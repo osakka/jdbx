@@ -13,3 +13,27 @@ server_debug.log
 js_debug.log
 *.patch
 
+# Configuration files
+auth.json
+auth2.json
+config.json
+token.txt
+db.json
+db/
+**/db.json
+**/rbac.json
+**/js_path_cache.json
+
+# Generated files
+debug_files.txt
+test_data.json
+test_logs/
+var/
+
+# Compiled binaries
+db_js_test
+logger_test
+minimal_js_test
+test_server
+socket_test.py
+
