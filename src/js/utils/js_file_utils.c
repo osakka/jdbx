@@ -1,5 +1,5 @@
-#include "utils/js_file_utils.h"
-#include "utils/logger.h"
+#include "jsondb/utils/js_file_utils.h"
+#include "jsondb/utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -244,9 +244,15 @@ static void cache_save() {
 
             /* Build path so far */
             if (*dir_path == '/') {
-                snprintf(tmp, sizeof(tmp), "/%s", dir_path);
+                /* Use strncat for safer concatenation */
+                tmp[0] = '/';
+                tmp[1] = '\0';
+                strncat(tmp, dir_path, sizeof(tmp) - 2);  /* -2 for '/' and null terminator */
+                tmp[sizeof(tmp) - 1] = '\0';
             } else {
-                snprintf(tmp, sizeof(tmp), "%s", dir_path);
+                /* For this case, we can safely use strncpy since we're just copying the path */
+                strncpy(tmp, dir_path, sizeof(tmp) - 1);
+                tmp[sizeof(tmp) - 1] = '\0';
             }
 
             /* Create directory */
@@ -299,6 +305,40 @@ static void cache_save() {
     if (g_logger) {
         LOG_INFO("Saved %d entries to JavaScript path cache: %s", count, g_cache_file_path);
     }
+}
+
+/* Helper function to safely combine paths */
+static int safe_path_join(char* dest, size_t dest_size, const char* first, const char* second, const char* third) {
+    size_t required_len = strlen(first) + 1; /* +1 for null terminator */
+
+    if (second) {
+        required_len += strlen(second) + 1; /* +1 for separator */
+    }
+
+    if (third) {
+        required_len += strlen(third) + 1; /* +1 for separator */
+    }
+
+    if (required_len > dest_size) {
+        /* Path would be too long for buffer */
+        return 0;
+    }
+
+    /* Safe to build path */
+    dest[0] = '\0'; /* Start with empty string */
+    strncat(dest, first, dest_size - 1);
+
+    if (second) {
+        strncat(dest, "/", dest_size - strlen(dest) - 1);
+        strncat(dest, second, dest_size - strlen(dest) - 1);
+    }
+
+    if (third) {
+        strncat(dest, "/", dest_size - strlen(dest) - 1);
+        strncat(dest, third, dest_size - strlen(dest) - 1);
+    }
+
+    return 1;
 }
 
 /* Find a JavaScript file by searching in common locations */
@@ -374,7 +414,12 @@ int js_file_find(const char* filename, char* resolved_path, size_t path_size) {
 
     /* Try with current working directory */
     char test_path[PATH_MAX];
-    snprintf(test_path, sizeof(test_path), "%s/%s", cwd, filename);
+    if (!safe_path_join(test_path, sizeof(test_path), cwd, filename, NULL)) {
+        if (g_logger) {
+            LOG_ERROR("Path too long for buffer: %s/%s", cwd, filename);
+        }
+        return 0;
+    }
 
     if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
         /* File found in current directory */
@@ -430,7 +475,12 @@ int js_file_find(const char* filename, char* resolved_path, size_t path_size) {
     }
 
     /* Try with current directory + extension */
-    snprintf(test_path, sizeof(test_path), "%s/%s", cwd, filename_with_ext);
+    if (!safe_path_join(test_path, sizeof(test_path), cwd, filename_with_ext, NULL)) {
+        if (g_logger) {
+            LOG_ERROR("Path too long for buffer: %s/%s", cwd, filename_with_ext);
+        }
+        return 0;
+    }
     if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
         /* File found in current directory with extension */
         strncpy(resolved_path, test_path, path_size - 1);
@@ -451,48 +501,58 @@ int js_file_find(const char* filename, char* resolved_path, size_t path_size) {
 
     /* Try all common directories */
     for (int i = 0; common_js_dirs[i] != NULL; i++) {
-        /* Try without extension */
-        snprintf(test_path, sizeof(test_path), "%s/%s/%s",
-                cwd, common_js_dirs[i], filename);
+        /* Try without extension using safe path join */
+        if (safe_path_join(test_path, sizeof(test_path), cwd, common_js_dirs[i], filename)) {
+            if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
+                /* File found in common directory */
+                strncpy(resolved_path, test_path, path_size - 1);
+                resolved_path[path_size - 1] = '\0';
 
-        if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            /* File found in common directory */
-            strncpy(resolved_path, test_path, path_size - 1);
-            resolved_path[path_size - 1] = '\0';
+                /* Add to cache */
+                cache_add_or_update(filename, resolved_path);
 
-            /* Add to cache */
-            cache_add_or_update(filename, resolved_path);
+                return 1;
+            }
 
-            return 1;
+            /* Add to search history */
+            if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
+                strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
+                search_paths[search_path_count][PATH_MAX - 1] = '\0';
+                search_path_count++;
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("Path too long when searching for %s in %s/%s",
+                        filename, cwd, common_js_dirs[i]);
+            } else {
+                fprintf(stderr, "Warning: Path too long when searching for %s in %s/%s\n",
+                        filename, cwd, common_js_dirs[i]);
+            }
         }
 
-        /* Add to search history */
-        if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-            strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-            search_paths[search_path_count][PATH_MAX - 1] = '\0';
-            search_path_count++;
-        }
+        /* Try with extension using safe path join */
+        if (safe_path_join(test_path, sizeof(test_path), cwd, common_js_dirs[i], filename_with_ext)) {
 
-        /* Try with extension */
-        snprintf(test_path, sizeof(test_path), "%s/%s/%s",
-                cwd, common_js_dirs[i], filename_with_ext);
+            if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
+                /* File found in common directory with extension */
+                strncpy(resolved_path, test_path, path_size - 1);
+                resolved_path[path_size - 1] = '\0';
 
-        if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            /* File found in common directory with extension */
-            strncpy(resolved_path, test_path, path_size - 1);
-            resolved_path[path_size - 1] = '\0';
+                /* Add to cache */
+                cache_add_or_update(filename, resolved_path);
 
-            /* Add to cache */
-            cache_add_or_update(filename, resolved_path);
+                return 1;
+            }
 
-            return 1;
-        }
-
-        /* Add to search history */
-        if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-            strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-            search_paths[search_path_count][PATH_MAX - 1] = '\0';
-            search_path_count++;
+            /* Add to search history */
+            if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
+                strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
+                search_paths[search_path_count][PATH_MAX - 1] = '\0';
+                search_path_count++;
+            }
+        } else {
+            fprintf(stderr, "Warning: Path too long when searching for %s in %s/%s\n",
+                    filename_with_ext, cwd, common_js_dirs[i]);
         }
     }
 
@@ -575,14 +635,78 @@ void js_file_log_not_found(const char* original_path, log_level_t level) {
         char* p = message;
         int remaining = sizeof(message) - 1;
         
-        int n = snprintf(p, remaining, "JavaScript file not found: %s\nSearched in:\n", original_path);
+        /* Check if there's enough space for the initial message */
+        int n;
+        if (strlen(original_path) + 50 <= (size_t)remaining) {
+            /* Should be safe as we just checked the length requirement */
+            n = snprintf(p, remaining, "JavaScript file not found: %s\nSearched in:\n", original_path);
+        } else {
+            /* Not enough space, truncate the path */
+            n = snprintf(p, remaining, "JavaScript file not found: ...\nSearched in:\n");
+        }
         if (n > 0 && n < remaining) {
             p += n;
             remaining -= n;
         }
         
         for (int i = 0; i < search_path_count && remaining > 0; i++) {
-            n = snprintf(p, remaining, "  - %s\n", search_paths[i]);
+            /* Only print if we have enough space for at least part of the path */
+            if (remaining > 10) { /* Need space for at least "  - " + a few chars + "\n" + null terminator */
+                /* Create a safer approach that doesn't rely on snprintf for possibly long strings */
+                const char* prefix = "  - ";
+                size_t prefix_len = strlen(prefix);
+
+                /* Copy the prefix first */
+                if (prefix_len + 1 <= (size_t)remaining) {  /* +1 for null terminator */
+                    memcpy(p, prefix, prefix_len);
+                    p += prefix_len;
+                    remaining -= prefix_len;
+
+                    /* Now copy as much of the search path as will fit, leaving room for newline and null */
+                    size_t path_len = strlen(search_paths[i]);
+                    size_t remaining_size = (remaining > 2) ? (size_t)(remaining - 2) : 0;
+                    size_t copy_len = (path_len < remaining_size) ? path_len : remaining_size;
+
+                    memcpy(p, search_paths[i], copy_len);
+                    p += copy_len;
+                    remaining -= copy_len;
+
+                    /* Add newline if room */
+                    if (remaining >= 2) {  /* Room for newline and null */
+                        *p++ = '\n';
+                        remaining--;
+                    }
+
+                    /* Null terminate */
+                    *p = '\0';
+
+                    /* Set n to the length we wrote (to match snprintf behavior) */
+                    n = prefix_len + copy_len + (remaining >= 2 ? 1 : 0);
+                } else {
+                    /* Not even room for the prefix */
+                    if (remaining >= 2) {
+                        *p++ = '.';
+                        *p = '\0';
+                        n = 1;
+                    } else {
+                        n = 0;
+                    }
+                    break;
+                }
+            } else {
+                /* Not enough space left - manually copy without snprintf */
+                if (remaining >= 5) {  /* Room for "...\n" and null */
+                    memcpy(p, "...\n", 4);
+                    p += 4;
+                    *p = '\0';
+                    n = 4;
+                } else {
+                    /* Not even room for ellipsis */
+                    *p = '\0';
+                    n = 0;
+                }
+                break;
+            }
             if (n > 0 && n < remaining) {
                 p += n;
                 remaining -= n;
