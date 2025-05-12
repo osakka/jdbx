@@ -1,16 +1,34 @@
-# Tests Makefile
-# Integrates all test targets for the JSON database project
+# JSONdb Tests Makefile
+# This Makefile coordinates the testing for JSONdb
 
+# Directories
+TEST_SRC_DIR = .
+UNIT_DIR = unit
+INTEGRATION_DIR = integration
+PERF_DIR = performance
+JS_DIR = js
+ROOT_DIR = ..
+OBJ_DIR = $(ROOT_DIR)/build/obj/tests
+BIN_DIR = $(ROOT_DIR)/build/bin/tests
+LIB_DIR = $(ROOT_DIR)/build/lib
+INCLUDE_DIR = $(ROOT_DIR)/include
+
+# Compiler and flags
 CC = gcc
-CFLAGS = -Wall -I../src/include -DTOOLS_BUILD -DUSE_QUICKJS -g -O0 -DDEBUG
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -DTOOLS_BUILD -g -O0 -DDEBUG
+LDFLAGS = -lm -lpthread
 
-# Libraries
-LDFLAGS = -pthread -lm
+# QuickJS support
+QUICKJS_FLAGS = -DUSE_QUICKJS
+QUICKJS_LIBS = -lquickjs
 
-# Quickjs check
+# Library
+JSONDB_LIB = $(LIB_DIR)/libjsondb.a
+
+# Check for QuickJS
 ifneq ($(wildcard /opt/qjs/lib/quickjs/libquickjs.*),)
-    CFLAGS += -DUSE_QUICKJS
-    LDFLAGS += -L/opt/qjs/lib/quickjs -lquickjs
+    CFLAGS += $(QUICKJS_FLAGS)
+    LDFLAGS += -L/opt/qjs/lib/quickjs $(QUICKJS_LIBS)
     $(info QuickJS found, enabling JavaScript tests)
     JS_ENABLED = 1
 else
@@ -18,105 +36,108 @@ else
     JS_ENABLED = 0
 endif
 
-# Common source directories
-SRC_DIR = ../src/components
-OBJ_DIR = obj
+# Unit test sources and objects
+UNIT_TEST_SRCS = $(wildcard $(UNIT_DIR)/*.c)
+UNIT_TEST_OBJS = $(patsubst $(UNIT_DIR)/%.c,$(OBJ_DIR)/unit/%.o,$(UNIT_TEST_SRCS))
+UNIT_TEST_BINS = $(patsubst $(UNIT_DIR)/%.c,$(BIN_DIR)/unit/%,$(UNIT_TEST_SRCS))
 
-# Create directory for object files
-$(shell mkdir -p $(OBJ_DIR))
-$(shell mkdir -p $(OBJ_DIR)/utils)
-$(shell mkdir -p $(OBJ_DIR)/utils/memory)
-$(shell mkdir -p $(OBJ_DIR)/database)
-$(shell mkdir -p $(OBJ_DIR)/js)
+# Integration test sources and objects
+INTEG_TEST_SRCS = $(wildcard $(INTEGRATION_DIR)/*.c)
+INTEG_TEST_OBJS = $(patsubst $(INTEGRATION_DIR)/%.c,$(OBJ_DIR)/integration/%.o,$(INTEG_TEST_SRCS))
+INTEG_TEST_BINS = $(patsubst $(INTEGRATION_DIR)/%.c,$(BIN_DIR)/integration/%,$(INTEG_TEST_SRCS))
 
-# Common object files
-COMMON_OBJS = $(OBJ_DIR)/utils/json.o \
-              $(OBJ_DIR)/utils/json_helpers.o \
-              $(OBJ_DIR)/utils/logger.o \
-              $(OBJ_DIR)/utils/cache.o \
-              $(OBJ_DIR)/utils/memory/ref_counter.o \
-              $(OBJ_DIR)/utils/memory/ref_json.o
+# All tests
+ALL_TEST_BINS = $(UNIT_TEST_BINS) $(INTEG_TEST_BINS)
 
-# Database test objects
-DB_OBJS = $(COMMON_OBJS) \
-          $(OBJ_DIR)/database/database.o \
-          $(OBJ_DIR)/database/index.o \
-          $(OBJ_DIR)/database/schema.o \
-          $(OBJ_DIR)/database/lock_manager.o
+# JavaScript tests
+JS_TEST_FILES = $(wildcard $(JS_DIR)/*.js)
 
-# JavaScript test objects (conditionally included)
-ifeq ($(JS_ENABLED), 1)
-JS_OBJS = $(DB_OBJS) \
-          $(OBJ_DIR)/utils/js_file_utils.o \
-          $(OBJ_DIR)/js/js_engine.o \
-          $(OBJ_DIR)/js/js_api.o
-endif
+# Main targets
+all: dirs $(ALL_TEST_BINS)
 
-# All test targets
-ALL_TESTS = test_json_helpers_simple \
-            test_refcount_simple
-
-# Add JavaScript tests if JS is enabled
-ifeq ($(JS_ENABLED), 1)
-ALL_TESTS += test_js_integration
-endif
-
-# Default target - builds all tests
-all: prepare $(ALL_TESTS)
-	@echo "All tests built successfully!"
-
-# Prepare directories needed for tests
-prepare:
+# Create build directories
+dirs:
+	@mkdir -p $(OBJ_DIR)/unit $(OBJ_DIR)/integration $(BIN_DIR)/unit $(BIN_DIR)/integration
 	@mkdir -p ../var/log/jsondb
 	@mkdir -p ../var/data/jsondb
-	@mkdir -p ../functions
 
-# Simple JSON helpers test
-test_json_helpers_simple: test_json_helpers_simple.c $(COMMON_OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+# Unit tests
+unit-tests: dirs $(UNIT_TEST_BINS)
+	@echo "Running unit tests..."
+	@for test in $(UNIT_TEST_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
 
-# Simple reference counting test
-test_refcount_simple: test_refcount_simple.c $(COMMON_OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+# Integration tests
+integration-tests: dirs $(INTEG_TEST_BINS)
+	@echo "Running integration tests..."
+	@for test in $(INTEG_TEST_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
 
-# JavaScript integration test
+# JavaScript tests
+js-tests:
 ifeq ($(JS_ENABLED), 1)
-test_js_integration: test_js_integration.c $(JS_OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Running JavaScript tests..."
+	@for test in $(JS_TEST_FILES); do \
+		echo "Running $$test"; \
+		$(BIN_DIR)/js_test $$test; \
+	done
+else
+	@echo "JavaScript support not enabled, skipping JS tests"
 endif
 
-# Object file compilation
-$(OBJ_DIR)/utils/%.o: $(SRC_DIR)/utils/%.c
+# Performance tests
+performance:
+	@echo "Running performance tests..."
+	@cd $(PERF_DIR) && ./run_performance_tests.sh
+
+# Clean test files
+clean:
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
+
+# Special compatibility targets
+test_json_helpers_simple: dirs
+	@mkdir -p $(UNIT_DIR)
+	cp test_json_helpers_simple.c $(UNIT_DIR)/
+	make unit-tests
+
+test_refcount_simple: dirs
+	@mkdir -p $(UNIT_DIR)
+	cp test_refcount_simple.c $(UNIT_DIR)/
+	make unit-tests
+
+test_js_integration: dirs
+ifeq ($(JS_ENABLED), 1)
+	@mkdir -p $(INTEGRATION_DIR)
+	cp test_js_integration.c $(INTEGRATION_DIR)/
+	make integration-tests
+endif
+
+# Pattern rules for building tests
+$(OBJ_DIR)/unit/%.o: $(UNIT_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/utils/memory/%.o: $(SRC_DIR)/utils/memory/%.c
+$(BIN_DIR)/unit/%: $(OBJ_DIR)/unit/%.o $(JSONDB_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $< $(JSONDB_LIB) $(LDFLAGS)
+
+$(OBJ_DIR)/integration/%.o: $(INTEGRATION_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/database/%.o: $(SRC_DIR)/database/%.c
+$(BIN_DIR)/integration/%: $(OBJ_DIR)/integration/%.o $(JSONDB_LIB)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJ_DIR)/js/%.o: $(SRC_DIR)/js/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -o $@ $< $(JSONDB_LIB) $(LDFLAGS)
 
 # Run all tests
-run: all
-	@echo "=== Running JSON Helpers Test ==="
-	./test_json_helpers_simple
-	@echo ""
-	@echo "=== Running RefCount Test ==="
-	./test_refcount_simple
+run: all unit-tests integration-tests
 ifeq ($(JS_ENABLED), 1)
-	@echo ""
-	@echo "=== Running JavaScript Integration Test ==="
-	./test_js_integration
+	make js-tests
 endif
+	make performance
 
-# Clean up
-clean:
-	rm -f $(ALL_TESTS) $(OBJ_DIR)/*.o $(OBJ_DIR)/utils/*.o $(OBJ_DIR)/utils/memory/*.o $(OBJ_DIR)/database/*.o $(OBJ_DIR)/js/*.o
-
-.PHONY: all clean run prepare
+.PHONY: all dirs unit-tests integration-tests js-tests performance clean run
