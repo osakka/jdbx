@@ -78,6 +78,11 @@ static api_route_t routes[] = {
     /* Admin auth routes */
     {"/api/admin/login", HTTP_POST, api_handle_admin_login, 0},
     {"/api/admin/test", HTTP_GET, api_handle_admin_test, 0},
+
+    /* Health and monitoring routes */
+    {"/health", HTTP_GET, api_handle_health_check, 0},
+    {"/metrics", HTTP_GET, api_handle_metrics, 0},
+    {"/metrics/available", HTTP_GET, api_handle_metrics_available, 0},
     
     /* Schema validation routes */
     {"/api/schemas", HTTP_GET, api_handle_schema_get, 1},
