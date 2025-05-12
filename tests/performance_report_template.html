@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Database Performance Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #0066cc;
+        }
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 20px;
+        }
+        .report-metadata {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #0066cc;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .chart-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .chart {
+            flex: 1;
+            min-width: 400px;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .summary-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            flex: 1;
+            min-width: 200px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .card-metric {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0066cc;
+            margin: 10px 0;
+        }
+        .card-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .operation-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .benchmark-details {
+            display: none;
+            margin-top: 20px;
+        }
+        .toggle-details {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .toggle-details:hover {
+            background-color: #0052a3;
+        }
+    </style>
+</head>
+<body>
+    <div class="report-header">
+        <div>
+            <h1>JSON Database Performance Report</h1>
+            <p>Comprehensive performance analysis of the JSON database with JavaScript integration</p>
+        </div>
+        <div>
+            <h3>Report generated: <span id="generated-date">Loading...</span></h3>
+        </div>
+    </div>
+    
+    <div class="report-metadata">
+        <h2>Test Configuration</h2>
+        <div id="config-details">Loading configuration...</div>
+    </div>
+    
+    <div class="summary-cards">
+        <div class="summary-card">
+            <h3>Overall Performance</h3>
+            <div class="card-metric" id="avg-ops-sec">-</div>
+            <div class="card-label">Average Operations/Second</div>
+        </div>
+        <div class="summary-card">
+            <h3>Response Time</h3>
+            <div class="card-metric" id="avg-ms-op">-</div>
+            <div class="card-label">Average Ms/Operation</div>
+        </div>
+        <div class="summary-card">
+            <h3>Test Duration</h3>
+            <div class="card-metric" id="test-duration">-</div>
+            <div class="card-label">Total Test Time (seconds)</div>
+        </div>
+        <div class="summary-card">
+            <h3>Operations Tested</h3>
+            <div class="card-metric" id="ops-tested">-</div>
+            <div class="card-label">Unique Operations</div>
+        </div>
+    </div>
+    
+    <h2>Performance by Operation Type</h2>
+    <div class="chart-container">
+        <div class="chart" id="ops-per-sec-chart"></div>
+        <div class="chart" id="ms-per-op-chart"></div>
+    </div>
+    
+    <h2>Performance by Data Size</h2>
+    <div class="chart-container">
+        <div class="chart" id="size-comparison-chart"></div>
+        <div class="chart" id="size-scaling-chart"></div>
+    </div>
+    
+    <h2>Detailed Results</h2>
+    <div id="operation-details">
+        Loading detailed results...
+    </div>
+    
+    <!-- Load Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        // This will be replaced with the actual performance data JSON
+        const performanceData = PERFORMANCE_DATA_PLACEHOLDER;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            renderReport(performanceData);
+        });
+        
+        function renderReport(data) {
+            // Set metadata
+            document.getElementById('generated-date').textContent = new Date(data.generatedAt).toLocaleString();
+            document.getElementById('test-duration').textContent = data.duration.toFixed(1);
+            document.getElementById('ops-tested').textContent = Object.keys(data.summary).length;
+            
+            // Render configuration details
+            const configEl = document.getElementById('config-details');
+            configEl.innerHTML = `
+                <p><strong>Iterations:</strong> ${data.config.iterations}</p>
+                <p><strong>Document Counts:</strong> 
+                    Small: ${data.config.documentCounts.small}, 
+                    Medium: ${data.config.documentCounts.medium}, 
+                    Large: ${data.config.documentCounts.large}
+                </p>
+                <p><strong>Collection:</strong> ${data.config.collectionName}</p>
+                <p><strong>Operations:</strong> ${data.config.operations.join(', ')}</p>
+            `;
+            
+            // Calculate overall averages
+            let totalOpsPerSec = 0;
+            let totalMsPerOp = 0;
+            let measurementCount = 0;
+            
+            Object.entries(data.summary).forEach(([operation, sizes]) => {
+                Object.entries(sizes).forEach(([size, stats]) => {
+                    totalOpsPerSec += stats.opsPerSecond.avg;
+                    totalMsPerOp += stats.msPerOp.avg;
+                    measurementCount++;
+                });
+            });
+            
+            document.getElementById('avg-ops-sec').textContent = (totalOpsPerSec / measurementCount).toFixed(2);
+            document.getElementById('avg-ms-op').textContent = (totalMsPerOp / measurementCount).toFixed(4);
+            
+            // Render charts
+            renderOperationComparisonCharts(data);
+            renderSizeComparisonCharts(data);
+            
+            // Render detailed results
+            renderDetailedResults(data);
+        }
+        
+        function renderOperationComparisonCharts(data) {
+            const operations = Object.keys(data.summary);
+            const datasets = [];
+            
+            // Process data for medium-sized dataset (as a representative sample)
+            const opsPerSecData = operations.map(op => data.summary[op].medium.opsPerSecond.avg);
+            const msPerOpData = operations.map(op => data.summary[op].medium.msPerOp.avg);
+            
+            new Chart(document.getElementById('ops-per-sec-chart'), {
+                type: 'bar',
+                data: {
+                    labels: operations,
+                    datasets: [{
+                        label: 'Operations per Second (Medium Dataset)',
+                        data: opsPerSecData,
+                        backgroundColor: 'rgba(0, 102, 204, 0.7)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Operations per Second by Operation Type'
+                        }
+                    }
+                }
+            });
+            
+            new Chart(document.getElementById('ms-per-op-chart'), {
+                type: 'bar',
+                data: {
+                    labels: operations,
+                    datasets: [{
+                        label: 'Milliseconds per Operation (Medium Dataset)',
+                        data: msPerOpData,
+                        backgroundColor: 'rgba(204, 51, 0, 0.7)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Response Time by Operation Type'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderSizeComparisonCharts(data) {
+            const operations = Object.keys(data.summary);
+            const sizes = Object.keys(data.summary[operations[0]]);
+            
+            // Prepare datasets for size comparison
+            const sizeDatasets = operations.map(op => {
+                return {
+                    label: op,
+                    data: sizes.map(size => data.summary[op][size].opsPerSecond.avg),
+                    borderWidth: 1
+                };
+            });
+            
+            new Chart(document.getElementById('size-comparison-chart'), {
+                type: 'bar',
+                data: {
+                    labels: sizes,
+                    datasets: sizeDatasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Performance Comparison by Data Size'
+                        }
+                    }
+                }
+            });
+            
+            // Create scaling chart (how performance scales with size)
+            const scalingDatasets = operations.map(op => {
+                const smallOps = data.summary[op].small.opsPerSecond.avg;
+                const mediumOps = data.summary[op].medium.opsPerSecond.avg;
+                const largeOps = data.summary[op].large.opsPerSecond.avg;
+                
+                // Calculate relative performance (small=100%)
+                return {
+                    label: op,
+                    data: [
+                        100, // Small (baseline)
+                        (mediumOps / smallOps) * 100, // Medium relative to small
+                        (largeOps / smallOps) * 100 // Large relative to small
+                    ],
+                    borderWidth: 1
+                };
+            });
+            
+            new Chart(document.getElementById('size-scaling-chart'), {
+                type: 'line',
+                data: {
+                    labels: sizes,
+                    datasets: scalingDatasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Relative Performance Scaling (Small=100%)'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderDetailedResults(data) {
+            const detailsContainer = document.getElementById('operation-details');
+            detailsContainer.innerHTML = '';
+            
+            Object.entries(data.summary).forEach(([operation, sizes]) => {
+                const opSection = document.createElement('div');
+                opSection.className = 'operation-section';
+                
+                // Create header
+                const header = document.createElement('h3');
+                header.textContent = `${operation.charAt(0).toUpperCase() + operation.slice(1)} Operation`;
+                opSection.appendChild(header);
+                
+                // Create summary table
+                const table = document.createElement('table');
+                let tableHtml = `
+                    <tr>
+                        <th>Data Size</th>
+                        <th>Operations/Second</th>
+                        <th>Ms/Operation</th>
+                        <th>Min Ops/Sec</th>
+                        <th>Max Ops/Sec</th>
+                        <th>Std Deviation</th>
+                    </tr>
+                `;
+                
+                Object.entries(sizes).forEach(([size, stats]) => {
+                    tableHtml += `
+                        <tr>
+                            <td>${size.charAt(0).toUpperCase() + size.slice(1)}</td>
+                            <td>${stats.opsPerSecond.avg.toFixed(2)}</td>
+                            <td>${stats.msPerOp.avg.toFixed(4)}</td>
+                            <td>${stats.opsPerSecond.min.toFixed(2)}</td>
+                            <td>${stats.opsPerSecond.max.toFixed(2)}</td>
+                            <td>${stats.opsPerSecond.stdDev.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                
+                table.innerHTML = tableHtml;
+                opSection.appendChild(table);
+                
+                // Create toggle button for details
+                const detailsDiv = document.createElement('div');
+                detailsDiv.className = 'benchmark-details';
+                detailsDiv.id = `details-${operation}`;
+                
+                const toggleButton = document.createElement('button');
+                toggleButton.className = 'toggle-details';
+                toggleButton.textContent = 'Show Raw Benchmark Data';
+                toggleButton.onclick = function() {
+                    const details = document.getElementById(`details-${operation}`);
+                    if (details.style.display === 'none') {
+                        details.style.display = 'block';
+                        this.textContent = 'Hide Raw Benchmark Data';
+                    } else {
+                        details.style.display = 'none';
+                        this.textContent = 'Show Raw Benchmark Data';
+                    }
+                };
+                
+                opSection.appendChild(toggleButton);
+                
+                // Create details for each size
+                let detailsHtml = '';
+                Object.entries(sizes).forEach(([size, stats]) => {
+                    detailsHtml += `<h4>${size.charAt(0).toUpperCase() + size.slice(1)} Dataset Raw Data</h4>`;
+                    detailsHtml += '<table><tr><th>Iteration</th><th>Operations</th><th>Total Time (ms)</th><th>Ops/Second</th><th>Ms/Operation</th></tr>';
+                    
+                    stats.raw.forEach((result, i) => {
+                        detailsHtml += `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td>${result.count}</td>
+                                <td>${result.totalTime}</td>
+                                <td>${result.opsPerSecond.toFixed(2)}</td>
+                                <td>${result.msPerOp.toFixed(4)}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    detailsHtml += '</table>';
+                });
+                
+                detailsDiv.innerHTML = detailsHtml;
+                opSection.appendChild(detailsDiv);
+                
+                detailsContainer.appendChild(opSection);
+            });
+        }
+    </script>
+</body>
+</html>

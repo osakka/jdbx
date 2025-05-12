@@ -1,0 +1,71 @@
+# Makefile for js_test.c - JavaScript engine integration test
+
+CC = gcc
+CFLAGS = -Wall -I. -Isrc/include -DTOOLS_BUILD -DUSE_QUICKJS
+
+# Check if QuickJS is available
+ifneq ($(wildcard /opt/qjs/lib/quickjs/libquickjs.*),)
+    CFLAGS += -DUSE_QUICKJS
+    LDFLAGS = -pthread -lm -L/opt/qjs/lib/quickjs -lquickjs
+    $(info QuickJS found, enabling JavaScript support)
+else
+    LDFLAGS = -pthread -lm
+    $(info QuickJS not found, JavaScript support will be disabled)
+endif
+
+# Debug build by default
+CFLAGS += -g -O0 -DDEBUG
+
+# Source files needed for js_test, excluding files with main()
+SRC_FILES = src/components/utils/json.c \
+            src/components/utils/json_helpers.c \
+            src/components/utils/js_file_utils.c \
+            src/components/utils/logger.c \
+            src/components/utils/cache.c \
+            src/components/utils/config_loader.c \
+            src/components/database/database.c \
+            src/components/database/index.c \
+            src/components/database/schema.c \
+            src/components/database/lock_manager.c \
+            src/components/js/js_engine.c \
+            src/components/js/js_api.c \
+            src/components/utils/memory/ref_counter.c \
+            src/components/utils/memory/ref_json.c
+
+# Object files
+OBJ_FILES = $(SRC_FILES:.c=.o)
+
+# Target executable
+TARGET = js_test
+
+# Default target
+all: $(TARGET)
+
+# Linking rule
+$(TARGET): js_test.o $(OBJ_FILES)
+	@echo "Linking $@..."
+	@mkdir -p var/log/jsondb
+	@mkdir -p var/data/jsondb
+	$(CC) $^ -o $@ $(LDFLAGS)
+	@echo "Build completed successfully!"
+	@echo "Run with: ./$(TARGET) [optional_js_file]"
+
+# Compile js_test.c
+js_test.o: js_test.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Generic compilation rule for source files
+%.o: %.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean
+clean:
+	rm -f js_test.o $(OBJ_FILES) $(TARGET)
+
+# Run
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run
