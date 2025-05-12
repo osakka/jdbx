@@ -1,5 +1,5 @@
-#include "utils/js_file_utils.h"
-#include "utils/logger.h"
+#include "jsondb/utils/js_file_utils.h"
+#include "jsondb/utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,605 +10,334 @@
 #include <limits.h> /* For PATH_MAX */
 #include <time.h>   /* For caching timestamps */
 
-/* Simple key-value entry for caching resolved paths */
-typedef struct js_path_cache_entry {
+/* strlcpy and strlcat implementations if not available in libc */
+#if !defined(HAVE_STRLCPY) && !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__APPLE__)
+/**
+ * strlcpy - Copy a %NUL terminated string into a sized buffer
+ * @dest: Where to copy the string to
+ * @src: Where to copy the string from
+ * @size: Size of destination buffer
+ *
+ * Compatible with *BSD: the result is always a valid
+ * NUL-terminated string that fits in the buffer (unless,
+ * of course, the buffer size is zero). It does not pad
+ * out the result like strncpy() does.
+ *
+ * Returns the length of the source string (regardless of
+ * whether it fits in the destination buffer or not).
+ */
+static size_t strlcpy(char *dest, const char *src, size_t size)
+{
+    size_t ret = strlen(src);
+
+    if (size) {
+        size_t len = (ret >= size) ? size - 1 : ret;
+        memcpy(dest, src, len);
+        dest[len] = '\0';
+    }
+
+    return ret;
+}
+
+/**
+ * strlcat - Append a %NUL terminated string into a sized buffer
+ * @dest: Where to append the string to
+ * @src: Where to copy the string from
+ * @size: Size of destination buffer
+ *
+ * Compatible with *BSD: the result is always a valid
+ * NUL-terminated string that fits in the buffer (unless,
+ * of course, the buffer size is zero). It does not pad
+ * out the result like strncat() does.
+ *
+ * Returns the total length of the source string plus the
+ * initial length of the destination string (regardless of
+ * whether all of the source string could be copied or not).
+ */
+static size_t strlcat(char *dest, const char *src, size_t size)
+{
+    size_t dsize = strlen(dest);
+    size_t len = strlen(src);
+    size_t ret = dsize + len;
+
+    if (dsize < size) {
+        size_t copy_len = size - dsize - 1;
+        if (len < copy_len)
+            copy_len = len;
+        memcpy(dest + dsize, src, copy_len);
+        dest[dsize + copy_len] = '\0';
+    }
+
+    return ret;
+}
+#endif
+
+/* Global known search paths */
+static char *search_paths[JS_FILE_MAX_SEARCH_PATHS];
+static size_t num_search_paths = 0;
+
+/* Cache of recently resolved paths */
+typedef struct {
     char original_path[PATH_MAX];
     char resolved_path[PATH_MAX];
     time_t timestamp;
-    struct js_path_cache_entry* next;
-} js_path_cache_entry_t;
+} js_file_cache_entry_t;
 
-/* Global cache */
-static js_path_cache_entry_t* g_js_path_cache = NULL;
+#define JS_FILE_CACHE_SIZE 128
+static js_file_cache_entry_t file_cache[JS_FILE_CACHE_SIZE];
+static size_t cache_used = 0;
+static char cache_file_path[PATH_MAX] = "./js_file_cache.dat";
+static int cache_modified = 0;
 
-/* Cache expiration in seconds (24 hours by default) */
-static const time_t CACHE_EXPIRATION = 24 * 60 * 60;
+/* Add a path to the list of known search paths */
+static void add_search_path(const char *path) {
+    if (num_search_paths < JS_FILE_MAX_SEARCH_PATHS) {
+        search_paths[num_search_paths] = strdup(path);
+        num_search_paths++;
+    }
+}
 
-/* Path to the cache file - default to project root */
-static char g_cache_file_path[PATH_MAX] = "var/data/jsondb/js_path_cache.json";
+/* Initialize search paths */
+static void init_search_paths() {
+    if (num_search_paths > 0) {
+        return; /* Already initialized */
+    }
+    
+    /* Add current directory */
+    add_search_path(".");
+    
+    /* Add standard JS directories */
+    add_search_path("./js");
+    add_search_path("./src/js");
+    add_search_path("./scripts");
+    
+    /* Add functions directory */
+    add_search_path("./functions");
+    add_search_path("./src/js/functions");
+    
+    /* Add validators and transformers */
+    add_search_path("./validators");
+    add_search_path("./src/js/validators");
+    add_search_path("./transformers");
+    add_search_path("./src/js/transformers");
+    
+    /* Check environment variable for additional paths */
+    char *js_path = getenv("JSONDB_JS_PATH");
+    if (js_path) {
+        /* Split by colon */
+        char *path = strtok(js_path, ":");
+        while (path) {
+            add_search_path(path);
+            path = strtok(NULL, ":");
+        }
+    }
+}
 
-/* Common directories to search for JavaScript files */
-static const char* common_js_dirs[] = {
-    "functions",
-    "validators",
-    "transforms",
-    "tests/js",
-    "examples/js_extensions",
-    NULL /* Null-terminated array */
-};
+/* Load the path cache from disk */
+static void load_cache() {
+    FILE *f = fopen(cache_file_path, "rb");
+    if (!f) {
+        return;
+    }
+    
+    if (fread(&cache_used, sizeof(cache_used), 1, f) != 1) {
+        fclose(f);
+        return;
+    }
+    
+    if (cache_used > JS_FILE_CACHE_SIZE) {
+        cache_used = JS_FILE_CACHE_SIZE;
+    }
+    
+    if (fread(file_cache, sizeof(js_file_cache_entry_t), cache_used, f) != cache_used) {
+        cache_used = 0;
+    }
+    
+    fclose(f);
+}
 
-/* Paths where the file was searched but not found */
-static char search_paths[JS_FILE_MAX_SEARCH_PATHS][PATH_MAX];
-static int search_path_count = 0;
+/* Save the path cache to disk */
+void js_file_save_cache() {
+    if (!cache_modified) {
+        return;
+    }
+    
+    FILE *f = fopen(cache_file_path, "wb");
+    if (!f) {
+        LOG_WARNING("Failed to save JavaScript file path cache to %s: %s", 
+                cache_file_path, strerror(errno));
+        return;
+    }
+    
+    if (fwrite(&cache_used, sizeof(cache_used), 1, f) != 1 ||
+        fwrite(file_cache, sizeof(js_file_cache_entry_t), cache_used, f) != cache_used) {
+        LOG_WARNING("Failed to write JavaScript file cache data");
+    }
+    
+    fclose(f);
+    cache_modified = 0;
+}
+
+/* Add an entry to the path cache */
+static void cache_add(const char *original, const char *resolved) {
+    size_t idx;
+    
+    /* Check if we already have this entry */
+    for (idx = 0; idx < cache_used; idx++) {
+        if (strcmp(file_cache[idx].original_path, original) == 0) {
+            /* Update existing entry */
+            strlcpy(file_cache[idx].resolved_path, resolved, sizeof(file_cache[idx].resolved_path));
+            file_cache[idx].timestamp = time(NULL);
+            cache_modified = 1;
+            return;
+        }
+    }
+    
+    /* Handle cache full */
+    if (cache_used >= JS_FILE_CACHE_SIZE) {
+        /* Find oldest entry to replace */
+        time_t oldest = file_cache[0].timestamp;
+        idx = 0;
+        
+        for (size_t i = 1; i < cache_used; i++) {
+            if (file_cache[i].timestamp < oldest) {
+                oldest = file_cache[i].timestamp;
+                idx = i;
+            }
+        }
+    } else {
+        idx = cache_used++;
+    }
+    
+    /* Add new entry */
+    strlcpy(file_cache[idx].original_path, original, sizeof(file_cache[idx].original_path));
+    strlcpy(file_cache[idx].resolved_path, resolved, sizeof(file_cache[idx].resolved_path));
+    file_cache[idx].timestamp = time(NULL);
+    cache_modified = 1;
+}
+
+/* Look up a path in the cache */
+static int cache_lookup(const char *original, char *resolved, size_t resolved_size) {
+    /* Initialize cache if needed */
+    static int cache_initialized = 0;
+    if (!cache_initialized) {
+        load_cache();
+        cache_initialized = 1;
+    }
+    
+    for (size_t i = 0; i < cache_used; i++) {
+        if (strcmp(file_cache[i].original_path, original) == 0) {
+            strlcpy(resolved, file_cache[i].resolved_path, resolved_size);
+            return 1;
+        }
+    }
+    
+    return 0;
+}
 
 /* Set the cache file path */
 void js_file_set_cache_path(const char* path) {
     if (path) {
-        strncpy(g_cache_file_path, path, sizeof(g_cache_file_path) - 1);
-        g_cache_file_path[sizeof(g_cache_file_path) - 1] = '\0';
-
-        if (g_logger) {
-            LOG_INFO("JavaScript path resolution cache file set to: %s", g_cache_file_path);
-        }
+        strlcpy(cache_file_path, path, sizeof(cache_file_path));
     }
 }
 
-/* Free the cache memory */
-static void free_cache() {
-    js_path_cache_entry_t* current = g_js_path_cache;
-    js_path_cache_entry_t* next = NULL;
-
-    while (current) {
-        next = current->next;
-        free(current);
-        current = next;
+/**
+ * Make a path absolute if it is not already
+ * 
+ * @param path The path to convert
+ * @param resolved_path Buffer to store the resolved path
+ * @param path_size Size of the resolved_path buffer
+ * @return 1 on success, 0 on failure
+ */
+int make_path_absolute(const char* path, char* resolved_path, size_t path_size) {
+    if (!path || !resolved_path || path_size == 0) {
+        return 0;
     }
-
-    g_js_path_cache = NULL;
-}
-
-/* Add or update an entry in the cache */
-static void cache_add_or_update(const char* original_path, const char* resolved_path) {
-    if (!original_path || !resolved_path) {
-        return;
+    
+    /* If already absolute, just copy it */
+    if (path[0] == '/') {
+        strlcpy(resolved_path, path, path_size);
+        return 1;
     }
-
-    /* First check if the entry already exists */
-    js_path_cache_entry_t* current = g_js_path_cache;
-    while (current) {
-        if (strcmp(current->original_path, original_path) == 0) {
-            /* Update existing entry */
-            strncpy(current->resolved_path, resolved_path, sizeof(current->resolved_path) - 1);
-            current->resolved_path[sizeof(current->resolved_path) - 1] = '\0';
-            current->timestamp = time(NULL);
-            return;
-        }
-        current = current->next;
+    
+    /* Get current working directory */
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        LOG_ERROR("Failed to get current working directory: %s", strerror(errno));
+        return 0;
     }
-
-    /* Create a new entry */
-    js_path_cache_entry_t* new_entry = (js_path_cache_entry_t*)malloc(sizeof(js_path_cache_entry_t));
-    if (!new_entry) {
-        /* Memory allocation failed */
-        if (g_logger) {
-            LOG_ERROR("Failed to allocate memory for JavaScript path cache entry");
-        }
-        return;
-    }
-
-    /* Initialize the new entry */
-    strncpy(new_entry->original_path, original_path, sizeof(new_entry->original_path) - 1);
-    new_entry->original_path[sizeof(new_entry->original_path) - 1] = '\0';
-
-    strncpy(new_entry->resolved_path, resolved_path, sizeof(new_entry->resolved_path) - 1);
-    new_entry->resolved_path[sizeof(new_entry->resolved_path) - 1] = '\0';
-
-    new_entry->timestamp = time(NULL);
-    new_entry->next = g_js_path_cache;
-    g_js_path_cache = new_entry;
-}
-
-/* Find a cached path, returns NULL if not found or expired */
-static const char* cache_find(const char* original_path) {
-    if (!original_path) {
-        return NULL;
-    }
-
-    /* Get current time for expiration check */
-    time_t now = time(NULL);
-
-    js_path_cache_entry_t* current = g_js_path_cache;
-    while (current) {
-        if (strcmp(current->original_path, original_path) == 0) {
-            /* Check if entry is expired */
-            if (now - current->timestamp > CACHE_EXPIRATION) {
-                /* Entry is expired, remove it */
-                if (g_logger) {
-                    LOG_DEBUG("JavaScript path cache entry expired: %s", original_path);
-                }
-                return NULL;
-            }
-
-            /* Check if the resolved file still exists */
-            struct stat st;
-            if (stat(current->resolved_path, &st) != 0 || !S_ISREG(st.st_mode)) {
-                /* File no longer exists or is not a regular file */
-                if (g_logger) {
-                    LOG_DEBUG("JavaScript path cache entry invalid (file no longer exists): %s", original_path);
-                }
-                return NULL;
-            }
-
-            /* Valid cache entry found */
-            if (g_logger) {
-                LOG_DEBUG("JavaScript path cache hit: %s -> %s", original_path, current->resolved_path);
-            }
-            return current->resolved_path;
-        }
-        current = current->next;
-    }
-
-    /* Not found in cache */
-    return NULL;
-}
-
-/* Load the cache from file */
-static void cache_load() {
-    FILE* file = fopen(g_cache_file_path, "r");
-    if (!file) {
-        /* Cache file doesn't exist, that's okay */
-        return;
-    }
-
-    char line[PATH_MAX * 2 + 64]; /* original_path|resolved_path|timestamp */
-    char original_path[PATH_MAX];
-    char resolved_path[PATH_MAX];
-    time_t timestamp;
-
-    /* First free any existing cache */
-    free_cache();
-
-    /* Parse each line in the format: original_path|resolved_path|timestamp */
-    while (fgets(line, sizeof(line), file)) {
-        /* Remove newline */
-        size_t len = strlen(line);
-        if (len > 0 && line[len-1] == '\n') {
-            line[len-1] = '\0';
-        }
-
-        /* Parse line */
-        if (sscanf(line, "%[^|]|%[^|]|%ld", original_path, resolved_path, &timestamp) == 3) {
-            /* Create a new entry */
-            js_path_cache_entry_t* entry = (js_path_cache_entry_t*)malloc(sizeof(js_path_cache_entry_t));
-            if (!entry) {
-                continue; /* Memory allocation failed */
-            }
-
-            /* Initialize the entry */
-            strncpy(entry->original_path, original_path, sizeof(entry->original_path) - 1);
-            entry->original_path[sizeof(entry->original_path) - 1] = '\0';
-
-            strncpy(entry->resolved_path, resolved_path, sizeof(entry->resolved_path) - 1);
-            entry->resolved_path[sizeof(entry->resolved_path) - 1] = '\0';
-
-            entry->timestamp = timestamp;
-
-            /* Add to the cache */
-            entry->next = g_js_path_cache;
-            g_js_path_cache = entry;
-        }
-    }
-
-    fclose(file);
-
-    if (g_logger) {
-        /* Count entries */
-        int count = 0;
-        js_path_cache_entry_t* current = g_js_path_cache;
-        while (current) {
-            count++;
-            current = current->next;
-        }
-
-        LOG_INFO("Loaded %d entries from JavaScript path cache: %s", count, g_cache_file_path);
-    }
-}
-
-/* Save the cache to file */
-static void cache_save() {
-    /* Create directory if it doesn't exist */
-    char dir_path[PATH_MAX];
-    strncpy(dir_path, g_cache_file_path, sizeof(dir_path) - 1);
-    dir_path[sizeof(dir_path) - 1] = '\0';
-
-    /* Find the last slash to get directory path */
-    char* last_slash = strrchr(dir_path, '/');
-    if (last_slash) {
-        *last_slash = '\0'; /* Truncate at the last slash */
-
-        /* Create directory hierarchy */
-        char tmp[PATH_MAX];
-        char* p = dir_path;
-
-        /* Skip leading slash if present */
-        if (*p == '/') {
-            p++;
-        }
-
-        while (*p) {
-            /* Find next slash or end of string */
-            char* next = strchr(p, '/');
-            if (next) {
-                *next = '\0';
-            }
-
-            /* Build path so far */
-            if (*dir_path == '/') {
-                snprintf(tmp, sizeof(tmp), "/%s", dir_path);
-            } else {
-                snprintf(tmp, sizeof(tmp), "%s", dir_path);
-            }
-
-            /* Create directory */
-            struct stat st;
-            if (stat(tmp, &st) != 0) {
-                if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
-                    if (g_logger) {
-                        LOG_ERROR("Failed to create directory for JavaScript path cache: %s", tmp);
-                    }
-                    return;
-                }
-            }
-
-            /* Restore slash */
-            if (next) {
-                *next = '/';
-                p = next + 1;
-            } else {
-                break;
-            }
-        }
-    }
-
-    /* Open file for writing */
-    FILE* file = fopen(g_cache_file_path, "w");
-    if (!file) {
-        if (g_logger) {
-            LOG_ERROR("Failed to open JavaScript path cache file for writing: %s", g_cache_file_path);
-        }
-        return;
-    }
-
-    /* Write each entry to the file */
-    int count = 0;
-    js_path_cache_entry_t* current = g_js_path_cache;
-    time_t now = time(NULL);
-
-    while (current) {
-        /* Skip expired entries */
-        if (now - current->timestamp <= CACHE_EXPIRATION) {
-            /* Write in the format: original_path|resolved_path|timestamp */
-            fprintf(file, "%s|%s|%ld\n", current->original_path, current->resolved_path, current->timestamp);
-            count++;
-        }
-        current = current->next;
-    }
-
-    fclose(file);
-
-    if (g_logger) {
-        LOG_INFO("Saved %d entries to JavaScript path cache: %s", count, g_cache_file_path);
-    }
+    
+    /* Build absolute path */
+    snprintf(resolved_path, path_size, "%s/%s", cwd, path);
+    return 1;
 }
 
 /* Find a JavaScript file by searching in common locations */
 int js_file_find(const char* filename, char* resolved_path, size_t path_size) {
-    if (!filename || !resolved_path || path_size <= 0) {
+    if (!filename || !resolved_path || path_size == 0) {
         return 0;
     }
-
-    /* Reset search path tracking */
-    search_path_count = 0;
-    memset(search_paths, 0, sizeof(search_paths));
-
-    /* Static initialization flag for lazy loading the cache */
-    static int cache_initialized = 0;
-
-    /* Initialize cache first time this function is called */
-    if (!cache_initialized) {
-        cache_load();
-        cache_initialized = 1;
-    }
-
-    /* First check the cache */
-    const char* cached_path = cache_find(filename);
-    if (cached_path) {
-        /* Found in cache - verify the file still exists */
+    
+    /* Initialize search paths if needed */
+    init_search_paths();
+    
+    /* Check if this is an absolute path */
+    if (filename[0] == '/') {
         struct stat st;
-        if (stat(cached_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            /* Copy the resolved path */
-            strncpy(resolved_path, cached_path, path_size - 1);
-            resolved_path[path_size - 1] = '\0';
-
-            if (g_logger) {
-                LOG_DEBUG("Using cached JavaScript file path: %s -> %s", filename, cached_path);
-            }
-
+        if (stat(filename, &st) == 0 && S_ISREG(st.st_mode)) {
+            strlcpy(resolved_path, filename, path_size);
             return 1;
-        } else {
-            /* Cache entry is invalid - file no longer exists */
-            if (g_logger) {
-                LOG_DEBUG("Cached JavaScript file no longer exists: %s", cached_path);
-            }
-        }
-    }
-
-    /* First check if the file exists as-is (might be an absolute path) */
-    struct stat st;
-    if (stat(filename, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File exists and is a regular file */
-        strncpy(resolved_path, filename, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add original path to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], filename, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* Get current working directory for relative paths */
-    char cwd[PATH_MAX];
-    if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        if (g_logger) {
-            LOG_ERROR("Failed to get current working directory: %s", strerror(errno));
         }
         return 0;
     }
-
-    /* Try with current working directory */
-    char test_path[PATH_MAX];
-    snprintf(test_path, sizeof(test_path), "%s/%s", cwd, filename);
-
-    if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File found in current directory */
-        strncpy(resolved_path, test_path, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* Add .js extension if not already present */
-    char filename_with_ext[PATH_MAX];
-    strncpy(filename_with_ext, filename, PATH_MAX - 1);
-    filename_with_ext[PATH_MAX - 1] = '\0';
-
-    size_t name_len = strlen(filename_with_ext);
-    if (name_len < 3 ||
-        filename_with_ext[name_len - 3] != '.' ||
-        filename_with_ext[name_len - 2] != 'j' ||
-        filename_with_ext[name_len - 1] != 's') {
-        /* Extension not present, append it */
-        if (name_len + 3 < PATH_MAX) {
-            strcat(filename_with_ext, ".js");
-        }
-    }
-
-    /* Try with just the filename + extension */
-    if (stat(filename_with_ext, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File exists with extension */
-        strncpy(resolved_path, filename_with_ext, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], filename_with_ext, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* Try with current directory + extension */
-    snprintf(test_path, sizeof(test_path), "%s/%s", cwd, filename_with_ext);
-    if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File found in current directory with extension */
-        strncpy(resolved_path, test_path, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* Try all common directories */
-    for (int i = 0; common_js_dirs[i] != NULL; i++) {
-        /* Try without extension */
-        snprintf(test_path, sizeof(test_path), "%s/%s/%s",
-                cwd, common_js_dirs[i], filename);
-
-        if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            /* File found in common directory */
-            strncpy(resolved_path, test_path, path_size - 1);
-            resolved_path[path_size - 1] = '\0';
-
-            /* Add to cache */
-            cache_add_or_update(filename, resolved_path);
-
+    
+    /* Check cache first */
+    if (cache_lookup(filename, resolved_path, path_size)) {
+        /* Verify the file still exists */
+        struct stat st;
+        if (stat(resolved_path, &st) == 0 && S_ISREG(st.st_mode)) {
             return 1;
         }
-
-        /* Add to search history */
-        if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-            strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-            search_paths[search_path_count][PATH_MAX - 1] = '\0';
-            search_path_count++;
-        }
-
-        /* Try with extension */
-        snprintf(test_path, sizeof(test_path), "%s/%s/%s",
-                cwd, common_js_dirs[i], filename_with_ext);
-
+    }
+    
+    /* Look in all known search paths */
+    for (size_t i = 0; i < num_search_paths; i++) {
+        char test_path[PATH_MAX];
+        snprintf(test_path, sizeof(test_path), "%s/%s", search_paths[i], filename);
+        
+        struct stat st;
         if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            /* File found in common directory with extension */
-            strncpy(resolved_path, test_path, path_size - 1);
-            resolved_path[path_size - 1] = '\0';
-
-            /* Add to cache */
-            cache_add_or_update(filename, resolved_path);
-
+            /* Found it! */
+            strlcpy(resolved_path, test_path, path_size);
+            
+            /* Update cache */
+            cache_add(filename, test_path);
+            
             return 1;
         }
-
-        /* Add to search history */
-        if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-            strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-            search_paths[search_path_count][PATH_MAX - 1] = '\0';
-            search_path_count++;
-        }
     }
-
-    /* Try project-root-relative paths using make_path_absolute */
-    extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
-
-    /* Try without extension */
-    make_path_absolute(filename, test_path, sizeof(test_path));
-    if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File found using make_path_absolute */
-        strncpy(resolved_path, test_path, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* Try with extension */
-    make_path_absolute(filename_with_ext, test_path, sizeof(test_path));
-    if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        /* File found using make_path_absolute with extension */
-        strncpy(resolved_path, test_path, path_size - 1);
-        resolved_path[path_size - 1] = '\0';
-
-        /* Add to cache */
-        cache_add_or_update(filename, resolved_path);
-
-        return 1;
-    }
-
-    /* Add to search history */
-    if (search_path_count < JS_FILE_MAX_SEARCH_PATHS) {
-        strncpy(search_paths[search_path_count], test_path, PATH_MAX - 1);
-        search_paths[search_path_count][PATH_MAX - 1] = '\0';
-        search_path_count++;
-    }
-
-    /* If we get here, file not found in any location */
+    
+    /* Not found */
     return 0;
-}
-
-/* Save the cache to disk - can be called manually or via atexit */
-void js_file_save_cache(void) {
-    static int already_called = 0;
-
-    /* Prevent double execution during shutdown */
-    if (already_called) {
-        return;
-    }
-    already_called = 1;
-
-    /* Save cache to file */
-    cache_save();
 }
 
 /* Log detailed information about file not found error */
 void js_file_log_not_found(const char* original_path, log_level_t level) {
-    if (!g_logger) {
-        /* Fall back to stderr if logger not initialized */
-        fprintf(stderr, "JavaScript file not found: %s\n", original_path);
-        fprintf(stderr, "Searched in the following locations:\n");
-        for (int i = 0; i < search_path_count; i++) {
-            fprintf(stderr, "  - %s\n", search_paths[i]);
-        }
-        return;
+    if (level == LOG_LEVEL_NONE) {
+        level = LOG_LEVEL_ERROR;
     }
     
-    /* Log using the logger system */
-    if (level <= g_logger->log_level) {
-        char message[4096] = {0}; /* Larger buffer for detailed message */
-        char* p = message;
-        int remaining = sizeof(message) - 1;
+    logger_log(level, __FILE__, __LINE__, __func__, 
+             "JavaScript file not found: %s", original_path);
+    
+    logger_log(level, __FILE__, __LINE__, __func__, 
+             "Searched in the following locations:");
+    
+    for (size_t i = 0; i < num_search_paths; i++) {
+        char test_path[PATH_MAX];
+        snprintf(test_path, sizeof(test_path), "%s/%s", search_paths[i], original_path);
         
-        int n = snprintf(p, remaining, "JavaScript file not found: %s\nSearched in:\n", original_path);
-        if (n > 0 && n < remaining) {
-            p += n;
-            remaining -= n;
-        }
-        
-        for (int i = 0; i < search_path_count && remaining > 0; i++) {
-            n = snprintf(p, remaining, "  - %s\n", search_paths[i]);
-            if (n > 0 && n < remaining) {
-                p += n;
-                remaining -= n;
-            }
-        }
-        
-        /* Use appropriate log level */
-        switch (level) {
-            case LOG_LEVEL_ERROR:
-                LOG_ERROR("%s", message);
-                break;
-            case LOG_LEVEL_WARNING:
-                LOG_WARNING("%s", message);
-                break;
-            case LOG_LEVEL_INFO:
-                LOG_INFO("%s", message);
-                break;
-            case LOG_LEVEL_DEBUG:
-                LOG_DEBUG("%s", message);
-                break;
-            case LOG_LEVEL_TRACE:
-                LOG_TRACE("%s", message);
-                break;
-            default:
-                LOG_ERROR("%s", message);
-                break;
-        }
+        logger_log(level, __FILE__, __LINE__, __func__, "  - %s", test_path);
     }
 }

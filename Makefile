@@ -15,8 +15,7 @@ CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR)
 LDFLAGS = -lm -lpthread
 
 # QuickJS support
-QUICKJS_FLAGS = -DUSE_QUICKJS
-QUICKJS_LIBS = -lquickjs
+QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
 
 # Source files (excluding tests)
 CORE_SRCS = $(wildcard $(SRC_DIR)/core/*.c)
@@ -42,18 +41,20 @@ JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
 
 # All objects
 OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS)
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
 
-# JavaScript support (default enabled, can be disabled)
-ifndef DISABLE_QUICKJS
-    CFLAGS += $(QUICKJS_FLAGS)
-    LDFLAGS += $(QUICKJS_LIBS)
-    OBJS += $(JS_OBJS)
+# JavaScript support handling
+ifdef DISABLE_JS
+    # JavaScript is explicitly disabled with -DDISABLE_JS
+    SERVER_LDFLAGS = $(LDFLAGS)
+else
+    # JavaScript is enabled (default)
+    SERVER_LDFLAGS = $(LDFLAGS) $(QUICKJS_LIBS)
 endif
 
 # Main targets
-ifdef DISABLE_QUICKJS
-all: dirs libjsondb server-without-js tests
+ifdef DISABLE_JS
+all: dirs libjsondb server tests
 else
 all: dirs libjsondb server tests
 endif
@@ -72,9 +73,15 @@ libjsondb: dirs $(OBJS)
 
 # Server executable
 server: dirs libjsondb
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS)
+	@if [ "$(DISABLE_JS)" = "1" ]; then \
+		echo "Building server with JavaScript disabled"; \
+		$(CC) $(CFLAGS) -DDISABLE_JS -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS); \
+	else \
+		echo "Building server with JavaScript enabled"; \
+		$(CC) $(CFLAGS) -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS) $(QUICKJS_LIBS); \
+	fi
 
-# Server executable without JS support
+# Server executable without JS support (maintained for backwards compatibility)
 server-without-js: dirs libjsondb
 	$(CC) $(CFLAGS) -DDISABLE_JS -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS)
 
