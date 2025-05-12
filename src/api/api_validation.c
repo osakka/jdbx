@@ -20,10 +20,10 @@ static http_response_t* validation_error_response(validation_error_t error, cons
     }
     
     json_value_t* response = json_create_object();
-    json_set_string(response, "status", "error");
-    json_set_string(response, "message", response_message);
-    
-    http_response_t* http_response = http_response_json_new(400, response);
+    json_object_set(response, "status", json_create_string("error"));
+    json_object_set(response, "message", json_create_string(response_message));
+
+    http_response_t* http_response = http_response_json(response, 400);
     json_free(response);
     
     return http_response;
@@ -45,7 +45,8 @@ http_response_t* api_validate_collection_name(http_request_t* request,
     const char* name = NULL;
     
     if (name_param) {
-        name = http_request_get_param(request, name_param);
+        /* Would use http_request_get_param or similar - for now we can only use URL path */
+        name = NULL; /* Need to implement proper query parameter extraction */
     } else {
         /* Extract from URL path - assuming /api/collection/:name pattern */
         const char* path = request->path;
@@ -96,7 +97,8 @@ http_response_t* api_validate_document_id(http_request_t* request,
     const char* id = NULL;
     
     if (id_param) {
-        id = http_request_get_param(request, id_param);
+        /* Would use http_request_get_param or similar - for now we can only use URL path */
+        id = NULL; /* Need to implement proper query parameter extraction */
     } else {
         /* Extract from URL path - assuming /api/collection/:name/document/:id pattern */
         const char* path = request->path;
@@ -178,7 +180,8 @@ http_response_t* api_validate_json_string(json_value_t* json,
                                          const char* allowed_chars, 
                                          int required, 
                                          const char** value_out) {
-    const char* value = json_get_string(json, field);
+    json_value_t* value_obj = json_object_get(json, field);
+    const char* value = value_obj ? json_get_string(value_obj) : NULL;
     
     if (!value) {
         if (required) {
@@ -221,7 +224,8 @@ http_response_t* api_validate_json_number(json_value_t* json,
                                          double max_value, 
                                          int required, 
                                          double* value_out) {
-    if (!json_has_number(json, field)) {
+    json_value_t* value_obj = json_object_get(json, field);
+    if (!value_obj || json_get_type(value_obj) != JSON_NUMBER) {
         if (required) {
             return validation_error_response(VALIDATION_ERROR_NULL_INPUT, field);
         } else {
@@ -230,7 +234,8 @@ http_response_t* api_validate_json_number(json_value_t* json,
         }
     }
     
-    double value = json_get_number(json, field);
+    json_value_t* value_obj = json_object_get(json, field);
+    double value = json_get_number(value_obj);
     validation_error_t result = validate_double_range(value, min_value, max_value);
     
     if (result != VALIDATION_SUCCESS) {
@@ -261,7 +266,8 @@ http_response_t* api_validate_json_integer(json_value_t* json,
                                           int64_t max_value, 
                                           int required, 
                                           int64_t* value_out) {
-    if (!json_has_number(json, field)) {
+    json_value_t* value_obj = json_object_get(json, field);
+    if (!value_obj || json_get_type(value_obj) != JSON_NUMBER) {
         if (required) {
             return validation_error_response(VALIDATION_ERROR_NULL_INPUT, field);
         } else {
@@ -270,7 +276,8 @@ http_response_t* api_validate_json_integer(json_value_t* json,
         }
     }
     
-    double double_value = json_get_number(json, field);
+    json_value_t* value_obj = json_object_get(json, field);
+    double double_value = json_get_number(value_obj);
     int64_t value = (int64_t)double_value;
     
     /* Check if the value is actually an integer */
@@ -304,7 +311,8 @@ http_response_t* api_validate_json_url(json_value_t* json,
                                       const char* field, 
                                       int required, 
                                       const char** value_out) {
-    const char* value = json_get_string(json, field);
+    json_value_t* value_obj = json_object_get(json, field);
+    const char* value = value_obj ? json_get_string(value_obj) : NULL;
     
     if (!value) {
         if (required) {
@@ -343,7 +351,8 @@ http_response_t* api_validate_json_email(json_value_t* json,
                                         const char* field, 
                                         int required, 
                                         const char** value_out) {
-    const char* value = json_get_string(json, field);
+    json_value_t* value_obj = json_object_get(json, field);
+    const char* value = value_obj ? json_get_string(value_obj) : NULL;
     
     if (!value) {
         if (required) {
@@ -382,7 +391,7 @@ http_response_t* api_validate_json_boolean(json_value_t* json,
                                           const char* field, 
                                           int required, 
                                           int* value_out) {
-    if (!json_has_field(json, field)) {
+    if (!json_object_has(json, field)) {
         if (required) {
             return validation_error_response(VALIDATION_ERROR_NULL_INPUT, field);
         } else {
@@ -391,12 +400,13 @@ http_response_t* api_validate_json_boolean(json_value_t* json,
         }
     }
     
-    if (json_get_type(json, field) != JSON_BOOLEAN) {
+    json_value_t* value_obj = json_object_get(json, field);
+    if (!value_obj || json_get_type(value_obj) != JSON_BOOLEAN) {
         return validation_error_response(VALIDATION_ERROR_INVALID_FORMAT, field);
     }
     
     if (value_out) {
-        *value_out = json_get_boolean(json, field);
+        *value_out = json_get_boolean(value_obj);
     }
     
     return NULL; /* NULL means validation successful */
