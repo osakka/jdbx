@@ -73,9 +73,12 @@ Basic performance tests have been conducted on the following operations:
 | Unit Tests | ⚠️ Partial | Core components have tests, but coverage could be improved |
 | Integration Tests | ✅ Complete | End-to-end testing for database operations |
 | JavaScript Tests | ✅ Complete | Tests for JavaScript integration and API |
+| Compiler Warnings | ✅ Complete | Fixed signedness, unused parameters, format-truncation warnings |
+| Buffer Safety | ✅ Complete | Enhanced string handling to prevent buffer overflows |
 | Code Documentation | ⚠️ Partial | API is well-documented, internals need more documentation |
 | Memory Management | ✅ Complete | Reference counting system for proper resource cleanup |
 | Error Handling | ⚠️ Partial | Good coverage but some edge cases need handling |
+| Build Modes | ✅ Complete | Clean builds with and without JavaScript support |
 
 ## Current Limitations
 
@@ -91,25 +94,34 @@ Basic performance tests have been conducted on the following operations:
 
 ## Recent Improvements
 
-1. **JavaScript Integration Enhancement**: 
+1. **Code Quality and Safety Enhancements**:
+   - Fixed compiler warnings across the codebase (signedness, unused parameters, format-truncation)
+   - Enhanced buffer safety in string operations to prevent overflow
+   - Standardized JavaScript conditional compilation for builds with/without JS support
+   - Added helper functions for safer path manipulation
+   - Created test scripts to verify cross-compilation modes
+
+2. **JavaScript Integration Enhancement**:
    - Added robust file path resolution for JavaScript files
    - Implemented caching for JavaScript file paths
    - Created a helper library for cleaner JavaScript database interaction
+   - Enhanced JavaScript file path utilities with safer string handling
 
-2. **Transaction Handling**:
+3. **Transaction Handling**:
    - Improved transaction isolation
    - Added support for savepoints
    - Enhanced error recovery during transaction failures
 
-3. **Memory Management**:
+4. **Memory Management**:
    - Implemented reference counting for JSON objects
    - Fixed memory leaks in long-running operations
    - Improved resource cleanup in error conditions
 
-4. **Path Resolution**:
+5. **Path Resolution**:
    - Enhanced path resolution for all file types
    - Made paths relative to binary location for better deployment flexibility
    - Improved daemon mode operation
+   - Added buffer overflow protection in path handling
 
 ## Future Development Areas
 
