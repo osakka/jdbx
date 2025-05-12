@@ -275,6 +275,19 @@ The server is built around these core components:
 - **Database Engine**: Collection and document management
 - **RBAC System**: User, role, and permission management
 - **API Layer**: RESTful interface to the database
+- **JavaScript Integration**: Extend database functionality with JavaScript
+
+### Project Structure
+
+The project follows a clean, maintainable structure organized into logical components:
+
+- **src/**: Source code organized by component
+- **include/**: Header files with clean namespace hierarchy
+- **doc/**: Comprehensive documentation
+- **examples/**: Usage examples from basic to advanced
+- **tests/**: Test suite organized by test type
+
+For a detailed overview of the project structure, see [Project Structure](doc/architecture/project_structure.md).
 
 ## Contributing
 
