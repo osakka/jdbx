@@ -58,7 +58,8 @@ js_engine_t* g_js_engine = NULL;
 #define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
 
 /* Global to store the binary directory path (not including trailing slash) */
-static char binary_dir[PATH_MAX] = {0};
+/* Unused for now */
+/*static char binary_dir[PATH_MAX] = {0};
 
 /* Default log level */
 #define DEFAULT_LOG_LEVEL LOG_LEVEL_INFO
@@ -200,11 +201,11 @@ int main(int argc, char** argv) {
 
     /* Handle command line arguments */
     char* js_file = NULL;
-    int show_help = 0;
-    int stop_server = 0;
-    int check_status = 0;
-    int just_version = 0;
-    const char* config_file = NULL;
+    /* Unused for now: int show_help = 0; */
+    /* Unused for now: int stop_server = 0; */
+    /* Unused for now: int check_status = 0; */
+    /* Unused for now: int just_version = 0; */
+    /* Unused for now: const char* config_file = NULL; */
 
     /* Process command-line arguments (simplified for testing) */
     for (int i = 1; i < argc; i++) {

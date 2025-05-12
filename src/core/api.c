@@ -1,9 +1,9 @@
-#include "api/api.h"
-#include "core/server.h"
-#include "database/database.h"
-#include "rbac/rbac.h"
-#include "rbac/jwt.h"
-#include "utils/metrics.h"
+#include "jsondb/api/api.h"
+#include "jsondb/core/server.h"
+#include "jsondb/database/database.h"
+#include "jsondb/rbac/rbac.h"
+#include "jsondb/rbac/jwt.h"
+#include "jsondb/utils/metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -540,7 +540,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
     }
     
     /* Extract collection name */
-    char* collection_name = strndup(path, slash ? slash - path : strlen(path));
+    char* collection_name = strndup(path, slash ? (size_t)(slash - path) : strlen(path));
     
     /* Parse query parameter if present */
     json_value_t* query = NULL;
@@ -761,62 +761,86 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
 
 /* RBAC handlers */
 http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"users\":[]}", "application/json");
 }
 
 http_response_t* api_handle_user_get(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_CREATED, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
 }
 
 http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"roles\":[]}", "application/json");
 }
 
 http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_CREATED, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
 }
 
 http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
 }
 
 /* Configuration handlers */
 http_response_t* api_handle_config_get(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"config\":{\"port\":8080}}", "application/json");
 }
 
 http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* request) {
+    (void)request; /* Avoid unused parameter warning */
+    (void)ctx; /* Avoid unused parameter warning */
     /* Placeholder implementation */
     return create_http_response(HTTP_OK, "{\"config\":{\"port\":8080}}", "application/json");
 }

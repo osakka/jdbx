@@ -1,5 +1,5 @@
-#include "core/server.h"
-#include "api/api.h"
+#include "jsondb/core/server.h"
+#include "jsondb/api/api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -358,7 +358,7 @@ char* serialize_http_response(http_response_t* response) {
 
     /* Status line */
     int n = snprintf(response_str + written, remaining, "HTTP/1.1 %s\r\n", http_status_string(response->status));
-    if (n < 0 || n >= remaining) {
+    if (n < 0 || (size_t)n >= remaining) {
         free(response_str);
         return NULL;
     }
@@ -367,7 +367,7 @@ char* serialize_http_response(http_response_t* response) {
 
     /* Headers */
     n = snprintf(response_str + written, remaining, "Content-Type: %s\r\n", response->content_type);
-    if (n < 0 || n >= remaining) {
+    if (n < 0 || (size_t)n >= remaining) {
         free(response_str);
         return NULL;
     }
@@ -375,7 +375,7 @@ char* serialize_http_response(http_response_t* response) {
     remaining -= n;
 
     n = snprintf(response_str + written, remaining, "Content-Length: %zu\r\n", response->content_length);
-    if (n < 0 || n >= remaining) {
+    if (n < 0 || (size_t)n >= remaining) {
         free(response_str);
         return NULL;
     }
@@ -383,7 +383,7 @@ char* serialize_http_response(http_response_t* response) {
     remaining -= n;
 
     n = snprintf(response_str + written, remaining, "Connection: close\r\n");
-    if (n < 0 || n >= remaining) {
+    if (n < 0 || (size_t)n >= remaining) {
         free(response_str);
         return NULL;
     }
@@ -396,7 +396,7 @@ char* serialize_http_response(http_response_t* response) {
     for (size_t i = 0; i < response->num_headers; i++) {
         if (response->headers[i]) {
             n = snprintf(response_str + written, remaining, "%s\r\n", response->headers[i]);
-            if (n < 0 || n >= remaining) {
+            if (n < 0 || (size_t)n >= remaining) {
                 free(response_str);
                 return NULL;
             }
@@ -407,7 +407,7 @@ char* serialize_http_response(http_response_t* response) {
 
     /* End of headers */
     n = snprintf(response_str + written, remaining, "\r\n");
-    if (n < 0 || n >= remaining) {
+    if (n < 0 || (size_t)n >= remaining) {
         free(response_str);
         return NULL;
     }

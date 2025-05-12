@@ -1,8 +1,8 @@
-#include "api/api.h"
-#include "core/server.h"
-#include "database/database.h"
-#include "rbac/rbac.h"
-#include "rbac/jwt.h"
+#include "jsondb/api/api.h"
+#include "jsondb/core/server.h"
+#include "jsondb/database/database.h"
+#include "jsondb/rbac/rbac.h"
+#include "jsondb/rbac/jwt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +10,8 @@
 
 /* Admin test route handler */
 http_response_t* api_handle_admin_test(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; /* Avoid unused parameter warning */
+    (void)request; /* Avoid unused parameter warning */
     printf("Admin test endpoint called\n");
 
     /* Create detailed response with debug info */
