@@ -1,6 +1,8 @@
-#include "api/api.h"
-#include "database/database.h"
-#include "utils/json.h"
+#include "jsondb/api/api.h"
+#include "jsondb/api/api_validation.h"
+#include "jsondb/database/database.h"
+#include "jsondb/utils/json.h"
+#include "jsondb/utils/input_validation.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -120,100 +122,94 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
 
 /* Create a new index */
 http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* request) {
-    if (!ctx || !request || !request->body) {
-        return create_http_response(HTTP_BAD_REQUEST, 
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
     }
-    
+
     /* Extract collection name */
-    char* collection = NULL;
-    char* index_name = NULL;
-    
-    if (!extract_path_segments(request->path, &collection, &index_name)) {
-        return create_http_response(HTTP_BAD_REQUEST, 
-                                  "{\"error\":\"Invalid path format\"}", "application/json");
+    char collection[256] = {0};
+    char* temp_index_name = NULL;
+
+    /* Validate collection name from path */
+    http_response_t* error_response = api_validate_collection_name(request, NULL, collection, sizeof(collection));
+    if (error_response) {
+        return error_response;
     }
-    
-    /* Free index_name as we'll get it from the request body */
-    if (index_name) {
-        free(index_name);
-        index_name = NULL;
-    }
-    
+
     /* Check if collection exists */
     db_collection_t* coll = db_get_collection(ctx->db, collection);
     if (!coll) {
-        free(collection);
-        return create_http_response(HTTP_NOT_FOUND, 
+        return create_http_response(HTTP_NOT_FOUND,
                                   "{\"error\":\"Collection not found\"}", "application/json");
     }
-    
-    /* Parse request body */
-    json_value_t* body = json_parse(request->body);
-    if (!body || body->type != JSON_OBJECT) {
-        free(collection);
-        if (body) json_free(body);
-        return create_http_response(HTTP_BAD_REQUEST, 
-                                  "{\"error\":\"Invalid request body\"}", "application/json");
+
+    /* Validate JSON request body */
+    json_value_t* body = NULL;
+    error_response = api_validate_json_body(request, &body);
+    if (error_response) {
+        return error_response;
     }
-    
-    /* Extract index parameters */
-    json_value_t* name_val = json_object_get(body, "name");
-    json_value_t* field_val = json_object_get(body, "field");
-    json_value_t* type_val = json_object_get(body, "type");
-    
-    if (!name_val || name_val->type != JSON_STRING || 
-        !field_val || field_val->type != JSON_STRING) {
-        free(collection);
+
+    /* Validate required fields */
+    const char* name = NULL;
+    const char* field = NULL;
+    const char* type_str = NULL;
+
+    error_response = api_validate_json_string(body, "name", 1, 64,
+                                             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
+                                             1, &name);
+    if (error_response) {
         json_free(body);
-        return create_http_response(HTTP_BAD_REQUEST, 
-                                  "{\"error\":\"Index name and field are required\"}", "application/json");
+        return error_response;
     }
-    
-    const char* name = name_val->value.string;
-    const char* field = field_val->value.string;
-    const char* type_str = (type_val && type_val->type == JSON_STRING) ? 
-                           type_val->value.string : "non_unique";
-    
+
+    error_response = api_validate_json_string(body, "field", 1, 128, NULL, 1, &field);
+    if (error_response) {
+        json_free(body);
+        return error_response;
+    }
+
+    error_response = api_validate_json_string(body, "type", 0, 32, NULL, 0, &type_str);
+    if (error_response) {
+        json_free(body);
+        return error_response;
+    }
+
+    /* Default type if not specified */
+    if (!type_str) {
+        type_str = "non_unique";
+    }
+
     /* Parse index type */
     index_type_t type = parse_index_type(type_str);
-    
+
     /* Create index */
     index_t* index = db_create_index(ctx->db, collection, name, field, type);
-    
+
     /* Free request body */
     json_free(body);
-    
+
     if (!index) {
-        free(collection);
-        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                                   "{\"error\":\"Failed to create index\"}", "application/json");
     }
-    
+
     /* Create response */
     json_value_t* response = json_create_object();
-    json_object_set(response, "success", json_create_boolean(1));
-    json_object_set(response, "message", json_create_string("Index created successfully"));
-    json_object_set(response, "collection", json_create_string(collection));
-    json_object_set(response, "name", json_create_string(name));
-    json_object_set(response, "field", json_create_string(field));
-    json_object_set(response, "type", json_create_string(type_str));
-    
-    /* Free collection name */
-    free(collection);
-    
-    /* Serialize response */
-    char* response_str = json_stringify(response);
-    
+    json_set_boolean(response, "success", 1);
+    json_set_string(response, "message", "Index created successfully");
+    json_set_string(response, "collection", collection);
+    json_set_string(response, "name", name);
+    json_set_string(response, "field", field);
+    json_set_string(response, "type", type_str);
+
+    /* Create HTTP response */
+    http_response_t* http_response = http_response_json_new(HTTP_CREATED, response);
+
     /* Free resources */
     json_free(response);
-    
-    /* Create HTTP response */
-    http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
-    
-    /* Free response string */
-    free(response_str);
-    
+
     return http_response;
 }
 
