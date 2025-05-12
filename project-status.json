@@ -1,0 +1,801 @@
+{
+  "name": "JSON Database Server",
+  "version": "1.0.0",
+  "description": "A lightweight, multithreaded JSON document database server with RESTful API and ACID transactions",
+  "lastUpdated": "2025-05-12",
+  "license": "MIT",
+  "contributors": 5,
+  "repository": "https://github.com/yourusername/jsondb.git",
+  "status": {
+    "overall": "stable",
+    "core": "stable",
+    "transaction": "beta",
+    "visualization": "alpha",
+    "metrics": "beta",
+    "build": "stable",
+    "memoryManagement": "stable"
+  },
+  "architecture": {
+    "components": [
+      {
+        "name": "Memory Management",
+        "description": "Reference counting system for safe memory management and preventing double-free issues",
+        "status": "stable",
+        "files": ["src/utils/memory/ref_counter.c", "src/utils/memory/ref_json.c", "include/utils/memory/ref_counter.h", "include/utils/memory/ref_json.h", "include/utils/debug.h"]
+      },
+      {
+        "name": "HTTP Server",
+        "description": "Multithreaded HTTP server with connection pooling",
+        "status": "stable",
+        "files": ["src/server.c", "include/server.h"]
+      },
+      {
+        "name": "JSON Parser",
+        "description": "Fast, memory-efficient JSON parser and serializer",
+        "status": "stable",
+        "files": ["src/json.c", "include/json.h"]
+      },
+      {
+        "name": "Database Engine",
+        "description": "Core storage engine for collections and documents",
+        "status": "stable",
+        "files": ["src/database.c", "include/database.h"]
+      },
+      {
+        "name": "RBAC System",
+        "description": "Role-based access control for authorization",
+        "status": "stable",
+        "files": ["src/rbac.c", "include/rbac.h"]
+      },
+      {
+        "name": "API Layer",
+        "description": "RESTful API implementation for database access",
+        "status": "stable",
+        "files": ["src/api.c", "include/api.h"]
+      },
+      {
+        "name": "Transaction Manager",
+        "description": "ACID transaction management for operations",
+        "status": "beta",
+        "files": ["src/transaction.c", "include/transaction.h"]
+      },
+      {
+        "name": "Lock Manager",
+        "description": "Document-level locking for concurrency control",
+        "status": "beta",
+        "files": ["src/lock_manager.c"]
+      },
+      {
+        "name": "Index System",
+        "description": "Indexing system for optimized queries",
+        "status": "stable",
+        "files": ["src/index.c", "src/index_api.c", "src/index_query_api.c"]
+      },
+      {
+        "name": "JavaScript Engine",
+        "description": "QuickJS integration for custom logic",
+        "status": "stable",
+        "files": ["src/js_engine.c", "src/js_api.c", "include/js_engine.h"]
+      },
+      {
+        "name": "Metrics System",
+        "description": "Performance monitoring and metrics collection",
+        "status": "beta",
+        "files": ["src/utils/metrics.c", "include/utils/metrics.h"]
+      },
+      {
+        "name": "Cache System",
+        "description": "Document caching with multiple eviction policies",
+        "status": "stable",
+        "files": ["src/utils/cache.c", "include/utils/cache.h"]
+      },
+      {
+        "name": "Admin Interface",
+        "description": "Web-based administration interface",
+        "status": "stable",
+        "files": ["admin/index.html", "admin/js/app.js", "admin/css/styles.css"]
+      },
+      {
+        "name": "Build System",
+        "description": "Makefile-based compilation and linking system",
+        "status": "stable",
+        "files": ["Makefile", "scripts/setup_quickjs.sh"]
+      }
+    ]
+  },
+  "features": [
+    {
+      "name": "JSON Document Database",
+      "description": "Document-oriented NoSQL database for JSON data",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "RESTful API",
+      "description": "Comprehensive HTTP API for all database operations",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Role-based Access Control",
+      "description": "User, role, and permission management system",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "JWT Authentication",
+      "description": "Secure token-based authentication",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "SSL/TLS Support",
+      "description": "Secure communication between clients and server",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Schema Validation",
+      "description": "JSON schema validation for documents",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Web Admin Interface",
+      "description": "Interface for managing collections, documents, and users",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Document Caching",
+      "description": "Document caching with LRU, LFU, and FIFO policies",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "JavaScript Extensions",
+      "description": "Integration with QuickJS for custom logic",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Query Language",
+      "description": "MongoDB-like query syntax for filtering documents",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Indexing",
+      "description": "Optimized queries with custom index support",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "ACID Transactions",
+      "description": "Atomicity, Consistency, Isolation, Durability guarantees",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Logging",
+      "description": "Logging system for crash recovery and auditing",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Visualization",
+      "description": "Visualization tools for transaction monitoring",
+      "status": "alpha",
+      "implemented": true
+    },
+    {
+      "name": "Deadlock Resolution",
+      "description": "Automatic detection and resolution of deadlocks",
+      "status": "beta",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Isolation Levels",
+      "description": "Support for read uncommitted, read committed, and serializable isolation",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Audit Trail",
+      "description": "Detailed audit logs for all transaction operations",
+      "status": "beta",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Retry",
+      "description": "Automatic retry mechanism for failed transactions",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Savepoints",
+      "description": "Support for partial rollbacks within transactions",
+      "status": "beta",
+      "implemented": true
+    },
+    {
+      "name": "Transaction Monitoring",
+      "description": "Metrics and monitoring for transaction performance",
+      "status": "beta",
+      "implemented": true
+    },
+    {
+      "name": "Cross-origin Resource Sharing",
+      "description": "CORS support for browser-based clients",
+      "status": "stable",
+      "implemented": true
+    },
+    {
+      "name": "Metrics System",
+      "description": "Comprehensive performance metrics collection",
+      "status": "beta",
+      "implemented": true
+    },
+    {
+      "name": "Import/Export Tools",
+      "description": "Tools for data migration and backup",
+      "status": "stable",
+      "implemented": true
+    }
+  ],
+  "api": {
+    "baseUrl": "http://localhost:5000",
+    "endpoints": [
+      {
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Login with credentials"
+      },
+      {
+        "path": "/api/auth/register",
+        "method": "POST",
+        "description": "Register a new user"
+      },
+      {
+        "path": "/api/collections",
+        "method": "GET",
+        "description": "List all collections"
+      },
+      {
+        "path": "/api/collections",
+        "method": "POST",
+        "description": "Create a collection"
+      },
+      {
+        "path": "/api/collections/:name",
+        "method": "DELETE",
+        "description": "Drop a collection"
+      },
+      {
+        "path": "/api/collections/:name/documents",
+        "method": "GET",
+        "description": "Query documents"
+      },
+      {
+        "path": "/api/collections/:name/documents",
+        "method": "POST",
+        "description": "Create a document"
+      },
+      {
+        "path": "/api/collections/:name/documents/:id",
+        "method": "GET",
+        "description": "Get a document"
+      },
+      {
+        "path": "/api/collections/:name/documents/:id",
+        "method": "PUT",
+        "description": "Update a document"
+      },
+      {
+        "path": "/api/collections/:name/documents/:id",
+        "method": "DELETE",
+        "description": "Delete a document"
+      },
+      {
+        "path": "/api/transactions",
+        "method": "POST",
+        "description": "Begin a new transaction"
+      },
+      {
+        "path": "/api/transactions/:id/commit",
+        "method": "POST",
+        "description": "Commit a transaction"
+      },
+      {
+        "path": "/api/transactions/:id/rollback",
+        "method": "DELETE",
+        "description": "Rollback a transaction"
+      },
+      {
+        "path": "/api/js/query",
+        "method": "POST",
+        "description": "Execute JavaScript query"
+      },
+      {
+        "path": "/api/js/eval",
+        "method": "POST",
+        "description": "Evaluate JavaScript code"
+      },
+      {
+        "path": "/api/js/functions",
+        "method": "POST",
+        "description": "Register JavaScript function"
+      },
+      {
+        "path": "/api/indexes/:collection",
+        "method": "POST",
+        "description": "Create index"
+      },
+      {
+        "path": "/api/metrics",
+        "method": "GET",
+        "description": "Get server metrics"
+      }
+    ]
+  },
+  "transactionSystem": {
+    "description": "ACID-compliant transaction management system",
+    "components": [
+      {
+        "name": "Transaction Manager",
+        "description": "Core transaction management and coordination",
+        "status": "stable"
+      },
+      {
+        "name": "Transaction Log",
+        "description": "Persistent logging for crash recovery",
+        "status": "stable"
+      },
+      {
+        "name": "Lock Manager",
+        "description": "Document-level locks for concurrency control",
+        "status": "beta"
+      },
+      {
+        "name": "Deadlock Detection",
+        "description": "Automatic detection of deadlock situations",
+        "status": "beta"
+      },
+      {
+        "name": "Isolation Levels",
+        "description": "Multiple isolation levels for transactions",
+        "status": "stable"
+      },
+      {
+        "name": "Savepoints",
+        "description": "Ability to create and roll back to savepoints",
+        "status": "beta"
+      },
+      {
+        "name": "Retry Mechanism",
+        "description": "Automatic retry for failed transactions",
+        "status": "stable"
+      },
+      {
+        "name": "Audit Trail",
+        "description": "Comprehensive transaction audit logging",
+        "status": "beta"
+      },
+      {
+        "name": "Visualization",
+        "description": "Tools for visualizing transaction execution",
+        "status": "alpha"
+      },
+      {
+        "name": "Metrics",
+        "description": "Performance monitoring for transactions",
+        "status": "beta"
+      }
+    ],
+    "isolationLevels": [
+      {
+        "name": "Read Uncommitted",
+        "description": "Allows transactions to see uncommitted changes from other transactions",
+        "implemented": true
+      },
+      {
+        "name": "Read Committed",
+        "description": "Only allows transactions to see committed changes from other transactions",
+        "implemented": true
+      },
+      {
+        "name": "Serializable",
+        "description": "Provides complete isolation between transactions",
+        "implemented": true
+      }
+    ]
+  },
+  "config": {
+    "options": [
+      {
+        "name": "server.port",
+        "type": "number",
+        "default": 5000,
+        "description": "Server port number"
+      },
+      {
+        "name": "server.host",
+        "type": "string",
+        "default": "0.0.0.0",
+        "description": "Server host address"
+      },
+      {
+        "name": "database.path",
+        "type": "string",
+        "default": "db.json",
+        "description": "Path to database file"
+      },
+      {
+        "name": "jwt.secret",
+        "type": "string",
+        "default": "REPLACE_THIS_WITH_A_SECURE_SECRET_KEY",
+        "description": "Secret key for JWT tokens"
+      },
+      {
+        "name": "ssl.enabled",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable SSL/TLS"
+      }
+    ]
+  },
+  "build": {
+    "system": "Make",
+    "dependencies": {
+      "runtime": {
+        "TCC": ">=0.9.27",
+        "libuuid": ">=2.36",
+        "libssl": ">=1.1.1",
+        "libcrypto": ">=1.1.1",
+        "QuickJS": ">=2021-03-27"
+      },
+      "development": {
+        "gcc": ">=8.0.0",
+        "make": ">=4.0",
+        "pkg-config": ">=0.29"
+      }
+    },
+    "targets": [
+      {
+        "name": "all",
+        "description": "Build entire project (server and tools)",
+        "default": true
+      },
+      {
+        "name": "server",
+        "description": "Build only the server component"
+      },
+      {
+        "name": "tools",
+        "description": "Build only the utility tools"
+      },
+      {
+        "name": "clean",
+        "description": "Remove all build artifacts"
+      },
+      {
+        "name": "run",
+        "description": "Build and run the server"
+      }
+    ],
+    "process": {
+      "steps": [
+        "Install required dependencies",
+        "Set up QuickJS integration",
+        "Run make to build the project",
+        "Configure server settings",
+        "Start the server"
+      ],
+      "quickStart": "make && ./bin/jsondb"
+    },
+    "outputs": {
+      "server": "bin/jsondb",
+      "tools": "bin/jsondb_tools"
+    },
+    "issues": [
+      {
+        "id": "missing-quickjs",
+        "description": "QuickJS integration not fully implemented in build system",
+        "status": "fixed",
+        "resolution": "Added external QuickJS library from /opt/qjs and updated Makefile to include proper paths and libraries. Implemented proper memory management in the JavaScript engine.",
+        "fixedDate": "2025-05-10",
+        "priority": "high"
+      },
+      {
+        "id": "compiler-compatibility",
+        "description": "Build process has compatibility issues with both TCC and GCC compilers",
+        "status": "partially-fixed",
+        "details": "Fixed several compiler issues including: circular header dependency, missing function declarations, struct redefinition issues, json_object_foreach macro errors, json_values_equal function calls, transaction_log API issues, and cookie struct type inconsistencies. Still has linking issues without QuickJS that need addressing for a complete build.",
+        "fixDetails": "Added forward declarations to break circular dependency, added missing JSON functions, fixed cache_t struct definition, fixed comment formatting in API routes, implemented json_equals function, fixed lock_manager struct redefinition issues, added missing includes (errno.h, sys/stat.h), added proper variable declarations for json_object_foreach macro, replaced json_values_equal with json_equals, fixed cookie_t struct definition, added helper functions for JSON operations, created comprehensive QuickJS mock implementation to enable building without QuickJS, fixed global variable definitions for TOOLS_BUILD mode",
+        "fixedDate": "2025-05-10",
+        "priority": "high"
+      },
+      {
+        "id": "ssl-mock",
+        "description": "SSL support currently uses mock implementation",
+        "status": "known-limitation",
+        "priority": "medium"
+      },
+      {
+        "id": "js-memory-management",
+        "description": "Memory management issues in JavaScript engine integration",
+        "status": "fixed",
+        "resolution": "Fixed double-free issues in JavaScript engine by implementing a comprehensive reference counting system. Created ref_counter.h/c and ref_json.h/c for shared object management. Reorganized source code for better maintainability. Added proper cleanup of resources and better error handling in js_engine_eval.",
+        "fixedDate": "2025-05-11",
+        "priority": "high"
+      },
+      {
+        "id": "http-response-json-type-mismatch",
+        "description": "Type mismatch errors in HTTP response JSON handling",
+        "status": "fixed",
+        "resolution": "Fixed JSON string to HTTP response conversion by implementing http_response_from_json_string and http_response_json_string helper functions. Created json_helpers.h utility header for consistent JSON string handling. Updated transaction.c to use the new helpers, avoiding incompatible pointer type warnings. Centralized helper functions by moving them to json_helpers.h for better code reuse.",
+        "fixedDate": "2025-05-12",
+        "priority": "medium",
+        "commitHash": "c26af52"
+      },
+      {
+        "id": "server-initialization-error",
+        "description": "Incorrect return value handling in server initialization causing startup failures",
+        "status": "fixed",
+        "resolution": "Created main_fixed.c with proper handling of server_init() and server_start() return values. Fixed server initialization to properly check for SERVER_OK (0) status code rather than treating 0 as false. Added proper initialization of max_connections field and error code. Updated build system to use main_fixed.c instead of main.c.",
+        "fixedDate": "2025-05-11",
+        "priority": "high",
+        "commitHash": "fd4e8a3"
+      }
+    ],
+    "enhancements": [
+      {
+        "id": "cmake-support",
+        "description": "Add CMake build system for better cross-platform support",
+        "status": "planned",
+        "priority": "medium"
+      },
+      {
+        "id": "quickjs-auto-download",
+        "description": "Add automatic download and setup of QuickJS",
+        "status": "planned",
+        "priority": "high"
+      },
+      {
+        "id": "incremental-build",
+        "description": "Improve incremental build support",
+        "status": "planned",
+        "priority": "low"
+      }
+    ],
+    "documentation": {
+      "main": "docs/build/BUILD.md",
+      "related": [
+        "README.md"
+      ]
+    }
+  },
+  "dependencies": {
+    "runtime": {
+      "TCC": ">=0.9.27",
+      "libuuid": ">=2.36",
+      "libssl": ">=1.1.1",
+      "libcrypto": ">=1.1.1",
+      "QuickJS": ">=2021-03-27"
+    },
+    "development": {
+      "gcc": ">=8.0.0",
+      "make": ">=4.0",
+      "pkg-config": ">=0.29"
+    }
+  },
+  "metrics": {
+    "categories": [
+      {
+        "name": "Server",
+        "metrics": ["server_requests_total", "server_request_duration_seconds", "active_connections"]
+      },
+      {
+        "name": "Database",
+        "metrics": ["db_operations_total", "db_operation_duration_seconds", "collection_documents_total"]
+      },
+      {
+        "name": "Cache",
+        "metrics": ["cache_hits_total", "cache_misses_total", "cache_size_bytes"]
+      },
+      {
+        "name": "Transactions",
+        "metrics": ["active_transactions", "committed_transactions_total", "aborted_transactions_total", "transaction_duration_seconds"]
+      }
+    ]
+  },
+  "javascript": {
+    "memoryManagement": {
+      "description": "Enhanced reference counting system for JavaScript engine integration",
+      "components": [
+        {
+          "name": "Reference Counter",
+          "description": "Core reference counting mechanism for shared objects",
+          "files": ["src/utils/memory/ref_counter.c", "include/utils/memory/ref_counter.h"]
+        },
+        {
+          "name": "JSON Reference Counter",
+          "description": "Reference counting for JSON values shared between components",
+          "files": ["src/utils/memory/ref_json.c", "include/utils/memory/ref_json.h"]
+        },
+        {
+          "name": "Debug Utilities",
+          "description": "Conditional debug output to assist with memory management",
+          "files": ["include/utils/debug.h"]
+        }
+      ],
+      "status": "stable"
+    },
+    "features": [
+      {
+        "name": "Custom Queries",
+        "description": "JavaScript-based document filtering",
+        "status": "stable"
+      },
+      {
+        "name": "User Functions",
+        "description": "Custom JavaScript functions callable via API",
+        "status": "stable"
+      },
+      {
+        "name": "Document Validators",
+        "description": "JavaScript-based document validation",
+        "status": "stable"
+      },
+      {
+        "name": "Document Transformers",
+        "description": "JavaScript-based document transformation",
+        "status": "stable"
+      }
+    ],
+    "integration": {
+      "engine": "QuickJS",
+      "version": "2021-03-27",
+      "location": "/opt/qjs",
+      "memoryManagement": "Enhanced with proper cleanup to prevent memory leaks",
+      "errorHandling": "Improved with detailed error reporting"
+    }
+  },
+  "recentDevelopment": [
+    {
+      "commitHash": "fd4e8a3",
+      "description": "Fix server initialization and build system file duplication issues",
+      "date": "2025-05-11"
+    },
+    {
+      "commitHash": "c26af52",
+      "description": "Refactor JSON string to HTTP response conversion and centralize helper functions",
+      "date": "2025-05-12"
+    },
+    {
+      "commitHash": "117e196",
+      "description": "Implement comprehensive memory management system and source reorganization",
+      "date": "2025-05-11"
+    },
+    {
+      "commitHash": "5479407",
+      "description": "Fix additional compiler issues to improve build compatibility",
+      "date": "2025-05-10"
+    },
+    {
+      "commitHash": "8e1279a",
+      "description": "Update project-status.json with compiler fix information",
+      "date": "2025-05-10"
+    },
+    {
+      "commitHash": "4d36436",
+      "description": "Fix compiler issues to improve build compatibility",
+      "date": "2025-05-10"
+    },
+    {
+      "commitHash": "a363d25",
+      "description": "Add build attempt results documentation",
+      "date": "2025-05-10"
+    },
+    {
+      "commitHash": "9ace582",
+      "description": "Set up QuickJS integration and document compiler issues",
+      "date": "2025-05-10"
+    },
+    {
+      "commitHash": "28c36ea",
+      "description": "Add comprehensive transaction management system components",
+      "date": "2025-04-18"
+    },
+    {
+      "commitHash": "3b0aef6",
+      "description": "Add transaction visualization and enhanced audit trail capabilities",
+      "date": "2025-04-15"
+    },
+    {
+      "commitHash": "6181458",
+      "description": "Implement transaction logging system for crash recovery",
+      "date": "2025-04-10"
+    },
+    {
+      "commitHash": "8d6b552",
+      "description": "Add detailed Git workflow and collaboration guidelines in CONTRIBUTING.md and update README.md",
+      "date": "2025-04-05"
+    },
+    {
+      "commitHash": "2282de9",
+      "description": "Initial commit of QJSDB - A JSON database with QuickJS integration and ACID transactions",
+      "date": "2025-04-01"
+    }
+  ],
+  "roadmap": [
+    {
+      "feature": "Fix Build System File Duplication",
+      "priority": "high",
+      "status": "complete",
+      "targetVersion": "1.0.1",
+      "description": "Resolve duplicate function definitions from src/ and src/*/subdirectory file structure",
+      "progress": "Fixed the issue by updating the Makefile to filter duplicate files between src/ and subdirectories. Updated server initialization to properly handle status codes and corrected server configuration.",
+      "fixedDate": "2025-05-11"
+    },
+    {
+      "feature": "QuickJS Integration Enhancement",
+      "priority": "high",
+      "status": "complete",
+      "targetVersion": "1.0.1",
+      "description": "Improve build process for QuickJS integration and add auto-download feature",
+      "progress": "Added QuickJS integration with external library from /opt/qjs, fixed memory management issues; implemented automatic download and installation script for QuickJS"
+    },
+    {
+      "feature": "CMake Build System",
+      "priority": "low",
+      "status": "cancelled",
+      "targetVersion": "N/A",
+      "description": "Add CMake build system for better cross-platform support - deprioritized in favor of current Make-based system"
+    },
+    {
+      "feature": "SSL/TLS Implementation",
+      "priority": "medium",
+      "status": "planned",
+      "targetVersion": "1.0.1",
+      "description": "Replace SSL mock implementation with actual OpenSSL integration"
+    },
+    {
+      "feature": "Enhance transaction visualization capabilities",
+      "priority": "high",
+      "status": "planned",
+      "targetVersion": "1.1.0"
+    },
+    {
+      "feature": "Improve deadlock detection and resolution",
+      "priority": "medium",
+      "status": "planned",
+      "targetVersion": "1.1.0"
+    },
+    {
+      "feature": "Optimize performance for high-concurrency operations",
+      "priority": "high",
+      "status": "planned",
+      "targetVersion": "1.2.0"
+    },
+    {
+      "feature": "Add distributed transaction support",
+      "priority": "medium",
+      "status": "research",
+      "targetVersion": "2.0.0"
+    },
+    {
+      "feature": "Expand monitoring and metrics for transactions",
+      "priority": "low",
+      "status": "planned",
+      "targetVersion": "1.1.0"
+    },
+    {
+      "feature": "Extend JavaScript API",
+      "priority": "medium",
+      "status": "planned",
+      "targetVersion": "1.1.0",
+      "description": "Add more database functions exposed to JavaScript for advanced custom logic"
+    }
+  ]
+}

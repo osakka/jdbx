@@ -1,0 +1,15 @@
+# Files to ignore
+*.o
+*.log
+*.pid
+obj/
+bin/
+js_integration_export/
+tmp/
+performance_results/
+daemon.log
+daemon_monitor.log
+server_debug.log
+js_debug.log
+*.patch
+

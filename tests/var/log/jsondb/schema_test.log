@@ -1,0 +1,207 @@
+[2025-05-11 14:59:41] [INFO] [logger.c:99:logger_init] Logger initialized with level TRACE
+[2025-05-11 14:59:41] [DEBUG] [schema.c:10:db_create_schema] Creating schema with name: test_schema
+[2025-05-11 14:59:41] [INFO] [schema.c:27:db_create_schema] Schema 'test_schema' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'type' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:113:db_create_schema_rule] Initialized type check rule with default JSON_OBJECT
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'type' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:254:db_add_schema_rule] Adding as first rule in schema
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'required' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:118:db_create_schema_rule] Initialized required rule with default value: true
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'required' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'minLength' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:123:db_create_schema_rule] Initialized minLength rule with default value: 0
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'minLength' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'pattern' for field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:143:db_create_schema_rule] Initialized pattern rule with NULL pattern (to be set later)
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'email' of type 'pattern' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'email' to schema 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:243:db_add_schema_rule] Compiling regex pattern: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [DEBUG] [schema.c:249:db_add_schema_rule] Regex pattern compiled successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'email' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:685:db_schema_to_json] Converting schema 'test_schema' to JSON
+[2025-05-11 14:59:41] [TRACE] [schema.c:701:db_schema_to_json] Adding schema name: test_schema
+[2025-05-11 14:59:41] [TRACE] [schema.c:705:db_schema_to_json] Adding schema description
+[2025-05-11 14:59:41] [TRACE] [schema.c:710:db_schema_to_json] Creating rules array
+[2025-05-11 14:59:41] [DEBUG] [schema.c:725:db_schema_to_json] Converting 4 rules to JSON
+[2025-05-11 14:59:41] [TRACE] [schema.c:732:db_schema_to_json] Converting rule 1/4 for field 'name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:778:db_schema_to_json] Setting rule type: type
+[2025-05-11 14:59:41] [TRACE] [schema.c:796:db_schema_to_json] Setting type check value: string
+[2025-05-11 14:59:41] [TRACE] [schema.c:861:db_schema_to_json] Adding rule to rules array
+[2025-05-11 14:59:41] [TRACE] [schema.c:732:db_schema_to_json] Converting rule 2/4 for field 'name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:778:db_schema_to_json] Setting rule type: required
+[2025-05-11 14:59:41] [TRACE] [schema.c:802:db_schema_to_json] Setting required value: 1
+[2025-05-11 14:59:41] [TRACE] [schema.c:861:db_schema_to_json] Adding rule to rules array
+[2025-05-11 14:59:41] [TRACE] [schema.c:732:db_schema_to_json] Converting rule 3/4 for field 'name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:778:db_schema_to_json] Setting rule type: minLength
+[2025-05-11 14:59:41] [TRACE] [schema.c:807:db_schema_to_json] Setting minLength value: 3
+[2025-05-11 14:59:41] [TRACE] [schema.c:861:db_schema_to_json] Adding rule to rules array
+[2025-05-11 14:59:41] [TRACE] [schema.c:732:db_schema_to_json] Converting rule 4/4 for field 'email'
+[2025-05-11 14:59:41] [TRACE] [schema.c:778:db_schema_to_json] Setting rule type: pattern
+[2025-05-11 14:59:41] [TRACE] [schema.c:828:db_schema_to_json] Setting pattern value: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [TRACE] [schema.c:861:db_schema_to_json] Adding rule to rules array
+[2025-05-11 14:59:41] [TRACE] [schema.c:868:db_schema_to_json] Adding rules array to schema object
+[2025-05-11 14:59:41] [INFO] [schema.c:871:db_schema_to_json] Schema 'test_schema' converted to JSON successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:877:db_schema_from_json] Creating schema from JSON
+[2025-05-11 14:59:41] [TRACE] [schema.c:891:db_schema_from_json] Found schema name: test_schema
+[2025-05-11 14:59:41] [TRACE] [schema.c:897:db_schema_from_json] Found schema description: A test schema for logging
+[2025-05-11 14:59:41] [DEBUG] [schema.c:903:db_schema_from_json] Creating schema with name 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:10:db_create_schema] Creating schema with name: test_schema
+[2025-05-11 14:59:41] [INFO] [schema.c:27:db_create_schema] Schema 'test_schema' created successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:920:db_schema_from_json] Processing 4 rules from JSON
+[2025-05-11 14:59:41] [TRACE] [schema.c:923:db_schema_from_json] Processing rule 1/4
+[2025-05-11 14:59:41] [TRACE] [schema.c:942:db_schema_from_json] Rule 1: field='name', type='type'
+[2025-05-11 14:59:41] [TRACE] [schema.c:971:db_schema_from_json] Creating rule of type 'type' for field 'name'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'type' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:113:db_create_schema_rule] Initialized type check rule with default JSON_OBJECT
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'type' created successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:982:db_schema_from_json] Processing rule value
+[2025-05-11 14:59:41] [TRACE] [schema.c:987:db_schema_from_json] Processing type check value: string
+[2025-05-11 14:59:41] [TRACE] [schema.c:1003:db_schema_from_json] Set type check value to: 4
+[2025-05-11 14:59:41] [TRACE] [schema.c:1091:db_schema_from_json] Adding rule to schema
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:254:db_add_schema_rule] Adding as first rule in schema
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:1096:db_schema_from_json] Rule added successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:923:db_schema_from_json] Processing rule 2/4
+[2025-05-11 14:59:41] [TRACE] [schema.c:942:db_schema_from_json] Rule 2: field='name', type='required'
+[2025-05-11 14:59:41] [TRACE] [schema.c:971:db_schema_from_json] Creating rule of type 'required' for field 'name'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'required' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:118:db_create_schema_rule] Initialized required rule with default value: true
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'required' created successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:982:db_schema_from_json] Processing rule value
+[2025-05-11 14:59:41] [TRACE] [schema.c:1010:db_schema_from_json] Set required value to: 1
+[2025-05-11 14:59:41] [TRACE] [schema.c:1091:db_schema_from_json] Adding rule to schema
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:1096:db_schema_from_json] Rule added successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:923:db_schema_from_json] Processing rule 3/4
+[2025-05-11 14:59:41] [TRACE] [schema.c:942:db_schema_from_json] Rule 3: field='name', type='minLength'
+[2025-05-11 14:59:41] [TRACE] [schema.c:971:db_schema_from_json] Creating rule of type 'minLength' for field 'name'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'minLength' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:123:db_create_schema_rule] Initialized minLength rule with default value: 0
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'name' of type 'minLength' created successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:982:db_schema_from_json] Processing rule value
+[2025-05-11 14:59:41] [TRACE] [schema.c:1017:db_schema_from_json] Set minLength value to: 3
+[2025-05-11 14:59:41] [TRACE] [schema.c:1091:db_schema_from_json] Adding rule to schema
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'name' to schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'name' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:1096:db_schema_from_json] Rule added successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:923:db_schema_from_json] Processing rule 4/4
+[2025-05-11 14:59:41] [TRACE] [schema.c:942:db_schema_from_json] Rule 4: field='email', type='pattern'
+[2025-05-11 14:59:41] [TRACE] [schema.c:971:db_schema_from_json] Creating rule of type 'pattern' for field 'email'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:90:db_create_schema_rule] Creating schema rule of type 'pattern' for field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:143:db_create_schema_rule] Initialized pattern rule with NULL pattern (to be set later)
+[2025-05-11 14:59:41] [INFO] [schema.c:157:db_create_schema_rule] Schema rule for field 'email' of type 'pattern' created successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:982:db_schema_from_json] Processing rule value
+[2025-05-11 14:59:41] [TRACE] [schema.c:1061:db_schema_from_json] Set pattern value to: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [TRACE] [schema.c:1091:db_schema_from_json] Adding rule to schema
+[2025-05-11 14:59:41] [DEBUG] [schema.c:237:db_add_schema_rule] Adding rule for field 'email' to schema 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:243:db_add_schema_rule] Compiling regex pattern: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [DEBUG] [schema.c:249:db_add_schema_rule] Regex pattern compiled successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:257:db_add_schema_rule] Adding to end of rules list
+[2025-05-11 14:59:41] [INFO] [schema.c:265:db_add_schema_rule] Rule for field 'email' added to schema 'test_schema' successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:1096:db_schema_from_json] Rule added successfully
+[2025-05-11 14:59:41] [INFO] [schema.c:1100:db_schema_from_json] Schema 'test_schema' created from JSON with 4 rules
+[2025-05-11 14:59:41] [DEBUG] [schema.c:341:db_validate_document] Validating document against schema 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:359:db_validate_document] Validating against 4 rules
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 1/4: type='type', field='name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:329:get_json_value_at_path] Found value at path 'name' of type string
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 2/4: type='required', field='name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:329:get_json_value_at_path] Found value at path 'name' of type string
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 3/4: type='minLength', field='name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:329:get_json_value_at_path] Found value at path 'name' of type string
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 4/4: type='pattern', field='email'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:329:get_json_value_at_path] Found value at path 'email' of type string
+[2025-05-11 14:59:41] [TRACE] [schema.c:475:db_validate_document] Checking pattern for field 'email': pattern='[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', value='john.doe@example.com'
+[2025-05-11 14:59:41] [INFO] [schema.c:548:db_validate_document] Document validation successful for schema 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:341:db_validate_document] Validating document against schema 'test_schema'
+[2025-05-11 14:59:41] [DEBUG] [schema.c:359:db_validate_document] Validating against 4 rules
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 1/4: type='type', field='name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:331:get_json_value_at_path] No value found at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:380:db_validate_document] Checking rule 2/4: type='required', field='name'
+[2025-05-11 14:59:41] [TRACE] [schema.c:272:get_json_value_at_path] Getting JSON value at path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:291:get_json_value_at_path] Processing path segment: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:294:get_json_value_at_path] Current is an object, getting property: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:331:get_json_value_at_path] No value found at path: name
+[2025-05-11 14:59:41] [INFO] [schema.c:399:db_validate_document] Required field 'name' is missing
+[2025-05-11 14:59:41] [DEBUG] [schema.c:38:db_free_schema] Freeing schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:49:db_free_schema] Freeing 4 rules for schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'type' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'type'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'required' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'required'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'minLength' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'minLength'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'pattern' for field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:192:db_free_schema_rule] Freeing compiled regex pattern
+[2025-05-11 14:59:41] [TRACE] [schema.c:200:db_free_schema_rule] Freeing pattern: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:59:db_free_schema] Freeing schema name: test_schema
+[2025-05-11 14:59:41] [TRACE] [schema.c:64:db_free_schema] Freeing schema description
+[2025-05-11 14:59:41] [TRACE] [schema.c:69:db_free_schema] Freeing schema structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:72:db_free_schema] Schema freed successfully
+[2025-05-11 14:59:41] [DEBUG] [schema.c:38:db_free_schema] Freeing schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:49:db_free_schema] Freeing 4 rules for schema 'test_schema'
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'type' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'type'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'required' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'required'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'minLength' for field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: name
+[2025-05-11 14:59:41] [TRACE] [schema.c:219:db_free_schema_rule] No additional resources to free for rule type 'minLength'
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:181:db_free_schema_rule] Freeing schema rule of type 'pattern' for field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:186:db_free_schema_rule] Freeing field path: email
+[2025-05-11 14:59:41] [TRACE] [schema.c:192:db_free_schema_rule] Freeing compiled regex pattern
+[2025-05-11 14:59:41] [TRACE] [schema.c:200:db_free_schema_rule] Freeing pattern: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+[2025-05-11 14:59:41] [TRACE] [schema.c:224:db_free_schema_rule] Freeing rule structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:227:db_free_schema_rule] Schema rule freed successfully
+[2025-05-11 14:59:41] [TRACE] [schema.c:59:db_free_schema] Freeing schema name: test_schema
+[2025-05-11 14:59:41] [TRACE] [schema.c:64:db_free_schema] Freeing schema description
+[2025-05-11 14:59:41] [TRACE] [schema.c:69:db_free_schema] Freeing schema structure
+[2025-05-11 14:59:41] [DEBUG] [schema.c:72:db_free_schema] Schema freed successfully
+[2025-05-11 14:59:41] [INFO] [logger.c:127:logger_close] Logger shutting down

@@ -1,0 +1,303 @@
+#include "../include/api.h"
+#include "../include/transaction.h"
+#include "../include/json.h"
+#include "../include/utils/json_helpers.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+/* API handler for starting a new transaction */
+http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t* request) {
+    transaction_manager_t* manager = ctx->db->transaction_manager;
+    
+    if (!manager) {
+        return http_response_error(400, "Transaction manager not available");
+    }
+    
+    /* Parse isolation level from query parameters */
+    const char* isolation_str = http_request_get_param(request, "isolation_level");
+    isolation_level_t isolation = ISOLATION_READ_COMMITTED; /* Default isolation level */
+    
+    if (isolation_str) {
+        isolation = isolation_level_from_string(isolation_str);
+        if (isolation == ISOLATION_INVALID) {
+            return http_response_error(400, "Invalid isolation level");
+        }
+    }
+    
+    /* Parse timeout from query parameters */
+    const char* timeout_str = http_request_get_param(request, "timeout");
+    int timeout_ms = 0; /* Default: no timeout */
+    
+    if (timeout_str) {
+        timeout_ms = atoi(timeout_str);
+        if (timeout_ms < 0) {
+            return http_response_error(400, "Timeout must be a non-negative integer");
+        }
+    }
+    
+    /* Start a new transaction */
+    transaction_t* transaction = transaction_begin(manager, isolation);
+    if (!transaction) {
+        return http_response_error(500, "Failed to start transaction");
+    }
+    
+    /* Set timeout if specified */
+    if (timeout_ms > 0) {
+        transaction_set_timeout(transaction, timeout_ms);
+    }
+    
+    /* Create JSON response with transaction ID */
+    json_value_t* json = transaction_to_json(transaction);
+    if (!json) {
+        return http_response_error(500, "Failed to create transaction details");
+    }
+    
+    return http_response_json(200, json);
+}
+
+/* API handler for committing a transaction */
+http_response_t* api_handle_transaction_commit(api_context_t* ctx, http_request_t* request) {
+    transaction_manager_t* manager = ctx->db->transaction_manager;
+    
+    if (!manager) {
+        return http_response_error(400, "Transaction manager not available");
+    }
+    
+    /* Get transaction ID from path */
+    const char* tx_id = http_request_get_path_param(request, "transaction_id");
+    if (!tx_id) {
+        return http_response_error(400, "Transaction ID required");
+    }
+    
+    /* Look up transaction */
+    transaction_t* transaction = transaction_manager_get_transaction(manager, tx_id);
+    if (!transaction) {
+        return http_response_error(404, "Transaction not found");
+    }
+    
+    /* Commit transaction */
+    int result = transaction_commit(transaction);
+    if (result != 0) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "Failed to commit transaction: %s", 
+                 transaction_error_to_string(result));
+        return http_response_error(500, error_msg);
+    }
+    
+    /* Create success response */
+    json_value_t* json = json_create_object();
+    if (!json) {
+        return http_response_error(500, "Failed to create response");
+    }
+    
+    json_object_set(json, "success", json_create_boolean(1));
+    json_object_set(json, "transaction_id", json_create_string(tx_id));
+    json_object_set(json, "status", json_create_string("committed"));
+    
+    return http_response_json(200, json);
+}
+
+/* API handler for rolling back a transaction */
+http_response_t* api_handle_transaction_rollback(api_context_t* ctx, http_request_t* request) {
+    transaction_manager_t* manager = ctx->db->transaction_manager;
+    
+    if (!manager) {
+        return http_response_error(400, "Transaction manager not available");
+    }
+    
+    /* Get transaction ID from path */
+    const char* tx_id = http_request_get_path_param(request, "transaction_id");
+    if (!tx_id) {
+        return http_response_error(400, "Transaction ID required");
+    }
+    
+    /* Look up transaction */
+    transaction_t* transaction = transaction_manager_get_transaction(manager, tx_id);
+    if (!transaction) {
+        return http_response_error(404, "Transaction not found");
+    }
+    
+    /* Rollback transaction */
+    int result = transaction_rollback(transaction);
+    if (result != 0) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "Failed to rollback transaction: %s", 
+                 transaction_error_to_string(result));
+        return http_response_error(500, error_msg);
+    }
+    
+    /* Create success response */
+    json_value_t* json = json_create_object();
+    if (!json) {
+        return http_response_error(500, "Failed to create response");
+    }
+    
+    json_object_set(json, "success", json_create_boolean(1));
+    json_object_set(json, "transaction_id", json_create_string(tx_id));
+    json_object_set(json, "status", json_create_string("rolled back"));
+    
+    return http_response_json(200, json);
+}
+
+/* Helper for handling document operations within a transaction */
+static http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, http_request_t* request) {
+    transaction_manager_t* manager = ctx->db->transaction_manager;
+    
+    if (!manager) {
+        return http_response_error(400, "Transaction manager not available");
+    }
+    
+    /* Get transaction ID from path */
+    const char* tx_id = http_request_get_path_param(request, "transaction_id");
+    if (!tx_id) {
+        return http_response_error(400, "Transaction ID required");
+    }
+    
+    /* Get collection name from path */
+    const char* collection = http_request_get_path_param(request, "collection");
+    if (!collection) {
+        return http_response_error(400, "Collection name required");
+    }
+    
+    /* Look up transaction */
+    transaction_t* transaction = transaction_manager_get_transaction(manager, tx_id);
+    if (!transaction) {
+        return http_response_error(404, "Transaction not found");
+    }
+    
+    /* Handle different operations based on HTTP method */
+    http_method_t method = request->method;
+    
+    if (method == HTTP_GET) {
+        /* Handle query operation */
+        return handle_transaction_query(ctx, request, transaction, collection);
+    } else if (method == HTTP_POST) {
+        /* Handle insert operation */
+        return handle_transaction_insert(ctx, request, transaction, collection);
+    } else if (method == HTTP_PUT) {
+        /* Handle update operation */
+        return handle_transaction_update(ctx, request, transaction, collection);
+    } else if (method == HTTP_DELETE) {
+        /* Handle delete operation */
+        return handle_transaction_delete(ctx, request, transaction, collection);
+    } else {
+        return http_response_error(405, "Method not allowed");
+    }
+}
+
+/* Handle query documents within a transaction */
+static http_response_t* handle_transaction_query(api_context_t* ctx, http_request_t* request, 
+                                             transaction_t* transaction, const char* collection) {
+    /* Parse request body as JSON */
+    json_value_t* query = NULL;
+    
+    if (request->body && strlen(request->body) > 0) {
+        query = json_parse(request->body);
+        if (!query) {
+            return http_response_error(400, "Invalid JSON in request body");
+        }
+    } else {
+        /* Empty query matches all documents */
+        query = json_create_object();
+    }
+    
+    /* Execute query in transaction */
+    json_value_t* result = transaction_query_documents(transaction, collection, query);
+    
+    /* Free query JSON */
+    json_free(query);
+    
+    if (!result) {
+        return http_response_error(500, "Failed to execute query");
+    }
+    
+    return http_response_json(200, result);
+}
+
+/* Handle insert document within a transaction */
+static http_response_t* handle_transaction_insert(api_context_t* ctx, http_request_t* request, 
+                                              transaction_t* transaction, const char* collection) {
+    /* Parse document from request body */
+    if (!request->body || strlen(request->body) == 0) {
+        return http_response_error(400, "Request body required");
+    }
+    
+    json_value_t* document = json_parse(request->body);
+    if (!document) {
+        return http_response_error(400, "Invalid JSON in request body");
+    }
+    
+    /* Insert document in transaction */
+    json_value_t* result = transaction_insert_document(transaction, collection, document);
+    
+    /* Free document JSON (it's cloned in the transaction) */
+    json_free(document);
+    
+    if (!result) {
+        return http_response_error(500, "Failed to insert document");
+    }
+    
+    return http_response_json(201, result);
+}
+
+/* Handle update document within a transaction */
+static http_response_t* handle_transaction_update(api_context_t* ctx, http_request_t* request, 
+                                              transaction_t* transaction, const char* collection) {
+    /* Get document ID from path */
+    const char* doc_id = http_request_get_path_param(request, "id");
+    if (!doc_id) {
+        return http_response_error(400, "Document ID required");
+    }
+    
+    /* Parse document from request body */
+    if (!request->body || strlen(request->body) == 0) {
+        return http_response_error(400, "Request body required");
+    }
+    
+    json_value_t* document = json_parse(request->body);
+    if (!document) {
+        return http_response_error(400, "Invalid JSON in request body");
+    }
+    
+    /* Update document in transaction */
+    json_value_t* result = transaction_update_document(transaction, collection, doc_id, document);
+    
+    /* Free document JSON (it's cloned in the transaction) */
+    json_free(document);
+    
+    if (!result) {
+        return http_response_error(404, "Document not found or update failed");
+    }
+    
+    return http_response_json(200, result);
+}
+
+/* Handle delete document within a transaction */
+static http_response_t* handle_transaction_delete(api_context_t* ctx, http_request_t* request, 
+                                              transaction_t* transaction, const char* collection) {
+    /* Get document ID from path */
+    const char* doc_id = http_request_get_path_param(request, "id");
+    if (!doc_id) {
+        return http_response_error(400, "Document ID required");
+    }
+    
+    /* Delete document in transaction */
+    int result = transaction_delete_document(transaction, collection, doc_id);
+    if (!result) {
+        return http_response_error(404, "Document not found or delete failed");
+    }
+    
+    /* Create success response */
+    json_value_t* json = json_create_object();
+    if (!json) {
+        return http_response_error(500, "Failed to create response");
+    }
+    
+    json_object_set(json, "success", json_create_boolean(1));
+    json_object_set(json, "deleted", json_create_boolean(1));
+    json_object_set(json, "_id", json_create_string(doc_id));
+    
+    return http_response_json(200, json);
+}

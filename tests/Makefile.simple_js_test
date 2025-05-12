@@ -1,0 +1,38 @@
+CC=gcc
+CFLAGS=-Wall -g -I../src/include -DUSE_QUICKJS
+LDFLAGS=-L../lib -L/opt/qjs/lib/quickjs -lquickjs -lpthread -lm
+
+# Source directories
+SRC_DIR=../src/components
+
+# Source files
+SRC_FILES= \
+	$(SRC_DIR)/database/database.c \
+	$(SRC_DIR)/js/js_engine.c \
+	$(SRC_DIR)/js/js_api.c \
+	$(SRC_DIR)/utils/json.c \
+	$(SRC_DIR)/utils/logger.c \
+	$(SRC_DIR)/utils/json_helpers.c \
+	$(SRC_DIR)/utils/js_file_utils.c
+
+# Object files
+OBJ_FILES=$(SRC_FILES:.c=.o)
+
+# Build target
+TARGET=simple_js_test
+
+all: $(TARGET)
+
+$(TARGET): simple_js_test.c $(OBJ_FILES)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(TARGET) $(OBJ_FILES)
+
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run

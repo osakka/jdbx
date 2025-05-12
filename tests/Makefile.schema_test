@@ -1,0 +1,39 @@
+CC = gcc
+CFLAGS = -Wall -I../src/include -g -O0 -DDEBUG
+LDFLAGS = -pthread -lm
+
+# Directory creation
+DIRS = ../var/log/jsondb
+
+# Source paths
+SRCDIR = ../src/components
+OBJDIR = ../obj
+
+# Schema test
+SCHEMA_TEST_OBJS = \
+	$(OBJDIR)/database/schema.o \
+	$(OBJDIR)/database/database.o \
+	$(OBJDIR)/database/index.o \
+	$(OBJDIR)/database/lock_manager.o \
+	$(OBJDIR)/utils/json.o \
+	$(OBJDIR)/utils/json_helpers.o \
+	$(OBJDIR)/utils/logger.o \
+	$(OBJDIR)/utils/cache.o \
+	$(OBJDIR)/utils/metrics.o \
+	$(OBJDIR)/utils/import_export.o \
+	$(OBJDIR)/transaction/transaction.o \
+	$(OBJDIR)/transaction/transaction_log.o \
+	$(OBJDIR)/query/query_language.o
+
+schema_test: test_schema_logging.c $(SCHEMA_TEST_OBJS) | $(DIRS)
+	$(CC) $(CFLAGS) -o schema_test test_schema_logging.c $(SCHEMA_TEST_OBJS) $(LDFLAGS)
+
+run: schema_test
+	./schema_test
+
+# Create required directories
+$(DIRS):
+	mkdir -p $@
+
+clean:
+	rm -f schema_test
