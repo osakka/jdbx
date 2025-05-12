@@ -1,0 +1,5 @@
+{
+  "token": "YOUR_JWT_TOKEN_HERE",
+  "user_id": "YOUR_USER_ID_HERE",
+  "username": "YOUR_USERNAME_HERE"
+}

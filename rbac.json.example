@@ -1,0 +1,20 @@
+{
+  "users": {
+    "USER_ID_1": {
+      "id": "USER_ID_1",
+      "username": "admin",
+      "password_hash": "HASHED_PASSWORD_HERE",
+      "roles": ["ROLE_ID_1"]
+    }
+  },
+  "roles": {
+    "ROLE_ID_1": {
+      "id": "ROLE_ID_1",
+      "name": "admin",
+      "permissions": {
+        "0:*": 15
+      },
+      "users": ["USER_ID_1"]
+    }
+  }
+}
