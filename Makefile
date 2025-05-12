@@ -44,15 +44,19 @@ JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
 OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS)
 
-# JavaScript support (optional)
-ifdef USE_QUICKJS
+# JavaScript support (default enabled, can be disabled)
+ifndef DISABLE_QUICKJS
     CFLAGS += $(QUICKJS_FLAGS)
     LDFLAGS += $(QUICKJS_LIBS)
     OBJS += $(JS_OBJS)
 endif
 
 # Main targets
+ifdef DISABLE_QUICKJS
+all: dirs libjsondb server-without-js tests
+else
 all: dirs libjsondb server tests
+endif
 
 # Create build directories
 dirs:
@@ -69,6 +73,10 @@ libjsondb: dirs $(OBJS)
 # Server executable
 server: dirs libjsondb
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS)
+
+# Server executable without JS support
+server-without-js: dirs libjsondb
+	$(CC) $(CFLAGS) -DDISABLE_JS -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS)
 
 # Tests
 tests: dirs libjsondb

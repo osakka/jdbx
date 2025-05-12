@@ -1,15 +1,17 @@
-#include "core/server.h"
-#include "database/database.h"
-#include "rbac/rbac.h"
-#include "api/api.h"
-#include "rbac/jwt.h"
-#include "utils/metrics.h"
-#include "js/js_api.h"
-#include "js/js_engine.h"
-#include "rbac/rbac_refcount.h"
-#include "utils/logger.h"
-#include "utils/config_loader.h"
-#include "utils/js_file_utils.h"
+#include "jsondb/core/server.h"
+#include "jsondb/database/database.h"
+#include "jsondb/rbac/rbac.h"
+#include "jsondb/api/api.h"
+#include "jsondb/rbac/jwt.h"
+#include "jsondb/utils/metrics.h"
+#ifndef DISABLE_JS
+#include "jsondb/js/js_api.h"
+#include "jsondb/js/js_engine.h"
+#endif
+#include "jsondb/rbac/rbac_refcount.h"
+#include "jsondb/utils/logger.h"
+#include "jsondb/utils/config_loader.h"
+#include "jsondb/utils/js_file_utils.h"
 #include <stdlib.h> /* For atexit */
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,7 +46,9 @@ static rbac_refcount_t* g_rbac_ref = NULL;  /* Reference counted RBAC */
 static rbac_system_t* g_rbac = NULL;       /* Regular RBAC for backwards compatibility */
 
 /* Access to JS engine */
+#ifndef DISABLE_JS
 extern js_engine_t* g_js_engine;
+#endif
 
 #ifndef TOOLS_BUILD
 api_context_t* g_api_ctx = NULL;
@@ -889,11 +893,13 @@ void cleanup() {
     /* Clean up in a safe order to avoid double-free issues */
 
     /* 1. First clean up JS engine which might use DB and RBAC */
+#ifndef DISABLE_JS
     if (g_js_engine) {
         js_engine_t* engine = g_js_engine;
         g_js_engine = NULL;  /* Clear global reference */
         js_engine_free(engine);
     }
+#endif
 
     /* 2. Free API context which might use DB and RBAC */
     if (g_api_ctx) {
@@ -1374,6 +1380,7 @@ int main(int argc, char** argv) {
         }
 
         /* Initialize JavaScript engine for script execution */
+#ifndef DISABLE_JS
         printf("Initializing JavaScript engine for script execution...\n");
         if (g_logger) {
             LOG_INFO("Initializing JavaScript engine for script execution...");
@@ -1382,6 +1389,12 @@ int main(int argc, char** argv) {
         js_api_init(g_database);
 
         printf("JavaScript engine initialized\n");
+#else
+        printf("JavaScript support is disabled\n");
+        if (g_logger) {
+            LOG_INFO("JavaScript support is disabled");
+        }
+#endif
         if (g_logger) {
             LOG_INFO("JavaScript engine initialized");
         }
@@ -1417,6 +1430,7 @@ int main(int argc, char** argv) {
             LOG_INFO("Executing JavaScript file: %s (resolved to: %s)", js_file, js_file_abs);
         }
 
+#ifndef DISABLE_JS
         /* Execute JavaScript file using the JS engine */
         if (g_js_engine) {
             if (!js_execute_file(g_js_engine, js_file_abs)) {
@@ -1425,6 +1439,21 @@ int main(int argc, char** argv) {
                     LOG_ERROR("Failed to execute JavaScript file: %s (resolved to: %s)", js_file, js_file_abs);
                 }
                 return 1;
+            }
+        } else {
+            fprintf(stderr, "JavaScript engine not initialized, cannot execute file\n");
+            if (g_logger) {
+                LOG_ERROR("JavaScript engine not initialized, cannot execute file");
+            }
+            return 1;
+        }
+#else
+        fprintf(stderr, "JavaScript support is disabled at compile time\n");
+        if (g_logger) {
+            LOG_ERROR("JavaScript support is disabled at compile time");
+        }
+        return 1;
+#endif
             }
             printf("JavaScript execution complete\n");
             if (g_logger) {
@@ -1534,6 +1563,7 @@ int main(int argc, char** argv) {
 
         /* Initialize JavaScript engine in the main process, if enabled */
         if (g_server_config->js_enabled) {
+#ifndef DISABLE_JS
             printf("Initializing JavaScript engine...\n");
             if (g_logger) {
                 LOG_INFO("Initializing JavaScript engine in foreground mode...");
@@ -1545,6 +1575,12 @@ int main(int argc, char** argv) {
             if (g_logger) {
                 LOG_INFO("JavaScript engine initialized");
             }
+#else
+            printf("JavaScript support is disabled at compile time\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled at compile time");
+            }
+#endif
         } else {
             printf("JavaScript support is disabled in configuration\n");
             if (g_logger) {
@@ -1571,6 +1607,7 @@ int main(int argc, char** argv) {
 
         /* Initialize JavaScript engine after fork to avoid concurrency issues, if enabled */
         if (g_server_config->js_enabled) {
+#ifndef DISABLE_JS
             printf("Initializing JavaScript engine in daemon process...\n");
             if (g_logger) {
                 LOG_INFO("Initializing JavaScript engine in daemon process...");
@@ -1582,6 +1619,12 @@ int main(int argc, char** argv) {
             if (g_logger) {
                 LOG_INFO("JavaScript engine initialized");
             }
+#else
+            printf("JavaScript support is disabled at compile time\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled at compile time");
+            }
+#endif
         } else {
             printf("JavaScript support is disabled in configuration\n");
             if (g_logger) {

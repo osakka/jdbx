@@ -1,15 +1,15 @@
 #ifndef JS_ENGINE_H
 #define JS_ENGINE_H
 
-#include "database/database.h"
-#include "utils/json.h"
+#include "jsondb/database/database.h"
+#include "jsondb/utils/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* QuickJS headers - only included when QuickJS support is enabled */
 #ifdef USE_QUICKJS
-#include "quickjs/quickjs.h"
+#include "jsondb/js/quickjs.h"
 #endif
 
 /* JS context for database operations */
