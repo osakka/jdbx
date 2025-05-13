@@ -93,8 +93,19 @@ static char* resolve_path(const char* path) {
         return NULL;
     }
     
-    /* Combine binary directory with the relative path */
-    snprintf(resolved_path, PATH_MAX, "%s/%s", g_binary_dir, path);
+    /* Combine binary directory with the relative path, leaving space for null terminator */
+    size_t max_path_len = PATH_MAX - 1;
+    int bytes_written = snprintf(resolved_path, max_path_len, "%s/%s", g_binary_dir, path);
+    
+    /* Check if path was truncated */
+    if (bytes_written < 0 || (size_t)bytes_written >= max_path_len) {
+        if (g_logger) {
+            LOG_WARNING("Path truncated during resolution: '%s/%s'", g_binary_dir, path);
+        }
+    }
+    
+    /* Ensure null termination */
+    resolved_path[max_path_len] = '\0';
     
     if (g_logger) {
         LOG_DEBUG("Resolved path '%s' to '%s'", path, resolved_path);

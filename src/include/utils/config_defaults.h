@@ -86,8 +86,9 @@
 #define DEFAULT_BACKUP_RETENTION 10
 #define DEFAULT_AUTO_BACKUP_INTERVAL_HOURS 24
 #define MAX_FILENAME_LEN 256
-#define MAX_BACKUP_PATH_LEN 768
 #define MAX_TIMESTAMP_LEN 32
+/* Increase path length to accommodate paths that can be up to PATH_MAX + filename */
+#define MAX_BACKUP_PATH_LEN (PATH_MAX + MAX_FILENAME_LEN)
 
 /* Database defaults */
 #define DEFAULT_INDEX_BUCKETS 256
