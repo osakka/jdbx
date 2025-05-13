@@ -12,6 +12,12 @@
 #include <regex.h>  /* For regex pattern validation */
 #include <ctype.h>  /* For isdigit() */
 
+/* Structure to hold collection names for invalidation */
+typedef struct {
+    char names[20][256];
+    int count;
+} invalidation_list_t;
+
 /* Generate a simple UUID replacement since uuid/uuid.h may not be available */
 static char* generate_simple_uuid() {
     char* uuid = (char*)malloc(37);  /* 36 chars + null terminator */
@@ -30,17 +36,19 @@ static char* generate_simple_uuid() {
     return uuid;
 }
 
+/* No need for external declarations with the new implementation */
+
 /* Cache management functions */
 
 /* Generate cache key for a document */
 static char* generate_cache_key(const char* collection, const char* id) {
     if (!collection || !id) return NULL;
-    
+
     /* Format: "collection:id" */
     size_t len = strlen(collection) + 1 + strlen(id) + 1;  /* +1 for ':' and +1 for null terminator */
     char* key = (char*)malloc(len);
     if (!key) return NULL;
-    
+
     snprintf(key, len, "%s:%s", collection, id);
     return key;
 }
@@ -121,52 +129,150 @@ static int store_query_result(database_t* db, const char* collection_name,
 }
 
 /**
- * Invalidate all query cache entries for a collection
+ * Safely mark collection as needing cache invalidation
  *
  * @param db Database instance
  * @param collection_name Collection name
- * @return Number of entries invalidated, or -1 on error
+ * @return 1 if successful, 0 otherwise
+ */
+static int mark_collection_for_invalidation(database_t* db, const char* collection_name) {
+    if (!db || !db->cache_enabled || !db->cache || !collection_name) {
+        return 0;
+    }
+
+    /* Generate the collection invalidation key */
+    char invalidation_key[512];
+    snprintf(invalidation_key, sizeof(invalidation_key), "invalidate:%s", collection_name);
+
+    /* Store a marker in the cache to indicate this collection needs invalidation */
+    json_value_t* marker = json_create_boolean(1);
+    if (!marker) {
+        return 0;
+    }
+
+    /* Add to cache with very short TTL (1 second) */
+    int result = cache_put(db->cache, invalidation_key, marker, 1);
+
+    /* Free the marker as cache_put creates a copy */
+    json_free(marker);
+
+    return result;
+}
+
+/**
+ * Process cache invalidation for collections marked for invalidation
+ * This function should be called periodically by the cache cleanup process
+ * or when acquiring the cache in read operations
+ *
+ * @param db Database instance
+ * @return Number of collections processed
+ */
+static int process_cache_invalidations(database_t* db) {
+    if (!db || !db->cache_enabled || !db->cache) {
+        return 0;
+    }
+
+    int processed = 0;
+    invalidation_list_t list = {0};
+
+    /* Get all keys in the cache */
+    char** all_keys = NULL;
+    size_t key_count = cache_get_keys(db->cache, &all_keys);
+
+    if (!all_keys) {
+        return 0;
+    }
+
+    /* First pass: find all invalidation markers */
+    for (size_t i = 0; i < key_count && list.count < 20; i++) {
+        if (strncmp(all_keys[i], "invalidate:", 11) == 0) {
+            /* Extract collection name */
+            const char* collection_name = all_keys[i] + 11;
+
+            /* Add to list if not already present */
+            int already_in_list = 0;
+            for (int j = 0; j < list.count; j++) {
+                if (strcmp(list.names[j], collection_name) == 0) {
+                    already_in_list = 1;
+                    break;
+                }
+            }
+
+            if (!already_in_list) {
+                strncpy(list.names[list.count], collection_name, 255);
+                list.names[list.count][255] = '\0';
+                list.count++;
+            }
+
+            /* Remove the invalidation marker */
+            cache_remove(db->cache, all_keys[i]);
+            processed++;
+        }
+    }
+
+    /* Free the keys from the first pass */
+    for (size_t i = 0; i < key_count; i++) {
+        free(all_keys[i]);
+    }
+    free(all_keys);
+
+    /* Second pass: invalidate all matching keys for each collection */
+    for (int i = 0; i < list.count; i++) {
+        const char* collection = list.names[i];
+
+        /* Get the keys again (since we modified the cache) */
+        char** keys = NULL;
+        size_t count = cache_get_keys(db->cache, &keys);
+
+        if (!keys) {
+            continue;
+        }
+
+        /* Create prefixes for matching */
+        char query_prefix[280];
+        snprintf(query_prefix, sizeof(query_prefix), "query:%s:", collection);
+        size_t query_prefix_len = strlen(query_prefix);
+
+        char coll_key[280];
+        snprintf(coll_key, sizeof(coll_key), "%s:", collection);
+
+        /* Remove matching entries */
+        int invalidated = 0;
+        for (size_t j = 0; j < count; j++) {
+            if (strncmp(keys[j], query_prefix, query_prefix_len) == 0 ||
+                strcmp(keys[j], coll_key) == 0) {
+                cache_remove(db->cache, keys[j]);
+                invalidated++;
+                processed++;
+            }
+            free(keys[j]);
+        }
+
+        free(keys);
+
+        if (invalidated > 0) {
+            LOG_DEBUG("Invalidated %d cache entries for collection '%s'", invalidated, collection);
+        }
+    }
+
+    return processed;
+}
+
+/**
+ * Invalidate query cache entries for a collection
+ *
+ * @param db Database instance
+ * @param collection_name Collection name
+ * @return 1 if successful, 0 otherwise
  */
 static int invalidate_query_cache(database_t* db, const char* collection_name) {
     if (!db || !db->cache_enabled || !db->cache || !collection_name) {
-        return -1;
+        return 0;
     }
 
-    /* Get all cache keys */
-    char** keys = NULL;
-    size_t key_count = cache_get_keys(db->cache, &keys);
-
-    if (!keys) return 0;
-
-    /* Invalidation counts */
-    int invalidated = 0;
-
-    /* Prefix to match */
-    char prefix[256];
-    snprintf(prefix, sizeof(prefix), "query:%s:", collection_name);
-    size_t prefix_len = strlen(prefix);
-
-    /* Invalidate matching keys */
-    for (size_t i = 0; i < key_count; i++) {
-        if (strncmp(keys[i], prefix, prefix_len) == 0) {
-            cache_remove(db->cache, keys[i]);
-            invalidated++;
-        }
-        free(keys[i]);
-    }
-
-    free(keys);
-
-    /* Also invalidate the collection cache for all documents */
-    char* coll_key = generate_collection_cache_key(collection_name);
-    if (coll_key) {
-        if (cache_remove(db->cache, coll_key)) {
-            invalidated++;
-        }
-        free(coll_key);
-    }
-
-    return invalidated;
+    /* Mark the collection for invalidation - this is a lightweight operation
+       that doesn't require complex lock coordination */
+    return mark_collection_for_invalidation(db, collection_name);
 }
 
 /* Initialize database */
@@ -680,14 +786,13 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         }
     }
     
-    /* Invalidate collection cache if cache is enabled */
+    /* Mark collection for cache invalidation - do this BEFORE releasing locks
+       to ensure proper synchronization */
     if (db->cache_enabled && db->cache) {
-        /* Invalidate all query caches for this collection */
-        int invalidated = invalidate_query_cache(db, collection_name);
-
-        if (invalidated > 0) {
-            LOG_DEBUG("Inserted document: Invalidated %d cache entries for collection '%s'",
-                     invalidated, collection_name);
+        /* Mark for invalidation only - actual invalidation happens later */
+        if (mark_collection_for_invalidation(db, collection_name)) {
+            LOG_DEBUG("Inserted document: Marked collection '%s' for cache invalidation",
+                     collection_name);
         }
     }
     
@@ -818,7 +923,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
             json_object_set(result, "_id", json_create_string(id));
         }
         
-        /* Remove from cache if cache is enabled */
+        /* Handle cache if cache is enabled */
         if (db->cache_enabled && db->cache) {
             /* Invalidate document cache */
             char* cache_key = generate_cache_key(collection_name, id);
@@ -827,12 +932,10 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
                 free(cache_key);
             }
 
-            /* Invalidate all query caches for this collection */
-            int invalidated = invalidate_query_cache(db, collection_name);
-
-            if (invalidated > 0) {
-                LOG_DEBUG("Updated document: Invalidated %d cache entries for collection '%s'",
-                         invalidated, collection_name);
+            /* Mark for invalidation only - actual invalidation happens later */
+            if (mark_collection_for_invalidation(db, collection_name)) {
+                LOG_DEBUG("Updated document: Marked collection '%s' for cache invalidation",
+                         collection_name);
             }
         }
     }
@@ -888,7 +991,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
         }
     }
     
-    /* If document was found and cache is enabled, remove from cache */
+    /* If document was found and cache is enabled, handle cache */
     if (found && db->cache_enabled && db->cache) {
         /* Invalidate document cache */
         char* cache_key = generate_cache_key(collection_name, id);
@@ -897,12 +1000,10 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
             free(cache_key);
         }
 
-        /* Invalidate all query caches for this collection */
-        int invalidated = invalidate_query_cache(db, collection_name);
-
-        if (invalidated > 0) {
-            LOG_DEBUG("Deleted document: Invalidated %d cache entries for collection '%s'",
-                     invalidated, collection_name);
+        /* Mark for invalidation only - actual invalidation happens later */
+        if (mark_collection_for_invalidation(db, collection_name)) {
+            LOG_DEBUG("Deleted document: Marked collection '%s' for cache invalidation",
+                     collection_name);
         }
     }
     
@@ -993,8 +1094,15 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         empty_query = 1;
     }
 
-    /* Check cache if enabled */
+    /* Process any pending cache invalidations before checking cache */
     if (db->cache_enabled && db->cache) {
+        /* This will process any collections marked for invalidation */
+        int invalidated = process_cache_invalidations(db);
+        if (invalidated > 0) {
+            LOG_DEBUG("Processed %d cache invalidations before query", invalidated);
+        }
+
+        /* Now check the cache */
         char* cache_key;
 
         if (empty_query) {
