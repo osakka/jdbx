@@ -1,7 +1,7 @@
 # JSON Database Server Implementation Status
 
 Current State: mainline-progress
-Last Updated: 2025-05-13
+Last Updated: 2025-05-13 (Updated to include query cache reliability improvements)
 
 This document provides a comprehensive overview of the current state of the JSON database server implementation, including core features, integration points, and future development areas.
 
@@ -108,6 +108,7 @@ Performance tests have been conducted on the following operations:
 | Security | Added SSL/TLS support for secure communications |
 | Performance | Optimized indexing with Bloom filters and LRU caching |
 | Performance | Implemented advanced query caching with smart invalidation |
+| Reliability | Fixed deadlock issues in query caching system with asynchronous invalidation |
 | Reliability | Implemented backup and recovery system with retention policies |
 | API | Added import/export functionality for data migration |
 | Testing | Created unit tests for input validation and security features |
