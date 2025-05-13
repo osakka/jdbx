@@ -122,6 +122,7 @@ void print_usage(const char* program_name) {
     printf("  -r, --rbac-file=FILE          Set RBAC file path\n");
     printf("  -p, --pid-file=FILE           Set PID file path\n");
     printf("  -o, --log-file=FILE           Set log file path\n");
+    printf("  -w, --web-root=DIRECTORY      Set web admin interface root directory\n");
     printf("  -c, --config=FILE             Load configuration from file\n");
     printf("  -v, --version                 Display version information and exit\n");
     printf("  -j, --js-file=FILE            Execute JavaScript file and exit\n");
@@ -266,6 +267,7 @@ int main(int argc, char** argv) {
     char* pid_file = NULL;
     char* log_file = NULL;
     char* rbac_file = NULL;
+    char* web_root = NULL;
     char* config_file = NULL;
     char* js_file = NULL;
     
@@ -280,6 +282,7 @@ int main(int argc, char** argv) {
         {"rbac-file",  required_argument, 0, 'r'},
         {"pid-file",   required_argument, 0, 'p'},
         {"log-file",   required_argument, 0, 'o'},
+        {"web-root",   required_argument, 0, 'w'},
         {"config",     required_argument, 0, 'c'},
         {"version",    no_argument,       0, 'v'},
         {"js-file",    required_argument, 0, 'j'},
@@ -290,7 +293,7 @@ int main(int argc, char** argv) {
     int opt;
     int option_index = 0;
     
-    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:c:vj:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:w:c:vj:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 show_help = 1;
@@ -320,6 +323,9 @@ int main(int argc, char** argv) {
                 break;
             case 'o':
                 log_file = optarg;
+                break;
+            case 'w':
+                web_root = optarg;
                 break;
             case 'c':
                 config_file = optarg;
@@ -386,6 +392,14 @@ int main(int argc, char** argv) {
             free(config.rbac_path);
         }
         config.rbac_path = strdup(rbac_file);
+    }
+    
+    if (web_root) {
+        /* Free previous value if allocated */
+        if (config.web_root) {
+            free(config.web_root);
+        }
+        config.web_root = strdup(web_root);
     }
     
     if (pid_file) {
@@ -455,6 +469,7 @@ int main(int argc, char** argv) {
     printf("Log level: %s\n", log_level_str ? log_level_str : "default");
     printf("Database path: %s\n", config.db_path ? config.db_path : "not set");
     printf("RBAC file: %s\n", config.rbac_path ? config.rbac_path : "not set");
+    printf("Web root: %s\n", config.web_root ? config.web_root : "not set");
     printf("PID file: %s\n", config.pid_file ? config.pid_file : "not set");
     printf("Log file: %s\n", config.log_file ? config.log_file : "not set");
     printf("Foreground mode: %s\n", config.foreground_mode ? "yes" : "no");
@@ -573,6 +588,25 @@ int main(int argc, char** argv) {
             if (system(cmd) != 0) {
                 fprintf(stderr, "Error: Failed to create database directory '%s': %s\n", 
                         dir, strerror(errno));
+                return 1;
+            }
+        }
+    }
+    
+    /* Create web root directory if it doesn't exist */
+    if (config.web_root) {
+        struct stat st = {0};
+        
+        if (stat(config.web_root, &st) == -1) {
+            printf("Creating web root directory: %s\n", config.web_root);
+            
+            /* Use system to create nested directories if needed */
+            char cmd[PATH_MAX + 50];
+            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", config.web_root);
+            
+            if (system(cmd) != 0) {
+                fprintf(stderr, "Error: Failed to create web root directory '%s': %s\n", 
+                        config.web_root, strerror(errno));
                 return 1;
             }
         }

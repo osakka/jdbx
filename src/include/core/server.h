@@ -90,6 +90,7 @@ typedef struct {
     char* rbac_path;
     char* pid_file;
     char* log_file;
+    char* web_root;                 /* Path to web admin interface files */
 
     /* Runtime settings */
     int foreground_mode;         /* 0 for daemon mode, 1 for foreground mode */

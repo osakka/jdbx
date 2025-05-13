@@ -44,8 +44,11 @@
 /** Default log file path */
 #define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
 
-/** Admin files directory */
-#define DEFAULT_ADMIN_FILES_DIR "share/htdocs"
+/** Default admin web interface root directory */
+#define DEFAULT_WEB_ROOT "share/htdocs"
+
+/** Admin files directory (maintained for compatibility) */
+#define DEFAULT_ADMIN_FILES_DIR DEFAULT_WEB_ROOT
 
 /*==============================================================================
  * Security Defaults

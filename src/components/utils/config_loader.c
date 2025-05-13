@@ -1637,6 +1637,7 @@ void config_free(server_config_t* config) {
     if (config->jwt_secret) free(config->jwt_secret);
     if (config->pid_file) free(config->pid_file);
     if (config->log_file) free(config->log_file);
+    if (config->web_root) free(config->web_root);
     
     /* Free CORS configuration */
     if (config->cors.allowed_origins) {
@@ -1708,6 +1709,7 @@ void config_init_defaults(server_config_t* config) {
     config->rbac_path = resolve_path(DEFAULT_RBAC_PATH);
     config->pid_file = resolve_path(DEFAULT_PID_FILE);
     config->log_file = resolve_path(DEFAULT_LOG_FILE);
+    config->web_root = resolve_path(DEFAULT_WEB_ROOT);
     
     /* Security settings */
     config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
@@ -1728,6 +1730,7 @@ void config_init_defaults(server_config_t* config) {
         LOG_DEBUG("Default RBAC path: %s", config->rbac_path);
         LOG_DEBUG("Default PID file: %s", config->pid_file);
         LOG_DEBUG("Default log file: %s", config->log_file);
+        LOG_DEBUG("Default web root: %s", config->web_root);
         
         /* Security-related defaults - only log at trace level */
         LOG_TRACE("Default JWT secret length: %zu", strlen(config->jwt_secret));
