@@ -91,6 +91,9 @@ typedef struct {
     char* pid_file;
     char* log_file;
     char* web_root;                 /* Path to web admin interface files */
+    char* validators_dir;           /* Path to validators directory */
+    char* transforms_dir;           /* Path to transforms directory */
+    char* metrics_dir;              /* Path to metrics directory */
 
     /* Runtime settings */
     int foreground_mode;         /* 0 for daemon mode, 1 for foreground mode */

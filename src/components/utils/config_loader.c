@@ -1638,6 +1638,9 @@ void config_free(server_config_t* config) {
     if (config->pid_file) free(config->pid_file);
     if (config->log_file) free(config->log_file);
     if (config->web_root) free(config->web_root);
+    if (config->validators_dir) free(config->validators_dir);
+    if (config->transforms_dir) free(config->transforms_dir);
+    if (config->metrics_dir) free(config->metrics_dir);
     
     /* Free CORS configuration */
     if (config->cors.allowed_origins) {
@@ -1710,6 +1713,9 @@ void config_init_defaults(server_config_t* config) {
     config->pid_file = resolve_path(DEFAULT_PID_FILE);
     config->log_file = resolve_path(DEFAULT_LOG_FILE);
     config->web_root = resolve_path(DEFAULT_WEB_ROOT);
+    config->validators_dir = resolve_path(DEFAULT_VALIDATORS_DIR);
+    config->transforms_dir = resolve_path(DEFAULT_TRANSFORMS_DIR);
+    config->metrics_dir = resolve_path(DEFAULT_METRICS_DIR);
     
     /* Security settings */
     config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
@@ -1731,6 +1737,9 @@ void config_init_defaults(server_config_t* config) {
         LOG_DEBUG("Default PID file: %s", config->pid_file);
         LOG_DEBUG("Default log file: %s", config->log_file);
         LOG_DEBUG("Default web root: %s", config->web_root);
+        LOG_DEBUG("Default validators directory: %s", config->validators_dir);
+        LOG_DEBUG("Default transforms directory: %s", config->transforms_dir);
+        LOG_DEBUG("Default metrics directory: %s", config->metrics_dir);
         
         /* Security-related defaults - only log at trace level */
         LOG_TRACE("Default JWT secret length: %zu", strlen(config->jwt_secret));

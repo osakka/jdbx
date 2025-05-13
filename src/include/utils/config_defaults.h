@@ -50,6 +50,15 @@
 /** Admin files directory (maintained for compatibility) */
 #define DEFAULT_ADMIN_FILES_DIR DEFAULT_WEB_ROOT
 
+/** Default validators directory */
+#define DEFAULT_VALIDATORS_DIR "var/validators"
+
+/** Default transformers directory */
+#define DEFAULT_TRANSFORMS_DIR "var/transforms"
+
+/** Default metrics directory */
+#define DEFAULT_METRICS_DIR "var/metrics"
+
 /*==============================================================================
  * Security Defaults
  *============================================================================*/

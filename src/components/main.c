@@ -164,6 +164,11 @@ void print_usage(const char* program_name) {
     printf("  -p, --pid-file=FILE           Set PID file path\n");
     printf("  -o, --log-file=FILE           Set log file path\n");
     printf("  -w, --web-root=DIRECTORY      Set web admin interface root directory\n");
+    printf("  -P, --port=PORT               Set server port (default: 5000)\n");
+    printf("  -H, --host=HOST               Set server bind address (default: 0.0.0.0)\n");
+    printf("  -V, --validators-dir=DIR      Set validators directory\n");
+    printf("  -T, --transforms-dir=DIR      Set transforms directory\n");
+    printf("  -M, --metrics-dir=DIR         Set metrics directory\n");
     printf("  -c, --config=FILE             Load configuration from file\n");
     printf("  -v, --version                 Display version information and exit\n");
     printf("  -j, --js-file=FILE            Execute JavaScript file and exit\n");
@@ -335,22 +340,32 @@ int main(int argc, char** argv) {
     char* web_root = NULL;
     char* config_file = NULL;
     char* js_file = NULL;
+    char* port_str = NULL;
+    char* host_str = NULL;
+    char* validators_dir = NULL;
+    char* transforms_dir = NULL;
+    char* metrics_dir = NULL;
     
     /* Define long options */
     static struct option long_options[] = {
-        {"help",       no_argument,       0, 'h'},
-        {"daemon",     no_argument,       0, 'd'},
-        {"foreground", no_argument,       0, 'f'},
-        {"terminate",  no_argument,       0, 't'},
-        {"log-level",  required_argument, 0, 'l'},
-        {"db-dir",     required_argument, 0, 'b'},
-        {"rbac-file",  required_argument, 0, 'r'},
-        {"pid-file",   required_argument, 0, 'p'},
-        {"log-file",   required_argument, 0, 'o'},
-        {"web-root",   required_argument, 0, 'w'},
-        {"config",     required_argument, 0, 'c'},
-        {"version",    no_argument,       0, 'v'},
-        {"js-file",    required_argument, 0, 'j'},
+        {"help",           no_argument,       0, 'h'},
+        {"daemon",         no_argument,       0, 'd'},
+        {"foreground",     no_argument,       0, 'f'},
+        {"terminate",      no_argument,       0, 't'},
+        {"log-level",      required_argument, 0, 'l'},
+        {"db-dir",         required_argument, 0, 'b'},
+        {"rbac-file",      required_argument, 0, 'r'},
+        {"pid-file",       required_argument, 0, 'p'},
+        {"log-file",       required_argument, 0, 'o'},
+        {"web-root",       required_argument, 0, 'w'},
+        {"config",         required_argument, 0, 'c'},
+        {"version",        no_argument,       0, 'v'},
+        {"js-file",        required_argument, 0, 'j'},
+        {"port",           required_argument, 0, 'P'},
+        {"host",           required_argument, 0, 'H'},
+        {"validators-dir", required_argument, 0, 'V'},
+        {"transforms-dir", required_argument, 0, 'T'},
+        {"metrics-dir",    required_argument, 0, 'M'},
         {0, 0, 0, 0}
     };
     
@@ -358,7 +373,7 @@ int main(int argc, char** argv) {
     int opt;
     int option_index = 0;
     
-    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:w:c:vj:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:w:c:vj:P:H:V:T:M:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 show_help = 1;
@@ -400,6 +415,21 @@ int main(int argc, char** argv) {
                 break;
             case 'j':
                 js_file = optarg;
+                break;
+            case 'P':
+                port_str = optarg;
+                break;
+            case 'H':
+                host_str = optarg;
+                break;
+            case 'V':
+                validators_dir = optarg;
+                break;
+            case 'T':
+                transforms_dir = optarg;
+                break;
+            case 'M':
+                metrics_dir = optarg;
                 break;
             default:
                 fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
@@ -483,6 +513,52 @@ int main(int argc, char** argv) {
         g_server_config->log_file = strdup(log_file);
     }
     
+    /* Process port argument */
+    if (port_str) {
+        int port = atoi(port_str);
+        if (port <= 0 || port > 65535) {
+            fprintf(stderr, "Error: Invalid port number '%s'\n", port_str);
+            return 1;
+        }
+        g_server_config->port = port;
+    }
+    
+    /* Process host argument */
+    if (host_str) {
+        /* Free previous value if allocated */
+        if (g_server_config->host) {
+            free(g_server_config->host);
+        }
+        g_server_config->host = strdup(host_str);
+    }
+    
+    /* Process validators directory argument */
+    if (validators_dir) {
+        /* Free previous value if allocated */
+        if (g_server_config->validators_dir) {
+            free(g_server_config->validators_dir);
+        }
+        g_server_config->validators_dir = strdup(validators_dir);
+    }
+    
+    /* Process transforms directory argument */
+    if (transforms_dir) {
+        /* Free previous value if allocated */
+        if (g_server_config->transforms_dir) {
+            free(g_server_config->transforms_dir);
+        }
+        g_server_config->transforms_dir = strdup(transforms_dir);
+    }
+    
+    /* Process metrics directory argument */
+    if (metrics_dir) {
+        /* Free previous value if allocated */
+        if (g_server_config->metrics_dir) {
+            free(g_server_config->metrics_dir);
+        }
+        g_server_config->metrics_dir = strdup(metrics_dir);
+    }
+    
     /* Copy paths to local variables for convenience */
     if (g_server_config->pid_file) {
         strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
@@ -544,6 +620,11 @@ int main(int argc, char** argv) {
     printf("Web root: %s\n", g_server_config->web_root ? g_server_config->web_root : "not set");
     printf("PID file: %s\n", g_server_config->pid_file ? g_server_config->pid_file : "not set");
     printf("Log file: %s\n", g_server_config->log_file ? g_server_config->log_file : "not set");
+    printf("Server host: %s\n", g_server_config->host ? g_server_config->host : "0.0.0.0");
+    printf("Server port: %d\n", g_server_config->port);
+    printf("Validators directory: %s\n", g_server_config->validators_dir ? g_server_config->validators_dir : DEFAULT_VALIDATORS_DIR);
+    printf("Transforms directory: %s\n", g_server_config->transforms_dir ? g_server_config->transforms_dir : DEFAULT_TRANSFORMS_DIR);
+    printf("Metrics directory: %s\n", g_server_config->metrics_dir ? g_server_config->metrics_dir : DEFAULT_METRICS_DIR);
     printf("Foreground mode: %s\n", g_server_config->foreground_mode ? "yes" : "no");
     
     /* If running in script mode, initialize JavaScript now if enabled */
