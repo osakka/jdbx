@@ -2,6 +2,7 @@
 #include "utils/config_defaults.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 #include <limits.h>  /* For PATH_MAX */
 #include <libgen.h>  /* For dirname() and basename() */
 #include <unistd.h>  /* For readlink() */
+#include <errno.h>   /* For errno and strerror() */
+#include <sys/stat.h> /* For stat() */
 
 /* Global configuration structure - defined elsewhere when building tools */
 #ifndef TOOLS_BUILD
@@ -19,29 +22,90 @@ server_config_t* g_server_config = NULL;
 static char g_binary_dir[PATH_MAX] = {0};
 
 /**
+ * Get string representation of JSON type
+ * @param type JSON value type
+ * @return String representation of the type
+ */
+static const char* json_type_name(int type) {
+    switch (type) {
+        case JSON_NULL:
+            return "null";
+        case JSON_BOOLEAN:
+            return "boolean";
+        case JSON_INTEGER:
+            return "integer";
+        case JSON_NUMBER:
+            return "number";
+        case JSON_STRING:
+            return "string";
+        case JSON_ARRAY:
+            return "array";
+        case JSON_OBJECT:
+            return "object";
+        default:
+            return "unknown";
+    }
+}
+
+/**
  * Initialize the binary directory path for resolving relative paths
  * This should be called early in the program's execution
  */
 void config_init_binary_dir(void) {
+    if (g_logger) {
+        LOG_TRACE("Entering config_init_binary_dir()");
+    }
+    
     if (g_binary_dir[0] != '\0') {
         /* Already initialized */
+        if (g_logger) {
+            LOG_DEBUG("Binary directory already initialized: %s", g_binary_dir);
+            LOG_TRACE("Exiting config_init_binary_dir() - already initialized");
+        }
         return;
     }
     
     /* Get the path to the executable */
     char exe_path[PATH_MAX];
+    if (g_logger) {
+        LOG_DEBUG("Attempting to resolve binary directory from /proc/self/exe");
+    }
+    
     ssize_t count = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
     if (count == -1) {
         /* Fallback to current directory if readlink fails */
+        if (g_logger) {
+            LOG_WARNING("Failed to read /proc/self/exe: %s", strerror(errno));
+            LOG_DEBUG("Falling back to current working directory");
+        }
+        
         if (getcwd(g_binary_dir, PATH_MAX - 1) == NULL) {
             /* Last resort, use a sensible default */
+            if (g_logger) {
+                LOG_WARNING("Failed to get current working directory: %s", strerror(errno));
+                LOG_DEBUG("Using default directory: /opt/jsondb");
+            } else {
+                fprintf(stderr, "Warning: Failed to detect binary directory, using default\n");
+            }
             strncpy(g_binary_dir, "/opt/jsondb", PATH_MAX - 1);
+        } else {
+            if (g_logger) {
+                LOG_INFO("Using current directory as binary directory: %s", g_binary_dir);
+            }
+        }
+        g_binary_dir[PATH_MAX - 1] = '\0';
+        
+        if (g_logger) {
+            LOG_TRACE("Exiting config_init_binary_dir() - using fallback");
         }
         return;
     }
     
     /* Ensure null termination */
     exe_path[count] = '\0';
+    if (g_logger) {
+        LOG_DEBUG("Executable path: %s", exe_path);
+    }
     
     /* Get the directory part */
     char* dir = dirname(exe_path);
@@ -49,7 +113,8 @@ void config_init_binary_dir(void) {
     g_binary_dir[PATH_MAX - 1] = '\0';
     
     if (g_logger) {
-        LOG_DEBUG("Binary directory: %s", g_binary_dir);
+        LOG_INFO("Binary directory initialized: %s", g_binary_dir);
+        LOG_TRACE("Exiting config_init_binary_dir() - success");
     }
 }
 
@@ -58,8 +123,19 @@ void config_init_binary_dir(void) {
  * @return Binary directory path
  */
 const char* config_get_binary_dir(void) {
+    if (g_logger) {
+        LOG_TRACE("Entering config_get_binary_dir()");
+    }
+    
     if (g_binary_dir[0] == '\0') {
+        if (g_logger) {
+            LOG_DEBUG("Binary directory not initialized, initializing now");
+        }
         config_init_binary_dir();
+    }
+    
+    if (g_logger) {
+        LOG_TRACE("Exiting config_get_binary_dir(): returning '%s'", g_binary_dir);
     }
     return g_binary_dir;
 }
@@ -70,15 +146,34 @@ const char* config_get_binary_dir(void) {
  * @return Resolved path (must be freed by caller)
  */
 static char* resolve_path(const char* path) {
-    if (!path) return NULL;
+    if (g_logger) {
+        LOG_TRACE("Entering resolve_path(path='%s')", path ? path : "NULL");
+    }
+    
+    if (!path) {
+        if (g_logger) {
+            LOG_ERROR("NULL path provided to resolve_path()");
+            LOG_TRACE("Exiting resolve_path() - NULL path");
+        } else {
+            fprintf(stderr, "Error: NULL path provided to resolve_path()\n");
+        }
+        return NULL;
+    }
     
     /* If it's an absolute path, just duplicate it */
     if (path[0] == '/') {
+        if (g_logger) {
+            LOG_DEBUG("Path '%s' is absolute, returning duplicate", path);
+            LOG_TRACE("Exiting resolve_path() - absolute path");
+        }
         return strdup(path);
     }
     
     /* Make sure binary directory is initialized */
     if (g_binary_dir[0] == '\0') {
+        if (g_logger) {
+            LOG_DEBUG("Binary directory not initialized, initializing for path resolution");
+        }
         config_init_binary_dir();
     }
     
@@ -86,9 +181,10 @@ static char* resolve_path(const char* path) {
     char* resolved_path = malloc(PATH_MAX);
     if (!resolved_path) {
         if (g_logger) {
-            LOG_ERROR("Failed to allocate memory for path resolution");
+            LOG_ERROR("Failed to allocate memory for path resolution of '%s'", path);
+            LOG_TRACE("Exiting resolve_path() - memory allocation failure");
         } else {
-            fprintf(stderr, "Error: Failed to allocate memory for path resolution\n");
+            fprintf(stderr, "Error: Failed to allocate memory for path resolution of '%s'\n", path);
         }
         return NULL;
     }
@@ -98,9 +194,22 @@ static char* resolve_path(const char* path) {
     int bytes_written = snprintf(resolved_path, max_path_len, "%s/%s", g_binary_dir, path);
     
     /* Check if path was truncated */
-    if (bytes_written < 0 || (size_t)bytes_written >= max_path_len) {
+    if (bytes_written < 0) {
         if (g_logger) {
-            LOG_WARNING("Path truncated during resolution: '%s/%s'", g_binary_dir, path);
+            LOG_ERROR("Failed to format path: '%s/%s'", g_binary_dir, path);
+        } else {
+            fprintf(stderr, "Error: Failed to format path: '%s/%s'\n", g_binary_dir, path);
+        }
+    } else if ((size_t)bytes_written >= max_path_len) {
+        if (g_logger) {
+            LOG_WARNING("Path truncated during resolution: '%s/%s' (needed %d bytes, limit %zu)",
+                       g_binary_dir, path, bytes_written, max_path_len);
+        } else {
+            fprintf(stderr, "Warning: Path truncated during resolution: '%s/%s'\n", g_binary_dir, path);
+        }
+    } else {
+        if (g_logger) {
+            LOG_TRACE("Path formatted successfully (%d bytes used)", bytes_written);
         }
     }
     
@@ -109,86 +218,202 @@ static char* resolve_path(const char* path) {
     
     if (g_logger) {
         LOG_DEBUG("Resolved path '%s' to '%s'", path, resolved_path);
+        LOG_TRACE("Exiting resolve_path() - success");
     }
     
     return resolved_path;
 }
 
 /* Internal helper functions */
+/**
+ * Trim whitespace from the beginning and end of a string
+ * @param str String to trim (modified in place)
+ * @return Pointer to the trimmed string
+ */
 static char* trim_whitespace(char* str) {
-    if (!str) return NULL;
+    if (g_logger) {
+        LOG_TRACE("Entering trim_whitespace(str='%s')", str ? str : "NULL");
+    }
+    
+    if (!str) {
+        if (g_logger) {
+            LOG_TRACE("Exiting trim_whitespace() - NULL input");
+        }
+        return NULL;
+    }
     
     /* Trim leading whitespace */
-    while (isspace(*str)) str++;
+    char* start = str;
+    while (isspace(*start)) start++;
     
     /* All whitespace */
-    if (*str == 0) return str;
+    if (*start == 0) {
+        if (g_logger) {
+            LOG_TRACE("String contains only whitespace");
+            LOG_TRACE("Exiting trim_whitespace() - empty result");
+        }
+        return start;
+    }
     
     /* Trim trailing whitespace */
     char* end = str + strlen(str) - 1;
-    while (end > str && isspace(*end)) end--;
+    while (end > start && isspace(*end)) end--;
     
     /* Null terminate the trimmed string */
     end[1] = '\0';
     
-    return str;
+    if (g_logger) {
+        if (start != str || end != (str + strlen(str) - 1)) {
+            LOG_TRACE("Trimmed whitespace: '%s' -> '%s'", str, start);
+        } else {
+            LOG_TRACE("No whitespace to trim: '%s'", str);
+        }
+        LOG_TRACE("Exiting trim_whitespace() - success");
+    }
+    
+    return start;
 }
 
-/* Parse boolean value from string */
+/**
+ * Parse a boolean value from a string
+ * @param value String to parse ("true", "yes", "1", "on" are considered true)
+ * @return 1 for true, 0 for false or invalid input
+ */
 static int parse_bool(const char* value) {
-    if (!value) return 0;
+    if (g_logger) {
+        LOG_TRACE("Entering parse_bool(value='%s')", value ? value : "NULL");
+    }
+    
+    if (!value) {
+        if (g_logger) {
+            LOG_DEBUG("NULL value provided to parse_bool(), returning false");
+            LOG_TRACE("Exiting parse_bool() - NULL value");
+        }
+        return 0;
+    }
     
     char* trimmed = strdup(value);
+    if (!trimmed) {
+        if (g_logger) {
+            LOG_ERROR("Failed to allocate memory in parse_bool()");
+            LOG_TRACE("Exiting parse_bool() - memory allocation failure");
+        }
+        return 0;
+    }
+    
     trimmed = trim_whitespace(trimmed);
     
+    int result = 0;
     if (strcasecmp(trimmed, "true") == 0 ||
         strcasecmp(trimmed, "yes") == 0 ||
         strcasecmp(trimmed, "1") == 0 ||
         strcasecmp(trimmed, "on") == 0) {
-        free(trimmed);
-        return 1;
+        if (g_logger) {
+            LOG_DEBUG("Parsed '%s' as TRUE", value);
+        }
+        result = 1;
+    } else {
+        if (g_logger) {
+            LOG_DEBUG("Parsed '%s' as FALSE", value);
+        }
+        result = 0;
     }
     
     free(trimmed);
-    return 0;
+    
+    if (g_logger) {
+        LOG_TRACE("Exiting parse_bool() - returning %d", result);
+    }
+    return result;
 }
 
-/* Load configuration from a JSON file */
+/**
+ * Load configuration from a JSON file
+ * @param filepath Path to the JSON configuration file
+ * @param config Pointer to the configuration structure to populate
+ * @return 1 on success, 0 on failure
+ */
 int config_load_json(const char* filepath, server_config_t* config) {
+    if (g_logger) {
+        LOG_TRACE("Entering config_load_json(filepath='%s')", filepath ? filepath : "NULL");
+    }
+    
     if (!filepath || !config) {
         if (g_logger) {
-            LOG_ERROR("Invalid parameters for config_load_json");
+            LOG_ERROR("Invalid parameters for config_load_json: filepath=%p, config=%p", 
+                     (void*)filepath, (void*)config);
+            LOG_TRACE("Exiting config_load_json() - invalid parameters");
         } else {
             fprintf(stderr, "Error: Invalid parameters for config_load_json\n");
         }
         return 0;
     }
     
+    if (g_logger) {
+        LOG_INFO("Loading configuration from JSON file: %s", filepath);
+        LOG_DEBUG("Opening config file for reading");
+    } else {
+        printf("Loading configuration from JSON file: %s\n", filepath);
+    }
+    
     FILE* file = fopen(filepath, "r");
     if (!file) {
         if (g_logger) {
-            LOG_ERROR("Could not open config file: %s", filepath);
+            LOG_ERROR("Could not open config file: %s - %s", filepath, strerror(errno));
+            LOG_TRACE("Exiting config_load_json() - failed to open file");
         } else {
-            fprintf(stderr, "Error: Could not open config file: %s\n", filepath);
+            fprintf(stderr, "Error: Could not open config file: %s - %s\n", 
+                   filepath, strerror(errno));
         }
         return 0;
     }
     
     /* Determine file size */
+    if (g_logger) {
+        LOG_TRACE("Getting file size");
+    }
+    
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
     
+    if (g_logger) {
+        LOG_DEBUG("Config file size: %ld bytes", file_size);
+    }
+    
+    if (file_size <= 0) {
+        if (g_logger) {
+            LOG_WARNING("Config file is empty or could not determine size: %s", filepath);
+        } else {
+            fprintf(stderr, "Warning: Config file is empty or could not determine size: %s\n", filepath);
+        }
+        fclose(file);
+        
+        if (g_logger) {
+            LOG_TRACE("Exiting config_load_json() - empty file");
+        }
+        return 0;
+    }
+    
     /* Read entire file into buffer */
+    if (g_logger) {
+        LOG_TRACE("Allocating memory for file contents (%ld bytes)", file_size + 1);
+    }
+    
     char* json_buffer = (char*)malloc(file_size + 1);
     if (!json_buffer) {
         if (g_logger) {
-            LOG_ERROR("Failed to allocate memory for config file");
+            LOG_ERROR("Failed to allocate memory for config file (%ld bytes)", file_size + 1);
+            LOG_TRACE("Exiting config_load_json() - memory allocation failure");
         } else {
             fprintf(stderr, "Error: Failed to allocate memory for config file\n");
         }
         fclose(file);
         return 0;
+    }
+    
+    if (g_logger) {
+        LOG_TRACE("Reading file contents");
     }
     
     size_t read_size = fread(json_buffer, 1, file_size, file);
@@ -197,7 +422,9 @@ int config_load_json(const char* filepath, server_config_t* config) {
     /* Cast file_size to size_t to avoid signedness comparison warning */
     if (read_size != (size_t)file_size) {
         if (g_logger) {
-            LOG_ERROR("Failed to read config file: %s", filepath);
+            LOG_ERROR("Failed to read config file: %s (read %zu of %ld bytes)", 
+                     filepath, read_size, file_size);
+            LOG_TRACE("Exiting config_load_json() - file read error");
         } else {
             fprintf(stderr, "Error: Failed to read config file: %s\n", filepath);
         }
@@ -207,205 +434,898 @@ int config_load_json(const char* filepath, server_config_t* config) {
     
     json_buffer[file_size] = '\0';
     
+    if (g_logger) {
+        LOG_TRACE("Parsing JSON content");
+    }
+    
     /* Parse JSON */
     json_value_t* json = json_parse(json_buffer);
+    
+    if (g_logger) {
+        LOG_TRACE("Freeing file buffer");
+    }
+    
     free(json_buffer);
     
-    if (!json || json->type != JSON_OBJECT) {
+    if (!json) {
         if (g_logger) {
-            LOG_ERROR("Invalid JSON format in config file: %s", filepath);
+            LOG_ERROR("Failed to parse JSON in config file: %s", filepath);
+            LOG_TRACE("Exiting config_load_json() - JSON parse error");
+        } else {
+            fprintf(stderr, "Error: Failed to parse JSON in config file: %s\n", filepath);
+        }
+        return 0;
+    }
+    
+    if (json->type != JSON_OBJECT) {
+        if (g_logger) {
+            LOG_ERROR("Invalid JSON format in config file: %s (expected object, got %s)", 
+                     filepath, json_type_name(json->type));
+            LOG_TRACE("Exiting config_load_json() - Invalid JSON format");
         } else {
             fprintf(stderr, "Error: Invalid JSON format in config file: %s\n", filepath);
         }
-        if (json) json_free(json);
+        json_free(json);
         return 0;
     }
     
     if (g_logger) {
-        LOG_INFO("Loading configuration from JSON file: %s", filepath);
+        LOG_INFO("Successfully read and parsed JSON configuration file: %s", filepath);
+        LOG_DEBUG("Processing configuration sections");
     } else {
-        printf("Loading configuration from JSON file: %s\n", filepath);
+        printf("Successfully read and parsed JSON configuration file: %s\n", filepath);
     }
     
     /* Parse server section */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'server' section");
+        LOG_TRACE("Looking for 'server' object in configuration");
+    }
+    
     json_value_t* server_section = json_object_get(json, "server");
-    if (server_section && server_section->type == JSON_OBJECT) {
-        json_value_t* port_val = json_object_get(server_section, "port");
-        if (port_val && port_val->type == JSON_INTEGER) {
-            config->port = (int)port_val->value.integer;
+    if (server_section) {
+        if (server_section->type == JSON_OBJECT) {
             if (g_logger) {
-                LOG_DEBUG("Config: Set port to %d", config->port);
+                LOG_TRACE("Found 'server' section with %zu properties", json_object_size(server_section));
             }
-        }
-        
-        json_value_t* host_val = json_object_get(server_section, "host");
-        if (host_val && host_val->type == JSON_STRING) {
-            config->host = strdup(host_val->value.string);
+            
+            /* Process port setting */
             if (g_logger) {
-                LOG_DEBUG("Config: Set host to '%s'", config->host);
+                LOG_TRACE("Looking for 'port' property in server section");
+            }
+            
+            json_value_t* port_val = json_object_get(server_section, "port");
+            if (port_val) {
+                if (port_val->type == JSON_INTEGER) {
+                    config->port = (int)port_val->value.integer;
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set port to %d", config->port);
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'port' in config (expected integer, got %s), using default: %d", 
+                                   json_type_name(port_val->type), DEFAULT_PORT);
+                    }
+                    config->port = DEFAULT_PORT;
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No 'port' specified in config, using default: %d", DEFAULT_PORT);
+                }
+                config->port = DEFAULT_PORT;
+            }
+            
+            /* Process host setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'host' property in server section");
+            }
+            
+            json_value_t* host_val = json_object_get(server_section, "host");
+            if (host_val) {
+                if (host_val->type == JSON_STRING) {
+                    config->host = strdup(host_val->value.string);
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set host to '%s'", config->host);
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'host' in config (expected string, got %s), using default: %s", 
+                                   json_type_name(host_val->type), DEFAULT_HOST);
+                    }
+                    config->host = strdup(DEFAULT_HOST);
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No 'host' specified in config, using default: %s", DEFAULT_HOST);
+                }
+                config->host = strdup(DEFAULT_HOST);
+            }
+            
+            /* Process max_connections setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'max_connections' property in server section");
+            }
+            
+            json_value_t* max_conn_val = json_object_get(server_section, "max_connections");
+            if (max_conn_val) {
+                if (max_conn_val->type == JSON_INTEGER) {
+                    config->max_connections = (int)max_conn_val->value.integer;
+                    
+                    /* Check for unreasonable value */
+                    if (config->max_connections <= 0) {
+                        if (g_logger) {
+                            LOG_WARNING("Invalid value for 'max_connections' (%d), must be positive, using default: %d", 
+                                       config->max_connections, DEFAULT_MAX_CONNECTIONS);
+                        }
+                        config->max_connections = DEFAULT_MAX_CONNECTIONS;
+                    } else if (config->max_connections > 10000) {
+                        if (g_logger) {
+                            LOG_WARNING("Very high 'max_connections' value (%d) may consume excessive resources", 
+                                       config->max_connections);
+                        }
+                    } else {
+                        if (g_logger) {
+                            LOG_DEBUG("Config: Set max_connections to %d", config->max_connections);
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'max_connections' in config (expected integer, got %s), using default: %d", 
+                                   json_type_name(max_conn_val->type), DEFAULT_MAX_CONNECTIONS);
+                    }
+                    config->max_connections = DEFAULT_MAX_CONNECTIONS;
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No 'max_connections' specified in config, using default: %d", DEFAULT_MAX_CONNECTIONS);
+                }
+                config->max_connections = DEFAULT_MAX_CONNECTIONS;
             }
         } else {
+            if (g_logger) {
+                LOG_WARNING("'server' section is not an object (found %s), using defaults", 
+                           json_type_name(server_section->type));
+            }
+            config->port = DEFAULT_PORT;
             config->host = strdup(DEFAULT_HOST);
-        }
-        
-        json_value_t* max_conn_val = json_object_get(server_section, "max_connections");
-        if (max_conn_val && max_conn_val->type == JSON_INTEGER) {
-            config->max_connections = (int)max_conn_val->value.integer;
-            if (g_logger) {
-                LOG_DEBUG("Config: Set max_connections to %d", config->max_connections);
-            }
-        } else {
             config->max_connections = DEFAULT_MAX_CONNECTIONS;
         }
+    } else {
+        if (g_logger) {
+            LOG_INFO("No 'server' section found in config, using defaults");
+        }
+        config->port = DEFAULT_PORT;
+        config->host = strdup(DEFAULT_HOST);
+        config->max_connections = DEFAULT_MAX_CONNECTIONS;
     }
     
     /* Parse database section */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'database' section");
+        LOG_TRACE("Looking for 'database' object in configuration");
+    }
+    
     json_value_t* db_section = json_object_get(json, "database");
-    if (db_section && db_section->type == JSON_OBJECT) {
-        json_value_t* path_val = json_object_get(db_section, "path");
-        if (path_val && path_val->type == JSON_STRING) {
-            config->db_path = strdup(path_val->value.string);
+    if (db_section) {
+        if (db_section->type == JSON_OBJECT) {
             if (g_logger) {
-                LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
+                LOG_TRACE("Found 'database' section with %zu properties", json_object_size(db_section));
+            }
+            
+            /* Process database path setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'path' property in database section");
+            }
+            
+            json_value_t* path_val = json_object_get(db_section, "path");
+            if (path_val) {
+                if (path_val->type == JSON_STRING) {
+                    /* Free existing path if it exists */
+                    if (config->db_path) {
+                        if (g_logger) {
+                            LOG_TRACE("Freeing existing db_path: '%s'", config->db_path);
+                        }
+                        free(config->db_path);
+                    }
+                    
+                    config->db_path = strdup(path_val->value.string);
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
+                        
+                        /* Special warning for default path in production */
+                        if (strcmp(config->db_path, DEFAULT_DB_PATH) == 0) {
+                            LOG_WARNING("Using default database path in configuration - "
+                                      "this may not be suitable for production use");
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'path' in database section (expected string, got %s)", 
+                                   json_type_name(path_val->type));
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_INFO("No database path specified, using default: %s", DEFAULT_DB_PATH);
+                    
+                    /* Resolve the default path */
+                    char* resolved_path = resolve_path(DEFAULT_DB_PATH);
+                    if (resolved_path) {
+                        config->db_path = resolved_path;
+                        LOG_DEBUG("Resolved default database path to: %s", config->db_path);
+                    } else {
+                        LOG_ERROR("Failed to resolve default database path");
+                        config->db_path = strdup(DEFAULT_DB_PATH);
+                    }
+                }
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("'database' section is not an object (found %s), using defaults", 
+                           json_type_name(db_section->type));
+            }
+        }
+    } else {
+        if (g_logger) {
+            LOG_INFO("No 'database' section found in config, using defaults");
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_DB_PATH);
+            if (resolved_path) {
+                config->db_path = resolved_path;
+                LOG_DEBUG("Resolved default database path to: %s", config->db_path);
+            } else {
+                LOG_ERROR("Failed to resolve default database path");
+                config->db_path = strdup(DEFAULT_DB_PATH);
             }
         }
     }
     
     /* Parse rbac section */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'rbac' section");
+        LOG_TRACE("Looking for 'rbac' object in configuration");
+    }
+    
     json_value_t* rbac_section = json_object_get(json, "rbac");
-    if (rbac_section && rbac_section->type == JSON_OBJECT) {
-        json_value_t* path_val = json_object_get(rbac_section, "path");
-        if (path_val && path_val->type == JSON_STRING) {
-            config->rbac_path = strdup(path_val->value.string);
+    if (rbac_section) {
+        if (rbac_section->type == JSON_OBJECT) {
             if (g_logger) {
-                LOG_DEBUG("Config: Set rbac_path to '%s'", config->rbac_path);
+                LOG_TRACE("Found 'rbac' section with %zu properties", json_object_size(rbac_section));
+            }
+            
+            /* Process RBAC path setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'path' property in RBAC section");
+            }
+            
+            json_value_t* path_val = json_object_get(rbac_section, "path");
+            if (path_val) {
+                if (path_val->type == JSON_STRING) {
+                    /* Free existing path if it exists */
+                    if (config->rbac_path) {
+                        if (g_logger) {
+                            LOG_TRACE("Freeing existing rbac_path: '%s'", config->rbac_path);
+                        }
+                        free(config->rbac_path);
+                    }
+                    
+                    config->rbac_path = strdup(path_val->value.string);
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set rbac_path to '%s'", config->rbac_path);
+                        
+                        /* Special warning for default path in production */
+                        if (strcmp(config->rbac_path, DEFAULT_RBAC_PATH) == 0) {
+                            LOG_WARNING("Using default RBAC path in configuration - "
+                                      "this may not be suitable for production use");
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'path' in RBAC section (expected string, got %s)", 
+                                   json_type_name(path_val->type));
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_INFO("No RBAC path specified, using default: %s", DEFAULT_RBAC_PATH);
+                    
+                    /* Resolve the default path */
+                    char* resolved_path = resolve_path(DEFAULT_RBAC_PATH);
+                    if (resolved_path) {
+                        config->rbac_path = resolved_path;
+                        LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
+                    } else {
+                        LOG_ERROR("Failed to resolve default RBAC path");
+                        config->rbac_path = strdup(DEFAULT_RBAC_PATH);
+                    }
+                }
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("'rbac' section is not an object (found %s), using defaults", 
+                           json_type_name(rbac_section->type));
+            }
+        }
+    } else {
+        if (g_logger) {
+            LOG_INFO("No 'rbac' section found in config, using defaults");
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_RBAC_PATH);
+            if (resolved_path) {
+                config->rbac_path = resolved_path;
+                LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
+            } else {
+                LOG_ERROR("Failed to resolve default RBAC path");
+                config->rbac_path = strdup(DEFAULT_RBAC_PATH);
             }
         }
     }
     
     /* Parse JWT section */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'jwt' section");
+        LOG_TRACE("Looking for 'jwt' object in configuration");
+    }
+    
     json_value_t* jwt_section = json_object_get(json, "jwt");
-    if (jwt_section && jwt_section->type == JSON_OBJECT) {
-        json_value_t* secret_val = json_object_get(jwt_section, "secret");
-        if (secret_val && secret_val->type == JSON_STRING) {
-            config->jwt_secret = strdup(secret_val->value.string);
+    if (jwt_section) {
+        if (jwt_section->type == JSON_OBJECT) {
             if (g_logger) {
-                LOG_DEBUG("Config: Set JWT secret");
+                LOG_TRACE("Found 'jwt' section with %zu properties", json_object_size(jwt_section));
             }
+            
+            /* Process JWT secret setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'secret' property in JWT section");
+            }
+            
+            json_value_t* secret_val = json_object_get(jwt_section, "secret");
+            if (secret_val) {
+                if (secret_val->type == JSON_STRING) {
+                    /* Free existing secret if it exists */
+                    if (config->jwt_secret) {
+                        if (g_logger) {
+                            LOG_TRACE("Freeing existing JWT secret");
+                        }
+                        free(config->jwt_secret);
+                    }
+                    
+                    config->jwt_secret = strdup(secret_val->value.string);
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set JWT secret");
+                        
+                        /* Security checks on JWT secret */
+                        if (secret_val->value.string && strlen(secret_val->value.string) < 16) {
+                            LOG_WARNING("JWT secret is too short (< 16 chars), this is a security risk");
+                        }
+                        
+                        if (secret_val->value.string && strcmp(secret_val->value.string, DEFAULT_JWT_SECRET) == 0) {
+                            LOG_ERROR("Using default JWT secret in configuration - "
+                                    "this is a SEVERE SECURITY RISK in production!");
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'secret' in JWT section (expected string, got %s)", 
+                                   json_type_name(secret_val->type));
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_WARNING("No JWT secret specified, using default (INSECURE for production)");
+                    
+                    /* Only in debug, never log secrets at INFO or above */
+                    LOG_TRACE("Using default JWT secret: %s", DEFAULT_JWT_SECRET);
+                }
+                
+                config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("'jwt' section is not an object (found %s), using defaults", 
+                           json_type_name(jwt_section->type));
+            }
+            
+            config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+        }
+    } else {
+        if (g_logger) {
+            LOG_WARNING("No 'jwt' section found in config, using default secret (INSECURE for production)");
+            config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
         }
     }
     
     /* Parse logging section */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'logging' section");
+        LOG_TRACE("Looking for 'logging' object in configuration");
+    }
+    
     json_value_t* logging_section = json_object_get(json, "logging");
-    if (logging_section && logging_section->type == JSON_OBJECT) {
-        json_value_t* level_val = json_object_get(logging_section, "level");
-        if (level_val && level_val->type == JSON_STRING) {
-            const char* level_str = level_val->value.string;
-            
-            if (strcasecmp(level_str, "none") == 0) {
-                config->log_level = LOG_LEVEL_NONE;
-            } else if (strcasecmp(level_str, "error") == 0) {
-                config->log_level = LOG_LEVEL_ERROR;
-            } else if (strcasecmp(level_str, "warning") == 0) {
-                config->log_level = LOG_LEVEL_WARNING;
-            } else if (strcasecmp(level_str, "info") == 0) {
-                config->log_level = LOG_LEVEL_INFO;
-            } else if (strcasecmp(level_str, "debug") == 0) {
-                config->log_level = LOG_LEVEL_DEBUG;
-            } else if (strcasecmp(level_str, "trace") == 0) {
-                config->log_level = LOG_LEVEL_TRACE;
+    if (logging_section) {
+        if (logging_section->type == JSON_OBJECT) {
+            if (g_logger) {
+                LOG_TRACE("Found 'logging' section with %zu properties", json_object_size(logging_section));
             }
             
+            /* Process log level setting */
             if (g_logger) {
-                LOG_DEBUG("Config: Set log_level to %d", config->log_level);
+                LOG_TRACE("Looking for 'level' property in logging section");
+            }
+            
+            json_value_t* level_val = json_object_get(logging_section, "level");
+            if (level_val) {
+                if (level_val->type == JSON_STRING) {
+                    const char* level_str = level_val->value.string;
+                    int old_level = config->log_level;
+                    
+                    if (g_logger) {
+                        LOG_TRACE("Parsing log level string: '%s'", level_str);
+                    }
+                    
+                    if (strcasecmp(level_str, "none") == 0) {
+                        config->log_level = LOG_LEVEL_NONE;
+                    } else if (strcasecmp(level_str, "error") == 0) {
+                        config->log_level = LOG_LEVEL_ERROR;
+                    } else if (strcasecmp(level_str, "warning") == 0) {
+                        config->log_level = LOG_LEVEL_WARNING;
+                    } else if (strcasecmp(level_str, "info") == 0) {
+                        config->log_level = LOG_LEVEL_INFO;
+                    } else if (strcasecmp(level_str, "debug") == 0) {
+                        config->log_level = LOG_LEVEL_DEBUG;
+                    } else if (strcasecmp(level_str, "trace") == 0) {
+                        config->log_level = LOG_LEVEL_TRACE;
+                    } else {
+                        if (g_logger) {
+                            LOG_WARNING("Unknown log level '%s', using default: %d", 
+                                       level_str, DEFAULT_LOG_LEVEL);
+                        }
+                        config->log_level = DEFAULT_LOG_LEVEL;
+                    }
+                    
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set log_level from %d to %d", old_level, config->log_level);
+                        
+                        /* Special notices for various log levels */
+                        if (config->log_level == LOG_LEVEL_TRACE) {
+                            LOG_WARNING("Trace logging enabled - this will generate large log files "
+                                      "and may impact performance");
+                        } else if (config->log_level == LOG_LEVEL_NONE) {
+                            LOG_WARNING("Logging disabled - no operational visibility will be available");
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'level' in logging section (expected string, got %s), "
+                                  "using default: %d", 
+                                  json_type_name(level_val->type), DEFAULT_LOG_LEVEL);
+                    }
+                    config->log_level = DEFAULT_LOG_LEVEL;
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No log level specified, using default: %d", DEFAULT_LOG_LEVEL);
+                }
+                config->log_level = DEFAULT_LOG_LEVEL;
+            }
+            
+            /* Process log file setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'file' property in logging section");
+            }
+            
+            json_value_t* file_val = json_object_get(logging_section, "file");
+            if (file_val) {
+                if (file_val->type == JSON_STRING) {
+                    /* Free existing path if it exists */
+                    if (config->log_file) {
+                        if (g_logger) {
+                            LOG_TRACE("Freeing existing log_file: '%s'", config->log_file);
+                        }
+                        free(config->log_file);
+                    }
+                    
+                    /* Check if we need to create the directory */
+                    char* log_path = strdup(file_val->value.string);
+                    char* dir_end = strrchr(log_path, '/');
+                    if (dir_end) {
+                        *dir_end = '\0'; /* Temporarily terminate the string at the directory */
+                        
+                        /* Check if directory exists and create if needed */
+                        struct stat st = {0};
+                        if (stat(log_path, &st) == -1) {
+                            if (g_logger) {
+                                LOG_DEBUG("Log directory doesn't exist, will need to be created: %s", log_path);
+                            }
+                        }
+                        
+                        /* Restore the path */
+                        *dir_end = '/';
+                    }
+                    free(log_path);
+                    
+                    config->log_file = strdup(file_val->value.string);
+                    if (g_logger) {
+                        LOG_DEBUG("Config: Set log_file to '%s'", config->log_file);
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for 'file' in logging section (expected string, got %s)",
+                                   json_type_name(file_val->type));
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No log file specified, using default: %s", DEFAULT_LOG_FILE);
+                    
+                    /* Resolve the default path */
+                    char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
+                    if (resolved_path) {
+                        config->log_file = resolved_path;
+                        LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+                    } else {
+                        LOG_ERROR("Failed to resolve default log file path");
+                        config->log_file = strdup(DEFAULT_LOG_FILE);
+                    }
+                }
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("'logging' section is not an object (found %s), using defaults", 
+                           json_type_name(logging_section->type));
+            }
+            config->log_level = DEFAULT_LOG_LEVEL;
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
+            if (resolved_path) {
+                config->log_file = resolved_path;
+                if (g_logger) {
+                    LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+                }
+            } else {
+                if (g_logger) {
+                    LOG_ERROR("Failed to resolve default log file path");
+                }
+                config->log_file = strdup(DEFAULT_LOG_FILE);
             }
         }
-        
-        json_value_t* file_val = json_object_get(logging_section, "file");
-        if (file_val && file_val->type == JSON_STRING) {
-            config->log_file = strdup(file_val->value.string);
-            if (g_logger) {
-                LOG_DEBUG("Config: Set log_file to '%s'", config->log_file);
+    } else {
+        if (g_logger) {
+            LOG_INFO("No 'logging' section found in config, using defaults");
+            config->log_level = DEFAULT_LOG_LEVEL;
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
+            if (resolved_path) {
+                config->log_file = resolved_path;
+                LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+            } else {
+                LOG_ERROR("Failed to resolve default log file path");
+                config->log_file = strdup(DEFAULT_LOG_FILE);
             }
         }
     }
     
     /* Parse PID file setting */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'pid_file' setting");
+        LOG_TRACE("Looking for 'pid_file' property in configuration");
+    }
+    
     json_value_t* pid_file_val = json_object_get(json, "pid_file");
-    if (pid_file_val && pid_file_val->type == JSON_STRING) {
-        config->pid_file = strdup(pid_file_val->value.string);
+    if (pid_file_val) {
+        if (pid_file_val->type == JSON_STRING) {
+            /* Free existing path if it exists */
+            if (config->pid_file) {
+                if (g_logger) {
+                    LOG_TRACE("Freeing existing pid_file: '%s'", config->pid_file);
+                }
+                free(config->pid_file);
+            }
+            
+            /* Check if we need to create the directory */
+            char* pid_path = strdup(pid_file_val->value.string);
+            char* dir_end = strrchr(pid_path, '/');
+            if (dir_end) {
+                *dir_end = '\0'; /* Temporarily terminate the string at the directory */
+                
+                /* Check if directory exists and create if needed */
+                struct stat st = {0};
+                if (stat(pid_path, &st) == -1) {
+                    if (g_logger) {
+                        LOG_DEBUG("PID directory doesn't exist, will need to be created: %s", pid_path);
+                    }
+                }
+                
+                /* Restore the path */
+                *dir_end = '/';
+            }
+            free(pid_path);
+            
+            config->pid_file = strdup(pid_file_val->value.string);
+            if (g_logger) {
+                LOG_DEBUG("Config: Set pid_file to '%s'", config->pid_file);
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("Invalid type for 'pid_file' (expected string, got %s), using default",
+                           json_type_name(pid_file_val->type));
+            }
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_PID_FILE);
+            if (resolved_path) {
+                config->pid_file = resolved_path;
+                if (g_logger) {
+                    LOG_DEBUG("Resolved default PID file path to: %s", config->pid_file);
+                }
+            } else {
+                if (g_logger) {
+                    LOG_ERROR("Failed to resolve default PID file path");
+                }
+                config->pid_file = strdup(DEFAULT_PID_FILE);
+            }
+        }
+    } else {
         if (g_logger) {
-            LOG_DEBUG("Config: Set pid_file to '%s'", config->pid_file);
+            LOG_DEBUG("No PID file specified, using default: %s", DEFAULT_PID_FILE);
+            
+            /* Resolve the default path */
+            char* resolved_path = resolve_path(DEFAULT_PID_FILE);
+            if (resolved_path) {
+                config->pid_file = resolved_path;
+                LOG_DEBUG("Resolved default PID file path to: %s", config->pid_file);
+            } else {
+                LOG_ERROR("Failed to resolve default PID file path");
+                config->pid_file = strdup(DEFAULT_PID_FILE);
+            }
         }
     }
     
     /* Parse foreground mode setting */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'foreground_mode' setting");
+        LOG_TRACE("Looking for 'foreground_mode' property in configuration");
+    }
+    
     json_value_t* foreground_val = json_object_get(json, "foreground_mode");
     if (foreground_val) {
+        if (g_logger) {
+            LOG_TRACE("Found 'foreground_mode' of type %s", json_type_name(foreground_val->type));
+        }
+        
+        int old_mode = config->foreground_mode;
+        
         if (foreground_val->type == JSON_BOOLEAN) {
             config->foreground_mode = foreground_val->value.boolean;
+            if (g_logger) {
+                LOG_TRACE("Parsing foreground_mode as boolean: %d", config->foreground_mode);
+            }
         } else if (foreground_val->type == JSON_INTEGER) {
             config->foreground_mode = (foreground_val->value.integer != 0);
+            if (g_logger) {
+                LOG_TRACE("Parsing foreground_mode as integer: %ld -> %d", 
+                         foreground_val->value.integer, config->foreground_mode);
+            }
         } else if (foreground_val->type == JSON_STRING) {
             config->foreground_mode = parse_bool(foreground_val->value.string);
+            if (g_logger) {
+                LOG_TRACE("Parsing foreground_mode as string: '%s' -> %d", 
+                         foreground_val->value.string, config->foreground_mode);
+            }
+        } else {
+            if (g_logger) {
+                LOG_WARNING("Invalid type for 'foreground_mode' (expected boolean, integer, or string, got %s), "
+                           "using default: %d", 
+                           json_type_name(foreground_val->type), DEFAULT_FOREGROUND_MODE);
+            }
+            config->foreground_mode = DEFAULT_FOREGROUND_MODE;
         }
         
         if (g_logger) {
-            LOG_DEBUG("Config: Set foreground_mode to %d", config->foreground_mode);
+            if (old_mode != config->foreground_mode) {
+                LOG_DEBUG("Config: Changed foreground_mode from %d to %d", old_mode, config->foreground_mode);
+                
+                if (config->foreground_mode) {
+                    LOG_INFO("Server will run in foreground mode (not as daemon)");
+                } else {
+                    LOG_INFO("Server will run in daemon mode (background)");
+                }
+            } else {
+                LOG_DEBUG("Config: foreground_mode remains at %d", config->foreground_mode);
+            }
+        }
+    } else {
+        if (g_logger) {
+            LOG_DEBUG("No foreground_mode specified, using default: %d", DEFAULT_FOREGROUND_MODE);
+            config->foreground_mode = DEFAULT_FOREGROUND_MODE;
+            
+            if (config->foreground_mode) {
+                LOG_INFO("Server will run in foreground mode (not as daemon)");
+            } else {
+                LOG_INFO("Server will run in daemon mode (background)");
+            }
         }
     }
     
     /* Parse CORS settings */
+    if (g_logger) {
+        LOG_DEBUG("Processing 'cors' section");
+        LOG_TRACE("Looking for 'cors' object in configuration");
+    }
+    
     json_value_t* cors_section = json_object_get(json, "cors");
-    if (cors_section && cors_section->type == JSON_OBJECT) {
-        /* Initialize CORS configuration */
-        init_cors_config(&config->cors);
-        
-        json_value_t* enabled_val = json_object_get(cors_section, "enabled");
-        if (enabled_val) {
-            int enabled = 0;
-            if (enabled_val->type == JSON_BOOLEAN) {
-                enabled = enabled_val->value.boolean;
-            } else if (enabled_val->type == JSON_INTEGER) {
-                enabled = (enabled_val->value.integer != 0);
-            } else if (enabled_val->type == JSON_STRING) {
-                enabled = parse_bool(enabled_val->value.string);
-            }
-            
-            config->cors.enabled = enabled;
+    if (cors_section) {
+        if (cors_section->type == JSON_OBJECT) {
             if (g_logger) {
-                LOG_DEBUG("Config: Set CORS enabled to %d", config->cors.enabled);
+                LOG_TRACE("Found 'cors' section with %zu properties", json_object_size(cors_section));
             }
-        }
-        
-        json_value_t* origins_val = json_object_get(cors_section, "allowed_origins");
-        if (origins_val && origins_val->type == JSON_ARRAY) {
-            /* Free existing origins if any */
-            if (config->cors.allowed_origins) {
-                for (int i = 0; i < config->cors.allowed_origins_count; i++) {
-                    free(config->cors.allowed_origins[i]);
+            
+            /* Initialize CORS configuration */
+            if (g_logger) {
+                LOG_TRACE("Initializing CORS configuration");
+            }
+            init_cors_config(&config->cors);
+            
+            /* Process CORS enabled setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'enabled' property in CORS section");
+            }
+            
+            json_value_t* enabled_val = json_object_get(cors_section, "enabled");
+            if (enabled_val) {
+                if (g_logger) {
+                    LOG_TRACE("Found 'enabled' of type %s", json_type_name(enabled_val->type));
                 }
-                free(config->cors.allowed_origins);
-                config->cors.allowed_origins = NULL;
-                config->cors.allowed_origins_count = 0;
-            }
-            
-            /* Allocate new origins array */
-            size_t count = json_array_size(origins_val);
-            config->cors.allowed_origins = (char**)malloc(count * sizeof(char*));
-            config->cors.allowed_origins_count = count;
-            
-            /* Copy origins */
-            for (size_t i = 0; i < count; i++) {
-                json_value_t* origin = json_array_get(origins_val, i);
-                if (origin && origin->type == JSON_STRING) {
-                    config->cors.allowed_origins[i] = strdup(origin->value.string);
+                
+                int enabled = 0;
+                if (enabled_val->type == JSON_BOOLEAN) {
+                    enabled = enabled_val->value.boolean;
                     if (g_logger) {
-                        LOG_DEBUG("Config: Added CORS allowed origin: '%s'", config->cors.allowed_origins[i]);
+                        LOG_TRACE("Parsing CORS enabled as boolean: %d", enabled);
+                    }
+                } else if (enabled_val->type == JSON_INTEGER) {
+                    enabled = (enabled_val->value.integer != 0);
+                    if (g_logger) {
+                        LOG_TRACE("Parsing CORS enabled as integer: %ld -> %d", 
+                                 enabled_val->value.integer, enabled);
+                    }
+                } else if (enabled_val->type == JSON_STRING) {
+                    enabled = parse_bool(enabled_val->value.string);
+                    if (g_logger) {
+                        LOG_TRACE("Parsing CORS enabled as string: '%s' -> %d", 
+                                 enabled_val->value.string, enabled);
                     }
                 } else {
-                    config->cors.allowed_origins[i] = strdup("*");
+                    if (g_logger) {
+                        LOG_WARNING("Invalid type for CORS 'enabled' (expected boolean, integer, or string, got %s), "
+                                   "using default: %d", 
+                                   json_type_name(enabled_val->type), DEFAULT_CORS_ENABLED);
+                    }
+                    enabled = DEFAULT_CORS_ENABLED;
                 }
+                
+                config->cors.enabled = enabled;
+                if (g_logger) {
+                    LOG_DEBUG("Config: Set CORS enabled to %d", config->cors.enabled);
+                    
+                    if (config->cors.enabled) {
+                        LOG_INFO("CORS support enabled");
+                    } else {
+                        LOG_INFO("CORS support disabled");
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_DEBUG("No CORS enabled setting specified, using default: %d", DEFAULT_CORS_ENABLED);
+                    config->cors.enabled = DEFAULT_CORS_ENABLED;
+                }
+            }
+            
+            /* Process allowed origins setting */
+            if (g_logger) {
+                LOG_TRACE("Looking for 'allowed_origins' property in CORS section");
+            }
+            
+            json_value_t* origins_val = json_object_get(cors_section, "allowed_origins");
+            if (origins_val) {
+                if (origins_val->type == JSON_ARRAY) {
+                    if (g_logger) {
+                        LOG_TRACE("Found 'allowed_origins' array with %zu items", 
+                                 json_array_size(origins_val));
+                    }
+                
+                /* Free existing origins if any */
+                if (config->cors.allowed_origins) {
+                    if (g_logger) {
+                        LOG_TRACE("Freeing existing allowed origins (%d items)", 
+                                 config->cors.allowed_origins_count);
+                    }
+                    
+                    for (int i = 0; i < config->cors.allowed_origins_count; i++) {
+                        free(config->cors.allowed_origins[i]);
+                    }
+                    free(config->cors.allowed_origins);
+                    config->cors.allowed_origins = NULL;
+                    config->cors.allowed_origins_count = 0;
+                }
+                
+                /* Allocate new origins array */
+                size_t count = json_array_size(origins_val);
+                if (g_logger) {
+                    LOG_TRACE("Allocating memory for %zu allowed origins", count);
+                }
+                
+                /* Check for empty array */
+                if (count == 0) {
+                    if (g_logger) {
+                        LOG_WARNING("Empty 'allowed_origins' array, CORS will not allow any origin");
+                    }
+                    config->cors.allowed_origins = NULL;
+                    config->cors.allowed_origins_count = 0;
+                    
+                } else {
+                    config->cors.allowed_origins = (char**)malloc(count * sizeof(char*));
+                    if (!config->cors.allowed_origins) {
+                        if (g_logger) {
+                            LOG_ERROR("Failed to allocate memory for CORS allowed origins");
+                        }
+                        /* Continue with other settings */
+                    } else {
+                        config->cors.allowed_origins_count = count;
+                        
+                        /* Copy origins */
+                        int wildcard_found = 0;
+                        for (size_t i = 0; i < count; i++) {
+                            json_value_t* origin = json_array_get(origins_val, i);
+                            if (origin && origin->type == JSON_STRING) {
+                                config->cors.allowed_origins[i] = strdup(origin->value.string);
+                                
+                                /* Check for wildcard origin */
+                                if (strcmp(origin->value.string, "*") == 0) {
+                                    wildcard_found = 1;
+                                    if (g_logger) {
+                                        LOG_WARNING("Wildcard (*) CORS origin can be a security risk");
+                                    }
+                                }
+                                
+                                if (g_logger) {
+                                    LOG_DEBUG("Config: Added CORS allowed origin: '%s'", 
+                                             config->cors.allowed_origins[i]);
+                                }
+                            } else {
+                                if (g_logger) {
+                                    if (origin) {
+                                        LOG_WARNING("Invalid CORS origin at index %zu (expected string, got %s), "
+                                                  "using wildcard '*'", 
+                                                  i, json_type_name(origin->type));
+                                    } else {
+                                        LOG_WARNING("Invalid CORS origin at index %zu (NULL), using wildcard '*'", i);
+                                    }
+                                }
+                                config->cors.allowed_origins[i] = strdup("*");
+                                wildcard_found = 1;
+                            }
+                        }
+                        
+                        if (g_logger && wildcard_found) {
+                            LOG_INFO("CORS configured with wildcard origin - all origins will be allowed");
+                        }
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_WARNING("Invalid type for 'allowed_origins' (expected array, got %s)", 
+                               json_type_name(origins_val->type));
+                }
+            }
+            }
+        } else {
+            if (g_logger && config->cors.enabled) {
+                LOG_WARNING("CORS is enabled but no allowed origins specified");
             }
         }
         
@@ -482,9 +1402,15 @@ int config_load_json(const char* filepath, server_config_t* config) {
 
 /* Load configuration from key=value file */
 int config_load_keyvalue(const char* filepath, server_config_t* config) {
+    if (g_logger) {
+        LOG_TRACE("Entering config_load_keyvalue(filepath='%s')", filepath ? filepath : "NULL");
+    }
+    
     if (!filepath || !config) {
         if (g_logger) {
-            LOG_ERROR("Invalid parameters for config_load_keyvalue");
+            LOG_ERROR("Invalid parameters for config_load_keyvalue: filepath=%p, config=%p", 
+                    (void*)filepath, (void*)config);
+            LOG_TRACE("Exiting config_load_keyvalue() - invalid parameters");
         } else {
             fprintf(stderr, "Error: Invalid parameters for config_load_keyvalue\n");
         }
@@ -608,6 +1534,7 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
     
     if (g_logger) {
         LOG_INFO("Configuration loaded successfully from %s", filepath);
+        LOG_TRACE("Exiting config_load_keyvalue() - success");
     } else {
         printf("Configuration loaded successfully from %s\n", filepath);
     }
@@ -617,9 +1544,15 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
 
 /* Detect config file type and load it */
 int config_load(const char* filepath, server_config_t* config) {
+    if (g_logger) {
+        LOG_TRACE("Entering config_load(filepath='%s')", filepath ? filepath : "NULL");
+    }
+    
     if (!filepath || !config) {
         if (g_logger) {
-            LOG_ERROR("Invalid parameters for config_load");
+            LOG_ERROR("Invalid parameters for config_load: filepath=%p, config=%p", 
+                    (void*)filepath, (void*)config);
+            LOG_TRACE("Exiting config_load() - invalid parameters");
         } else {
             fprintf(stderr, "Error: Invalid parameters for config_load\n");
         }
@@ -630,22 +1563,46 @@ int config_load(const char* filepath, server_config_t* config) {
     const char* ext = strrchr(filepath, '.');
     if (!ext) {
         /* Default to key=value if no extension */
+        if (g_logger) {
+            LOG_DEBUG("No file extension detected, assuming key=value format for '%s'", filepath);
+        }
         return config_load_keyvalue(filepath, config);
     }
     
     if (strcasecmp(ext, ".json") == 0) {
+        if (g_logger) {
+            LOG_DEBUG("Detected .json extension, loading as JSON format");
+            LOG_TRACE("Exiting config_load() - delegating to config_load_json");
+        }
         return config_load_json(filepath, config);
     } else if (strcasecmp(ext, ".conf") == 0) {
+        if (g_logger) {
+            LOG_DEBUG("Detected .conf extension, loading as key=value format");
+            LOG_TRACE("Exiting config_load() - delegating to config_load_keyvalue");
+        }
         return config_load_keyvalue(filepath, config);
     } else {
         /* Unknown extension, try key=value format */
+        if (g_logger) {
+            LOG_WARNING("Unknown file extension '%s', assuming key=value format", ext);
+            LOG_TRACE("Exiting config_load() - delegating to config_load_keyvalue");
+        }
         return config_load_keyvalue(filepath, config);
     }
 }
 
 /* Free configuration resources */
 void config_free(server_config_t* config) {
-    if (!config) return;
+    if (g_logger) {
+        LOG_TRACE("Entering config_free(config=%p)", (void*)config);
+    }
+    
+    if (!config) {
+        if (g_logger) {
+            LOG_TRACE("Exiting config_free() - NULL config");
+        }
+        return;
+    }
     
     /* Free string resources */
     if (config->host) free(config->host);
@@ -679,6 +1636,11 @@ void config_free(server_config_t* config) {
     
     /* Reset configuration */
     memset(config, 0, sizeof(server_config_t));
+    
+    if (g_logger) {
+        LOG_DEBUG("Configuration resources freed");
+        LOG_TRACE("Exiting config_free() - success");
+    }
 }
 
 /**
@@ -686,7 +1648,17 @@ void config_free(server_config_t* config) {
  * @param config Pointer to the configuration structure to initialize
  */
 void config_init_defaults(server_config_t* config) {
-    if (!config) return;
+    if (g_logger) {
+        LOG_TRACE("Entering config_init_defaults(config=%p)", (void*)config);
+    }
+    
+    if (!config) {
+        if (g_logger) {
+            LOG_ERROR("NULL config provided to config_init_defaults()");
+            LOG_TRACE("Exiting config_init_defaults() - NULL config");
+        }
+        return;
+    }
     
     /* Clear any existing configuration */
     config_free(config);
@@ -730,5 +1702,12 @@ void config_init_defaults(server_config_t* config) {
         LOG_DEBUG("Default RBAC path: %s", config->rbac_path);
         LOG_DEBUG("Default PID file: %s", config->pid_file);
         LOG_DEBUG("Default log file: %s", config->log_file);
+        
+        /* Security-related defaults - only log at trace level */
+        LOG_TRACE("Default JWT secret length: %zu", strlen(config->jwt_secret));
+        LOG_TRACE("Default CORS enabled: %d", config->cors.enabled);
+        LOG_TRACE("Default SSL enabled: %d", config->use_ssl);
+        
+        LOG_TRACE("Exiting config_init_defaults() - success");
     }
 }
