@@ -2,8 +2,8 @@
 #define RBAC_REFCOUNT_H
 
 #include "rbac/rbac.h"
-#include "utils/memory/ref_counter.h"
-#include "utils/memory/ref_json.h"
+#include "utils/ref_counter.h"
+#include "utils/ref_json.h"
 
 /**
  * Enhanced RBAC system with reference counting for JSON objects

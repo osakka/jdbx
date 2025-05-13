@@ -14,30 +14,30 @@ extern "C" {
 #endif
 
 /* Core database functionality */
-#include "components/database/database.h"
-#include "components/api/api.h"
+#include "database/database.h"
+#include "api/api.h"
 
 /* Optional JavaScript integration */
 #ifdef USE_QUICKJS
-#include "components/js/js_api.h"
-#include "components/js/js_engine.h"
+#include "js/js_api.h"
+#include "js/js_engine.h"
 #endif
 
 /* Transaction management */
-#include "components/transaction/transaction.h"
-#include "components/transaction/transaction_retry.h"
+#include "transaction/transaction.h"
+#include "transaction/transaction_retry.h"
 
 /* Query language */
-#include "components/query/query_language.h"
+#include "query/query_language.h"
 
 /* Authentication and authorization */
-#include "components/rbac/rbac.h"
-#include "components/rbac/jwt.h"
+#include "rbac/rbac.h"
+#include "rbac/jwt.h"
 
 /* Common utilities */
-#include "components/utils/json.h"
-#include "components/utils/logger.h"
-#include "components/utils/config_loader.h"
+#include "utils/json.h"
+#include "utils/logger.h"
+#include "utils/config_loader.h"
 
 #ifdef __cplusplus
 }

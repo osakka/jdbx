@@ -2,7 +2,7 @@
 #define REF_JSON_H
 
 #include "utils/json.h"
-#include "ref_counter.h"
+#include "utils/ref_counter.h"
 
 /**
  * Reference counted JSON values.

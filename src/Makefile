@@ -24,9 +24,9 @@ DB_SRCS = $(wildcard $(SRC_DIR)/components/database/*.c)
 QUERY_SRCS = $(wildcard $(SRC_DIR)/components/query/*.c)
 TRANS_SRCS = $(wildcard $(SRC_DIR)/components/transaction/*.c)
 RBAC_SRCS = $(wildcard $(SRC_DIR)/components/rbac/*.c)
-UTILS_SRCS = $(wildcard $(SRC_DIR)/components/utils/*.c) $(wildcard $(SRC_DIR)/components/utils/memory/*.c)
+UTILS_SRCS = $(wildcard $(SRC_DIR)/components/utils/*.c)
 TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
-JS_SRCS = $(wildcard $(SRC_DIR)/components/js/*.c) $(wildcard $(SRC_DIR)/components/js/utils/*.c)
+JS_SRCS = $(wildcard $(SRC_DIR)/components/js/*.c)
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
 # Object files
@@ -66,9 +66,9 @@ directories:
 	@mkdir -p $(OBJ_DIR)/components/query
 	@mkdir -p $(OBJ_DIR)/components/transaction
 	@mkdir -p $(OBJ_DIR)/components/rbac
-	@mkdir -p $(OBJ_DIR)/components/utils/memory
+	@mkdir -p $(OBJ_DIR)/components/utils
 	@mkdir -p $(OBJ_DIR)/components/tools
-	@mkdir -p $(OBJ_DIR)/components/js/utils
+	@mkdir -p $(OBJ_DIR)/components/js
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LIB_DIR)
 
@@ -136,6 +136,15 @@ verify-organization:
 			exit 1; \
 		fi; \
 	done
+	@# Check for redundant nested utils directories 
+	@if [ -d "./components/js/utils" ]; then \
+		echo "ERROR: js/utils directory should not exist - move files to js/"; \
+		exit 1; \
+	fi
+	@if [ -d "./include/utils/memory" ]; then \
+		echo "ERROR: utils/memory directory should not exist - move files to utils/"; \
+		exit 1; \
+	fi
 	@echo "Organization verification passed"
 
 # Phony targets
