@@ -616,15 +616,26 @@ int main(int argc, char** argv) {
     }
     
     /* Initialize logger */
-    if (config.log_file) {
+    if (config.foreground_mode) {
+        /* In foreground mode, direct logs to stdout/stderr */
+        if (!logger_init(NULL, config.log_level)) {
+            fprintf(stderr, "Error: Failed to initialize console logger\n");
+            return 1;
+        }
+        if (g_logger) {
+            g_logger->include_timestamp = 1;  /* Include timestamps in console output */
+            g_logger->include_level = 1;      /* Include log level in console output */
+        }
+    } else if (config.log_file) {
+        /* In daemon mode with specified log file */
         if (!logger_init(config.log_file, config.log_level)) {
             fprintf(stderr, "Error: Failed to initialize logger\n");
             return 1;
         }
     } else {
-        /* Use stderr for logging in foreground mode (no console logger function, using stderr with standard logger) */
-        if (!logger_init("/dev/stderr", config.log_level)) {
-            fprintf(stderr, "Error: Failed to initialize console logger\n");
+        /* In daemon mode without specified log file, use default */
+        if (!logger_init(DEFAULT_LOG_FILE, config.log_level)) {
+            fprintf(stderr, "Error: Failed to initialize default logger\n");
             return 1;
         }
     }

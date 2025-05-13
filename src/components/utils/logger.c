@@ -70,6 +70,19 @@ int logger_init(const char* log_file_path, log_level_t level) {
     g_logger->include_level = 1;
     g_logger->include_source = 1;
     
+    /* Check if we should use console logging (stdout/stderr) */
+    if (log_file_path == NULL) {
+        /* Use stdout for console mode */
+        g_logger->log_file = stdout;
+        g_logger->log_file_path[0] = '\0'; /* Empty path indicates console logging */
+        
+        /* Log initialization message */
+        logger_log(LOG_LEVEL_INFO, __FILE__, __LINE__, __func__, 
+                 "Logger initialized with level %s (console mode)", log_level_strings[level]);
+        
+        return 1;
+    }
+    
     /* Store log file path */
     strncpy(g_logger->log_file_path, log_file_path, sizeof(g_logger->log_file_path) - 1);
     g_logger->log_file_path[sizeof(g_logger->log_file_path) - 1] = '\0';
@@ -125,7 +138,11 @@ void logger_close() {
     /* Log closure message if possible */
     if (g_logger->log_file) {
         logger_log(LOG_LEVEL_INFO, __FILE__, __LINE__, __func__, "Logger shutting down");
-        fclose(g_logger->log_file);
+        
+        /* Don't close stdout/stderr */
+        if (g_logger->log_file != stdout && g_logger->log_file != stderr) {
+            fclose(g_logger->log_file);
+        }
         g_logger->log_file = NULL;
     }
     
@@ -148,7 +165,7 @@ static const char* get_filename(const char* path) {
 void logger_log(log_level_t level, const char* file, int line, 
                 const char* function, const char* format, ...) {
     /* Check if logger is initialized */
-    if (!g_logger || !g_logger->log_file) {
+    if (!g_logger) {
         return;
     }
     
@@ -158,6 +175,18 @@ void logger_log(log_level_t level, const char* file, int line,
     }
     
     pthread_mutex_lock(&g_logger->lock);
+    
+    /* Determine output stream for console mode */
+    FILE* output = g_logger->log_file;
+    
+    /* In console mode, direct errors and warnings to stderr, others to stdout */
+    if (g_logger->log_file_path[0] == '\0') {  /* Console mode */
+        if (level <= LOG_LEVEL_WARNING) {  /* ERROR and WARNING go to stderr */
+            output = stderr;
+        } else {
+            output = stdout;
+        }
+    }
     
     /* Add timestamp if enabled */
     if (g_logger->include_timestamp) {
@@ -169,33 +198,33 @@ void logger_log(log_level_t level, const char* file, int line,
         time_info = localtime(&now);
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", time_info);
         
-        fprintf(g_logger->log_file, "[%s] ", timestamp);
+        fprintf(output, "[%s] ", timestamp);
     }
     
     /* Add log level if enabled */
     if (g_logger->include_level) {
-        fprintf(g_logger->log_file, "[%s] ", log_level_strings[level]);
+        fprintf(output, "[%s] ", log_level_strings[level]);
     }
     
     /* Add source information if enabled */
     if (g_logger->include_source) {
-        fprintf(g_logger->log_file, "[%s:%d:%s] ", 
+        fprintf(output, "[%s:%d:%s] ", 
                 get_filename(file), line, function);
     }
     
     /* Format and write the actual log message */
     va_list args;
     va_start(args, format);
-    vfprintf(g_logger->log_file, format, args);
+    vfprintf(output, format, args);
     va_end(args);
     
     /* Add newline if not already present */
     if (format[0] == '\0' || format[strlen(format) - 1] != '\n') {
-        fprintf(g_logger->log_file, "\n");
+        fprintf(output, "\n");
     }
     
     /* Flush to ensure log is written immediately */
-    fflush(g_logger->log_file);
+    fflush(output);
     
     pthread_mutex_unlock(&g_logger->lock);
 }
