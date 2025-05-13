@@ -164,3 +164,9 @@ gcc -E -I./src your_file.c | grep "#include"
 ```
 
 If you encounter any "file not found" errors, check your include paths against this documentation.
+
+## See Also
+
+- [Repository Organization Guidelines](../guidelines/REPOSITORY_ORGANIZATION.md)
+- [Project Structure](project_structure.md)
+- [Source Consolidation Implementation](source_consolidation_implementation.md)

@@ -1,10 +1,10 @@
 # JSONdb Project Structure
 
-This document provides an overview of the JSONdb project structure after the repository reorganization (v1.0.0-structure).
+This document provides an overview of the JSONdb project structure after the repository reorganization and consolidation (v1.1.0-structure).
 
 ## Overview
 
-The repository has been reorganized following the principles outlined in the [Repository Organization Guidelines](../guidelines/REPOSITORY_ORGANIZATION.md) to create a more maintainable and consistent project structure.
+The repository has been reorganized following the principles outlined in the [Repository Organization Guidelines](../guidelines/REPOSITORY_ORGANIZATION.md) to create a more maintainable and consistent project structure. Additionally, all source files have been consolidated to eliminate redundancy and provide a single source of truth.
 
 ## Directory Structure
 
@@ -37,7 +37,7 @@ jsondb/
 │   │   └── utils/          # Utility header files
 │   │       ├── *.h         # Utility-specific headers
 │   │       └── memory/     # Memory management utility headers
-│   └── components/         # Component-based organization 
+│   └── components/         # Component-based organization with all implementation files 
 │       ├── main.c          # Main entry point
 │       ├── api/            # API implementation
 │       │   └── *.c         # API implementation files
@@ -102,14 +102,15 @@ jsondb/
 
 ## Component Organization
 
-The project uses a component-based organization where each component contains both its headers and implementation. This approach provides several benefits:
+The project uses a component-based organization with a clean separation between headers and implementation. This approach provides several benefits:
 
-1. **Cohesion**: Headers are kept with their implementation, making it easier to understand the component.
-2. **Encapsulation**: Components are self-contained, reducing unnecessary dependencies.
-3. **Discoverability**: Developers can quickly find all files related to a component in one location.
-4. **Maintenance**: Changes to a component can be made in one place, reducing the risk of inconsistencies.
+1. **Separation of Concerns**: Headers (interfaces) are kept separate from implementation, improving encapsulation.
+2. **Clean Include Paths**: All headers are accessed via the unified `src/include` directory.
+3. **Single Source of Truth**: All implementation files are consolidated in `src/components/`, eliminating redundancy.
+4. **Discoverability**: Developers can quickly find all related files in a consistent, predictable structure.
+5. **Maintenance**: Changes to a component can be made in one place, reducing the risk of inconsistencies.
 
-Components are located in `src/components/` with the global header `jsondb.h` in `src/include/`.
+Headers are located in `src/include/` (organized by component), while all implementation files are in `src/components/` (also organized by component). The main include file `jsondb.h` is located at `src/include/jsondb.h`.
 
 ## Build System
 
@@ -161,13 +162,16 @@ Examples are now organized by complexity and purpose:
 
 When working with this codebase, follow these best practices:
 
-1. Respect the component-based directory structure when adding new files
-2. Add new headers to the appropriate component directory, not to a separate include hierarchy
-3. Include component headers using `"components/component_name/header.h"` pattern
-4. Follow the established naming conventions
+1. Respect the separation between headers and implementation:
+   - Headers go in `src/include/{component}/`
+   - Implementation files go in `src/components/{component}/`
+2. Place all implementation files in the `src/components/` directory; **do not** create implementation files in the `src/` root or its subdirectories
+3. Include header files using the path relative to `src/include`, e.g., `#include "api/api.h"` or `#include "database/database.h"`
+4. Follow the established naming conventions for consistency
 5. Update documentation when making significant changes
 6. Add tests for new functionality that mirror the component structure
-7. Use the appropriate Makefile for building components
+7. Use the main Makefile in `src/` for building all components
+8. Maintain a single source of truth by avoiding duplicate implementations
 
 ## Related Documentation
 

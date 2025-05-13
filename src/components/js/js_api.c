@@ -1,7 +1,7 @@
-#include "api/api.h"
-#include "js/js_engine.h"
-#include "database/database.h"
-#include "utils/json.h"
+#include "components/api/api.h"
+#include "components/js/js_engine.h"
+#include "components/database/database.h"
+#include "components/utils/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,17 +17,17 @@ extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_
 
 /* Initialize JavaScript engine */
 void js_api_init(database_t *db) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     /* Get absolute paths for JS directories */
     char functions_dir[PATH_MAX] = {0};
     char validators_dir[PATH_MAX] = {0};
     char transforms_dir[PATH_MAX] = {0};
-    
+
     /* Make absolute paths */
     make_path_absolute("functions", functions_dir, sizeof(functions_dir));
     make_path_absolute("validators", validators_dir, sizeof(validators_dir));
     make_path_absolute("transforms", transforms_dir, sizeof(transforms_dir));
-    
+
     /* Create functions directory if it doesn't exist */
     struct stat st = {0};
     if (stat(functions_dir, &st) == -1) {
@@ -61,25 +61,28 @@ void js_api_init(database_t *db) {
     } else {
         printf("JavaScript engine initialized\n");
     }
-#else
-    /* QuickJS is not available */
-    fprintf(stderr, "JavaScript support is not available (QuickJS not found during build)\n");
+#else /* JavaScript functionality disabled */
+    fprintf(stderr, "JavaScript support is not available (disabled in this build)\n");
     g_js_engine = NULL;
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Free JavaScript engine */
 void js_api_cleanup() {
+#ifndef DISABLE_JS
     /* This function is kept for API compatibility, but actual cleanup
        is now performed directly in main.c to better handle memory management */
-    
+
     /* If called directly, just null the pointer - actual freeing is done in main.c */
     g_js_engine = NULL;
+#else /* JavaScript functionality disabled */
+    /* No-op when JavaScript is disabled */
+#endif /* DISABLE_JS */
 }
 
 /* Handle JavaScript query request */
 http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -142,17 +145,17 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
     free(response_str);
 
     return http_response;
-#else
-    /* JavaScript functionality not available */
+#else /* JavaScript functionality disabled */
+    /* Return error when JavaScript is disabled */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Handle user function registration */
 http_response_t* api_handle_js_function_register(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -216,17 +219,17 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
     free(response_str);
 
     return http_response;
-#else
+#else /* JavaScript functionality disabled */
     /* JavaScript functionality not available */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Handle user function execution */
 http_response_t* api_handle_js_function_execute(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -290,17 +293,17 @@ http_response_t* api_handle_js_function_execute(api_context_t* ctx, http_request
     free(response_str);
 
     return http_response;
-#else
+#else /* JavaScript functionality disabled */
     /* JavaScript functionality not available */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Handle validator registration */
 http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -367,17 +370,17 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
     free(response_str);
 
     return http_response;
-#else
+#else /* JavaScript functionality disabled */
     /* JavaScript functionality not available */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Handle transformer registration */
 http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -444,17 +447,17 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
     free(response_str);
 
     return http_response;
-#else
+#else /* JavaScript functionality disabled */
     /* JavaScript functionality not available */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }
 
 /* Handle JavaScript code evaluation */
 http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request) {
-#ifdef USE_QUICKJS
+#ifndef DISABLE_JS
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -524,10 +527,10 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
     free(response_str);
 
     return http_response;
-#else
+#else /* JavaScript functionality disabled */
     /* JavaScript functionality not available */
     return create_http_response(HTTP_NOT_IMPLEMENTED,
                               "{\"error\":\"JavaScript functionality is not available in this build\"}",
                               "application/json");
-#endif
+#endif /* DISABLE_JS */
 }

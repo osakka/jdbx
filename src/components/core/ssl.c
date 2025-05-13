@@ -1,4 +1,4 @@
-#include "core/ssl.h"
+#include "src/include/core/ssl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,23 +52,32 @@ void ssl_free_context(ssl_context_t* context) {
 
 /* Create SSL connection - mock implementation */
 SSL* ssl_create_connection(ssl_context_t* context, int socket_fd) {
+    (void)context; /* Avoid unused parameter warning */
+    (void)socket_fd; /* Avoid unused parameter warning */
     printf("SSL connection creation is mocked\n");
     return NULL;
 }
 
 /* Free SSL connection - mock implementation */
 void ssl_free_connection(SSL* ssl) {
+    (void)ssl; /* Avoid unused parameter warning */
     /* This is a mock implementation */
 }
 
 /* Read from SSL connection - mock implementation */
 int ssl_read(SSL* ssl, char* buffer, int length) {
+    (void)ssl; /* Avoid unused parameter warning */
+    (void)buffer; /* Avoid unused parameter warning */
+    (void)length; /* Avoid unused parameter warning */
     /* In a real implementation, this would read from an SSL connection */
     return -1; /* Indicate failure */
 }
 
 /* Write to SSL connection - mock implementation */
 int ssl_write(SSL* ssl, const char* buffer, int length) {
+    (void)ssl; /* Avoid unused parameter warning */
+    (void)buffer; /* Avoid unused parameter warning */
+    (void)length; /* Avoid unused parameter warning */
     /* In a real implementation, this would write to an SSL connection */
     return -1; /* Indicate failure */
 }

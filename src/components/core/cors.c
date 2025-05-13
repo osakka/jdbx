@@ -1,4 +1,4 @@
-#include "core/server.h"
+#include "src/include/core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -191,6 +191,8 @@ int is_cors_allowed_origin(cors_config_t* cors, const char* origin) {
 http_response_t* apply_cors_headers(http_response_t* response,
                                    cors_config_t* cors,
                                    const char* origin) {
+    (void)cors; /* Avoid unused parameter warning */
+    (void)origin; /* Avoid unused parameter warning */
     /* Make sure we have a valid response */
     if (!response) {
         return NULL;
