@@ -58,6 +58,7 @@ all: directories libjsondb server tools
 
 # Create build directories
 directories:
+	@mkdir -p $(OBJ_DIR)
 	@mkdir -p $(OBJ_DIR)/core
 	@mkdir -p $(OBJ_DIR)/api
 	@mkdir -p $(OBJ_DIR)/database
@@ -75,8 +76,8 @@ libjsondb: $(OBJS)
 	ar rcs $(LIB_DIR)/libjsondb.a $(OBJS)
 
 # Build server
-server: $(OBJ_DIR)/core/main.o libjsondb
-	$(CC) $(OBJ_DIR)/core/main.o -o $(BIN_DIR)/jsondb_server $(SERVER_LDFLAGS) -L$(LIB_DIR) -ljsondb
+server: $(OBJ_DIR)/main.o libjsondb
+	$(CC) $(OBJ_DIR)/main.o -o $(BIN_DIR)/jsondb_server $(SERVER_LDFLAGS) -L$(LIB_DIR) -ljsondb
 
 # Build tools
 tools: libjsondb $(OBJ_DIR)/tools/jsondb_tools.o
