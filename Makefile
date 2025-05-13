@@ -1,128 +1,33 @@
-# JSONdb Main Makefile
-# This Makefile coordinates the build process for the entire JSONdb project
+# Root Makefile for JSONdb
+# This Makefile forwards commands to the actual Makefile in the src directory
 
-# Directories
-SRC_DIR = src
-INCLUDE_DIR = include
-OBJ_DIR = build/obj
-BIN_DIR = build/bin
-LIB_DIR = build/lib
-TEST_DIR = tests
-
-# Compiler and flags
-CC = gcc
-CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR)
-LDFLAGS = -lm -lpthread
-
-# QuickJS support
-QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
-
-# Source files (excluding tests)
-CORE_SRCS = $(wildcard $(SRC_DIR)/core/*.c)
-API_SRCS = $(wildcard $(SRC_DIR)/api/*.c)
-DB_SRCS = $(wildcard $(SRC_DIR)/database/*.c)
-QUERY_SRCS = $(wildcard $(SRC_DIR)/query/*.c)
-TRANS_SRCS = $(wildcard $(SRC_DIR)/transaction/*.c)
-RBAC_SRCS = $(wildcard $(SRC_DIR)/rbac/*.c)
-UTILS_SRCS = $(wildcard $(SRC_DIR)/utils/*.c) $(wildcard $(SRC_DIR)/utils/memory/*.c)
-TOOLS_SRCS = $(wildcard $(SRC_DIR)/tools/*.c)
-JS_SRCS = $(wildcard $(SRC_DIR)/js/*.c) $(wildcard $(SRC_DIR)/js/utils/*.c)
-
-# Object files
-CORE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
-API_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(API_SRCS))
-DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
-QUERY_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(QUERY_SRCS))
-TRANS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(TRANS_SRCS))
-RBAC_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(RBAC_SRCS))
-UTILS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(UTILS_SRCS))
-TOOLS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(TOOLS_SRCS))
-JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
-
-# All objects
-OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
-
-# JavaScript support handling
-ifdef DISABLE_JS
-    # JavaScript is explicitly disabled with -DDISABLE_JS
-    SERVER_LDFLAGS = $(LDFLAGS)
-else
-    # JavaScript is enabled (default)
-    SERVER_LDFLAGS = $(LDFLAGS) $(QUICKJS_LIBS)
-endif
-
-# Main targets
-ifdef DISABLE_JS
-all: dirs libjsondb server tests
-else
-all: dirs libjsondb server tests
-endif
-
-# Create build directories
-dirs:
-	@mkdir -p $(OBJ_DIR)/core $(OBJ_DIR)/api $(OBJ_DIR)/database \
-	         $(OBJ_DIR)/query $(OBJ_DIR)/transaction $(OBJ_DIR)/rbac \
-	         $(OBJ_DIR)/utils $(OBJ_DIR)/utils/memory $(OBJ_DIR)/tools \
-	         $(OBJ_DIR)/js $(OBJ_DIR)/js/utils \
-	         $(BIN_DIR) $(LIB_DIR)
-
-# Static library
-libjsondb: dirs $(OBJS)
-	ar rcs $(LIB_DIR)/libjsondb.a $(OBJS)
-
-# Server executable
-server: dirs libjsondb
-	@if [ "$(DISABLE_JS)" = "1" ]; then \
-		echo "Building server with JavaScript disabled"; \
-		$(CC) $(CFLAGS) -DDISABLE_JS -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS); \
-	else \
-		echo "Building server with JavaScript enabled"; \
-		$(CC) $(CFLAGS) -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS) $(QUICKJS_LIBS); \
-	fi
-
-# Server executable without JS support (maintained for backwards compatibility)
-server-without-js: dirs libjsondb
-	$(CC) $(CFLAGS) -DDISABLE_JS -o $(BIN_DIR)/jsondb_server $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb.a $(LDFLAGS)
-
-# Tests
-tests: dirs libjsondb
-	@$(MAKE) -C $(TEST_DIR)
+# Default target
+all:
+	$(MAKE) -C src all
 
 # Clean build files
 clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR) $(LIB_DIR)
-	@$(MAKE) -C $(TEST_DIR) clean
+	$(MAKE) -C src clean
 
-# Install
-install: all
-	@echo "Installing JSONdb..."
-	@mkdir -p $(DESTDIR)/usr/local/bin
-	@mkdir -p $(DESTDIR)/usr/local/lib
-	@mkdir -p $(DESTDIR)/usr/local/include/jsondb
-	@cp $(BIN_DIR)/jsondb_server $(DESTDIR)/usr/local/bin/
-	@cp $(LIB_DIR)/libjsondb.a $(DESTDIR)/usr/local/lib/
-	@cp -r $(INCLUDE_DIR)/* $(DESTDIR)/usr/local/include/
+# Run tests
+test:
+	$(MAKE) -C src test
 
-# Uninstall
-uninstall:
-	@echo "Uninstalling JSONdb..."
-	@rm -f $(DESTDIR)/usr/local/bin/jsondb_server
-	@rm -f $(DESTDIR)/usr/local/lib/libjsondb.a
-	@rm -rf $(DESTDIR)/usr/local/include/jsondb
-	@rm -f $(DESTDIR)/usr/local/include/jsondb.h
+# Special targets for building with different flags
+js-disabled:
+	$(MAKE) -C src js-disabled
 
-# JavaScript tests
-js-tests: dirs libjsondb
-	@$(MAKE) -C $(TEST_DIR) js-tests
+js-enabled:
+	$(MAKE) -C src js-enabled
 
-# Performance tests
-performance: dirs libjsondb
-	@$(MAKE) -C $(TEST_DIR) performance
+metrics:
+	$(MAKE) -C src metrics
 
-# Object file compilation pattern
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+debug:
+	$(MAKE) -C src debug
 
-.PHONY: all dirs libjsondb server tests clean install uninstall js-tests performance
+release:
+	$(MAKE) -C src release
+
+# Phony targets
+.PHONY: all clean test js-disabled js-enabled metrics debug release
