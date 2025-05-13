@@ -72,7 +72,27 @@ The server now:
 
 ### Usage Instructions
 
-To build and run the fixed server:
+#### Recommended Method: Using the Runtime Script
+
+The easiest way to manage the JSONdb server is using the `jsondb_runtime.sh` script:
+
+```bash
+# Start the server
+./build/jsondb_runtime.sh start
+
+# Check server status
+./build/jsondb_runtime.sh status
+
+# Stop the server
+./build/jsondb_runtime.sh stop
+
+# Restart the server
+./build/jsondb_runtime.sh restart
+```
+
+#### Alternative: Direct Command-Line Usage
+
+You can also build and run the server directly:
 
 ```bash
 # Clean and build the project
@@ -83,14 +103,16 @@ make clean && make
 ```
 
 Key command-line options:
-- `-daemon`: Run as a daemon (detached) process
-- `-stop`: Stop a running server instance
-- `-status`: Check if the server is running
-- `-js <file.js>`: Run a JavaScript file and exit (useful for maintenance scripts)
-- `-log <file>`: Specify a custom log file location (relative to binary)
-- `-pid <file>`: Specify a custom PID file location (relative to binary)
+- `--daemon`: Run as a daemon (detached) process
+- `--stop`: Stop a running server instance
+- `--status`: Check if the server is running
+- `--js <file.js>`: Run a JavaScript file and exit (useful for maintenance scripts)
+- `--log-file <file>`: Specify a custom log file location (relative to binary)
+- `--pid-file <file>`: Specify a custom PID file location (relative to binary)
 
-All file paths used by the server are now relative to the binary location, making the server more portable across installations.
+All file paths used by the server are now relative to the binary location, making the server more portable across installations. 
+
+For full usage details, see the [Server Usage Guide](/docs/reference/SERVER_USAGE.md).
 
 ### Status
 - Both issues have been fixed and documented in project-status.json

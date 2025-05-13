@@ -68,20 +68,48 @@ int process_exists(pid_t pid);
 /* Read PID from PID file */
 pid_t read_pid_file() {
     if (pid_file_path[0] == '\0') {
-        fprintf(stderr, "Error: PID file path not set\n");
+        /* Use logger if available */
+        if (g_logger) {
+            LOG_WARNING("PID file path not set");
+        } else {
+            fprintf(stderr, "Warning: PID file path not set\n");
+        }
         return -1;
     }
     
+    /* Check if file exists first */
+    if (access(pid_file_path, F_OK) != 0) {
+        /* PID file doesn't exist, meaning no running instance */
+        return -1;
+    }
+    
+    /* Then try to open it */
     FILE* pid_fp = fopen(pid_file_path, "r");
     if (!pid_fp) {
-        /* PID file doesn't exist, meaning no running instance */
+        /* PID file exists but can't be opened - could be a permissions issue */
+        if (g_logger) {
+            LOG_WARNING("Failed to open PID file '%s': %s", 
+                        pid_file_path, strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to open PID file '%s': %s\n", 
+                    pid_file_path, strerror(errno));
+        }
         return -1;
     }
     
     pid_t pid;
     if (fscanf(pid_fp, "%d", &pid) != 1) {
         fclose(pid_fp);
-        fprintf(stderr, "Error: Failed to read PID from file '%s'\n", pid_file_path);
+        
+        /* PID file exists but is invalid */
+        if (g_logger) {
+            LOG_WARNING("Failed to read valid PID from file '%s'", pid_file_path);
+        } else {
+            fprintf(stderr, "Warning: Failed to read valid PID from file '%s'\n", pid_file_path);
+        }
+        
+        /* Invalid PID file should be removed */
+        unlink(pid_file_path);
         return -1;
     }
     
@@ -95,15 +123,28 @@ int process_exists(pid_t pid) {
         return 0;  /* Invalid PID */
     }
     
+    /* Check if process with this PID exists */
     if (kill(pid, 0) == 0) {
         /* Process exists */
         return 1;
     } else if (errno == ESRCH) {
-        /* Process does not exist */
+        /* Process does not exist - clean up stale PID file if it exists */
+        if (pid_file_path[0] != '\0' && access(pid_file_path, F_OK) == 0) {
+            if (g_logger) {
+                LOG_INFO("Removing stale PID file for non-existent process %d", pid);
+            }
+            unlink(pid_file_path);
+        }
         return 0;
     } else {
         /* Permission denied or other error */
-        fprintf(stderr, "Error checking process existence: %s\n", strerror(errno));
+        if (g_logger) {
+            LOG_WARNING("Error checking process existence (PID %d): %s", 
+                        pid, strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Error checking process existence (PID %d): %s\n", 
+                    pid, strerror(errno));
+        }
         return 0;
     }
 }
@@ -158,8 +199,19 @@ log_level_t parse_log_level(const char* level_str) {
     return DEFAULT_LOG_LEVEL;
 }
 
+/* Flag to prevent multiple cleanup calls */
+static int cleanup_registered = 0;
+static int cleanup_in_progress = 0;
+
 /* Cleanup resources safely */
 void cleanup() {
+    /* Prevent recursive cleanup */
+    if (cleanup_in_progress) {
+        return;
+    }
+    
+    cleanup_in_progress = 1;
+    
     if (g_logger) {
         LOG_INFO("Performing cleanup before shutdown");
     }
@@ -252,9 +304,22 @@ int main(int argc, char** argv) {
     config_init_binary_dir();
 
     /* Initialize the server config with defaults from centralized configuration */
-    server_config_t config = {0};
-    g_server_config = &config;
-    config_init_defaults(&config);
+    server_config_t local_config = {0};
+    server_config_t* heap_config = malloc(sizeof(server_config_t));
+    if (!heap_config) {
+        fprintf(stderr, "Error: Failed to allocate memory for server configuration\n");
+        return 1;
+    }
+    memset(heap_config, 0, sizeof(server_config_t));
+    
+    /* Initialize with default values */
+    config_init_defaults(&local_config);
+    
+    /* Copy to heap allocated config */
+    memcpy(heap_config, &local_config, sizeof(server_config_t));
+    
+    /* Set global pointer to heap allocated config */
+    g_server_config = heap_config;
     
     /* Command line options */
     int show_help = 0;
@@ -360,7 +425,7 @@ int main(int argc, char** argv) {
     
     /* Load configuration from file if specified */
     if (config_file) {
-        if (!config_load(config_file, &config)) {
+        if (!config_load(config_file, g_server_config)) {
             fprintf(stderr, "Error: Failed to load configuration from '%s'\n", config_file);
             return 1;
         }
@@ -369,78 +434,78 @@ int main(int argc, char** argv) {
     
     /* Override configuration with command line arguments */
     if (run_daemon) {
-        config.foreground_mode = 0;
+        g_server_config->foreground_mode = 0;
     } else if (run_foreground) {
-        config.foreground_mode = 1;
+        g_server_config->foreground_mode = 1;
     }
     
     if (log_level_str) {
-        config.log_level = parse_log_level(log_level_str);
+        g_server_config->log_level = parse_log_level(log_level_str);
     }
     
     if (db_dir) {
         /* Free previous value if allocated */
-        if (config.db_path) {
-            free(config.db_path);
+        if (g_server_config->db_path) {
+            free(g_server_config->db_path);
         }
-        config.db_path = strdup(db_dir);
+        g_server_config->db_path = strdup(db_dir);
     }
     
     if (rbac_file) {
         /* Free previous value if allocated */
-        if (config.rbac_path) {
-            free(config.rbac_path);
+        if (g_server_config->rbac_path) {
+            free(g_server_config->rbac_path);
         }
-        config.rbac_path = strdup(rbac_file);
+        g_server_config->rbac_path = strdup(rbac_file);
     }
     
     if (web_root) {
         /* Free previous value if allocated */
-        if (config.web_root) {
-            free(config.web_root);
+        if (g_server_config->web_root) {
+            free(g_server_config->web_root);
         }
-        config.web_root = strdup(web_root);
+        g_server_config->web_root = strdup(web_root);
     }
     
     if (pid_file) {
         /* Free previous value if allocated */
-        if (config.pid_file) {
-            free(config.pid_file);
+        if (g_server_config->pid_file) {
+            free(g_server_config->pid_file);
         }
-        config.pid_file = strdup(pid_file);
+        g_server_config->pid_file = strdup(pid_file);
     }
     
     if (log_file) {
         /* Free previous value if allocated */
-        if (config.log_file) {
-            free(config.log_file);
+        if (g_server_config->log_file) {
+            free(g_server_config->log_file);
         }
-        config.log_file = strdup(log_file);
+        g_server_config->log_file = strdup(log_file);
     }
     
     /* Copy paths to local variables for convenience */
-    if (config.pid_file) {
-        strncpy(pid_file_path, config.pid_file, PATH_MAX - 1);
+    if (g_server_config->pid_file) {
+        strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
         pid_file_path[PATH_MAX - 1] = '\0';
     }
     
-    if (config.log_file) {
-        strncpy(log_file_path, config.log_file, PATH_MAX - 1);
+    if (g_server_config->log_file) {
+        strncpy(log_file_path, g_server_config->log_file, PATH_MAX - 1);
         log_file_path[PATH_MAX - 1] = '\0';
     }
     
-    if (config.db_path) {
-        strncpy(db_file_path, config.db_path, PATH_MAX - 1);
+    if (g_server_config->db_path) {
+        strncpy(db_file_path, g_server_config->db_path, PATH_MAX - 1);
         db_file_path[PATH_MAX - 1] = '\0';
     }
     
-    if (config.rbac_path) {
-        strncpy(rbac_file_path, config.rbac_path, PATH_MAX - 1);
+    if (g_server_config->rbac_path) {
+        strncpy(rbac_file_path, g_server_config->rbac_path, PATH_MAX - 1);
         rbac_file_path[PATH_MAX - 1] = '\0';
     }
     
     /* Set log level from config */
-    log_level = config.log_level;
+    log_level = g_server_config->log_level;
     
     /* Terminate server if requested */
     if (terminate_server) {
@@ -461,23 +526,30 @@ int main(int argc, char** argv) {
         }
     }
 
-    /* Register cleanup handler */
-    atexit(cleanup);
+    /* Register cleanup handler only once */
+    if (!cleanup_registered) {
+        atexit(cleanup);
+        cleanup_registered = 1;
+        
+        if (g_logger) {
+            LOG_DEBUG("Registered cleanup handler");
+        }
+    }
 
     /* Display active configuration */
     printf("Binary directory: %s\n", config_get_binary_dir());
     printf("Log level: %s\n", log_level_str ? log_level_str : "default");
-    printf("Database path: %s\n", config.db_path ? config.db_path : "not set");
-    printf("RBAC file: %s\n", config.rbac_path ? config.rbac_path : "not set");
-    printf("Web root: %s\n", config.web_root ? config.web_root : "not set");
-    printf("PID file: %s\n", config.pid_file ? config.pid_file : "not set");
-    printf("Log file: %s\n", config.log_file ? config.log_file : "not set");
-    printf("Foreground mode: %s\n", config.foreground_mode ? "yes" : "no");
+    printf("Database path: %s\n", g_server_config->db_path ? g_server_config->db_path : "not set");
+    printf("RBAC file: %s\n", g_server_config->rbac_path ? g_server_config->rbac_path : "not set");
+    printf("Web root: %s\n", g_server_config->web_root ? g_server_config->web_root : "not set");
+    printf("PID file: %s\n", g_server_config->pid_file ? g_server_config->pid_file : "not set");
+    printf("Log file: %s\n", g_server_config->log_file ? g_server_config->log_file : "not set");
+    printf("Foreground mode: %s\n", g_server_config->foreground_mode ? "yes" : "no");
     
     /* If running in script mode, initialize JavaScript now if enabled */
     if (js_file) {
         /* Check if JavaScript is enabled in config */
-        if (!config.js_enabled) {
+        if (!g_server_config->js_enabled) {
             fprintf(stderr, "Error: JavaScript is disabled in configuration\n");
             return 1;
         }
@@ -511,20 +583,59 @@ int main(int argc, char** argv) {
     }
 
     /* For server mode */
+    /* Use LOG macro instead of printf after logger is initialized */
     printf("Starting server...\n");
     
-    /* Check if server is already running */
-    pid_t existing_pid = read_pid_file();
-    if (existing_pid > 0 && process_exists(existing_pid)) {
-        fprintf(stderr, "Error: Server is already running (PID: %d)\n", existing_pid);
-        fprintf(stderr, "Use --terminate to stop the running server\n");
-        return 1;
+    /* In foreground mode, always remove any existing PID file */
+    if (g_server_config->foreground_mode) {
+        if (g_server_config->pid_file && access(g_server_config->pid_file, F_OK) != -1) {
+            printf("Removing existing PID file in foreground mode\n");
+            if (unlink(g_server_config->pid_file) != 0) {
+                printf("Warning: Failed to remove existing PID file: %s\n", strerror(errno));
+            }
+        }
+    } 
+    /* In daemon mode, always check for existing process */
+    else {
+        /* Always clear stored PID file path first */
+        if (pid_file_path[0] != '\0') {
+            printf("Clearing stored PID file path '%s'\n", pid_file_path);
+            pid_file_path[0] = '\0';
+        }
+        
+        /* Copy current PID file path to global */
+        if (g_server_config->pid_file) {
+            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
+            pid_file_path[PATH_MAX - 1] = '\0';
+            printf("Set PID file path to '%s'\n", pid_file_path);
+        }
+        
+        /* Check for existing server using pid_file_path */
+        pid_t existing_pid = read_pid_file();
+        printf("Checking for existing server (PID file: %s, PID: %d)\n", 
+               pid_file_path, existing_pid);
+        
+        if (existing_pid > 0) {
+            printf("Testing if PID %d exists...\n", existing_pid);
+            if (process_exists(existing_pid)) {
+                fprintf(stderr, "Error: Server is already running (PID: %d)\n", existing_pid);
+                fprintf(stderr, "Use --terminate to stop the running server\n");
+                return 1;
+            } else {
+                printf("PID %d no longer exists, removing stale PID file\n", existing_pid);
+                if (pid_file_path[0] != '\0' && access(pid_file_path, F_OK) != -1) {
+                    unlink(pid_file_path);
+                }
+            }
+        } else {
+            printf("No existing server PID found\n");
+        }
     }
     
     /* Create PID file directory if it doesn't exist */
-    if (config.pid_file) {
+    if (g_server_config->pid_file) {
         char pid_dir[PATH_MAX];
-        strncpy(pid_dir, config.pid_file, PATH_MAX - 1);
+        strncpy(pid_dir, g_server_config->pid_file, PATH_MAX - 1);
         pid_dir[PATH_MAX - 1] = '\0';
         
         char* dir = dirname(pid_dir);
@@ -546,9 +657,9 @@ int main(int argc, char** argv) {
     }
     
     /* Create log file directory if it doesn't exist */
-    if (config.log_file) {
+    if (g_server_config->log_file) {
         char log_dir[PATH_MAX];
-        strncpy(log_dir, config.log_file, PATH_MAX - 1);
+        strncpy(log_dir, g_server_config->log_file, PATH_MAX - 1);
         log_dir[PATH_MAX - 1] = '\0';
         
         char* dir = dirname(log_dir);
@@ -570,9 +681,9 @@ int main(int argc, char** argv) {
     }
     
     /* Create database directory if it doesn't exist */
-    if (config.db_path) {
+    if (g_server_config->db_path) {
         char db_dir[PATH_MAX];
-        strncpy(db_dir, config.db_path, PATH_MAX - 1);
+        strncpy(db_dir, g_server_config->db_path, PATH_MAX - 1);
         db_dir[PATH_MAX - 1] = '\0';
         
         char* dir = dirname(db_dir);
@@ -594,26 +705,26 @@ int main(int argc, char** argv) {
     }
     
     /* Create web root directory if it doesn't exist */
-    if (config.web_root) {
+    if (g_server_config->web_root) {
         struct stat st = {0};
         
-        if (stat(config.web_root, &st) == -1) {
-            printf("Creating web root directory: %s\n", config.web_root);
+        if (stat(g_server_config->web_root, &st) == -1) {
+            printf("Creating web root directory: %s\n", g_server_config->web_root);
             
             /* Use system to create nested directories if needed */
             char cmd[PATH_MAX + 50];
-            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", config.web_root);
+            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", g_server_config->web_root);
             
             if (system(cmd) != 0) {
                 fprintf(stderr, "Error: Failed to create web root directory '%s': %s\n", 
-                        config.web_root, strerror(errno));
+                        g_server_config->web_root, strerror(errno));
                 return 1;
             }
         }
     }
 
     /* Start in daemon mode if requested */
-    if (!config.foreground_mode) {
+    if (!g_server_config->foreground_mode) {
         printf("Starting in daemon mode...\n");
         
         /* Fork the process */
@@ -625,7 +736,9 @@ int main(int argc, char** argv) {
         }
         
         if (pid > 0) {
-            /* Parent process exits */
+            /* Parent process exits without running cleanup */
+            /* We must NOT call cleanup in the parent, so we unregister it */
+            cleanup_registered = 0;  /* Prevent cleanup from running in parent */
             printf("Server started in background (PID: %d)\n", pid);
             return 0;
         }
@@ -658,49 +771,72 @@ int main(int argc, char** argv) {
         }
         
         /* Write PID to file */
-        if (config.pid_file) {
-            FILE* pid_fp = fopen(config.pid_file, "w");
+        if (g_server_config->pid_file) {
+            /* Make sure the PID file path is stored in our global variable for cleanup */
+            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
+            pid_file_path[PATH_MAX - 1] = '\0';
+            
+            FILE* pid_fp = fopen(g_server_config->pid_file, "w");
             if (pid_fp) {
                 fprintf(pid_fp, "%d\n", getpid());
                 fclose(pid_fp);
+                /* Cannot log here as logger may not be initialized yet */
             }
+            /* Cannot report error here as stderr is closed */
         }
     } else {
-        /* In foreground mode, write PID to file */
-        if (config.pid_file) {
-            FILE* pid_fp = fopen(config.pid_file, "w");
-            if (pid_fp) {
-                fprintf(pid_fp, "%d\n", getpid());
-                fclose(pid_fp);
-            } else {
-                fprintf(stderr, "Warning: Failed to write PID file '%s': %s\n", 
-                        config.pid_file, strerror(errno));
-            }
-        }
+        /* PID file writing now happens after logger initialization */
     }
     
     /* Initialize logger */
-    if (config.foreground_mode) {
+    if (g_server_config->foreground_mode) {
         /* In foreground mode, direct logs to stdout/stderr */
-        if (!logger_init(NULL, config.log_level)) {
+        if (!logger_init(NULL, g_server_config->log_level)) {
             fprintf(stderr, "Error: Failed to initialize console logger\n");
             return 1;
         }
         if (g_logger) {
             g_logger->include_timestamp = 1;  /* Include timestamps in console output */
             g_logger->include_level = 1;      /* Include log level in console output */
+            LOG_INFO("Console logger initialized");
         }
-    } else if (config.log_file) {
+    } else if (g_server_config->log_file) {
         /* In daemon mode with specified log file */
-        if (!logger_init(config.log_file, config.log_level)) {
+        if (!logger_init(g_server_config->log_file, g_server_config->log_level)) {
             fprintf(stderr, "Error: Failed to initialize logger\n");
             return 1;
         }
+        if (g_logger) {
+            LOG_INFO("File logger initialized: %s", g_server_config->log_file);
+        }
     } else {
         /* In daemon mode without specified log file, use default */
-        if (!logger_init(DEFAULT_LOG_FILE, config.log_level)) {
+        if (!logger_init(DEFAULT_LOG_FILE, g_server_config->log_level)) {
             fprintf(stderr, "Error: Failed to initialize default logger\n");
             return 1;
+        }
+        if (g_logger) {
+            LOG_INFO("Default file logger initialized: %s", DEFAULT_LOG_FILE);
+        }
+    }
+    
+    /* Now that logger is initialized, write PID file if needed (in foreground mode) */
+    if (g_server_config->foreground_mode && g_server_config->pid_file) {
+        /* Make sure pid_file_path is set */
+        if (pid_file_path[0] == '\0') {
+            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
+            pid_file_path[PATH_MAX - 1] = '\0';
+            LOG_DEBUG("Set pid_file_path to '%s'", pid_file_path);
+        }
+        
+        FILE* pid_fp = fopen(g_server_config->pid_file, "w");
+        if (pid_fp) {
+            fprintf(pid_fp, "%d\n", getpid());
+            fclose(pid_fp);
+            LOG_INFO("PID file written: %s (PID: %d)", g_server_config->pid_file, getpid());
+        } else {
+            LOG_ERROR("Failed to write PID file '%s': %s", 
+                     g_server_config->pid_file, strerror(errno));
         }
     }
     
@@ -762,7 +898,7 @@ int main(int argc, char** argv) {
     }
     
     /* Initialize API context */
-    g_api_ctx = api_create_context(g_database, g_rbac, config.jwt_secret);
+    g_api_ctx = api_create_context(g_database, g_rbac, g_server_config->jwt_secret);
     if (!g_api_ctx) {
         if (g_logger) {
             LOG_ERROR("Failed to create API context");
@@ -781,9 +917,9 @@ int main(int argc, char** argv) {
     }
     
     /* If in foreground mode, print more verbose output */
-    if (config.foreground_mode) {
+    if (g_server_config->foreground_mode) {
         /* Initialize JavaScript if enabled */
-        if (config.js_enabled) {
+        if (g_server_config->js_enabled) {
 #ifndef DISABLE_JS
             printf("Initializing JavaScript engine...\n");
             js_api_init(g_database);
@@ -824,7 +960,8 @@ int main(int argc, char** argv) {
     }
 
     /* Initialize server */
-    server_status_t status = server_init(&config);
+    printf("Initializing server...\n");
+    server_status_t status = server_init(g_server_config);
     if (status != SERVER_OK) {
         if (g_logger) {
             LOG_ERROR("Failed to initialize server (status: %d)", status);
@@ -832,9 +969,11 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error: Failed to initialize server\n");
         return 1;
     }
+    printf("Server initialized successfully\n");
 
     /* Start server */
-    status = server_start(&config);
+    printf("Starting server on port %d...\n", g_server_config->port);
+    status = server_start(g_server_config);
     if (status != SERVER_OK) {
         if (g_logger) {
             LOG_ERROR("Failed to start server (status: %d)", status);
@@ -842,21 +981,45 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error: Failed to start server\n");
         return 1;
     }
+    printf("Server started successfully\n");
 
-    if (config.foreground_mode) {
+    if (g_server_config->foreground_mode) {
         /* Keep the server running in foreground mode */
         printf("Server running on %s:%d. Press Ctrl+C to stop.\n", 
-               config.host ? config.host : "0.0.0.0", config.port);
+               g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
     } else {
         /* In daemon mode, log that server started successfully */
         if (g_logger) {
             LOG_INFO("Server running in daemon mode on %s:%d", 
-                    config.host ? config.host : "0.0.0.0", config.port);
+                    g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
         }
     }
     
-    /* Wait for signal in both foreground and daemon modes */
-    pause();
+    /* Wait for signal - different handling in foreground vs daemon */
+    if (g_server_config->foreground_mode) {
+        /* In foreground mode, we can simply pause */
+        if (g_logger) {
+            LOG_INFO("Server is now running in foreground mode, waiting for signals");
+        }
+        printf("Server is running. Press Ctrl+C to terminate.\n");
+        pause();
+    } else {
+        /* In daemon mode, we sleep for a very long time instead of using pause() */
+        if (g_logger) {
+            LOG_INFO("Server is running in daemon mode, starting main loop");
+        }
+        
+        /* Signal handling will wake up from this sleep if needed */
+        while (1) {
+            sleep(3600); /* Sleep for an hour at a time */
+        }
+    }
+    
+    /* Should only reach here in foreground mode after receiving a signal */
+    printf("Server terminating\n");
+    if (g_logger) {
+        LOG_INFO("Server terminating normally");
+    }
     
     return 0;
 }

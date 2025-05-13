@@ -16,7 +16,7 @@ if [ -d "/opt/qjs/lib/quickjs" ]; then
     export LD_LIBRARY_PATH="/opt/qjs/lib/quickjs:$LD_LIBRARY_PATH"
 fi
 
-# Check if server is running
+# Check if server is running with better stale PID file handling
 check_status() {
     if [ -f "$PIDFILE" ]; then
         PID=$(cat "$PIDFILE")
@@ -25,6 +25,8 @@ check_status() {
             return 0
         else
             echo "JSONdb server is not running (stale PID file exists)"
+            # Remove stale PID file
+            rm -f "$PIDFILE"
             return 1
         fi
     else
@@ -33,11 +35,19 @@ check_status() {
     fi
 }
 
-# Start the server
+# Start the server with better directory handling and error checking
 start_server() {
     if check_status > /dev/null; then
         echo "JSONdb server is already running"
     else
+        # Create necessary directories if they don't exist
+        for DIR in $(dirname "$LOGFILE") $(dirname "$PIDFILE") $(dirname "$DBPATH"); do
+            if [ ! -d "$DIR" ]; then
+                echo "Creating directory: $DIR"
+                mkdir -p "$DIR"
+            fi
+        done
+        
         echo "Starting JSONdb server..."
         ./bin/jsondb_server \
           --daemon \
@@ -49,30 +59,46 @@ start_server() {
           --web-root=${WEBROOT}
         
         # Give the server a moment to start
-        sleep 1
+        sleep 2
         
         if check_status > /dev/null; then
             echo "JSONdb server started successfully"
         else
-            echo "Failed to start JSONdb server. Check the log at: $LOGFILE"
+            echo "Failed to start JSONdb server. Check logs at:"
+            echo "  Log file: $LOGFILE"
+            # Check if anything was logged
+            if [ -f "$LOGFILE" ]; then
+                echo "Last 5 log lines:"
+                tail -n 5 "$LOGFILE"
+            fi
         fi
     fi
 }
 
-# Stop the server
+# Stop the server with grace period and force kill if needed
 stop_server() {
     if check_status > /dev/null; then
-        echo "Stopping JSONdb server..."
+        PID=$(cat "$PIDFILE")
+        echo "Stopping JSONdb server (PID: $PID)..."
+        
+        # Try graceful termination first using built-in terminate option
         ./bin/jsondb_server --terminate --pid-file=${PIDFILE}
         
-        # Wait for the server to stop
-        sleep 1
+        # Wait for the server to stop (with a timeout)
+        for i in {1..5}; do
+            sleep 1
+            if ! check_status > /dev/null; then
+                echo "JSONdb server stopped successfully"
+                return 0
+            fi
+        done
         
-        if check_status > /dev/null; then
-            echo "Warning: JSONdb server did not stop gracefully"
-        else
-            echo "JSONdb server stopped successfully"
-        fi
+        # If we get here, the server didn't stop gracefully
+        echo "Warning: JSONdb server did not stop gracefully, forcing termination..."
+        PID=$(cat "$PIDFILE")
+        kill -9 $PID 2>/dev/null
+        rm -f "$PIDFILE"
+        echo "JSONdb server terminated forcefully"
     else
         echo "JSONdb server is not running"
     fi

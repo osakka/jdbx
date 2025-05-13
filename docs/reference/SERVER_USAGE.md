@@ -2,6 +2,31 @@
 
 This document explains how to properly use the JSON Database Server with its binary-relative path feature and daemon mode.
 
+## Recommended Method: Using the Runtime Script
+
+The easiest way to manage the JSONdb server is using the `jsondb_runtime.sh` script:
+
+```bash
+# Start the server
+./build/jsondb_runtime.sh start
+
+# Check server status
+./build/jsondb_runtime.sh status
+
+# Stop the server
+./build/jsondb_runtime.sh stop
+
+# Restart the server
+./build/jsondb_runtime.sh restart
+```
+
+The runtime script:
+- Sets up all necessary environment variables and paths
+- Configures QuickJS library paths if needed
+- Handles proper startup and shutdown procedures
+- Verifies server status before and after operations
+- Provides simple start/stop/status/restart commands
+
 ## Path Resolution
 
 The JSON Database Server uses binary-relative paths for all operations. This means:
@@ -28,7 +53,9 @@ The server expects the following directory structure relative to the binary loca
 
 The server will create these directories automatically if they don't exist.
 
-## Command-Line Arguments
+## Direct Command-Line Usage
+
+You can also control the server directly using command-line arguments, though using the runtime script is recommended for most scenarios.
 
 ### Basic Operation
 
@@ -37,13 +64,13 @@ The server will create these directories automatically if they don't exist.
 ./bin/jsondb_server
 
 # Start the server in foreground mode (for debugging only)
-./bin/jsondb_server -foreground
+./bin/jsondb_server --foreground
 
 # Check server status
-./bin/jsondb_server -status
+./bin/jsondb_server --status
 
 # Stop a running server
-./bin/jsondb_server -stop
+./bin/jsondb_server --stop
 ```
 
 ### Customizing Paths
@@ -52,29 +79,29 @@ All paths are relative to the binary location by default, but you can override t
 
 ```bash
 # Use custom PID file
-./bin/jsondb_server -pid custom/path/to/server.pid
+./bin/jsondb_server --pid-file custom/path/to/server.pid
 
 # Use custom log file
-./bin/jsondb_server -log custom/path/to/server.log
+./bin/jsondb_server --log-file custom/path/to/server.log
 
 # Use absolute paths
-./bin/jsondb_server -pid /absolute/path/to/server.pid -log /absolute/path/to/server.log
+./bin/jsondb_server --pid-file /absolute/path/to/server.pid --log-file /absolute/path/to/server.log
 ```
 
 ### Other Options
 
 ```bash
 # Set a custom port
-./bin/jsondb_server -port 8080
+./bin/jsondb_server --port 8080
 
 # Set a specific host
-./bin/jsondb_server -host my.domain.com
+./bin/jsondb_server --host my.domain.com
 
 # Run JavaScript file and exit
-./bin/jsondb_server -js script.js
+./bin/jsondb_server --js script.js
 
 # Set log level
-./bin/jsondb_server -log-level debug
+./bin/jsondb_server --log-level debug
 ```
 
 ## Server State Management
@@ -120,15 +147,15 @@ The server has improved PID file handling for reliability:
 
 ## Common Issues
 
-- **Server already running**: Ensure no other server instance is running with `./bin/jsondb_server -status`
+- **Server already running**: Ensure no other server instance is running with `./build/jsondb_runtime.sh status`
 - **Cannot write to PID file**: Ensure the `/path/to/var/run/` directory exists and is writable
 - **Cannot write to log file**: Ensure the `/path/to/var/log/jsondb/` directory exists and is writable
-- **Stale PID file**: If the server crashed previously, restart it and it will clean up stale PID files
+- **Stale PID file**: If the server crashed previously, restart it with `./build/jsondb_runtime.sh restart` to clean up stale PID files
 
 ## Best Practices
 
-1. Use daemon mode for production (which is now the default)
-2. Always use the server's control commands (-stop, -status) rather than manually killing processes
+1. Use the `jsondb_runtime.sh` script for managing the server in all environments
+2. Always use proper control commands rather than manually killing processes
 3. When installing, ensure the server has write permissions to its var/ directory
 4. Check the log file when troubleshooting unexpected behavior
 5. Use foreground mode only for development and debugging
@@ -136,12 +163,12 @@ The server has improved PID file handling for reliability:
 
 ## Configuration File Support
 
-The server can read settings from a configuration file. Place the `config.json` file in the same directory as the executable or specify the path with `-config <path>`.
+The server can read settings from a configuration file. Place the `config.json` file in the same directory as the executable or specify the path with `--config <path>`.
 
 ## Version Information
 
-Use `-version` to display the version information:
+Use `--version` to display the version information:
 
 ```bash
-./bin/jsondb_server -version
+./bin/jsondb_server --version
 ```

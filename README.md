@@ -93,38 +93,55 @@ This will create the executable in the `build/bin` directory.
 
 ## Running the Server
 
-### Start the Server
+### Using the Runtime Script (Recommended)
+
+The easiest way to manage the server is using the `jsondb_runtime.sh` script:
+
+```bash
+# Start the server
+./build/jsondb_runtime.sh start
+
+# Check server status
+./build/jsondb_runtime.sh status
+
+# Stop the server
+./build/jsondb_runtime.sh stop
+
+# Restart the server
+./build/jsondb_runtime.sh restart
+```
+
+### Alternative Methods
+
+You can also start the server from source:
 
 ```bash
 cd src
 make run
 ```
 
-Or directly:
+Or run the binary directly:
 
 ```bash
 ./build/bin/jsondb_server
 ```
 
-To run as a daemon in the background:
+For direct binary usage, the following command-line options are available:
 
 ```bash
-./bin/jsondb_server -daemon
-```
+# Run as a daemon in the background
+./bin/jsondb_server --daemon
 
-To check server status:
+# Check server status
+./bin/jsondb_server --status
 
-```bash
-./bin/jsondb_server -status
-```
-
-To stop a running server:
-
-```bash
-./bin/jsondb_server -stop
+# Stop a running server
+./bin/jsondb_server --stop
 ```
 
 The server runs on port 5000 by default. You can access the API at `http://localhost:5000` and the admin interface at `http://localhost:5000/admin`.
+
+For detailed server usage instructions, see [Server Usage Guide](docs/reference/SERVER_USAGE.md).
 
 ### Accessing the Admin Interface
 
@@ -252,18 +269,27 @@ The server configuration is stored in the database and can be modified via the A
 Usage: jsondb_server [options]
 
 Options:
-  -port <number>     Set the server port (default: 5000)
-  -host <address>    Set the host name or address to advertise
-  -js <file>         Execute a JavaScript file and exit
-  -start             Start the server (default if no action specified)
-  -stop              Stop the running server instance
-  -status            Check the current status of the server
-  -daemon, -d        Run server as a daemon in the background
-  -pid <file>        Use custom PID file location (relative to binary)
-  -log <file>        Use custom log file location (relative to binary)
-  -log-level <level> Set logging level (none, error, warning, info, debug, trace)
-  -help, --help, -h  Display this help message
-  -version, -v       Display version information
+  --port <number>       Set the server port (default: 5000)
+  --host <address>      Set the host name or address to advertise
+  --js <file>           Execute a JavaScript file and exit
+  --start               Start the server (default if no action specified)
+  --stop                Stop the running server instance
+  --status              Check the current status of the server
+  --daemon              Run server as a daemon in the background
+  --pid-file <file>     Use custom PID file location (relative to binary)
+  --log-file <file>     Use custom log file location (relative to binary)
+  --log-level <level>   Set logging level (none, error, warning, info, debug, trace)
+  --db-dir <directory>  Set the database directory
+  --rbac-file <file>    Set the RBAC configuration file
+  --web-root <directory> Set the web interface root directory
+  --help, -h            Display this help message
+  --version, -v         Display version information
+```
+
+For server management, you can also use the `jsondb_runtime.sh` script:
+
+```bash
+Usage: ./build/jsondb_runtime.sh {start|stop|status|restart}
 ```
 
 You can also update some configuration via the `/api/config` endpoint (admin access required).

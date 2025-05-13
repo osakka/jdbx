@@ -4,7 +4,27 @@ This document provides information on how to use the `tests/server/test_server.s
 
 > **IMPORTANT NOTE:** The testing scripts described in this document are currently reference implementations. Due to build issues in the current project state, these scripts may not be fully functional. The information provided here serves as documentation for when the build issues are resolved.
 
-## Quick Start
+## Server Management
+
+For everyday server management, use the `jsondb_runtime.sh` script:
+
+```bash
+# Start the server
+./build/jsondb_runtime.sh start
+
+# Check server status
+./build/jsondb_runtime.sh status
+
+# Stop the server
+./build/jsondb_runtime.sh stop
+
+# Restart the server
+./build/jsondb_runtime.sh restart
+```
+
+See the [Server Usage Guide](/docs/reference/SERVER_USAGE.md) for complete details.
+
+## Quick Start for Testing
 
 To build and run a full test of the server:
 
