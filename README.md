@@ -85,23 +85,25 @@ Clone the repository and build from source:
 ```bash
 git clone https://github.com/yourusername/jsondb.git
 cd jsondb
+cd src
 make
 ```
 
-This will create the executable in the `bin` directory.
+This will create the executable in the `build/bin` directory.
 
 ## Running the Server
 
 ### Start the Server
 
 ```bash
+cd src
 make run
 ```
 
 Or directly:
 
 ```bash
-./bin/jsondb_server
+./build/bin/jsondb_server
 ```
 
 To run as a daemon in the background:
@@ -283,11 +285,11 @@ The project follows a clean, maintainable structure organized into logical compo
 
 - **src/**: Source code organized by component
 - **include/**: Header files with clean namespace hierarchy
-- **doc/**: Comprehensive documentation
+- **docs/**: Comprehensive documentation
 - **examples/**: Usage examples from basic to advanced
 - **tests/**: Test suite organized by test type
 
-For a detailed overview of the project structure, see [Project Structure](doc/architecture/project_structure.md).
+For a detailed overview of the project structure, see [Project Structure](docs/architecture/project_structure.md).
 
 ## Contributing
 
