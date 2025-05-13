@@ -119,6 +119,7 @@ void print_usage(const char* program_name) {
     printf("  -t, --terminate               Terminate running server instance\n");
     printf("  -l, --log-level=LEVEL         Set log level (error, warn, info, debug, trace)\n");
     printf("  -b, --db-dir=DIRECTORY        Set database directory\n");
+    printf("  -r, --rbac-file=FILE          Set RBAC file path\n");
     printf("  -p, --pid-file=FILE           Set PID file path\n");
     printf("  -o, --log-file=FILE           Set log file path\n");
     printf("  -c, --config=FILE             Load configuration from file\n");
@@ -264,6 +265,7 @@ int main(int argc, char** argv) {
     char* db_dir = NULL;
     char* pid_file = NULL;
     char* log_file = NULL;
+    char* rbac_file = NULL;
     char* config_file = NULL;
     char* js_file = NULL;
     
@@ -275,6 +277,7 @@ int main(int argc, char** argv) {
         {"terminate",  no_argument,       0, 't'},
         {"log-level",  required_argument, 0, 'l'},
         {"db-dir",     required_argument, 0, 'b'},
+        {"rbac-file",  required_argument, 0, 'r'},
         {"pid-file",   required_argument, 0, 'p'},
         {"log-file",   required_argument, 0, 'o'},
         {"config",     required_argument, 0, 'c'},
@@ -287,7 +290,7 @@ int main(int argc, char** argv) {
     int opt;
     int option_index = 0;
     
-    while ((opt = getopt_long(argc, argv, "hdftl:b:p:o:c:vj:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:c:vj:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 show_help = 1;
@@ -308,6 +311,9 @@ int main(int argc, char** argv) {
                 break;
             case 'b':
                 db_dir = optarg;
+                break;
+            case 'r':
+                rbac_file = optarg;
                 break;
             case 'p':
                 pid_file = optarg;
@@ -372,6 +378,14 @@ int main(int argc, char** argv) {
             free(config.db_path);
         }
         config.db_path = strdup(db_dir);
+    }
+    
+    if (rbac_file) {
+        /* Free previous value if allocated */
+        if (config.rbac_path) {
+            free(config.rbac_path);
+        }
+        config.rbac_path = strdup(rbac_file);
     }
     
     if (pid_file) {
@@ -440,6 +454,7 @@ int main(int argc, char** argv) {
     printf("Binary directory: %s\n", config_get_binary_dir());
     printf("Log level: %s\n", log_level_str ? log_level_str : "default");
     printf("Database path: %s\n", config.db_path ? config.db_path : "not set");
+    printf("RBAC file: %s\n", config.rbac_path ? config.rbac_path : "not set");
     printf("PID file: %s\n", config.pid_file ? config.pid_file : "not set");
     printf("Log file: %s\n", config.log_file ? config.log_file : "not set");
     printf("Foreground mode: %s\n", config.foreground_mode ? "yes" : "no");
@@ -502,7 +517,12 @@ int main(int argc, char** argv) {
         
         if (stat(dir, &st) == -1) {
             printf("Creating PID file directory: %s\n", dir);
-            if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
+            
+            /* Use system to create nested directories if needed */
+            char cmd[PATH_MAX + 50];
+            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", dir);
+            
+            if (system(cmd) != 0) {
                 fprintf(stderr, "Error: Failed to create PID file directory '%s': %s\n", 
                         dir, strerror(errno));
                 return 1;
@@ -521,7 +541,12 @@ int main(int argc, char** argv) {
         
         if (stat(dir, &st) == -1) {
             printf("Creating log file directory: %s\n", dir);
-            if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
+            
+            /* Use system to create nested directories if needed */
+            char cmd[PATH_MAX + 50];
+            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", dir);
+            
+            if (system(cmd) != 0) {
                 fprintf(stderr, "Error: Failed to create log file directory '%s': %s\n", 
                         dir, strerror(errno));
                 return 1;
@@ -540,7 +565,12 @@ int main(int argc, char** argv) {
         
         if (stat(dir, &st) == -1) {
             printf("Creating database directory: %s\n", dir);
-            if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
+            
+            /* Use system to create nested directories if needed */
+            char cmd[PATH_MAX + 50];
+            snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", dir);
+            
+            if (system(cmd) != 0) {
                 fprintf(stderr, "Error: Failed to create database directory '%s': %s\n", 
                         dir, strerror(errno));
                 return 1;

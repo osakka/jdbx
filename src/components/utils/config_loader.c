@@ -177,7 +177,22 @@ static char* resolve_path(const char* path) {
         config_init_binary_dir();
     }
     
-    /* Allocate enough space for the full path */
+    /* Handle relative paths with special care for paths containing ../ */
+    char* working_path = malloc(PATH_MAX);
+    if (!working_path) {
+        if (g_logger) {
+            LOG_ERROR("Failed to allocate memory for working path of '%s'", path);
+        } else {
+            fprintf(stderr, "Error: Failed to allocate memory for working path of '%s'\n", path);
+        }
+        return NULL;
+    }
+    
+    /* Start with the binary directory */
+    strncpy(working_path, g_binary_dir, PATH_MAX - 1);
+    working_path[PATH_MAX - 1] = '\0';
+    
+    /* Allocate space for the absolute path result */
     char* resolved_path = malloc(PATH_MAX);
     if (!resolved_path) {
         if (g_logger) {
@@ -186,35 +201,46 @@ static char* resolve_path(const char* path) {
         } else {
             fprintf(stderr, "Error: Failed to allocate memory for path resolution of '%s'\n", path);
         }
+        free(working_path);
         return NULL;
     }
     
-    /* Combine binary directory with the relative path, leaving space for null terminator */
-    size_t max_path_len = PATH_MAX - 1;
-    int bytes_written = snprintf(resolved_path, max_path_len, "%s/%s", g_binary_dir, path);
+    /* Use realpath to resolve the path properly */
+    char temp_path[PATH_MAX];
+    snprintf(temp_path, PATH_MAX - 1, "%s/%s", working_path, path);
+    temp_path[PATH_MAX - 1] = '\0';
     
-    /* Check if path was truncated */
-    if (bytes_written < 0) {
+    if (g_logger) {
+        LOG_DEBUG("Resolving combined path: '%s'", temp_path);
+    }
+    
+    /* Manually resolve the path to handle ../ properly */
+    if (realpath(temp_path, resolved_path) == NULL) {
         if (g_logger) {
-            LOG_ERROR("Failed to format path: '%s/%s'", g_binary_dir, path);
-        } else {
-            fprintf(stderr, "Error: Failed to format path: '%s/%s'\n", g_binary_dir, path);
+            LOG_WARNING("Could not resolve path with realpath: %s", strerror(errno));
+            LOG_DEBUG("Using simple concatenation instead");
         }
-    } else if ((size_t)bytes_written >= max_path_len) {
-        if (g_logger) {
-            LOG_WARNING("Path truncated during resolution: '%s/%s' (needed %d bytes, limit %zu)",
-                       g_binary_dir, path, bytes_written, max_path_len);
-        } else {
-            fprintf(stderr, "Warning: Path truncated during resolution: '%s/%s'\n", g_binary_dir, path);
-        }
-    } else {
-        if (g_logger) {
-            LOG_TRACE("Path formatted successfully (%d bytes used)", bytes_written);
+        
+        /* Fall back to simple concatenation if realpath fails */
+        int bytes_written = snprintf(resolved_path, PATH_MAX - 1, "%s/%s", g_binary_dir, path);
+        resolved_path[PATH_MAX - 1] = '\0';
+        
+        if (bytes_written < 0 || bytes_written >= PATH_MAX - 1) {
+            if (g_logger) {
+                LOG_ERROR("Path truncation detected in fallback for '%s'", path);
+            } else {
+                fprintf(stderr, "Error: Path truncation detected in fallback for '%s'\n", path);
+            }
         }
     }
     
-    /* Ensure null termination */
-    resolved_path[max_path_len] = '\0';
+    free(working_path);
+    
+    if (g_logger) {
+        LOG_DEBUG("Resolved '%s' to '%s'", path, resolved_path);
+    }
+    
+    /* Note: Error handling for possible path issues will be done by the caller */
     
     if (g_logger) {
         LOG_DEBUG("Resolved path '%s' to '%s'", path, resolved_path);
