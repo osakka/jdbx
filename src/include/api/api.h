@@ -1,11 +1,11 @@
 #ifndef API_H
 #define API_H
 
-#include "core/server.h"
-#include "database/database.h"
-#include "rbac/rbac.h"
-#include "rbac/jwt.h"
-#include "transaction/transaction.h"
+#include "jsondb/core/server.h"
+#include "jsondb/database/database.h"
+#include "jsondb/rbac/rbac.h"
+#include "jsondb/rbac/jwt.h"
+#include "jsondb/transaction/transaction.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,6 +127,15 @@ http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t
 http_response_t* api_handle_transaction_commit(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_transaction_rollback(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, http_request_t* request);
+
+/* Health and monitoring handlers */
+http_response_t* api_handle_health_check(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t* request);
+
+/* Health API initialization and endpoint registration */
+void health_api_init(void);
+void register_health_api_endpoints(api_context_t *ctx);
 
 /* JavaScript engine initialization and cleanup */
 void js_api_init(database_t* db);
