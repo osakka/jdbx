@@ -1,7 +1,7 @@
 #ifndef JSONDB_HEALTH_API_H
 #define JSONDB_HEALTH_API_H
 
-#include "components/api/api.h"
+#include "api/api.h"
 
 /**
  * @file health_api.h

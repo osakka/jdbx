@@ -96,8 +96,50 @@ clean:
 test:
 	cd $(TEST_DIR) && $(MAKE) -f Makefile.unified
 
+# Organization verification target
+verify-organization:
+	@echo "Verifying project organization..."
+	@# Check for backup files
+	@if find . -name "*.bak" -o -name "*.backup" -o -name "*.orig" | grep -q .; then \
+		echo "ERROR: Backup files found in source tree"; \
+		find . -name "*.bak" -o -name "*.backup" -o -name "*.orig"; \
+		exit 1; \
+	fi
+	@# Check for implementation files in wrong locations
+	@if find . -type f -name "*.c" | grep -v "./components/" | grep -q .; then \
+		echo "ERROR: Implementation files found outside components directory"; \
+		find . -type f -name "*.c" | grep -v "./components/"; \
+		exit 1; \
+	fi
+	@# Check for header files in wrong locations
+	@if find ./components -name "*.h" | grep -q .; then \
+		echo "ERROR: Header files found in components directory (should be in include/)"; \
+		find ./components -name "*.h"; \
+		exit 1; \
+	fi
+	@# Check for duplicate main.c
+	@if [ $$(find . -name "main.c" | wc -l) -gt 1 ]; then \
+		echo "ERROR: Multiple main.c files found"; \
+		find . -name "main.c"; \
+		exit 1; \
+	fi
+	@# Ensure components and include directories match (with exceptions)
+	@for dir in $(shell find ./include -mindepth 1 -maxdepth 1 -type d | sed 's|./include/||'); do \
+		if [ ! -d "./components/$$dir" ] && [ "$$dir" != "quickjs" ]; then \
+			echo "ERROR: Component directory missing: components/$$dir"; \
+			exit 1; \
+		fi; \
+	done
+	@for dir in $(shell find ./components -mindepth 1 -maxdepth 1 -type d | sed 's|./components/||'); do \
+		if [ ! -d "./include/$$dir" ]; then \
+			echo "ERROR: Include directory missing: include/$$dir"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "Organization verification passed"
+
 # Phony targets
-.PHONY: all directories libjsondb server tools clean test
+.PHONY: all directories libjsondb server tools clean test verify-organization
 
 # Special targets for building with different flags
 js-disabled:
