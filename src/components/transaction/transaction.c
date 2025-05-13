@@ -35,10 +35,7 @@ static const char* transaction_operation_names[] = {
     NULL
 };
 
-/* Define ISOLATION_INVALID if not already defined */
-#ifndef ISOLATION_INVALID
-#define ISOLATION_INVALID (-1)
-#endif
+/* ISOLATION_INVALID is now defined in the enum */
 
 #ifndef TRANSACTION_STATE_INVALID
 #define TRANSACTION_STATE_INVALID (-1)
@@ -1295,7 +1292,7 @@ int transaction_delete_document(transaction_manager_t* manager, transaction_t* t
 
 /* Query documents within a transaction */
 json_value_t* transaction_query_documents(transaction_manager_t* manager, transaction_t* transaction,
-                                        const char* collection, json_value_t* query) {
+                                        const char* collection, json_value_t* query __attribute__((unused))) {
     if (!manager || !transaction || !collection) {
         return NULL;
     }

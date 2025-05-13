@@ -361,7 +361,7 @@ json_value_t* transaction_get_relationship_data(transaction_manager_t* manager, 
     /* Process history entries to build graph */
     int node_index = 0;
     
-    for (int i = 0; i < json_array_size(history); i++) {
+    for (size_t i = 0; i < json_array_size(history); i++) {
         json_value_t* entry = json_array_get(history, i);
         if (!entry || entry->type != JSON_OBJECT) {
             continue;
@@ -551,7 +551,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
             
             if (nodes && nodes->type == JSON_ARRAY) {
                 /* Write nodes */
-                for (int i = 0; i < json_array_size(nodes); i++) {
+                for (size_t i = 0; i < json_array_size(nodes); i++) {
                     json_value_t* node = json_array_get(nodes, i);
                     if (!node || node->type != JSON_OBJECT) {
                         continue;
@@ -607,7 +607,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
             
             if (edges && edges->type == JSON_ARRAY) {
                 /* Write edges */
-                for (int i = 0; i < json_array_size(edges); i++) {
+                for (size_t i = 0; i < json_array_size(edges); i++) {
                     json_value_t* edge = json_array_get(edges, i);
                     if (!edge || edge->type != JSON_OBJECT) {
                         continue;
@@ -675,7 +675,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
             
             if (nodes_xml && nodes_xml->type == JSON_ARRAY) {
                 /* Write nodes */
-                for (int i = 0; i < json_array_size(nodes_xml); i++) {
+                for (size_t i = 0; i < json_array_size(nodes_xml); i++) {
                     json_value_t* node = json_array_get(nodes_xml, i);
                     if (!node || node->type != JSON_OBJECT) {
                         continue;
@@ -748,7 +748,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
             
             if (edges_xml && edges_xml->type == JSON_ARRAY) {
                 /* Write edges */
-                for (int i = 0; i < json_array_size(edges_xml); i++) {
+                for (size_t i = 0; i < json_array_size(edges_xml); i++) {
                     json_value_t* edge = json_array_get(edges_xml, i);
                     if (!edge || edge->type != JSON_OBJECT) {
                         continue;
@@ -763,8 +763,8 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
                     }
                     
                     char edge_str[1024];
-                    snprintf(edge_str, sizeof(edge_str), "    <edge id=\"e%d\" source=\"n%ld\" target=\"n%ld\">\n", 
-                             i, source->value.integer, target->value.integer);
+                    snprintf(edge_str, sizeof(edge_str), "    <edge id=\"e%lu\" source=\"n%ld\" target=\"n%ld\">\n", 
+                             (unsigned long)i, source->value.integer, target->value.integer);
                     strcat(result, edge_str);
                     
                     /* Add operation if available */
@@ -811,7 +811,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
                 
                 if (nodes_json && nodes_json->type == JSON_ARRAY) {
                     /* Convert nodes */
-                    for (int i = 0; i < json_array_size(nodes_json); i++) {
+                    for (size_t i = 0; i < json_array_size(nodes_json); i++) {
                         json_value_t* node = json_array_get(nodes_json, i);
                         if (!node || node->type != JSON_OBJECT) {
                             continue;
@@ -885,7 +885,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
                         
                         /* Copy any additional properties */
                         const char* keys[] = { "state", "timestamp" };
-                        for (int k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
+                        for (size_t k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
                             json_value_t* prop = json_object_get(node, keys[k]);
                             if (prop) {
                                 if (prop->type == JSON_STRING) {
@@ -903,7 +903,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
                 
                 if (edges_json && edges_json->type == JSON_ARRAY) {
                     /* Convert edges */
-                    for (int i = 0; i < json_array_size(edges_json); i++) {
+                    for (size_t i = 0; i < json_array_size(edges_json); i++) {
                         json_value_t* edge = json_array_get(edges_json, i);
                         if (!edge || edge->type != JSON_OBJECT) {
                             continue;
@@ -924,7 +924,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
                         
                         /* Set id, source and target */
                         char id_str[32], source_str[32], target_str[32];
-                        snprintf(id_str, sizeof(id_str), "e%d", i);
+                        snprintf(id_str, sizeof(id_str), "e%lu", (unsigned long)i);
                         snprintf(source_str, sizeof(source_str), "n%ld", source->value.integer);
                         snprintf(target_str, sizeof(target_str), "n%ld", target->value.integer);
                         
@@ -1008,7 +1008,7 @@ char* transaction_graph_export(json_value_t* graph_data, graph_export_format_t f
 }
 
 /* Timeline visualization helper */
-static json_value_t* create_timeline_visualization(json_value_t* history, time_t start_time, time_t end_time) {
+static json_value_t* create_timeline_visualization(json_value_t* history, time_t start_time __attribute__((unused)), time_t end_time __attribute__((unused))) {
     if (!history || history->type != JSON_ARRAY) {
         return NULL;
     }
@@ -1020,7 +1020,7 @@ static json_value_t* create_timeline_visualization(json_value_t* history, time_t
     }
     
     /* Process each entry in the history */
-    for (int i = 0; i < json_array_size(history); i++) {
+    for (size_t i = 0; i < json_array_size(history); i++) {
         json_value_t* entry = json_array_get(history, i);
         if (!entry || entry->type != JSON_OBJECT) {
             continue;
@@ -1120,7 +1120,7 @@ static json_value_t* create_lifecycle_visualization(json_value_t* history) {
     }
     
     /* Process each entry in the history */
-    for (int i = 0; i < json_array_size(history); i++) {
+    for (size_t i = 0; i < json_array_size(history); i++) {
         json_value_t* entry = json_array_get(history, i);
         if (!entry || entry->type != JSON_OBJECT) {
             continue;
@@ -1271,7 +1271,7 @@ static json_value_t* create_lifecycle_visualization(json_value_t* history) {
 
 /* Simple stub implementations of the remaining visualization formats */
 
-static json_value_t* create_heatmap_visualization(json_value_t* history) {
+static json_value_t* create_heatmap_visualization(json_value_t* history __attribute__((unused))) {
     /* Create a basic heatmap data structure */
     json_value_t* heatmap = json_create_object();
     json_object_set(heatmap, "type", json_create_string("heatmap"));
@@ -1279,7 +1279,7 @@ static json_value_t* create_heatmap_visualization(json_value_t* history) {
     return heatmap;
 }
 
-static json_value_t* create_distribution_visualization(json_value_t* history) {
+static json_value_t* create_distribution_visualization(json_value_t* history __attribute__((unused))) {
     /* Create a basic distribution data structure */
     json_value_t* distribution = json_create_object();
     json_object_set(distribution, "type", json_create_string("distribution"));
@@ -1287,7 +1287,7 @@ static json_value_t* create_distribution_visualization(json_value_t* history) {
     return distribution;
 }
 
-static json_value_t* create_dependency_visualization(json_value_t* history) {
+static json_value_t* create_dependency_visualization(json_value_t* history __attribute__((unused))) {
     /* Create a basic dependency graph data structure */
     json_value_t* dependency = json_create_object();
     json_object_set(dependency, "type", json_create_string("dependency"));
@@ -1296,7 +1296,7 @@ static json_value_t* create_dependency_visualization(json_value_t* history) {
     return dependency;
 }
 
-static json_value_t* create_sankey_visualization(json_value_t* history) {
+static json_value_t* create_sankey_visualization(json_value_t* history __attribute__((unused))) {
     /* Create a basic Sankey diagram data structure */
     json_value_t* sankey = json_create_object();
     json_object_set(sankey, "type", json_create_string("sankey"));

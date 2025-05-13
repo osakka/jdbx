@@ -105,7 +105,6 @@ static int analyze_metrics_file(const char* filename, const char* output_file) {
         
         /* Parse metric line */
         char name[256];
-        char type[32];
         
         /* Try to parse different metric formats */
         if (sscanf(line, "%255s counter %lf", name, &counters[num_counters].value) == 2) {
@@ -118,14 +117,14 @@ static int analyze_metrics_file(const char* filename, const char* output_file) {
             strcpy(gauges[num_gauges].type, "gauge");
             num_gauges++;
         }
-        else if (sscanf(line, "%255s timer count=%llu min=%lf max=%lf sum=%lf avg=%lf", 
+        else if (sscanf(line, "%255s timer count=%lu min=%lf max=%lf sum=%lf avg=%lf", 
                        name, &timers[num_timers].count, &timers[num_timers].min, 
                        &timers[num_timers].max, &timers[num_timers].sum, &timers[num_timers].avg) == 6) {
             strcpy(timers[num_timers].name, name);
             strcpy(timers[num_timers].type, "timer");
             num_timers++;
         }
-        else if (sscanf(line, "%255s histogram count=%llu min=%lf max=%lf sum=%lf avg=%lf", 
+        else if (sscanf(line, "%255s histogram count=%lu min=%lf max=%lf sum=%lf avg=%lf", 
                        name, &histograms[num_histograms].count, &histograms[num_histograms].min, 
                        &histograms[num_histograms].max, &histograms[num_histograms].sum, 
                        &histograms[num_histograms].avg) == 6) {
@@ -173,7 +172,7 @@ static int analyze_metrics_file(const char* filename, const char* output_file) {
     fprintf(output, "|------|-------|----------|----------|----------|------------|\n");
     
     for (int i = 0; i < num_timers; i++) {
-        fprintf(output, "| %s | %llu | %.3f | %.3f | %.3f | %.3f |\n", 
+        fprintf(output, "| %s | %lu | %.3f | %.3f | %.3f | %.3f |\n", 
                timers[i].name, 
                timers[i].count, 
                timers[i].min * 1000, 
@@ -190,7 +189,7 @@ static int analyze_metrics_file(const char* filename, const char* output_file) {
     fprintf(output, "|------|-------|-----|-----|-----|\n");
     
     for (int i = 0; i < num_histograms; i++) {
-        fprintf(output, "| %s | %llu | %.6f | %.6f | %.6f |\n", 
+        fprintf(output, "| %s | %lu | %.6f | %.6f | %.6f |\n", 
                histograms[i].name, 
                histograms[i].count, 
                histograms[i].min, 
@@ -270,7 +269,6 @@ static int diff_metrics_files(const char* file1, const char* file2, const char* 
         
         /* Parse metric line */
         char name[256];
-        char type[32];
         
         /* Try to parse different metric formats */
         if (sscanf(line, "%255s counter %lf", name, &counters1[num_counters1].value) == 2) {
@@ -283,7 +281,7 @@ static int diff_metrics_files(const char* file1, const char* file2, const char* 
             strcpy(gauges1[num_gauges1].type, "gauge");
             num_gauges1++;
         }
-        else if (sscanf(line, "%255s timer count=%llu min=%lf max=%lf sum=%lf avg=%lf", 
+        else if (sscanf(line, "%255s timer count=%lu min=%lf max=%lf sum=%lf avg=%lf", 
                        name, &timers1[num_timers1].count, &timers1[num_timers1].min, 
                        &timers1[num_timers1].max, &timers1[num_timers1].sum, &timers1[num_timers1].avg) == 6) {
             strcpy(timers1[num_timers1].name, name);
@@ -327,7 +325,6 @@ static int diff_metrics_files(const char* file1, const char* file2, const char* 
         
         /* Parse metric line */
         char name[256];
-        char type[32];
         
         /* Try to parse different metric formats */
         if (sscanf(line, "%255s counter %lf", name, &counters2[num_counters2].value) == 2) {
@@ -340,7 +337,7 @@ static int diff_metrics_files(const char* file1, const char* file2, const char* 
             strcpy(gauges2[num_gauges2].type, "gauge");
             num_gauges2++;
         }
-        else if (sscanf(line, "%255s timer count=%llu min=%lf max=%lf sum=%lf avg=%lf", 
+        else if (sscanf(line, "%255s timer count=%lu min=%lf max=%lf sum=%lf avg=%lf", 
                        name, &timers2[num_timers2].count, &timers2[num_timers2].min, 
                        &timers2[num_timers2].max, &timers2[num_timers2].sum, &timers2[num_timers2].avg) == 6) {
             strcpy(timers2[num_timers2].name, name);
@@ -575,7 +572,7 @@ static int generate_report(const char* dir_path, const char* output_file, int da
 }
 
 /* Export metrics from a running database */
-static int export_metrics(const char* db_path, const char* output_file) {
+static int export_metrics(const char* db_path __attribute__((unused)), const char* output_file __attribute__((unused))) {
     /* In a real implementation, this would connect to the database via IPC or API */
     fprintf(stderr, "Error: Metrics export from a running database is not implemented in this demo.\n");
     return 1;

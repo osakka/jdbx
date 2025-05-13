@@ -384,9 +384,9 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
 
         switch (rule->type) {
             case SCHEMA_TYPE_CHECK:
-                if (value && value->type != rule->params.type_value) {
+                if (value && value->type != (json_type_t)rule->params.type_value) {
                     LOG_INFO("Type mismatch for field '%s': expected=%d, actual=%d",
-                            rule->field_path, rule->params.type_value, value->type);
+                            rule->field_path, rule->params.type_value, (int)value->type);
                     result.is_valid = 0;
                     result.error_field = strdup(rule->field_path);
                     result.error_message = strdup("Type mismatch");

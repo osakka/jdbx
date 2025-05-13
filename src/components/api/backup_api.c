@@ -19,7 +19,8 @@
 
 /* Default backup directory */
 #define DEFAULT_BACKUP_DIR "./backups"
-#define MAX_BACKUP_PATH_LEN 512
+#define MAX_FILENAME_LEN 256
+#define MAX_BACKUP_PATH_LEN 768  /* Increased to safely accommodate path + filename */
 #define MAX_TIMESTAMP_LEN 32
 #define DEFAULT_BACKUP_RETENTION 10
 #define AUTO_BACKUP_INTERVAL_HOURS 24
@@ -97,7 +98,7 @@ static void cleanup_old_backups() {
     
     // Count and collect backup files
     typedef struct {
-        char filename[MAX_BACKUP_PATH_LEN];
+        char filename[MAX_FILENAME_LEN];  /* Using more appropriate MAX_FILENAME_LEN */
         time_t mtime;
     } backup_file_t;
     
@@ -736,7 +737,7 @@ void backup_api_init(void) {
 }
 
 /* API endpoint registration */
-void register_backup_api_endpoints(api_context_t *ctx) {
+void register_backup_api_endpoints(api_context_t *ctx __attribute__((unused))) {
     /* Initialize backup API */
     backup_api_init();
 

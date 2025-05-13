@@ -102,7 +102,7 @@ static char* base64_url_encode(const unsigned char* input, int length) {
 }
 
 /* Create new JWT token */
-jwt_token_t* jwt_create(const char* secret) {
+jwt_token_t* jwt_create(const char* secret __attribute__((unused))) {
     jwt_token_t* token = (jwt_token_t*)malloc(sizeof(jwt_token_t));
     if (!token) {
         return NULL;

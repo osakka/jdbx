@@ -33,7 +33,7 @@ http_response_t* api_handle_export(api_context_t* ctx, http_request_t* request) 
     /* Parse query parameters */
     char collection[256] = {0};
     char format[32] = "json";
-    int pretty = 1;
+    /* pretty parameter is not used currently, but parsing is left in for future use */
     
     if (request->query) {
         /* Extract collection parameter */
@@ -68,15 +68,9 @@ http_response_t* api_handle_export(api_context_t* ctx, http_request_t* request) 
             }
         }
         
-        /* Extract pretty parameter */
-        const char* pretty_param = strstr(request->query, "pretty=");
-        if (pretty_param) {
-            pretty_param += 7; /* Skip "pretty=" */
-            if (strncmp(pretty_param, "false", 5) == 0 || 
-                strncmp(pretty_param, "0", 1) == 0) {
-                pretty = 0;
-            }
-        }
+        /* Parsing for pretty parameter has been removed as it's not currently used
+         * We will reimplement this when pretty-printing functionality is added
+         */
     }
     
     /* Currently only JSON format is supported */

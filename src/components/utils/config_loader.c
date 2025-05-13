@@ -96,7 +96,8 @@ int config_load_json(const char* filepath, server_config_t* config) {
     size_t read_size = fread(json_buffer, 1, file_size, file);
     fclose(file);
     
-    if (read_size != file_size) {
+    /* Cast file_size to size_t to avoid signedness comparison warning */
+    if (read_size != (size_t)file_size) {
         if (g_logger) {
             LOG_ERROR("Failed to read config file: %s", filepath);
         } else {

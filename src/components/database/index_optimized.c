@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <limits.h>  /* For SIZE_MAX */
 
 /* Enhanced index configuration */
 #define DEFAULT_INDEX_BUCKETS 256        /* Increased from 128 for better initial distribution */
@@ -156,7 +157,8 @@ static uint32_t hash_string(const char* str) {
 }
 
 /* Secondary hash for double hashing */
-static uint32_t hash_string_secondary(const char* str) {
+/* Currently unused but kept for future double-hashing optimization */
+static uint32_t __attribute__((unused)) hash_string_secondary(const char* str) {
     return hash_string_murmur3(str) | 1; // Ensure odd value for coprime stepping
 }
 
@@ -383,7 +385,8 @@ static lru_cache_t* lru_cache_init(size_t capacity) {
 }
 
 /* Free an LRU cache */
-static void lru_cache_free(lru_cache_t* cache) {
+/* Currently unused but kept for future cache memory management */
+static void __attribute__((unused)) lru_cache_free(lru_cache_t* cache) {
     if (!cache) return;
     
     pthread_mutex_lock(&cache->mutex);
@@ -1411,14 +1414,15 @@ json_value_t* db_query_by_optimized_index(database_t* db, const char* collection
         uint32_t hash = hash_string(value) % index->num_buckets;
         
         /* Account for any results already found in cache */
-        int remaining_limit = limit > 0 ? limit - json_array_size(result) : -1;
+        /* Use SIZE_MAX as sentinel for "no limit" instead of -1 to avoid signedness issues */
+        size_t remaining_limit = limit > 0 ? (size_t)limit - json_array_size(result) : SIZE_MAX;
         
         if (USE_ROBIN_HOOD_HASHING) {
             /* Try probing up to MAX_PROBE_DISTANCE slots */
             size_t probe_distance = 0;
             size_t bucket = hash;
             
-            while (probe_distance < MAX_PROBE_DISTANCE && (remaining_limit > 0 || remaining_limit < 0)) {
+            while (probe_distance < MAX_PROBE_DISTANCE && remaining_limit > 0) {
                 index_entry_t* entry = index->buckets[bucket];
                 
                 /* Check if bucket is empty - key not found */
@@ -1427,7 +1431,7 @@ json_value_t* db_query_by_optimized_index(database_t* db, const char* collection
                 }
                 
                 /* Check entries in this bucket */
-                while (entry && (remaining_limit > 0 || remaining_limit < 0)) {
+                while (entry && remaining_limit > 0) {
                     if (strcmp(entry->key_value, value) == 0) {
                         /* Match found */
                         if (skip > 0) {
@@ -1479,7 +1483,7 @@ json_value_t* db_query_by_optimized_index(database_t* db, const char* collection
             /* Standard chaining approach */
             index_entry_t* entry = index->buckets[hash];
             
-            while (entry && (remaining_limit > 0 || remaining_limit < 0)) {
+            while (entry && remaining_limit > 0) {
                 if (strcmp(entry->key_value, value) == 0) {
                     /* Match found */
                     if (skip > 0) {

@@ -1,5 +1,6 @@
 #include "database/database.h"
 #include "utils/logger.h"
+#include "utils/cache.h"
 #include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>

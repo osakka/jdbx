@@ -25,7 +25,7 @@ static char* extract_collection_name(const char* path) {
 
 /* Parse limit and skip parameters */
 #ifdef INCLUDE_PAGINATION_PARSING
-static void parse_pagination(const char* query_str, int* limit, int* skip) {
+static void parse_pagination(const char* query_str, size_t* limit, size_t* skip) {
     if (!query_str || !limit || !skip) {
         return;
     }
@@ -40,9 +40,9 @@ static void parse_pagination(const char* query_str, int* limit, int* skip) {
     
     while (token) {
         if (strncmp(token, "limit=", 6) == 0) {
-            *limit = atoi(token + 6);
+            *limit = (size_t)atoi(token + 6);
         } else if (strncmp(token, "skip=", 5) == 0) {
-            *skip = atoi(token + 5);
+            *skip = (size_t)atoi(token + 5);
         }
         token = strtok(NULL, "&");
     }
@@ -129,19 +129,19 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
     }
     
     /* Parse pagination parameters */
-    int limit = 0;
-    int skip = 0;
+    size_t limit = 0;
+    size_t skip = 0;
     
     json_value_t* limit_val = json_object_get(body, "limit");
     if (limit_val && (limit_val->type == JSON_NUMBER || limit_val->type == JSON_INTEGER)) {
         limit = (limit_val->type == JSON_NUMBER) ? 
-                (int)limit_val->value.number : (int)limit_val->value.integer;
+                (size_t)limit_val->value.number : (size_t)limit_val->value.integer;
     }
     
     json_value_t* skip_val = json_object_get(body, "skip");
     if (skip_val && (skip_val->type == JSON_NUMBER || skip_val->type == JSON_INTEGER)) {
         skip = (skip_val->type == JSON_NUMBER) ? 
-               (int)skip_val->value.number : (int)skip_val->value.integer;
+               (size_t)skip_val->value.number : (size_t)skip_val->value.integer;
     }
     
     /* Free the request body as we don't need it anymore */
@@ -215,19 +215,19 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
     /* Future enhancement: Support OR operations */
     
     /* Parse pagination parameters */
-    int limit = 0;
-    int skip = 0;
+    size_t limit = 0;
+    size_t skip = 0;
     
     json_value_t* limit_val = json_object_get(body, "limit");
     if (limit_val && (limit_val->type == JSON_NUMBER || limit_val->type == JSON_INTEGER)) {
         limit = (limit_val->type == JSON_NUMBER) ? 
-                (int)limit_val->value.number : (int)limit_val->value.integer;
+                (size_t)limit_val->value.number : (size_t)limit_val->value.integer;
     }
     
     json_value_t* skip_val = json_object_get(body, "skip");
     if (skip_val && (skip_val->type == JSON_NUMBER || skip_val->type == JSON_INTEGER)) {
         skip = (skip_val->type == JSON_NUMBER) ? 
-               (int)skip_val->value.number : (int)skip_val->value.integer;
+               (size_t)skip_val->value.number : (size_t)skip_val->value.integer;
     }
     
     /* Convert queries array to a real query object for database */

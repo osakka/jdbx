@@ -54,7 +54,7 @@ static size_t strlcpy(char *dest, const char *src, size_t size)
  * initial length of the destination string (regardless of
  * whether all of the source string could be copied or not).
  */
-static size_t strlcat(char *dest, const char *src, size_t size)
+static size_t __attribute__((unused)) strlcat(char *dest, const char *src, size_t size)
 {
     size_t dsize = strlen(dest);
     size_t len = strlen(src);

@@ -67,10 +67,13 @@ json_value_t* json_export_collection(database_t* db, const char* collection) {
     }
     
     /* Check if collection exists */
-    json_value_t* coll = db_get_collection(db, collection);
-    if (!coll) {
+    db_collection_t* db_coll = db_get_collection(db, collection);
+    if (!db_coll) {
         return NULL;
     }
+    
+    /* Get the actual JSON value from the collection */
+    json_value_t* coll = db_coll->documents;
     
     /* Create a new object with just this collection */
     json_value_t* result = json_create_object();
@@ -90,10 +93,13 @@ json_value_t* json_export_collection(database_t* db, const char* collection) {
     
     if (!coll_copy) {
         json_free(result);
+        /* No need to free db_coll - it's managed by the database */
         return NULL;
     }
     
     json_object_set(result, collection, coll_copy);
+    
+    /* No need to free db_coll - it's managed by the database */
     return result;
 }
 

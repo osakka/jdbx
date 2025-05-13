@@ -31,6 +31,7 @@ typedef enum {
 
 /* Isolation level */
 typedef enum {
+    ISOLATION_INVALID = -1,     /* Invalid isolation level */
     ISOLATION_READ_UNCOMMITTED, /* Lowest isolation level, can see uncommitted changes */
     ISOLATION_READ_COMMITTED,   /* Can only see committed changes */
     ISOLATION_SERIALIZABLE      /* Highest isolation level, complete transaction isolation */

@@ -1125,25 +1125,29 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
 #else /* !USE_QUICKJS - Provide stub implementations */
 
 /* Initialize JavaScript engine */
-js_engine_t* js_engine_init(database_t *db) {
+js_engine_t* js_engine_init(database_t *db __attribute__((unused))) {
     /* No QuickJS available, return NULL */
     return NULL;
 }
 
 /* Free JavaScript engine */
-void js_engine_free(js_engine_t *engine) {
+void js_engine_free(js_engine_t *engine __attribute__((unused))) {
     /* No operation needed */
 }
 
 /* JavaScript evaluation */
-int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
+int js_engine_eval(js_engine_t *engine __attribute__((unused)), 
+                  const char *script __attribute__((unused)), 
+                  char **result) {
     if (result) {
         *result = NULL;
     }
     return 0;
 }
 
-int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **result) {
+int js_engine_eval_file(js_engine_t *engine __attribute__((unused)), 
+                       const char *file_path __attribute__((unused)), 
+                       char **result) {
     if (result) {
         *result = NULL;
     }
@@ -1151,38 +1155,51 @@ int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **resul
 }
 
 /* Execute JavaScript file */
-int js_execute_file(js_engine_t* engine, const char* file_path) {
+int js_execute_file(js_engine_t* engine __attribute__((unused)), 
+                   const char* file_path __attribute__((unused))) {
     return 0;
 }
 
 /* Register database functions */
-void js_register_db_functions(js_engine_t *engine) {
+void js_register_db_functions(js_engine_t *engine __attribute__((unused))) {
     /* No operation needed */
 }
 
 /* JavaScript query execution */
-json_value_t* js_execute_query(js_engine_t *engine, const char *collection_name, const char *query_script) {
+json_value_t* js_execute_query(js_engine_t *engine __attribute__((unused)), 
+                             const char *collection_name __attribute__((unused)), 
+                             const char *query_script __attribute__((unused))) {
     return NULL;
 }
 
 /* JavaScript document validation */
-int js_validate_document(js_engine_t *engine, const char *collection_name, json_value_t *document) {
+int js_validate_document(js_engine_t *engine __attribute__((unused)), 
+                        const char *collection_name __attribute__((unused)), 
+                        json_value_t *document __attribute__((unused))) {
     /* Default validation passes when JavaScript is not available */
     return 1;
 }
 
 /* JavaScript document transformation */
-json_value_t* js_transform_document(js_engine_t *engine, const char *collection_name, json_value_t *document, const char *operation) {
+json_value_t* js_transform_document(js_engine_t *engine __attribute__((unused)), 
+                                  const char *collection_name __attribute__((unused)), 
+                                  json_value_t *document, 
+                                  const char *operation __attribute__((unused))) {
     /* Return a copy of the original document when JavaScript is not available */
     return json_clone(document);
 }
 
 /* User-defined functions */
-int js_register_user_function(js_engine_t *engine, const char *name, const char *script) {
+int js_register_user_function(js_engine_t *engine __attribute__((unused)), 
+                            const char *name __attribute__((unused)), 
+                            const char *script __attribute__((unused))) {
     return 0;
 }
 
-int js_call_user_function(js_engine_t *engine, const char *name, json_value_t *args, json_value_t **result) {
+int js_call_user_function(js_engine_t *engine __attribute__((unused)), 
+                         const char *name __attribute__((unused)), 
+                         json_value_t *args __attribute__((unused)), 
+                         json_value_t **result) {
     if (result) {
         *result = NULL;
     }
@@ -1190,11 +1207,12 @@ int js_call_user_function(js_engine_t *engine, const char *name, json_value_t *a
 }
 
 /* Error handling */
-const char* js_get_last_error(js_engine_t *engine) {
+const char* js_get_last_error(js_engine_t *engine __attribute__((unused))) {
     return "JavaScript support is not available in this build";
 }
 
-void js_set_error(js_engine_t *engine, const char *error) {
+void js_set_error(js_engine_t *engine __attribute__((unused)), 
+               const char *error __attribute__((unused))) {
     /* No operation needed */
 }
 

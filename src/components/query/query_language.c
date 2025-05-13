@@ -528,7 +528,7 @@ json_value_t* query_extract_field(json_value_t* document, const char* field_path
                 }
                 
                 /* Then access the array element */
-                if (current && current->type == JSON_ARRAY && index >= 0 && index < json_array_size(current)) {
+                if (current && current->type == JSON_ARRAY && index >= 0 && (size_t)index < json_array_size(current)) {
                     current = json_array_get(current, index);
                 } else {
                     free(path_copy);
@@ -647,7 +647,7 @@ static int match_comparison_operator(query_operator_t op, json_value_t* field_va
                 return 0;
             }
             
-            for (int i = 0; i < json_array_size(query_value); i++) {
+            for (size_t i = 0; i < json_array_size(query_value); i++) {
                 json_value_t* array_value = json_array_get(query_value, i);
                 if (json_equals(field_value, array_value)) {
                     return 1;
@@ -661,7 +661,7 @@ static int match_comparison_operator(query_operator_t op, json_value_t* field_va
                 return 1;
             }
             
-            for (int i = 0; i < json_array_size(query_value); i++) {
+            for (size_t i = 0; i < json_array_size(query_value); i++) {
                 json_value_t* array_value = json_array_get(query_value, i);
                 if (json_equals(field_value, array_value)) {
                     return 0;
@@ -678,9 +678,9 @@ static int match_comparison_operator(query_operator_t op, json_value_t* field_va
         }
             
         case OP_TYPE: {
-            int type_val = -1;
+            json_type_t type_val = (json_type_t)-1;  /* Invalid type */
             if (query_value->type == JSON_INTEGER) {
-                type_val = (int)query_value->value.integer;
+                type_val = (json_type_t)query_value->value.integer;
             } else if (query_value->type == JSON_STRING) {
                 if (strcmp(query_value->value.string, "null") == 0) {
                     type_val = JSON_NULL;
@@ -707,11 +707,11 @@ static int match_comparison_operator(query_operator_t op, json_value_t* field_va
                 return 0;
             }
             
-            for (int i = 0; i < json_array_size(query_value); i++) {
+            for (size_t i = 0; i < json_array_size(query_value); i++) {
                 json_value_t* search_value = json_array_get(query_value, i);
                 int found = 0;
                 
-                for (int j = 0; j < json_array_size(field_value); j++) {
+                for (size_t j = 0; j < json_array_size(field_value); j++) {
                     json_value_t* array_value = json_array_get(field_value, j);
                     if (json_equals(array_value, search_value)) {
                         found = 1;
@@ -813,7 +813,7 @@ int query_match_document(query_expr_t* expr, json_value_t* document) {
                 return 0;
             }
             
-            for (int i = 0; i < json_array_size(field_value); i++) {
+            for (size_t i = 0; i < json_array_size(field_value); i++) {
                 json_value_t* element = json_array_get(field_value, i);
                 if (element->type == JSON_OBJECT) {
                     int matched = 1;
@@ -1027,10 +1027,10 @@ void query_apply_sort(json_value_t* documents, json_value_t* sort) {
     }
     
     /* Bubble sort the documents (simple but not efficient for large result sets) */
-    int size = json_array_size(documents);
+    size_t size = json_array_size(documents);
     size_t result_size = json_array_size(documents);
-    for (int i = 0; i < result_size - 1; i++) {
-        for (int j = 0; j < size - i - 1; j++) {
+    for (size_t i = 0; i < result_size - 1; i++) {
+        for (size_t j = 0; j < (size_t)(size - i - 1); j++) {
             json_value_t* a = json_array_get(documents, j);
             json_value_t* b = json_array_get(documents, j + 1);
             
@@ -1247,7 +1247,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
 
     if (!expr || !documents || documents->type != JSON_ARRAY) {
         LOG_ERROR("Invalid query execution parameters (expr: %p, documents: %p, document type: %d)",
-                 expr, documents, documents ? documents->type : -1);
+                 expr, documents, documents ? (int)documents->type : -1);
         return result;
     }
 
@@ -1261,7 +1261,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
     int evaluated = 0;
     int matched = 0;
 
-    for (int i = 0; i < json_array_size(documents); i++) {
+    for (size_t i = 0; i < json_array_size(documents); i++) {
         json_value_t* doc = json_array_get(documents, i);
         evaluated++;
 

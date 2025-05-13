@@ -264,8 +264,10 @@ static int process_cache_invalidations(database_t* db) {
  * @param db Database instance
  * @param collection_name Collection name
  * @return 1 if successful, 0 otherwise
+ * 
+ * Note: This function is currently unused but is kept for future use
  */
-static int invalidate_query_cache(database_t* db, const char* collection_name) {
+static int __attribute__((unused)) invalidate_query_cache(database_t* db, const char* collection_name) {
     if (!db || !db->cache_enabled || !db->cache || !collection_name) {
         return 0;
     }
