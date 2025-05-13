@@ -3,6 +3,7 @@
 
 #include "utils/json.h"
 #include "core/server.h"
+#include "database/database.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -298,5 +299,45 @@ static inline int json_validate_required_fields(json_value_t* object,
     
     return 1;
 }
+
+/**
+ * Export a specific collection to JSON
+ * 
+ * @param db The database
+ * @param collection The collection name
+ * @return JSON value containing the exported collection, or NULL on error
+ */
+json_value_t* json_export_collection(database_t* db, const char* collection);
+
+/**
+ * Export the entire database to JSON
+ * 
+ * @param db The database
+ * @return JSON value containing the exported database, or NULL on error
+ */
+json_value_t* json_export_database(database_t* db);
+
+/**
+ * Import data into a specific collection
+ * 
+ * @param db The database
+ * @param collection The collection name
+ * @param data The data to import
+ * @param replace_mode Whether to replace the collection (1) or merge (0)
+ * @param docs_imported Pointer to store the number of documents imported
+ * @return 1 on success, 0 on failure
+ */
+int json_import_collection(database_t* db, const char* collection, json_value_t* data, int replace_mode, int* docs_imported);
+
+/**
+ * Import data into the database
+ * 
+ * @param db The database
+ * @param data The data to import
+ * @param replace_mode Whether to replace collections (1) or merge (0)
+ * @param docs_imported Pointer to store the number of documents imported
+ * @return 1 on success, 0 on failure
+ */
+int json_import_database(database_t* db, json_value_t* data, int replace_mode, int* docs_imported);
 
 #endif /* JSON_HELPERS_H */

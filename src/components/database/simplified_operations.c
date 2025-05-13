@@ -11,6 +11,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
+
+/**
+ * Generate a UUID for document IDs
+ * This is a simple implementation that generates a reasonably unique ID
+ * Not a proper RFC-compliant UUID but sufficient for our needs
+ */
+static char* generate_uuid() {
+    static int counter = 0;
+    char* uuid = (char*)malloc(37); /* 36 chars + null */
+    if (!uuid) return NULL;
+    
+    time_t now = time(NULL);
+    unsigned int random_part = (unsigned int)rand();
+    counter++;
+    
+    snprintf(uuid, 37, "%08lx-%04x-%04x-%04x-%08x%04x",
+             now, (unsigned short)(random_part & 0xFFFF),
+             (unsigned short)((random_part >> 16) & 0xFFFF),
+             (unsigned short)(counter & 0xFFFF),
+             (unsigned int)clock(), (unsigned short)(counter >> 16));
+    
+    return uuid;
+}
 
 /**
  * Simplified Implementation for Inserting a Document

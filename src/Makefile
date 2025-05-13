@@ -12,7 +12,7 @@ TEST_DIR = ../tests
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -I.
-LDFLAGS = -lm -lpthread
+LDFLAGS = -lpthread -lm
 
 # QuickJS support
 QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
@@ -78,7 +78,7 @@ libjsondb: $(OBJS)
 
 # Build server
 server: $(OBJ_DIR)/components/main.o libjsondb
-	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server $(SERVER_LDFLAGS) -L$(LIB_DIR) -ljsondb
+	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS) -lm
 
 # Build tools
 tools: libjsondb $(OBJ_DIR)/components/tools/jsondb_tools.o
