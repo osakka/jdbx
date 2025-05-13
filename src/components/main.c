@@ -847,10 +847,16 @@ int main(int argc, char** argv) {
         /* Keep the server running in foreground mode */
         printf("Server running on %s:%d. Press Ctrl+C to stop.\n", 
                config.host ? config.host : "0.0.0.0", config.port);
-        
-        /* Wait for signal */
-        pause();
+    } else {
+        /* In daemon mode, log that server started successfully */
+        if (g_logger) {
+            LOG_INFO("Server running in daemon mode on %s:%d", 
+                    config.host ? config.host : "0.0.0.0", config.port);
+        }
     }
+    
+    /* Wait for signal in both foreground and daemon modes */
+    pause();
     
     return 0;
 }
