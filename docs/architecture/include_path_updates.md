@@ -169,4 +169,5 @@ If you encounter any "file not found" errors, check your include paths against t
 
 - [Repository Organization Guidelines](../guidelines/REPOSITORY_ORGANIZATION.md)
 - [Project Structure](project_structure.md)
-- [Source Consolidation Implementation](source_consolidation_implementation.md)
+- [Component Organization](component_organization.md)
+- [Code Organization](code_organization.md)

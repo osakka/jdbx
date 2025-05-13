@@ -178,3 +178,6 @@ When working with this codebase, follow these best practices:
 - [Repository Organization Guidelines](../guidelines/REPOSITORY_ORGANIZATION.md)
 - [Git Guidelines](../guidelines/GIT_GUIDELINES.md)
 - [Implementation Status](../status/IMPLEMENTATION_STATUS.md)
+- [Component Organization](component_organization.md)
+- [Code Organization](code_organization.md)
+- [Include Path Updates](include_path_updates.md)
