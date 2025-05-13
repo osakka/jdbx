@@ -1,0 +1,94 @@
+# JSONdb Test Framework Makefile
+# Production-Grade Test Suite
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../include
+LDFLAGS = -L../lib -ljsondb
+
+TEST_BINDIR = ./bin
+TEST_OBJDIR = ./obj
+
+# Directories
+UNIT_DIR = unit
+INTEGRATION_DIR = integration
+PERFORMANCE_DIR = performance
+SECURITY_DIR = security
+
+# Test suites
+UNIT_TESTS = $(wildcard $(UNIT_DIR)/*.c)
+UNIT_BINS = $(patsubst $(UNIT_DIR)/%.c,$(TEST_BINDIR)/unit_%,$(UNIT_TESTS))
+
+INTEGRATION_TESTS = $(wildcard $(INTEGRATION_DIR)/*.c)
+INTEGRATION_BINS = $(patsubst $(INTEGRATION_DIR)/%.c,$(TEST_BINDIR)/integration_%,$(INTEGRATION_TESTS))
+
+PERFORMANCE_TESTS = $(wildcard $(PERFORMANCE_DIR)/*.c)
+PERFORMANCE_BINS = $(patsubst $(PERFORMANCE_DIR)/%.c,$(TEST_BINDIR)/performance_%,$(PERFORMANCE_TESTS))
+
+SECURITY_TESTS = $(wildcard $(SECURITY_DIR)/*.c)
+SECURITY_BINS = $(patsubst $(SECURITY_DIR)/%.c,$(TEST_BINDIR)/security_%,$(SECURITY_TESTS))
+
+# Main targets
+.PHONY: all clean dirs test unit-test integration-test performance-test security-test report
+
+all: dirs $(UNIT_BINS) $(INTEGRATION_BINS) $(PERFORMANCE_BINS) $(SECURITY_BINS)
+
+dirs:
+	@mkdir -p $(TEST_BINDIR) $(TEST_OBJDIR)
+	@mkdir -p $(TEST_OBJDIR)/$(UNIT_DIR) $(TEST_OBJDIR)/$(INTEGRATION_DIR)
+	@mkdir -p $(TEST_OBJDIR)/$(PERFORMANCE_DIR) $(TEST_OBJDIR)/$(SECURITY_DIR)
+
+# Compile unit tests
+$(TEST_BINDIR)/unit_%: $(UNIT_DIR)/%.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+# Compile integration tests
+$(TEST_BINDIR)/integration_%: $(INTEGRATION_DIR)/%.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+# Compile performance tests
+$(TEST_BINDIR)/performance_%: $(PERFORMANCE_DIR)/%.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+# Compile security tests
+$(TEST_BINDIR)/security_%: $(SECURITY_DIR)/%.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+# Run tests
+test: unit-test integration-test performance-test security-test
+	@echo "All tests complete"
+	@./scripts/generate_test_report.sh
+
+unit-test: $(UNIT_BINS)
+	@echo "Running unit tests..."
+	@for test in $(UNIT_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
+
+integration-test: $(INTEGRATION_BINS)
+	@echo "Running integration tests..."
+	@for test in $(INTEGRATION_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
+
+performance-test: $(PERFORMANCE_BINS)
+	@echo "Running performance tests..."
+	@for test in $(PERFORMANCE_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
+
+security-test: $(SECURITY_BINS)
+	@echo "Running security tests..."
+	@for test in $(SECURITY_BINS); do \
+		echo "Running $$test"; \
+		$$test; \
+	done
+
+report:
+	@./scripts/generate_test_report.sh
+
+# Clean
+clean:
+	rm -rf $(TEST_BINDIR)/* $(TEST_OBJDIR)/*

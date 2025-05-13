@@ -1,0 +1,11 @@
+JSONdb Server Metrics Report
+Generated at: Mon May 12 21:48:16 BST 2025
+Server URL: http://localhost:8080
+
+Summary Statistics:
+-------------------
+Average CPU Usage: N/A%
+Average Memory Usage: N/AKB
+Maximum CPU Usage: %
+Maximum Memory Usage: KB
+Maximum Concurrent Connections: 

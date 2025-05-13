@@ -1,0 +1,70 @@
+# Makefile for debugging operations test
+
+# Root directory
+ROOT_DIR = ..
+
+# Include and lib directories
+INCLUDE_DIR = $(ROOT_DIR)/include
+LIB_DIR = $(ROOT_DIR)/build/lib
+BIN_DIR = $(ROOT_DIR)/build/bin/tests
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -g -O0 -DDEBUG
+LDFLAGS = -lm -lpthread
+
+# JSONdb library
+JSONDB_LIB = $(LIB_DIR)/libjsondb.a
+
+# Source and binary files
+TEST_SRC = debug_operations.c
+TEST_BIN = $(BIN_DIR)/debug_operations
+
+# Default target
+all: $(TEST_BIN)
+
+# Create build directory
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# Build test
+$(TEST_BIN): $(TEST_SRC) $(JSONDB_LIB) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(JSONDB_LIB) $(LDFLAGS)
+
+# Run test for db_init
+run_init: $(TEST_BIN)
+	$(TEST_BIN) 1
+
+# Run test for db_create_collection
+run_create: $(TEST_BIN)
+	$(TEST_BIN) 2
+
+# Run test for db_insert_document
+run_insert: $(TEST_BIN)
+	$(TEST_BIN) 3
+
+# Run test for db_get_document
+run_get: $(TEST_BIN)
+	$(TEST_BIN) 4
+
+# Run test for db_update_document
+run_update: $(TEST_BIN)
+	$(TEST_BIN) 5
+
+# Run test for db_delete_document
+run_delete: $(TEST_BIN)
+	$(TEST_BIN) 6
+
+# Run test for db_query_documents
+run_query: $(TEST_BIN)
+	$(TEST_BIN) 7
+
+# Run all tests
+run_all: $(TEST_BIN)
+	$(TEST_BIN) 8
+
+# Clean
+clean:
+	rm -f $(TEST_BIN)
+
+.PHONY: all run_init run_create run_insert run_get run_update run_delete run_query run_all clean

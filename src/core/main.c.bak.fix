@@ -1,0 +1,1665 @@
+#include "jsondb/core/server.h"
+#include "jsondb/database/database.h"
+#include "jsondb/rbac/rbac.h"
+#include "jsondb/api/api.h"
+#include "jsondb/rbac/jwt.h"
+#include "jsondb/utils/metrics.h"
+/* JavaScript dependencies */
+#ifndef DISABLE_JS
+#include "jsondb/js/js_api.h"
+#include "jsondb/js/js_engine.h"
+#else
+/* Stub definitions when JavaScript is disabled */
+typedef void js_engine_t;
+void js_api_init(database_t* db) { 
+    /* No-op implementation when JS is disabled */
+    (void)db; /* Avoid unused parameter warning */
+}
+void js_api_cleanup() { 
+    /* No-op implementation when JS is disabled */
+}
+int js_execute_file(js_engine_t* engine, const char* filename) {
+    /* No-op implementation when JS is disabled */
+    (void)engine; /* Avoid unused parameter warning */
+    (void)filename; /* Avoid unused parameter warning */
+    return 0;
+}
+void js_engine_free(js_engine_t* engine) {
+    /* No-op implementation when JS is disabled */
+    (void)engine; /* Avoid unused parameter warning */
+}
+js_engine_t* g_js_engine = NULL;
+#endif
+#endif
+#include "jsondb/rbac/rbac_refcount.h"
+#include "jsondb/utils/logger.h"
+#include "jsondb/utils/config_loader.h"
+#include "jsondb/utils/js_file_utils.h"
+#include <stdlib.h> /* For atexit */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <libgen.h> /* For dirname() */
+#include <dirent.h> /* For directory operations */
+#include <limits.h> /* For PATH_MAX */
+
+/* Default relative paths (will be resolved relative to the binary path) */
+#define DEFAULT_DB_PATH "var/data/jsondb/db.json"
+#define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"
+#define DEFAULT_JWT_SECRET "change-this-secret-in-production"
+#define DEFAULT_PID_FILE "var/run/jsondb_server.pid"
+#define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
+
+/* Global to store the binary directory path (not including trailing slash) */
+static char binary_dir[PATH_MAX] = {0};
+
+/* Default log level */
+#define DEFAULT_LOG_LEVEL LOG_LEVEL_INFO
+
+/* Global variables for cleanup handling */
+/* g_server_config is now declared in config_loader.h/c */
+static database_t* g_database = NULL;
+static rbac_refcount_t* g_rbac_ref = NULL;  /* Reference counted RBAC */
+static rbac_system_t* g_rbac = NULL;       /* Regular RBAC for backwards compatibility */
+
+/* Access to JS engine */
+#ifndef DISABLE_JS
+extern js_engine_t* g_js_engine;
+#endif
+
+#ifndef TOOLS_BUILD
+api_context_t* g_api_ctx = NULL;
+metrics_registry_t* g_metrics_registry = NULL;
+#else
+extern api_context_t* g_api_ctx;
+extern metrics_registry_t* g_metrics_registry;
+#endif
+
+/* Runtime file paths */
+char pid_file_path[PATH_MAX] = DEFAULT_PID_FILE;
+char log_file_path[PATH_MAX] = DEFAULT_LOG_FILE;
+char db_file_path[PATH_MAX] = DEFAULT_DB_PATH;
+char rbac_file_path[PATH_MAX] = DEFAULT_RBAC_PATH;
+log_level_t log_level = DEFAULT_LOG_LEVEL;
+
+/* Determine the binary directory (resolves symlinks) */
+int get_binary_dir() {
+    char exe_path[PATH_MAX];
+    ssize_t len;
+
+    /* Get the path to the executable */
+    len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len == -1) {
+        fprintf(stderr, "Error: Could not determine binary path: %s\n", strerror(errno));
+        return 0;
+    }
+    exe_path[len] = '\0';
+
+    /* Get the directory of the executable */
+    strcpy(binary_dir, exe_path);
+    dirname(binary_dir);
+
+    return 1;
+}
+
+/* Convert a path relative to the binary directory to an absolute path */
+void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size) {
+    /* If rel_path is already absolute, just copy it */
+    if (rel_path[0] == '/') {
+        strncpy(abs_path, rel_path, abs_path_size - 1);
+        abs_path[abs_path_size - 1] = '\0';
+        return;
+    }
+
+    /* Get the project root directory regardless of where the binary is */
+    char project_root[PATH_MAX] = {0};
+
+    /* More reliable project root detection:
+     * 1. If binary is in /bin, get parent directory
+     * 2. If not, check common project directory structure
+     */
+    if (strstr(binary_dir, "/bin")) {
+        /* For binaries in /bin directory */
+        const char* bin_substr = strstr(binary_dir, "/bin");
+        size_t len = bin_substr - binary_dir;
+        strncpy(project_root, binary_dir, len);
+        project_root[len] = '\0';
+    }
+    else if (strstr(binary_dir, "build") || strstr(binary_dir, "dist")) {
+        /* For binaries in build or dist directories */
+        char* last_slash = strrchr(binary_dir, '/');
+        if (last_slash) {
+            size_t len = last_slash - binary_dir;
+            strncpy(project_root, binary_dir, len);
+            project_root[len] = '\0';
+        } else {
+            /* Fallback to binary_dir */
+            strncpy(project_root, binary_dir, PATH_MAX - 1);
+            project_root[PATH_MAX - 1] = '\0';
+        }
+    }
+    else {
+        /* Otherwise, assume binary_dir is the project root */
+        strncpy(project_root, binary_dir, PATH_MAX - 1);
+        project_root[PATH_MAX - 1] = '\0';
+    }
+
+    /* Join project root with rel_path */
+    snprintf(abs_path, abs_path_size, "%s/%s", project_root, rel_path);
+
+    /* Log path resolution at debug level */
+    if (g_logger) {
+        LOG_DEBUG("Path resolution: rel_path='%s', binary_dir='%s', project_root='%s', abs_path='%s'",
+                 rel_path, binary_dir, project_root, abs_path);
+    } else if (log_level >= LOG_LEVEL_DEBUG) {
+        /* Fall back to printf if logger not initialized yet */
+        printf("DEBUG: Path resolution: rel_path='%s', binary_dir='%s', project_root='%s', abs_path='%s'\n",
+              rel_path, binary_dir, project_root, abs_path);
+    }
+}
+
+/* Initialize all paths to be relative to the binary directory */
+void init_paths() {
+    /* Get binary directory first */
+    if (!get_binary_dir()) {
+        fprintf(stderr, "Warning: Could not determine binary directory, using relative paths\n");
+        return;
+    }
+
+    /* Convert all default paths to absolute paths */
+    make_path_absolute(DEFAULT_PID_FILE, pid_file_path, sizeof(pid_file_path));
+    make_path_absolute(DEFAULT_LOG_FILE, log_file_path, sizeof(log_file_path));
+    make_path_absolute(DEFAULT_DB_PATH, db_file_path, sizeof(db_file_path));
+    make_path_absolute(DEFAULT_RBAC_PATH, rbac_file_path, sizeof(rbac_file_path));
+
+    /* Log path information - use printf first since logger might not be initialized yet */
+    printf("Binary directory: %s\n", binary_dir);
+    printf("PID file path: %s\n", pid_file_path);
+    printf("Log file path: %s\n", log_file_path);
+    printf("Database path: %s\n", db_file_path);
+    printf("RBAC path: %s\n", rbac_file_path);
+
+    /* Also log to logger if it's initialized */
+    if (g_logger) {
+        LOG_INFO("Binary directory: %s", binary_dir);
+        LOG_INFO("PID file path: %s", pid_file_path);
+        LOG_INFO("Log file path: %s", log_file_path);
+        LOG_INFO("Database path: %s", db_file_path);
+        LOG_INFO("RBAC path: %s", rbac_file_path);
+    }
+}
+
+/* Safe string copy - uses strdup to copy safely */
+static char* safe_strdup(const char* str) {
+    if (!str) return NULL;
+    return strdup(str);
+}
+
+/* Ensure directory exists for a file path - native implementation */
+static int ensure_directory_exists(const char* path) {
+    char path_copy[PATH_MAX];
+    strncpy(path_copy, path, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+
+    char* dir = dirname(path_copy);
+    struct stat st;
+
+    /* Check if directory already exists */
+    if (stat(dir, &st) == 0 && S_ISDIR(st.st_mode)) {
+        /* Check write permissions */
+        if (access(dir, W_OK) == 0) {
+            return 1; /* Directory exists and is writable */
+        } else {
+            fprintf(stderr, "Warning: Directory %s exists but is not writable\n", dir);
+            return 0;
+        }
+    }
+
+    /* Need to create directory structure */
+    char tmp[PATH_MAX];
+    char *p = NULL;
+    size_t len;
+
+    snprintf(tmp, sizeof(tmp), "%s", dir);
+    len = strlen(tmp);
+
+    /* Remove trailing slash */
+    if (tmp[len - 1] == '/') {
+        tmp[len - 1] = 0;
+    }
+
+    /* Create directory recursively */
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = 0;
+            /* Create the directory if it doesn't exist */
+            if (stat(tmp, &st) != 0) {
+                if (mkdir(tmp, 0755) < 0) {
+                    fprintf(stderr, "Error: Failed to create directory %s: %s\n",
+                            tmp, strerror(errno));
+                    return 0;
+                }
+            } else if (!S_ISDIR(st.st_mode)) {
+                fprintf(stderr, "Error: %s exists but is not a directory\n", tmp);
+                return 0;
+            }
+            *p = '/';
+        }
+    }
+
+    /* Create the final directory */
+    if (stat(tmp, &st) != 0) {
+        if (mkdir(tmp, 0755) < 0) {
+            fprintf(stderr, "Error: Failed to create directory %s: %s\n",
+                    tmp, strerror(errno));
+            return 0;
+        }
+    } else if (!S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "Error: %s exists but is not a directory\n", tmp);
+        return 0;
+    }
+
+    /* Check if directory is writable */
+    if (access(tmp, W_OK) != 0) {
+        fprintf(stderr, "Warning: Created directory %s but it is not writable: %s\n",
+                tmp, strerror(errno));
+        return 0;
+    }
+
+    return 1;
+}
+
+/* Global file descriptor for PID file locking */
+static int pid_file_fd = -1;
+
+/* Function declarations for forward references */
+pid_t read_pid_file();
+int process_exists(pid_t pid);
+void remove_pid_file();
+
+/* Write PID to file with file locking to prevent race conditions */
+int write_pid_file() {
+    /* Ensure directory exists */
+    if (!ensure_directory_exists(pid_file_path)) {
+        if (g_logger) {
+            LOG_ERROR("Failed to create directory for PID file: %s", pid_file_path);
+        } else {
+            fprintf(stderr, "Error: Failed to create directory for PID file: %s\n", pid_file_path);
+        }
+        return 0;
+    }
+
+    /* Check for stale PID file first */
+    if (access(pid_file_path, F_OK) == 0) {
+        /* PID file exists, check if it's a valid process */
+        pid_t existing_pid = read_pid_file();
+
+        if (existing_pid > 0) {
+            /* Check if this process is running */
+            if (kill(existing_pid, 0) == 0) {
+                /* Process exists - additional verification */
+                if (process_exists(existing_pid)) {
+                    if (g_logger) {
+                        LOG_ERROR("Server is already running with PID %d", existing_pid);
+                    } else {
+                        fprintf(stderr, "Error: Server is already running with PID %d\n", existing_pid);
+                    }
+                    return 0;
+                }
+            }
+
+            /* Process doesn't exist, file is stale - remove it */
+            if (g_logger) {
+                LOG_WARNING("Removing stale PID file for nonexistent process %d", existing_pid);
+            } else {
+                fprintf(stderr, "Warning: Removing stale PID file for nonexistent process %d\n", existing_pid);
+            }
+
+            /* Try to remove stale PID file */
+            if (unlink(pid_file_path) != 0) {
+                if (g_logger) {
+                    LOG_WARNING("Failed to remove stale PID file: %s", strerror(errno));
+                } else {
+                    fprintf(stderr, "Warning: Failed to remove stale PID file: %s\n", strerror(errno));
+                }
+                /* We'll try to overwrite it instead */
+            }
+        }
+    }
+
+    /* Open PID file with exclusive locking */
+    pid_file_fd = open(pid_file_path, O_RDWR | O_CREAT, 0644);
+    if (pid_file_fd < 0) {
+        if (g_logger) {
+            LOG_ERROR("Could not open PID file %s: %s", pid_file_path, strerror(errno));
+        } else {
+            fprintf(stderr, "Error: Could not open PID file %s: %s\n",
+                    pid_file_path, strerror(errno));
+        }
+        return 0;
+    }
+
+    /* Try to get exclusive lock with a timeout */
+    struct flock fl;
+    fl.l_type = F_WRLCK;    /* Write lock */
+    fl.l_whence = SEEK_SET;  /* From beginning of file */
+    fl.l_start = 0;          /* Start at beginning */
+    fl.l_len = 0;            /* Lock whole file */
+
+    /* Try locking with a short timeout to handle possible stale locks */
+    int lock_attempts = 3;
+    while (lock_attempts > 0) {
+        if (fcntl(pid_file_fd, F_SETLK, &fl) != -1) {
+            /* Successfully acquired lock */
+            break;
+        }
+
+        /* Check specific error conditions */
+        if (errno != EAGAIN && errno != EACCES) {
+            /* Unexpected error */
+            if (g_logger) {
+                LOG_ERROR("Failed to lock PID file: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Error: Failed to lock PID file: %s\n", strerror(errno));
+            }
+            close(pid_file_fd);
+            pid_file_fd = -1;
+            return 0;
+        }
+
+        /* File is locked by another process - try to verify if it's actually running */
+        pid_t existing_pid = read_pid_file();
+        if (existing_pid > 0 && !process_exists(existing_pid)) {
+            /* Process doesn't exist, file is stale - try force unlock */
+            if (g_logger) {
+                LOG_WARNING("Found stale lock from nonexistent process %d, attempting to break lock", existing_pid);
+            } else {
+                fprintf(stderr, "Warning: Found stale lock from nonexistent process %d, attempting to break lock\n", existing_pid);
+            }
+
+            /* Close and reopen file to break stale lock */
+            close(pid_file_fd);
+
+            /* Force removal of stale PID file */
+            if (unlink(pid_file_path) != 0) {
+                if (g_logger) {
+                    LOG_WARNING("Failed to remove stale PID file: %s", strerror(errno));
+                } else {
+                    fprintf(stderr, "Warning: Failed to remove stale PID file: %s\n", strerror(errno));
+                }
+            }
+
+            /* Reopen pid file */
+            pid_file_fd = open(pid_file_path, O_RDWR | O_CREAT, 0644);
+            if (pid_file_fd < 0) {
+                if (g_logger) {
+                    LOG_ERROR("Could not reopen PID file after lock break attempt: %s", strerror(errno));
+                } else {
+                    fprintf(stderr, "Error: Could not reopen PID file after lock break attempt: %s\n", strerror(errno));
+                }
+                return 0;
+            }
+        } else {
+            /* Another process has valid lock */
+            if (g_logger) {
+                LOG_ERROR("PID file is locked by another process (PID: %d)", existing_pid);
+            } else {
+                fprintf(stderr, "Error: PID file is locked by another process (PID: %d)\n", existing_pid);
+            }
+            close(pid_file_fd);
+            pid_file_fd = -1;
+            return 0;
+        }
+
+        lock_attempts--;
+
+        if (lock_attempts > 0) {
+            /* Small delay before retry */
+            usleep(100000); /* 100ms */
+        }
+    }
+
+    if (lock_attempts <= 0) {
+        /* Failed to acquire lock after multiple attempts */
+        if (g_logger) {
+            LOG_ERROR("Failed to acquire lock on PID file after multiple attempts");
+        } else {
+            fprintf(stderr, "Error: Failed to acquire lock on PID file after multiple attempts\n");
+        }
+        close(pid_file_fd);
+        pid_file_fd = -1;
+        return 0;
+    }
+
+    /* We have the lock - truncate the file and write our PID */
+    if (ftruncate(pid_file_fd, 0) != 0) {
+        if (g_logger) {
+            LOG_ERROR("Failed to truncate PID file: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Error: Failed to truncate PID file: %s\n", strerror(errno));
+        }
+        close(pid_file_fd);
+        pid_file_fd = -1;
+        return 0;
+    }
+
+    /* Write PID to file */
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "%d\n", getpid());
+    if (write(pid_file_fd, buf, len) != len) {
+        if (g_logger) {
+            LOG_ERROR("Failed to write to PID file: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Error: Failed to write to PID file: %s\n", strerror(errno));
+        }
+        close(pid_file_fd);
+        pid_file_fd = -1;
+        return 0;
+    }
+
+    /* Flush changes to disk to ensure PID is written */
+    fsync(pid_file_fd);
+
+    /* We keep the file descriptor open to maintain the lock */
+    if (g_logger) {
+        LOG_INFO("PID file created and locked successfully at %s (PID: %d)",
+                pid_file_path, getpid());
+    }
+
+    /* Register an atexit handler specifically for PID file */
+    atexit(remove_pid_file);
+
+    return 1;
+}
+
+/* Read PID from file */
+pid_t read_pid_file() {
+    FILE* fp = fopen(pid_file_path, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    pid_t pid;
+    if (fscanf(fp, "%d", &pid) != 1) {
+        fclose(fp);
+        return -1;
+    }
+
+    fclose(fp);
+    return pid;
+}
+
+/* Check if process with given PID exists and is our server */
+int process_exists(pid_t pid) {
+    /* Check if process exists */
+    if (kill(pid, 0) != 0 && errno == ESRCH) {
+        return 0; /* Process doesn't exist */
+    }
+
+    /* Process exists, now verify it's our server process */
+    char proc_path[PATH_MAX];
+    char exe_path[PATH_MAX];
+    ssize_t len;
+
+    /* Read symlink /proc/[pid]/exe to get process executable path */
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d/exe", pid);
+    len = readlink(proc_path, exe_path, sizeof(exe_path) - 1);
+
+    if (len != -1) {
+        exe_path[len] = '\0'; /* Add null terminator */
+
+        /* Get our own executable path for comparison */
+        char self_path[PATH_MAX];
+        readlink("/proc/self/exe", self_path, sizeof(self_path) - 1);
+        self_path[len] = '\0';
+
+        /* If it's the same executable, it's probably our server */
+        if (strstr(exe_path, "jsondb_server") != NULL) {
+            return 1;
+        }
+
+        /* Check command line arguments */
+        char cmdline_path[PATH_MAX];
+        FILE* fp;
+        char cmdline[PATH_MAX];
+
+        snprintf(cmdline_path, sizeof(cmdline_path), "/proc/%d/cmdline", pid);
+        fp = fopen(cmdline_path, "r");
+
+        if (fp) {
+            size_t read_size = fread(cmdline, 1, sizeof(cmdline) - 1, fp);
+            cmdline[read_size] = '\0';
+            fclose(fp);
+
+            /* Replace null chars with spaces for easier processing */
+            for (size_t i = 0; i < read_size; i++) {
+                if (cmdline[i] == '\0') cmdline[i] = ' ';
+            }
+
+            /* If cmdline contains "jsondb_server", it's probably our process */
+            if (strstr(cmdline, "jsondb_server") != NULL) {
+                return 1;
+            }
+        }
+    }
+
+    /* Process exists but doesn't seem to be our server */
+    return 0;
+}
+
+/* Find any running server process using direct process checks */
+pid_t find_running_server() {
+    pid_t self_pid = getpid();
+    pid_t parent_pid = getppid();
+
+    /* Just use ps command with very specific filtering to find actual server processes */
+    char ps_cmd[512]; /* Increased buffer size to be safe */
+    snprintf(ps_cmd, sizeof(ps_cmd),
+             "ps ax -o pid,comm | grep jsondb_server | grep -v grep | grep -v %d | awk '{print $1}'",
+             self_pid);
+
+    FILE* fp = popen(ps_cmd, "r");
+    if (!fp) {
+        /* Command failed, no processes found */
+        return -1;
+    }
+
+    /* Read the output and process PID */
+    char line[32] = {0};
+    pid_t found_pid = -1;
+
+    if (fgets(line, sizeof(line), fp) != NULL) {
+        /* Convert to PID */
+        found_pid = (pid_t)strtol(line, NULL, 10);
+
+        /* Verify PID is valid and not our own process or parent */
+        if (found_pid <= 0 || found_pid == self_pid || found_pid == parent_pid) {
+            found_pid = -1;
+        } else {
+            /* Double-check the process exists */
+            char check_cmd[256]; /* Increased buffer size to be safe */
+            snprintf(check_cmd, sizeof(check_cmd), "ps -p %d > /dev/null 2>&1", found_pid);
+            if (system(check_cmd) != 0) {
+                /* Process doesn't exist */
+                found_pid = -1;
+            }
+        }
+    }
+
+    pclose(fp);
+
+    /* Use a more direct approach as fallback if the first method failed */
+    if (found_pid <= 0) {
+        /* Look for binary specific processes to reduce confusion with awk/grep */
+        char bin_cmd[512]; /* Increased buffer size to be safe */
+        snprintf(bin_cmd, sizeof(bin_cmd),
+                 "ps ax -o pid,args | grep '/home/claude-3/project/bin/jsondb_server' | grep -v grep | awk '{print $1}'");
+
+        fp = popen(bin_cmd, "r");
+        if (fp) {
+            if (fgets(line, sizeof(line), fp) != NULL) {
+                found_pid = (pid_t)strtol(line, NULL, 10);
+
+                /* Skip own PID */
+                if (found_pid == self_pid || found_pid == parent_pid) {
+                    found_pid = -1;
+                }
+            }
+            pclose(fp);
+        }
+    }
+
+    return found_pid;
+}
+
+/* Remove PID file and release lock */
+void remove_pid_file() {
+    pid_t self_pid = getpid();
+    pid_t file_pid = read_pid_file();
+
+    /* Only remove the PID file if it contains our own PID */
+    if (file_pid > 0 && file_pid != self_pid) {
+        if (g_logger) {
+            LOG_WARNING("PID file contains different PID (%d vs our %d) - not removing", file_pid, self_pid);
+        } else {
+            fprintf(stderr, "Warning: PID file contains different PID (%d vs our %d) - not removing\n", file_pid, self_pid);
+        }
+
+        /* Still close our file descriptor if open */
+        if (pid_file_fd >= 0) {
+            close(pid_file_fd);
+            pid_file_fd = -1;
+        }
+
+        return;
+    }
+
+    /* Release the lock and close the file descriptor */
+    if (pid_file_fd >= 0) {
+        /* Unlock the file */
+        struct flock fl;
+        fl.l_type = F_UNLCK;    /* Unlock */
+        fl.l_whence = SEEK_SET;  /* From beginning of file */
+        fl.l_start = 0;          /* Start at beginning */
+        fl.l_len = 0;            /* Unlock whole file */
+
+        if (fcntl(pid_file_fd, F_SETLK, &fl) == -1) {
+            if (g_logger) {
+                LOG_WARNING("Failed to unlock PID file: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Warning: Failed to unlock PID file: %s\n", strerror(errno));
+            }
+        } else if (g_logger) {
+            LOG_INFO("Released lock on PID file: %s", pid_file_path);
+        }
+
+        close(pid_file_fd);
+        pid_file_fd = -1;
+    }
+
+    /* Verify that the PID file exists before trying to remove it */
+    if (access(pid_file_path, F_OK) != 0) {
+        if (g_logger) {
+            LOG_INFO("PID file %s already removed", pid_file_path);
+        }
+        return;
+    }
+
+    /* Verify the PID in the file again before removing it */
+    file_pid = read_pid_file();
+    if (file_pid > 0 && file_pid != self_pid) {
+        if (g_logger) {
+            LOG_WARNING("PID file now contains different PID (%d) - not removing", file_pid);
+        } else {
+            fprintf(stderr, "Warning: PID file now contains different PID (%d) - not removing\n", file_pid);
+        }
+        return;
+    }
+
+    /* Remove the PID file */
+    int max_attempts = 3;
+    int attempt = 0;
+
+    while (attempt++ < max_attempts) {
+        if (unlink(pid_file_path) == 0) {
+            if (g_logger) {
+                LOG_INFO("PID file removed successfully: %s", pid_file_path);
+            }
+            return;
+        }
+
+        /* Check specific error conditions */
+        if (errno == ENOENT) {
+            /* File doesn't exist anymore, which is fine */
+            if (g_logger) {
+                LOG_INFO("PID file %s no longer exists", pid_file_path);
+            }
+            return;
+        }
+
+        if (g_logger) {
+            LOG_WARNING("Failed to remove PID file %s: %s (attempt %d/%d)",
+                       pid_file_path, strerror(errno), attempt, max_attempts);
+        } else {
+            fprintf(stderr, "Warning: Failed to remove PID file %s: %s (attempt %d/%d)\n",
+                    pid_file_path, strerror(errno), attempt, max_attempts);
+        }
+
+        if (attempt < max_attempts) {
+            /* Brief delay before retry */
+            usleep(100000); /* 100ms */
+        }
+    }
+
+    if (g_logger) {
+        LOG_ERROR("Failed to remove PID file after %d attempts: %s", max_attempts, strerror(errno));
+    } else {
+        fprintf(stderr, "Error: Failed to remove PID file after %d attempts: %s\n",
+                max_attempts, strerror(errno));
+    }
+}
+
+/* Improved daemonization process with proper logging */
+int daemonize() {
+    /* Fork to the background first, before initializing logger */
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        /* Fork failed */
+        fprintf(stderr, "Error: Fork failed: %s\n", strerror(errno));
+        return 0;
+    }
+
+    if (pid > 0) {
+        /* Parent process - display daemon PID and exit */
+        printf("Server started in daemon mode with PID: %d\n", pid);
+        printf("PID file location: %s\n", pid_file_path);
+        printf("Log file location: %s\n", log_file_path);
+
+        /* Wait a moment to ensure child process has started */
+        usleep(100000); /* 100ms */
+
+        /* Clean exit without running the atexit handlers of the child process */
+        _exit(0);
+    }
+
+    /* Child process continues as daemon */
+
+    /* Immediately ignore SIGHUP to ensure proper terminal detachment */
+    signal(SIGHUP, SIG_IGN);
+
+    /* Initialize the logger in the child process only with specific configuration */
+    if (!logger_init(log_file_path, log_level)) {
+        fprintf(stderr, "Error: Failed to initialize logger at %s\n", log_file_path);
+        return 0;
+    }
+
+    /* Configure logger to avoid duplicated output since stdout/stderr redirect to log */
+    if (g_logger) {
+        /* Disable including timestamp if the logger already adds timestamps */
+        g_logger->include_timestamp = 1;
+
+        /* Keep including level information */
+        g_logger->include_level = 1;
+
+        /* Keep including source file information */
+        g_logger->include_source = 1;
+    }
+
+    LOG_INFO("Starting daemon with PID file: %s", pid_file_path);
+    LOG_INFO("Daemon process running with PID: %d", getpid());
+
+    /* Create new session */
+    if (setsid() < 0) {
+        LOG_ERROR("Failed to create new session: %s", strerror(errno));
+        return 0;
+    }
+
+    LOG_DEBUG("Created new session with SID: %d", getsid(0));
+
+    /* Change working directory to project root instead of binary directory
+       to maintain relative path consistency with user-provided paths */
+    char project_root[PATH_MAX] = {0};
+    const char* bin_substr = strstr(binary_dir, "/bin");
+
+    if (bin_substr) {
+        /* Get the project root by truncating at "/bin" */
+        size_t len = bin_substr - binary_dir;
+        strncpy(project_root, binary_dir, len);
+        project_root[len] = '\0';
+
+        /* Change to project root */
+        if (chdir(project_root) < 0) {
+            LOG_WARNING("Could not change working directory to project root %s: %s",
+                       project_root, strerror(errno));
+            /* Fall back to binary directory */
+            if (chdir(binary_dir) < 0) {
+                LOG_WARNING("Could not change working directory to binary location %s: %s",
+                           binary_dir, strerror(errno));
+                /* Not critical, can continue */
+            } else {
+                LOG_INFO("Changed working directory to binary location: %s", binary_dir);
+            }
+        } else {
+            LOG_INFO("Changed working directory to project root: %s", project_root);
+        }
+    } else {
+        /* No bin subdirectory found, use binary directory as before */
+        if (chdir(binary_dir) < 0) {
+            LOG_WARNING("Could not change working directory to %s: %s",
+                       binary_dir, strerror(errno));
+            /* Not critical, can continue */
+        } else {
+            LOG_INFO("Changed working directory to binary location: %s", binary_dir);
+        }
+    }
+
+    /* Get logger file descriptor */
+    int log_fd = fileno(g_logger->log_file);
+
+    /* Close only specific file descriptors (stdin, stdout, stderr)
+       to avoid closing important sockets that may be in use */
+    if (STDIN_FILENO != log_fd) close(STDIN_FILENO);
+    if (STDOUT_FILENO != log_fd) close(STDOUT_FILENO);
+    if (STDERR_FILENO != log_fd) close(STDERR_FILENO);
+
+    /* Open /dev/null for standard input */
+    int null_fd = open("/dev/null", O_RDWR);
+    if (null_fd >= 0) {
+        /* Only redirect stdin to /dev/null */
+        if (null_fd != STDIN_FILENO) {
+            dup2(null_fd, STDIN_FILENO);
+            close(null_fd);
+        }
+    } else {
+        LOG_WARNING("Failed to open /dev/null: %s", strerror(errno));
+    }
+
+    /* Open log file for stdout and stderr */
+    if (log_fd >= 0) {
+        /* Redirect stdout and stderr to log file */
+        dup2(log_fd, STDOUT_FILENO);
+        dup2(log_fd, STDERR_FILENO);
+        LOG_INFO("Standard output and error redirected to log file");
+    }
+
+    /* Reset file mode creation mask */
+    umask(0);
+
+    /* Write PID file */
+    if (!write_pid_file()) {
+        LOG_ERROR("Failed to write PID file - daemon will run but cannot be stopped via PID file");
+        /* Continue anyway, as the daemon can still run */
+    }
+
+    LOG_INFO("Daemon initialization complete");
+    return 1;
+}
+
+/* Signal handler for graceful shutdown */
+void handle_signal(int sig) {
+    if (g_logger) {
+        LOG_INFO("Received signal %d, shutting down...", sig);
+    } else {
+        printf("\nReceived signal %d, shutting down...\n", sig);
+    }
+
+    if (g_server_config) {
+        server_stop(g_server_config);
+    }
+
+    /* Remove PID file on shutdown */
+    remove_pid_file();
+
+    /* Close logger if it's open */
+    if (g_logger) {
+        logger_close();
+    }
+
+    exit(0);
+}
+
+/* Setup signal handlers */
+void setup_signal_handlers() {
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
+    signal(SIGHUP, SIG_IGN);  /* Ignore hangup signal */
+}
+
+/* Cleanup resources safely */
+void cleanup() {
+    if (g_logger) {
+        LOG_INFO("Performing cleanup before shutdown");
+    }
+
+    /* Save data first if needed */
+    if (g_database) {
+        if (g_logger) {
+            LOG_INFO("Saving database state");
+        }
+        db_save(g_database);
+    }
+
+    if (g_rbac_ref) {
+        if (g_logger) {
+            LOG_INFO("Saving RBAC configuration");
+        }
+        rbac_refcount_save(g_rbac_ref, rbac_file_path);
+    }
+
+    /* Clean up in a safe order to avoid double-free issues */
+
+    /* 1. First clean up JS engine which might use DB and RBAC */
+#ifndef DISABLE_JS
+    if (g_js_engine) {
+        js_engine_t* engine = g_js_engine;
+        g_js_engine = NULL;  /* Clear global reference */
+        js_engine_free(engine);
+    }
+#endif
+
+    /* 2. Free API context which might use DB and RBAC */
+    if (g_api_ctx) {
+        api_context_t* api = g_api_ctx;
+        g_api_ctx = NULL;  /* Clear global reference */
+        api_free_context(api);
+    }
+
+    /* 3. Free metrics */
+    if (g_metrics_registry) {
+        metrics_registry_t* metrics = g_metrics_registry;
+        g_metrics_registry = NULL;  /* Clear global reference */
+        metrics_registry_free(metrics);
+    }
+
+    /* 4. Free database */
+    if (g_database) {
+        database_t* db = g_database;
+        g_database = NULL;  /* Clear global reference */
+        db_close(db);
+    }
+
+    /* 5. Free server config */
+    if (g_server_config) {
+        server_config_t* server = g_server_config;
+        g_server_config = NULL;  /* Clear global reference */
+
+        /* Stop the server if it's still running */
+        server_stop(server);
+
+        /* Properly free CORS configuration */
+        free_cors_config(&server->cors);
+
+        free(server);
+    }
+
+    /* 6. First free the regular RBAC reference if it exists */
+    if (g_rbac) {
+        free(g_rbac); /* Just free the struct, not its contents (owned by g_rbac_ref) */
+        g_rbac = NULL;
+    }
+
+    /* 7. Finally free RBAC system with reference counting */
+    if (g_rbac_ref) {
+        rbac_refcount_t* rbac = g_rbac_ref;
+        g_rbac_ref = NULL;  /* Clear global reference */
+        rbac_refcount_free(rbac);
+    }
+
+    /* 8. Remove PID file */
+    remove_pid_file();
+
+    /* 9. Close the logger */
+    if (g_logger) {
+        logger_close();
+    }
+}
+
+int main(int argc, char** argv) {
+    /* Print banner */
+    printf("JSON Database Server\n");
+    printf("===================\n\n");
+
+    /* Initialize paths relative to binary */
+    init_paths();
+
+    /* Set up JavaScript path cache file location and register save on exit */
+    char js_cache_path[PATH_MAX];
+    make_path_absolute("var/data/jsondb/js_path_cache.json", js_cache_path, sizeof(js_cache_path));
+    js_file_set_cache_path(js_cache_path);
+    atexit(js_file_save_cache);
+
+    /* Initialize the server config with defaults */
+    server_config_t config = {0};
+    g_server_config = &config;
+    config.port = DEFAULT_PORT;
+    config.max_connections = MAX_CONNECTIONS;
+    config.host = NULL;  /* Will be set to default later if not provided */
+    config.foreground_mode = 0;  /* Default to daemon mode */
+    config.log_level = DEFAULT_LOG_LEVEL;
+    config.js_enabled = 1;  /* Enable JavaScript by default */
+
+    /* Handle command line arguments */
+    char* js_file = NULL;
+    int show_help = 0;
+    int stop_server = 0;
+    int check_status = 0;
+    int just_version = 0;
+    const char* config_file = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-js") == 0 && i + 1 < argc) {
+            js_file = argv[i + 1];
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-config") == 0 && i + 1 < argc) {
+            config_file = argv[i + 1];
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-port") == 0 && i + 1 < argc) {
+            config.port = atoi(argv[i + 1]);
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-host") == 0 && i + 1 < argc) {
+            config.host = argv[i + 1];
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-pid") == 0 && i + 1 < argc) {
+            const char* custom_pid_file = argv[i + 1];
+            /* Make the custom path absolute (relative to binary) if it's not already */
+            make_path_absolute(custom_pid_file, pid_file_path, sizeof(pid_file_path));
+            config.pid_file = pid_file_path;
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-log") == 0 && i + 1 < argc) {
+            const char* custom_log_file = argv[i + 1];
+            /* Make the custom path absolute (relative to binary) if it's not already */
+            make_path_absolute(custom_log_file, log_file_path, sizeof(log_file_path));
+            config.log_file = log_file_path;
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-log-level") == 0 && i + 1 < argc) {
+            const char* log_level_str = argv[i + 1];
+            /* Convert string to log level */
+            if (strcasecmp(log_level_str, "none") == 0) {
+                config.log_level = LOG_LEVEL_NONE;
+            } else if (strcasecmp(log_level_str, "error") == 0) {
+                config.log_level = LOG_LEVEL_ERROR;
+            } else if (strcasecmp(log_level_str, "warning") == 0) {
+                config.log_level = LOG_LEVEL_WARNING;
+            } else if (strcasecmp(log_level_str, "info") == 0) {
+                config.log_level = LOG_LEVEL_INFO;
+            } else if (strcasecmp(log_level_str, "debug") == 0) {
+                config.log_level = LOG_LEVEL_DEBUG;
+            } else if (strcasecmp(log_level_str, "trace") == 0) {
+                config.log_level = LOG_LEVEL_TRACE;
+            } else {
+                printf("Warning: Unknown log level '%s', using 'info'\n", log_level_str);
+                config.log_level = LOG_LEVEL_INFO;
+            }
+            i++;  /* Skip the next argument */
+        }
+        else if (strcmp(argv[i], "-stop") == 0) {
+            stop_server = 1;
+        }
+        else if (strcmp(argv[i], "-status") == 0) {
+            check_status = 1;
+        }
+        else if (strcmp(argv[i], "-start") == 0) {
+            /* Default behavior is to start server, so this option is just for explicitness */
+        }
+        else if (strcmp(argv[i], "-daemon") == 0 || strcmp(argv[i], "-d") == 0) {
+            /* Default mode, just ensure foreground_mode is off */
+            config.foreground_mode = 0;
+        }
+        else if (strcmp(argv[i], "-foreground") == 0 || strcmp(argv[i], "-f") == 0) {
+            /* Explicit foreground mode */
+            config.foreground_mode = 1;
+        }
+        else if (strcmp(argv[i], "-help") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            show_help = 1;
+        }
+        else if (strcmp(argv[i], "-version") == 0 || strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
+            just_version = 1;
+        }
+    }
+
+    /* Show version information */
+    if (just_version) {
+        printf("JSON Database Server v1.0.0\n");
+        /* No cleanup needed here since we haven't allocated resources yet */
+        return 0;
+    }
+
+    /* Show help information */
+    if (show_help) {
+        printf("Usage: jsondb_server [options]\n\n");
+        printf("Options:\n");
+        printf("  -port <number>     Set the server port (default: %d)\n", DEFAULT_PORT);
+        printf("  -host <address>    Set the host name or address to advertise (default: claude-code.uk.home.arpa)\n");
+        printf("  -js <file>         Execute a JavaScript file and exit\n");
+        printf("  -start             Start the server (same as default behavior)\n");
+        printf("  -stop              Stop the running server instance\n");
+        printf("  -status            Check the current status of the server\n");
+        printf("  -foreground, -f    Run server in foreground mode for debugging (not recommended)\n");
+        printf("  -daemon, -d        Run server as a daemon (this is the default mode)\n");
+        printf("  -pid <file>        Use custom PID file location (default: %s)\n", DEFAULT_PID_FILE);
+        printf("  -log <file>        Use custom log file location (default: %s)\n", DEFAULT_LOG_FILE);
+        printf("  -log-level <level> Set the log level (none, error, warning, info, debug, trace)\n");
+        printf("  -config <file>     Load settings from configuration file (JSON or key=value)\n");
+        printf("  -help, --help, -h  Display this help message\n");
+        printf("  -version, -v       Display version information\n\n");
+        printf("Examples:\n");
+        printf("  jsondb_server                      Start the server as daemon on default port (5000)\n");
+        printf("  jsondb_server -port 8080           Start the server as daemon on port 8080\n");
+        printf("  jsondb_server -host localhost      Start the server as daemon with hostname 'localhost'\n");
+        printf("  jsondb_server -foreground          Start the server in foreground mode (for debugging)\n");
+        printf("  jsondb_server -start               Same as no arguments (daemon mode)\n");
+        printf("  jsondb_server -stop                Stop the running server\n");
+        printf("  jsondb_server -status              Check if server is running\n");
+        printf("  jsondb_server -js script.js        Run JavaScript file and exit\n");
+        printf("  jsondb_server -pid /tmp/jsondb.pid Use custom PID file\n");
+        printf("  jsondb_server -config config.json  Load settings from config.json\n\n");
+        printf("The server binds to all addresses but advertises as claude-code.uk.home.arpa:%d by default.\n", DEFAULT_PORT);
+        printf("All API operations can be performed via HTTP requests (curl, etc.)\n");
+        printf("The admin web interface is accessible at http://<host>:%d/\n", DEFAULT_PORT);
+        return 0;
+    }
+
+    /* Load config file if provided */
+    if (config_file) {
+        char abs_config_path[PATH_MAX] = {0};
+        make_path_absolute(config_file, abs_config_path, sizeof(abs_config_path));
+
+        printf("Loading configuration from: %s\n", abs_config_path);
+
+        /* Store original config file path */
+        config.config_file = strdup(abs_config_path);
+
+        /* Load the configuration */
+        if (!config_load(abs_config_path, &config)) {
+            fprintf(stderr, "Warning: Failed to load configuration file: %s\n", abs_config_path);
+            fprintf(stderr, "Continuing with command line options and defaults\n");
+        }
+    }
+
+    /* Set defaults for values not specified in config or command line */
+    if (!config.host) {
+        config.host = strdup("claude-code.uk.home.arpa");
+    }
+
+    /* Set default file paths if not specified */
+    if (!config.db_path) {
+        config.db_path = strdup(db_file_path);
+    }
+
+    if (!config.rbac_path) {
+        config.rbac_path = strdup(rbac_file_path);
+    }
+
+    if (!config.pid_file) {
+        config.pid_file = strdup(pid_file_path);
+    }
+
+    if (!config.log_file) {
+        config.log_file = strdup(log_file_path);
+    }
+
+    /* Handle status command */
+    if (check_status) {
+        printf("Checking JSON Database Server status...\n");
+
+        /* Check PID file first */
+        pid_t pid = read_pid_file();
+        if (pid > 0) {
+            printf("PID file exists at: %s (PID: %d)\n", pid_file_path, pid);
+
+            /* Check if process with this PID exists */
+            if (process_exists(pid)) {
+                printf("Server is running (PID: %d)\n", pid);
+
+                /* Get additional process information */
+                char cmdline_path[PATH_MAX];
+                FILE* fp;
+                char cmdline[PATH_MAX] = {0};
+
+                snprintf(cmdline_path, sizeof(cmdline_path), "/proc/%d/cmdline", pid);
+                fp = fopen(cmdline_path, "r");
+
+                if (fp) {
+                    size_t read_size = fread(cmdline, 1, sizeof(cmdline) - 1, fp);
+                    cmdline[read_size] = '\0';
+                    fclose(fp);
+
+                    /* Replace null chars with spaces for display */
+                    for (size_t i = 0; i < read_size; i++) {
+                        if (cmdline[i] == '\0') cmdline[i] = ' ';
+                    }
+
+                    printf("Command line: %s\n", cmdline);
+                }
+
+                /* Get memory usage */
+                char statm_path[PATH_MAX];
+                snprintf(statm_path, sizeof(statm_path), "/proc/%d/statm", pid);
+                fp = fopen(statm_path, "r");
+
+                if (fp) {
+                    long size, resident, shared;
+                    if (fscanf(fp, "%ld %ld %ld", &size, &resident, &shared) == 3) {
+                        /* Convert to human-readable KB/MB */
+                        printf("Memory usage: %ld KB total, %ld KB resident\n",
+                               size * 4, resident * 4); /* Assuming 4KB page size */
+                    }
+                    fclose(fp);
+                }
+
+                /* Check for config file */
+                char conf_path[PATH_MAX];
+                snprintf(conf_path, sizeof(conf_path), "/proc/%d/cwd/config.json", pid);
+                if (access(conf_path, F_OK) == 0) {
+                    printf("Config file found: %s\n", conf_path);
+                } else {
+                    snprintf(conf_path, sizeof(conf_path), "/proc/%d/cwd/jsondb.conf", pid);
+                    if (access(conf_path, F_OK) == 0) {
+                        printf("Config file found: %s\n", conf_path);
+                    }
+                }
+
+                /* Check if log file exists and show last few lines */
+                if (access(log_file_path, R_OK) == 0) {
+                    printf("Log file: %s\n", log_file_path);
+                    printf("Last 5 log entries:\n");
+
+                    /* Use popen to get last 5 lines of log */
+                    char cmd[PATH_MAX * 2]; /* Increase buffer size to ensure no truncation */
+                    snprintf(cmd, sizeof(cmd), "tail -n 5 '%s'", log_file_path);
+                    fp = popen(cmd, "r");
+
+                    if (fp) {
+                        char line[256];
+                        while (fgets(line, sizeof(line), fp) != NULL) {
+                            printf("  %s", line);
+                        }
+                        pclose(fp);
+                    }
+                } else {
+                    printf("Log file not accessible: %s\n", log_file_path);
+                }
+
+                return 0;
+            } else {
+                printf("PID file exists but process %d is not running\n", pid);
+                printf("This is a stale PID file that should be removed\n");
+            }
+        } else {
+            printf("No PID file found at: %s\n", pid_file_path);
+        }
+
+        /* Look for server processes regardless of PID file */
+        pid_t found_pid = find_running_server();
+        if (found_pid > 0) {
+            printf("Server is running with PID %d (detected without PID file)\n", found_pid);
+            return 0;
+        } else {
+            printf("No running server detected\n");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /* Handle stop command */
+    if (stop_server) {
+        printf("Attempting to stop running server using PID file: %s\n", pid_file_path);
+
+        /* Read PID from file */
+        pid_t pid = read_pid_file();
+        if (pid <= 0) {
+            printf("No PID file found or invalid PID. Trying to find process by name...\n");
+
+            /* Try to find running server by scanning processes */
+            pid_t found_pid = find_running_server();
+            if (found_pid > 0) {
+                printf("Found server process with PID %d\n", found_pid);
+                pid = found_pid;
+            } else {
+                /* Fall back to pkill if no process found */
+                printf("No server process found by scanning. Trying pkill...\n");
+                int result = system("pkill -f jsondb_server");
+
+                if (result == 0) {
+                    printf("Server stopped successfully using pkill.\n");
+                    return 0;
+                } else {
+                    printf("No running server found or failed to stop server.\n");
+                    return 1;
+                }
+            }
+        }
+
+        /* Check if process exists */
+        if (!process_exists(pid)) {
+            printf("PID %d does not exist. Removing stale PID file.\n", pid);
+            remove_pid_file();
+            return 1;
+        }
+
+        /* Send SIGTERM to the process */
+        printf("Sending SIGTERM to process %d...\n", pid);
+        if (kill(pid, SIGTERM) != 0) {
+            printf("Failed to send SIGTERM to process %d: %s\n", pid, strerror(errno));
+
+            /* Try again with SIGKILL if SIGTERM failed */
+            printf("Trying SIGKILL...\n");
+            if (kill(pid, SIGKILL) != 0) {
+                printf("Failed to send SIGKILL to process %d: %s\n", pid, strerror(errno));
+                return 1;
+            }
+        }
+
+        /* Give the process a moment to terminate */
+        printf("Waiting for process to terminate...\n");
+        for (int i = 0; i < 5; i++) {
+            sleep(1);
+            if (!process_exists(pid)) {
+                printf("Server stopped successfully.\n");
+
+                /* Remove PID file */
+                remove_pid_file();
+                return 0;
+            }
+        }
+
+        printf("Process %d still running after 5 seconds. You may need to kill it manually.\n", pid);
+        return 1;
+    }
+    
+    /* Setup signal handlers */
+    setup_signal_handlers();
+    
+    /* Register cleanup handler */
+    atexit(cleanup);
+
+    /* Initialize database */
+    g_database = db_init(config.db_path);
+    if (!g_database) {
+        fprintf(stderr, "Failed to initialize database\n");
+        return 1;
+    }
+
+    /* Initialize RBAC system with reference counting */
+    if (access(config.rbac_path, F_OK) != -1) {
+        /* Load existing RBAC data */
+        g_rbac_ref = rbac_refcount_load(config.rbac_path);
+    } else {
+        /* Create new RBAC system */
+        g_rbac_ref = rbac_refcount_init();
+    }
+
+    if (!g_rbac_ref) {
+        fprintf(stderr, "Failed to initialize RBAC system\n");
+        return 1;
+    }
+
+    /* Create a regular RBAC reference for backward compatibility */
+    g_rbac = rbac_from_refcount(g_rbac_ref);
+
+    /* Initialize metrics registry */
+    g_metrics_registry = metrics_registry_create();
+    if (!g_metrics_registry) {
+        fprintf(stderr, "Failed to initialize metrics registry\n");
+        return 1;
+    }
+
+    /* Create common metrics */
+    metrics_create_counter(g_metrics_registry, METRIC_SERVER_REQUESTS, "Total number of server requests");
+    metrics_create_timer(g_metrics_registry, METRIC_SERVER_REQUEST_DURATION, "Request duration in seconds");
+    metrics_create_counter(g_metrics_registry, METRIC_DB_OPERATIONS, "Total number of database operations");
+    metrics_create_timer(g_metrics_registry, METRIC_DB_OPERATION_DURATION, "Database operation duration in seconds");
+    metrics_create_gauge(g_metrics_registry, METRIC_ACTIVE_CONNECTIONS, "Number of active connections");
+    metrics_create_counter(g_metrics_registry, METRIC_API_ERRORS, "Total number of API errors");
+
+    /* Create API context with JWT secret from config or default */
+    const char* jwt_secret = config.jwt_secret ? config.jwt_secret : DEFAULT_JWT_SECRET;
+    g_api_ctx = api_create_context(g_database, g_rbac, jwt_secret);
+    if (!g_api_ctx) {
+        fprintf(stderr, "Failed to create API context\n");
+        return 1;
+    }
+    
+    /* If running in script mode, initialize JavaScript now if enabled */
+    if (js_file) {
+        /* Check if JavaScript is enabled in config */
+        if (!config.js_enabled) {
+            fprintf(stderr, "Error: JavaScript is disabled in configuration\n");
+            return 1;
+        }
+
+        /* Initialize JavaScript engine for script execution */
+#ifndef DISABLE_JS
+        printf("Initializing JavaScript engine for script execution...\n");
+        if (g_logger) {
+            LOG_INFO("Initializing JavaScript engine for script execution...");
+        }
+
+        js_api_init(g_database);
+
+        printf("JavaScript engine initialized\n");
+#else
+        printf("JavaScript support is disabled\n");
+        if (g_logger) {
+            LOG_INFO("JavaScript support is disabled");
+        }
+#endif
+        if (g_logger) {
+            LOG_INFO("JavaScript engine initialized");
+        }
+
+        /* Use our enhanced JavaScript file utilities to find the file */
+        char js_file_abs[PATH_MAX] = {0};
+
+        /* Log the search attempt */
+        if (g_logger) {
+            LOG_INFO("Searching for JavaScript file: %s", js_file);
+        } else {
+            printf("Searching for JavaScript file: %s\n", js_file);
+        }
+
+        /* Try to find the file with our enhanced utility */
+        if (!js_file_find(js_file, js_file_abs, sizeof(js_file_abs))) {
+            fprintf(stderr, "JavaScript file not found: %s\n", js_file);
+
+            if (g_logger) {
+                LOG_ERROR("JavaScript file not found: %s", js_file);
+                /* Log detailed search paths */
+                js_file_log_not_found(js_file, LOG_LEVEL_ERROR);
+            } else {
+                /* The file paths searched were not found (we'll need to log manually) */
+                fprintf(stderr, "Checked common paths but file was not found.\n");
+                fprintf(stderr, "Try using an absolute path or check file permissions.\n");
+            }
+            return 1; /* Exit since we couldn't find the file */
+        }
+
+        printf("Executing JavaScript file: %s (resolved to: %s)\n", js_file, js_file_abs);
+        if (g_logger) {
+            LOG_INFO("Executing JavaScript file: %s (resolved to: %s)", js_file, js_file_abs);
+        }
+
+#ifndef DISABLE_JS
+        /* Execute JavaScript file using the JS engine */
+        if (g_js_engine) {
+            if (!js_execute_file(g_js_engine, js_file_abs)) {
+                fprintf(stderr, "Failed to execute JavaScript file: %s (resolved to: %s)\n", js_file, js_file_abs);
+                if (g_logger) {
+                    LOG_ERROR("Failed to execute JavaScript file: %s (resolved to: %s)", js_file, js_file_abs);
+                }
+                return 1;
+            }
+        } else {
+            fprintf(stderr, "JavaScript engine not initialized, cannot execute file\n");
+            if (g_logger) {
+                LOG_ERROR("JavaScript engine not initialized, cannot execute file");
+            }
+            return 1;
+        }
+#else
+        fprintf(stderr, "JavaScript support is disabled at compile time\n");
+        if (g_logger) {
+            LOG_ERROR("JavaScript support is disabled at compile time");
+        }
+        return 1;
+#endif
+            }
+            printf("JavaScript execution complete\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript execution complete");
+            }
+        } else {
+#ifdef USE_QUICKJS
+            fprintf(stderr, "JavaScript engine failed to initialize\n");
+            if (g_logger) {
+                LOG_ERROR("JavaScript engine failed to initialize");
+            }
+#else
+            fprintf(stderr, "JavaScript support was not compiled into this build\n");
+            if (g_logger) {
+                LOG_ERROR("JavaScript support was not compiled into this build");
+            }
+#endif
+            return 1;
+        }
+
+        /* Exit normally to ensure proper cleanup */
+        return 0;
+    }
+
+    /*
+     * For server mode, we'll initialize the JavaScript engine later
+     * (after fork in daemon mode or right before server loop in normal mode)
+     * to avoid concurrency issues with process detection
+     */
+    
+    /* Initialize server config */
+    g_server_config = malloc(sizeof(server_config_t));
+    if (!g_server_config) {
+        fprintf(stderr, "Failed to allocate server config\n");
+        return 1;
+    }
+
+    /* Set server configuration from our parsed config */
+    memcpy(g_server_config, &config, sizeof(server_config_t));
+
+    /* Set references to created objects */
+    g_server_config->api_ctx = g_api_ctx;
+    g_server_config->metrics = g_metrics_registry;
+
+    /* Initialize CORS configuration if not already done */
+    if (!g_server_config->cors.enabled && !g_server_config->cors.allowed_origins) {
+        init_cors_config(&g_server_config->cors);
+    }
+    
+    /* Check if server is already running before doing anything else */
+    pid_t existing_pid = read_pid_file();
+    if (existing_pid > 0) {
+        if (process_exists(existing_pid)) {
+            printf("Error: Server is already running with PID %d\n", existing_pid);
+            printf("Use -stop to stop the running server first, or -status to get more information.\n");
+            return 1;
+        } else {
+            printf("Warning: Found stale PID file with PID %d. Process no longer exists.\n", existing_pid);
+            printf("Removing stale PID file...\n");
+            remove_pid_file();
+        }
+    }
+
+    /* Also check for running processes even if PID file doesn't exist */
+    pid_t found_pid = find_running_server();
+
+    /* If no running server found, double-check after a brief delay to avoid race conditions */
+    if (found_pid <= 0 || found_pid == getpid()) {
+        usleep(500000); /* 500ms delay */
+        found_pid = find_running_server();
+    }
+
+    if (found_pid > 0 && found_pid != getpid()) {
+        printf("Error: Server is already running with PID %d (detected without PID file)\n", found_pid);
+        printf("Use -stop to stop the running server first, or -status to get more information.\n");
+        return 1;
+    }
+
+    /* Initialize server */
+    server_status_t init_status = server_init(g_server_config);
+    if (init_status != SERVER_OK) {
+        fprintf(stderr, "Failed to initialize server: %d\n", init_status);
+        return 1;
+    }
+
+    /* Start server */
+    printf("Starting server on %s:%d...\n", g_server_config->host, g_server_config->port);
+    printf("Server will be accessible at %s:%d\n", g_server_config->host, g_server_config->port);
+
+    server_status_t start_status = server_start(g_server_config);
+    if (start_status != SERVER_OK) {
+        fprintf(stderr, "Failed to start server: %d\n", start_status);
+        return 1;
+    }
+
+    /* Use foreground mode only if explicitly requested, otherwise daemon mode is the default */
+    if (g_server_config->foreground_mode) {
+        printf("Starting server in foreground mode...\n");
+        printf("WARNING: Foreground mode is for debugging only. Use daemon mode for production.\n");
+
+        /* For foreground mode, write PID file for stop functionality */
+        if (!write_pid_file()) {
+            fprintf(stderr, "Warning: Failed to write PID file. The -stop command may not work correctly.\n");
+            fprintf(stderr, "The server will continue running, but you might need to manually kill it later.\n");
+            /* Continue anyway, this is not fatal */
+        }
+
+        /* Initialize JavaScript engine in the main process, if enabled */
+        if (g_server_config->js_enabled) {
+#ifndef DISABLE_JS
+            printf("Initializing JavaScript engine...\n");
+            if (g_logger) {
+                LOG_INFO("Initializing JavaScript engine in foreground mode...");
+            }
+
+            js_api_init(g_database);
+
+            printf("JavaScript engine initialized\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript engine initialized");
+            }
+#else
+            printf("JavaScript support is disabled at compile time\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled at compile time");
+            }
+#endif
+        } else {
+            printf("JavaScript support is disabled in configuration\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled in configuration");
+            }
+        }
+
+        printf("Server started in foreground mode. Press Ctrl+C to stop.\n");
+    } else {
+        /* Default to daemon mode */
+        printf("Starting server in daemon mode...\n");
+
+        /* Daemonize the process */
+        if (!daemonize()) {
+            fprintf(stderr, "Failed to daemonize process\n");
+            return 1;
+        }
+
+        /* Daemon process continues here */
+        printf("Server running as daemon with PID %d\n", getpid());
+        if (g_logger) {
+            LOG_INFO("Server running as daemon with PID %d", getpid());
+        }
+
+        /* Initialize JavaScript engine after fork to avoid concurrency issues, if enabled */
+        if (g_server_config->js_enabled) {
+#ifndef DISABLE_JS
+            printf("Initializing JavaScript engine in daemon process...\n");
+            if (g_logger) {
+                LOG_INFO("Initializing JavaScript engine in daemon process...");
+            }
+
+            js_api_init(g_database);
+
+            printf("JavaScript engine initialized\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript engine initialized");
+            }
+#else
+            printf("JavaScript support is disabled at compile time\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled at compile time");
+            }
+#endif
+        } else {
+            printf("JavaScript support is disabled in configuration\n");
+            if (g_logger) {
+                LOG_INFO("JavaScript support is disabled in configuration");
+            }
+        }
+    }
+
+    /* Keep the server running */
+    while (1) {
+        sleep(1);
+    }
+    
+    return 0;
+}

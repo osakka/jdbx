@@ -1,0 +1,58 @@
+# Makefile for minimal debug test
+
+# Root directory
+ROOT_DIR = ..
+
+# Include and lib directories
+INCLUDE_DIR = $(ROOT_DIR)/include
+LIB_DIR = $(ROOT_DIR)/build/lib
+BIN_DIR = $(ROOT_DIR)/build/bin/tests
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -g -O0 -DDEBUG
+LDFLAGS = -lm -lpthread
+
+# JSONdb library
+JSONDB_LIB = $(LIB_DIR)/libjsondb.a
+
+# Source and binary files
+TEST_SRC = minimal_debug.c
+TEST_BIN = $(BIN_DIR)/minimal_debug
+
+# Default target
+all: $(TEST_BIN)
+
+# Create build directory
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# Build test
+$(TEST_BIN): $(TEST_SRC) $(JSONDB_LIB) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(JSONDB_LIB) $(LDFLAGS)
+
+# Run test 1
+test1: $(TEST_BIN)
+	$(TEST_BIN) 1
+
+# Run test 2
+test2: $(TEST_BIN)
+	$(TEST_BIN) 2
+
+# Run test 3
+test3: $(TEST_BIN)
+	$(TEST_BIN) 3
+
+# Run test 4
+test4: $(TEST_BIN)
+	$(TEST_BIN) 4
+
+# Run test 5
+test5: $(TEST_BIN)
+	$(TEST_BIN) 5
+
+# Clean
+clean:
+	rm -f $(TEST_BIN)
+
+.PHONY: all clean test1 test2 test3 test4 test5
