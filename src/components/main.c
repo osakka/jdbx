@@ -18,6 +18,7 @@ typedef void js_engine_t;
 #include "rbac/rbac_refcount.h"
 #include "utils/logger.h"
 #include "utils/config_loader.h"
+#include "utils/config_defaults.h"  /* For centralized defaults */
 #include "utils/js_file_utils.h"
 #include <stdlib.h> /* For atexit */
 #include <stdio.h>
@@ -32,20 +33,6 @@ typedef void js_engine_t;
 #include <libgen.h> /* For dirname() */
 #include <dirent.h> /* For directory operations */
 #include <limits.h> /* For PATH_MAX */
-
-/* Default relative paths (will be resolved relative to the binary path) */
-#define DEFAULT_DB_PATH "var/data/jsondb/db.json"
-#define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"
-#define DEFAULT_JWT_SECRET "change-this-secret-in-production"
-#define DEFAULT_PID_FILE "var/run/jsondb_server.pid"
-#define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
-
-/* Global to store the binary directory path (not including trailing slash) */
-/* Unused for now */
-/*static char binary_dir[PATH_MAX] = {0};*/
-
-/* Default log level */
-#define DEFAULT_LOG_LEVEL LOG_LEVEL_INFO
 
 // Global variables for cleanup handling
 // g_server_config is now declared in config_loader.h/c
@@ -66,11 +53,11 @@ extern api_context_t* g_api_ctx;
 extern metrics_registry_t* g_metrics_registry;
 #endif
 
-/* Runtime file paths */
-char pid_file_path[PATH_MAX] = DEFAULT_PID_FILE;
-char log_file_path[PATH_MAX] = DEFAULT_LOG_FILE;
-char db_file_path[PATH_MAX] = DEFAULT_DB_PATH;
-char rbac_file_path[PATH_MAX] = DEFAULT_RBAC_PATH;
+/* Runtime file paths - will be initialized from config during startup */
+char pid_file_path[PATH_MAX];
+char log_file_path[PATH_MAX];
+char db_file_path[PATH_MAX];
+char rbac_file_path[PATH_MAX];
 log_level_t log_level = DEFAULT_LOG_LEVEL;
 
 /* Function declarations for forward references */
@@ -178,15 +165,38 @@ int main(int argc, char** argv) {
     printf("JSON Database Server\n");
     printf("===================\n\n");
 
-    /* Initialize the server config with defaults */
+    /* Initialize binary directory for path resolution */
+    config_init_binary_dir();
+    printf("Binary directory: %s\n", config_get_binary_dir());
+
+    /* Initialize the server config with defaults from centralized configuration */
     server_config_t config = {0};
     g_server_config = &config;
-    config.port = DEFAULT_PORT;
-    config.max_connections = MAX_CONNECTIONS;
-    config.host = NULL;  /* Will be set to default later if not provided */
-    config.foreground_mode = 0;  /* Default to daemon mode */
-    config.log_level = DEFAULT_LOG_LEVEL;
-    config.js_enabled = 1;  /* Enable JavaScript by default */
+    config_init_defaults(&config);
+    
+    /* Copy paths to local variables for convenience */
+    if (config.pid_file) {
+        strncpy(pid_file_path, config.pid_file, PATH_MAX - 1);
+        pid_file_path[PATH_MAX - 1] = '\0';
+    }
+    
+    if (config.log_file) {
+        strncpy(log_file_path, config.log_file, PATH_MAX - 1);
+        log_file_path[PATH_MAX - 1] = '\0';
+    }
+    
+    if (config.db_path) {
+        strncpy(db_file_path, config.db_path, PATH_MAX - 1);
+        db_file_path[PATH_MAX - 1] = '\0';
+    }
+    
+    if (config.rbac_path) {
+        strncpy(rbac_file_path, config.rbac_path, PATH_MAX - 1);
+        rbac_file_path[PATH_MAX - 1] = '\0';
+    }
+    
+    /* Set log level from config */
+    log_level = config.log_level;
 
     /* Handle command line arguments */
     char* js_file = NULL;

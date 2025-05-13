@@ -1,20 +1,107 @@
 #include "utils/config_loader.h"
+#include "utils/config_defaults.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>  /* For PATH_MAX */
+#include <libgen.h>  /* For dirname() and basename() */
+#include <unistd.h>  /* For readlink() */
 
 /* Global configuration structure - defined elsewhere when building tools */
 #ifndef TOOLS_BUILD
 server_config_t* g_server_config = NULL;
 #endif
 
-/* Default configuration values */
-#define DEFAULT_HOST "claude-code.uk.home.arpa"
-#define DEFAULT_PORT 5000
-#define DEFAULT_MAX_CONNECTIONS 100
+/* Path to the executable's directory, used for resolving relative paths */
+static char g_binary_dir[PATH_MAX] = {0};
+
+/**
+ * Initialize the binary directory path for resolving relative paths
+ * This should be called early in the program's execution
+ */
+void config_init_binary_dir(void) {
+    if (g_binary_dir[0] != '\0') {
+        /* Already initialized */
+        return;
+    }
+    
+    /* Get the path to the executable */
+    char exe_path[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
+    if (count == -1) {
+        /* Fallback to current directory if readlink fails */
+        if (getcwd(g_binary_dir, PATH_MAX - 1) == NULL) {
+            /* Last resort, use a sensible default */
+            strncpy(g_binary_dir, "/opt/jsondb", PATH_MAX - 1);
+        }
+        return;
+    }
+    
+    /* Ensure null termination */
+    exe_path[count] = '\0';
+    
+    /* Get the directory part */
+    char* dir = dirname(exe_path);
+    strncpy(g_binary_dir, dir, PATH_MAX - 1);
+    g_binary_dir[PATH_MAX - 1] = '\0';
+    
+    if (g_logger) {
+        LOG_DEBUG("Binary directory: %s", g_binary_dir);
+    }
+}
+
+/**
+ * Get the binary directory path
+ * @return Binary directory path
+ */
+const char* config_get_binary_dir(void) {
+    if (g_binary_dir[0] == '\0') {
+        config_init_binary_dir();
+    }
+    return g_binary_dir;
+}
+
+/**
+ * Resolve a path that might be relative to the binary directory
+ * @param path Path to resolve (absolute or relative)
+ * @return Resolved path (must be freed by caller)
+ */
+static char* resolve_path(const char* path) {
+    if (!path) return NULL;
+    
+    /* If it's an absolute path, just duplicate it */
+    if (path[0] == '/') {
+        return strdup(path);
+    }
+    
+    /* Make sure binary directory is initialized */
+    if (g_binary_dir[0] == '\0') {
+        config_init_binary_dir();
+    }
+    
+    /* Allocate enough space for the full path */
+    char* resolved_path = malloc(PATH_MAX);
+    if (!resolved_path) {
+        if (g_logger) {
+            LOG_ERROR("Failed to allocate memory for path resolution");
+        } else {
+            fprintf(stderr, "Error: Failed to allocate memory for path resolution\n");
+        }
+        return NULL;
+    }
+    
+    /* Combine binary directory with the relative path */
+    snprintf(resolved_path, PATH_MAX, "%s/%s", g_binary_dir, path);
+    
+    if (g_logger) {
+        LOG_DEBUG("Resolved path '%s' to '%s'", path, resolved_path);
+    }
+    
+    return resolved_path;
+}
 
 /* Internal helper functions */
 static char* trim_whitespace(char* str) {
@@ -583,21 +670,54 @@ void config_free(server_config_t* config) {
     memset(config, 0, sizeof(server_config_t));
 }
 
-/* Initialize configuration with default values */
+/**
+ * Initialize configuration with default values from config_defaults.h
+ * @param config Pointer to the configuration structure to initialize
+ */
 void config_init_defaults(server_config_t* config) {
     if (!config) return;
     
     /* Clear any existing configuration */
     config_free(config);
     
-    /* Set default values */
+    /* Ensure binary directory is initialized for path resolution */
+    config_init_binary_dir();
+    
+    /* Server settings */
     config->port = DEFAULT_PORT;
     config->host = strdup(DEFAULT_HOST);
     config->max_connections = DEFAULT_MAX_CONNECTIONS;
-    config->foreground_mode = 0;  /* Daemon mode is default */
-    config->log_level = LOG_LEVEL_INFO;
-    config->js_enabled = 1;  /* Enable JavaScript by default */
+    
+    /* Runtime settings */
+    config->foreground_mode = DEFAULT_FOREGROUND_MODE;
+    config->log_level = DEFAULT_LOG_LEVEL;
+    config->js_enabled = DEFAULT_JS_ENABLED;
+    config->use_ssl = DEFAULT_SSL_ENABLED;
+    
+    /* File paths (resolved relative to binary directory) */
+    config->db_path = resolve_path(DEFAULT_DB_PATH);
+    config->rbac_path = resolve_path(DEFAULT_RBAC_PATH);
+    config->pid_file = resolve_path(DEFAULT_PID_FILE);
+    config->log_file = resolve_path(DEFAULT_LOG_FILE);
+    
+    /* Security settings */
+    config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
     
     /* Initialize CORS configuration */
     init_cors_config(&config->cors);
+    
+    /* Additional settings */
+    config->cors.enabled = DEFAULT_CORS_ENABLED;
+    config->cors.allow_credentials = DEFAULT_CORS_ALLOW_CREDENTIALS;
+    config->cors.max_age = DEFAULT_CORS_MAX_AGE;
+    
+    if (g_logger) {
+        LOG_INFO("Configuration initialized with default values");
+        LOG_DEBUG("Default port: %d", config->port);
+        LOG_DEBUG("Default host: %s", config->host);
+        LOG_DEBUG("Default DB path: %s", config->db_path);
+        LOG_DEBUG("Default RBAC path: %s", config->rbac_path);
+        LOG_DEBUG("Default PID file: %s", config->pid_file);
+        LOG_DEBUG("Default log file: %s", config->log_file);
+    }
 }

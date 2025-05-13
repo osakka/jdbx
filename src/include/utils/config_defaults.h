@@ -1,0 +1,109 @@
+#ifndef CONFIG_DEFAULTS_H
+#define CONFIG_DEFAULTS_H
+
+/**
+ * @file config_defaults.h
+ * @brief Centralized default configuration values for JSONdb
+ * 
+ * This file contains all default configuration values used throughout
+ * the JSONdb server. It serves as a single source of truth for defaults,
+ * making configuration management more maintainable and consistent.
+ */
+
+#include "utils/logger.h"  /* For log level definitions */
+
+/*==============================================================================
+ * Server Configuration Defaults
+ *============================================================================*/
+
+/** Default server port */
+#define DEFAULT_PORT 5000
+
+/** Default host to bind to */
+#define DEFAULT_HOST "claude-code.uk.home.arpa"
+
+/** Default maximum number of simultaneous connections */
+#define DEFAULT_MAX_CONNECTIONS 100
+
+/** Default to foreground mode (0 for daemon, 1 for foreground) */
+#define DEFAULT_FOREGROUND_MODE 0
+
+/*==============================================================================
+ * Path Defaults (relative to install directory unless absolute)
+ *============================================================================*/
+
+/** Default database file path */
+#define DEFAULT_DB_PATH "var/data/jsondb/db.json"
+
+/** Default RBAC config file path */
+#define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"
+
+/** Default PID file path */
+#define DEFAULT_PID_FILE "var/run/jsondb/jsondb_server.pid"
+
+/** Default log file path */
+#define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
+
+/** Admin files directory */
+#define DEFAULT_ADMIN_FILES_DIR "share/htdocs"
+
+/*==============================================================================
+ * Security Defaults
+ *============================================================================*/
+
+/** Default JWT secret (SHOULD BE CHANGED in production) */
+#define DEFAULT_JWT_SECRET "change-this-secret-in-production"
+
+/*==============================================================================
+ * Feature Defaults
+ *============================================================================*/
+
+/** Default logging level */
+#define DEFAULT_LOG_LEVEL LOG_LEVEL_INFO
+
+/** Default JavaScript engine enabled flag */
+#define DEFAULT_JS_ENABLED 1
+
+/** Default SSL enabled flag */
+#define DEFAULT_SSL_ENABLED 0
+
+/*==============================================================================
+ * Performance Defaults
+ *============================================================================*/
+
+/** Default cache size */
+#define DEFAULT_CACHE_SIZE (1024 * 1024 * 10)  /* 10 MB */
+
+/** Default cache entry TTL in seconds */
+#define DEFAULT_CACHE_TTL 300  /* 5 minutes */
+
+/*==============================================================================
+ * Component-specific Defaults
+ *============================================================================*/
+
+/* Backup API defaults */
+#define DEFAULT_BACKUP_DIR "var/backups"
+#define DEFAULT_BACKUP_RETENTION 10
+#define DEFAULT_AUTO_BACKUP_INTERVAL_HOURS 24
+#define MAX_FILENAME_LEN 256
+#define MAX_BACKUP_PATH_LEN 768
+#define MAX_TIMESTAMP_LEN 32
+
+/* Database defaults */
+#define DEFAULT_INDEX_BUCKETS 256
+#define DEFAULT_COLLECTION_CAPACITY 64
+#define DEFAULT_DOCUMENTS_CAPACITY 1024
+#define DEFAULT_INDEX_CAPACITY 16
+#define DEFAULT_LRU_CACHE_SIZE 1000
+
+/* Transaction defaults */
+#define DEFAULT_TRANSACTION_TIMEOUT 30  /* 30 seconds */
+#define DEFAULT_MAX_RETRIES 3
+#define DEFAULT_RETRY_DELAY 100  /* 100 milliseconds */
+
+/* CORS defaults */
+#define DEFAULT_CORS_ENABLED 0
+#define DEFAULT_CORS_ALLOW_CREDENTIALS 0
+#define DEFAULT_CORS_MAX_AGE 86400  /* 24 hours */
+
+#endif /* CONFIG_DEFAULTS_H */

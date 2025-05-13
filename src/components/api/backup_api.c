@@ -16,14 +16,7 @@
 #include "utils/logger.h"
 #include "utils/import_export.h"
 #include "utils/config_loader.h"
-
-/* Default backup directory */
-#define DEFAULT_BACKUP_DIR "./backups"
-#define MAX_FILENAME_LEN 256
-#define MAX_BACKUP_PATH_LEN 768  /* Increased to safely accommodate path + filename */
-#define MAX_TIMESTAMP_LEN 32
-#define DEFAULT_BACKUP_RETENTION 10
-#define AUTO_BACKUP_INTERVAL_HOURS 24
+#include "utils/config_defaults.h"  /* For centralized defaults */
 
 typedef struct {
     int is_running;
@@ -31,14 +24,16 @@ typedef struct {
     int backup_retention_count;
     pthread_t thread;
     pthread_mutex_t mutex;
+    char backup_dir[PATH_MAX];  /* Resolved backup directory path */
 } backup_service_t;
 
 static backup_service_t g_backup_service = {
     .is_running = 0,
-    .backup_interval_hours = AUTO_BACKUP_INTERVAL_HOURS,
+    .backup_interval_hours = DEFAULT_AUTO_BACKUP_INTERVAL_HOURS,
     .backup_retention_count = DEFAULT_BACKUP_RETENTION,
     .thread = 0,
-    .mutex = PTHREAD_MUTEX_INITIALIZER
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .backup_dir = {0}  /* Will be initialized in backup_api_init() */
 };
 
 extern database_t *g_database;
@@ -49,13 +44,32 @@ extern database_t *g_database;
 static int ensure_backup_dir() {
     struct stat st = {0};
     
-    if (stat(DEFAULT_BACKUP_DIR, &st) == -1) {
+    /* Make sure backup_dir is initialized */
+    if (g_backup_service.backup_dir[0] == '\0') {
+        /* Check if path is absolute */
+        if (DEFAULT_BACKUP_DIR[0] == '/') {
+            strncpy(g_backup_service.backup_dir, DEFAULT_BACKUP_DIR, PATH_MAX - 1);
+        } else {
+            /* Resolve relative to binary directory */
+            const char* bin_dir = config_get_binary_dir();
+            snprintf(g_backup_service.backup_dir, PATH_MAX, "%s/%s", 
+                     bin_dir, DEFAULT_BACKUP_DIR);
+        }
+        g_backup_service.backup_dir[PATH_MAX - 1] = '\0';
+        
+        if (g_logger) {
+            LOG_DEBUG("Resolved backup directory: %s", g_backup_service.backup_dir);
+        }
+    }
+    
+    if (stat(g_backup_service.backup_dir, &st) == -1) {
         /* Directory doesn't exist, create it */
-        if (mkdir(DEFAULT_BACKUP_DIR, 0755) != 0) {
-            LOG_ERROR("Failed to create backup directory: %s", strerror(errno));
+        if (mkdir(g_backup_service.backup_dir, 0755) != 0) {
+            LOG_ERROR("Failed to create backup directory: %s (%s)", 
+                     g_backup_service.backup_dir, strerror(errno));
             return 0;
         }
-        LOG_INFO("Created backup directory: %s", DEFAULT_BACKUP_DIR);
+        LOG_INFO("Created backup directory: %s", g_backup_service.backup_dir);
     }
     
     return 1;
@@ -73,10 +87,13 @@ static void create_backup_path(char *path, size_t size, const char *prefix) {
     char timestamp[MAX_TIMESTAMP_LEN];
     generate_timestamp(timestamp, sizeof(timestamp));
     
+    /* Ensure backup directory exists and is initialized */
+    ensure_backup_dir();
+    
     if (prefix && strlen(prefix) > 0) {
-        snprintf(path, size, "%s/%s_%s.json", DEFAULT_BACKUP_DIR, prefix, timestamp);
+        snprintf(path, size, "%s/%s_%s.json", g_backup_service.backup_dir, prefix, timestamp);
     } else {
-        snprintf(path, size, "%s/backup_%s.json", DEFAULT_BACKUP_DIR, timestamp);
+        snprintf(path, size, "%s/backup_%s.json", g_backup_service.backup_dir, timestamp);
     }
 }
 
@@ -90,9 +107,13 @@ static void cleanup_old_backups() {
         return;  // No cleanup needed if retention is unlimited
     }
     
-    dir = opendir(DEFAULT_BACKUP_DIR);
+    /* Ensure backup directory exists and is initialized */
+    ensure_backup_dir();
+    
+    dir = opendir(g_backup_service.backup_dir);
     if (!dir) {
-        LOG_ERROR("Failed to open backup directory for cleanup: %s", strerror(errno));
+        LOG_ERROR("Failed to open backup directory for cleanup: %s (%s)", 
+                 g_backup_service.backup_dir, strerror(errno));
         return;
     }
     
@@ -134,7 +155,7 @@ static void cleanup_old_backups() {
             char full_path[MAX_BACKUP_PATH_LEN];
             struct stat st;
             
-            snprintf(full_path, sizeof(full_path), "%s/%s", DEFAULT_BACKUP_DIR, entry->d_name);
+            snprintf(full_path, sizeof(full_path), "%s/%s", g_backup_service.backup_dir, entry->d_name);
             if (stat(full_path, &st) == 0) {
                 strcpy(files[count].filename, entry->d_name);
                 files[count].mtime = st.st_mtime;
@@ -160,7 +181,7 @@ static void cleanup_old_backups() {
     int to_remove = count - retention;
     for (int i = 0; i < to_remove; i++) {
         char full_path[MAX_BACKUP_PATH_LEN];
-        snprintf(full_path, sizeof(full_path), "%s/%s", DEFAULT_BACKUP_DIR, files[i].filename);
+        snprintf(full_path, sizeof(full_path), "%s/%s", g_backup_service.backup_dir, files[i].filename);
         
         if (remove(full_path) != 0) {
             LOG_ERROR("Failed to remove old backup: %s - %s", full_path, strerror(errno));
@@ -700,7 +721,29 @@ http_response_t* api_handle_backup_configure(api_context_t* ctx, http_request_t*
 
 /* Initialization function */
 void backup_api_init(void) {
-    /* Ensure backup directory exists */
+    /* Set default values from centralized defaults */
+    g_backup_service.backup_interval_hours = DEFAULT_AUTO_BACKUP_INTERVAL_HOURS;
+    g_backup_service.backup_retention_count = DEFAULT_BACKUP_RETENTION;
+    
+    /* Initialize backup directory from configuration with path resolution */
+    if (g_backup_service.backup_dir[0] == '\0') {
+        /* Check if path is absolute */
+        if (DEFAULT_BACKUP_DIR[0] == '/') {
+            strncpy(g_backup_service.backup_dir, DEFAULT_BACKUP_DIR, PATH_MAX - 1);
+        } else {
+            /* Resolve relative to binary directory */
+            const char* bin_dir = config_get_binary_dir();
+            snprintf(g_backup_service.backup_dir, PATH_MAX, "%s/%s", 
+                     bin_dir, DEFAULT_BACKUP_DIR);
+        }
+        g_backup_service.backup_dir[PATH_MAX - 1] = '\0';
+        
+        if (g_logger) {
+            LOG_DEBUG("Using backup directory: %s", g_backup_service.backup_dir);
+        }
+    }
+    
+    /* Check if backup directory exists and create if needed */
     ensure_backup_dir();
     
     /* Read configuration if available */
@@ -711,13 +754,34 @@ void backup_api_init(void) {
             json_value_t *auto_val = json_object_get(backup_config, "auto_backup");
             json_value_t *interval_val = json_object_get(backup_config, "interval_hours");
             json_value_t *retention_val = json_object_get(backup_config, "retention_count");
+            json_value_t *dir_val = json_object_get(backup_config, "backup_dir");
             
             if (interval_val && json_get_type(interval_val) == JSON_NUMBER) {
                 g_backup_service.backup_interval_hours = (int)json_get_number(interval_val);
+                LOG_DEBUG("Configured backup interval: %d hours", g_backup_service.backup_interval_hours);
             }
             
             if (retention_val && json_get_type(retention_val) == JSON_NUMBER) {
                 g_backup_service.backup_retention_count = (int)json_get_number(retention_val);
+                LOG_DEBUG("Configured backup retention: %d backups", g_backup_service.backup_retention_count);
+            }
+            
+            if (dir_val && json_get_type(dir_val) == JSON_STRING) {
+                const char* custom_dir = json_get_string(dir_val);
+                /* Handle custom backup directory from config */
+                if (custom_dir[0] == '/') {
+                    /* Absolute path */
+                    strncpy(g_backup_service.backup_dir, custom_dir, PATH_MAX - 1);
+                } else {
+                    /* Relative to binary directory */
+                    const char* bin_dir = config_get_binary_dir();
+                    snprintf(g_backup_service.backup_dir, PATH_MAX, "%s/%s", bin_dir, custom_dir);
+                }
+                g_backup_service.backup_dir[PATH_MAX - 1] = '\0';
+                LOG_DEBUG("Using custom backup directory: %s", g_backup_service.backup_dir);
+                
+                /* Re-check directory with new path */
+                ensure_backup_dir();
             }
             
             if (auto_val && json_get_type(auto_val) == JSON_BOOLEAN && json_get_boolean(auto_val)) {
@@ -733,7 +797,7 @@ void backup_api_init(void) {
         }
     }
     
-    LOG_INFO("Backup API initialized");
+    LOG_INFO("Backup API initialized with directory: %s", g_backup_service.backup_dir);
 }
 
 /* API endpoint registration */
