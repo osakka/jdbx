@@ -12,7 +12,7 @@
 #include "jsondb/utils/json_helpers.h"
 
 #define TEST_LOG_FILE "../test_logs/unit_transaction.log"
-#define TEST_DB_FILE "../test_data/test_transaction.json"
+#define TEST_DB_FILE "../data/test_transaction.json"
 
 FILE *log_file = NULL;
 

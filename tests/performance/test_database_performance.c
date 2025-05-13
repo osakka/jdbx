@@ -9,7 +9,7 @@
 #include "jsondb/utils/json_helpers.h"
 
 #define TEST_LOG_FILE "../test_logs/performance_database.log"
-#define TEST_DB_FILE "../test_data/perf_database.json"
+#define TEST_DB_FILE "../data/perf_database.json"
 #define TEST_COLLECTION "perf_test"
 
 #define NUM_DOCUMENTS 1000

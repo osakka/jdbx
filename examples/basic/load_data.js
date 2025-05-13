@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Read the sample data
-const sampleData = JSON.parse(fs.readFileSync('test_data/sample_data.json', 'utf8'));
+const sampleData = JSON.parse(fs.readFileSync('../data/sample_data.json', 'utf8'));
 
 // Function to load data into the database
 function loadData() {

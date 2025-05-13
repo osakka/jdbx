@@ -12,8 +12,8 @@
 #include "jsondb/utils/json_helpers.h"
 
 #define TEST_LOG_FILE "../test_logs/integration_js.log"
-#define TEST_DB_FILE "../test_data/test_js_integration.json"
-#define TEST_SCRIPT_DIR "../test_data/scripts"
+#define TEST_DB_FILE "../data/test_js_integration.json"
+#define TEST_SCRIPT_DIR "../data/scripts"
 
 #ifndef DISABLE_JS
 // Note: We only test JS integration if it's enabled in the build
