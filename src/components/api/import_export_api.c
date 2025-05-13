@@ -1,7 +1,7 @@
-#include "components/api/api.h"
-#include "components/utils/import_export.h"
-#include "components/utils/json_helpers.h"
-#include "components/utils/logger.h"
+#include "api/api.h"
+#include "utils/import_export.h"
+#include "utils/json_helpers.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

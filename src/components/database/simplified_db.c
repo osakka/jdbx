@@ -1,6 +1,6 @@
-#include "components/database/database.h"
-#include "components/utils/logger.h"
-#include "components/query/query_language.h"
+#include "database/database.h"
+#include "utils/logger.h"
+#include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

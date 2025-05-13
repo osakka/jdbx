@@ -11,7 +11,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "components/utils/json.h"
+#include "utils/json.h"
 
 /**
  * @brief Validation error codes

@@ -1,7 +1,7 @@
-#include "components/api/api.h"
-#include "components/js/js_engine.h"
-#include "components/database/database.h"
-#include "components/utils/json.h"
+#include "api/api.h"
+#include "js/js_engine.h"
+#include "database/database.h"
+#include "utils/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

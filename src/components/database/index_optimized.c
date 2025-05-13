@@ -1,6 +1,6 @@
-#include "components/database/database.h"
-#include "components/utils/json.h"
-#include "components/utils/logger.h"
+#include "database/database.h"
+#include "utils/json.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

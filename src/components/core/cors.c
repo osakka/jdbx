@@ -1,4 +1,4 @@
-#include "src/include/core/server.h"
+#include "core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

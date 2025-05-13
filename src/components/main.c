@@ -1,24 +1,24 @@
-#include "src/include/core/server.h"
-#include "src/include/database/database.h"
-#include "src/include/rbac/rbac.h"
-#include "src/include/api/api.h"
-#include "src/include/rbac/jwt.h"
-#include "src/include/utils/metrics.h"
+#include "core/server.h"
+#include "database/database.h"
+#include "rbac/rbac.h"
+#include "api/api.h"
+#include "rbac/jwt.h"
+#include "utils/metrics.h"
 
 /* JavaScript dependencies */
 #ifndef DISABLE_JS
-#include "src/include/js/js_api.h"
-#include "src/include/js/js_engine.h"
+#include "js/js_api.h"
+#include "js/js_engine.h"
 #else
 /* Include stub typedefs for JavaScript when disabled */
 typedef void js_engine_t;
 /* Function declarations for JavaScript stubs are in api.h */
 #endif
 
-#include "src/include/rbac/rbac_refcount.h"
-#include "src/include/utils/logger.h"
-#include "src/include/utils/config_loader.h"
-#include "src/include/utils/js_file_utils.h"
+#include "rbac/rbac_refcount.h"
+#include "utils/logger.h"
+#include "utils/config_loader.h"
+#include "utils/js_file_utils.h"
 #include <stdlib.h> /* For atexit */
 #include <stdio.h>
 #include <stdlib.h>

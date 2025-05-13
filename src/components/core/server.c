@@ -1,5 +1,5 @@
-#include "src/include/core/server.h"
-#include "src/include/api/api.h"
+#include "core/server.h"
+#include "api/api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

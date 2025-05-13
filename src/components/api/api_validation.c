@@ -1,8 +1,8 @@
-#include "components/api/api.h"
-#include "components/utils/input_validation.h"
-#include "components/utils/logger.h"
-#include "components/utils/json.h"
-#include "components/utils/json_helpers.h"
+#include "api/api.h"
+#include "utils/input_validation.h"
+#include "utils/logger.h"
+#include "utils/json.h"
+#include "utils/json_helpers.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -234,7 +234,6 @@ http_response_t* api_validate_json_number(json_value_t* json,
         }
     }
     
-    json_value_t* value_obj = json_object_get(json, field);
     double value = json_get_number(value_obj);
     validation_error_t result = validate_double_range(value, min_value, max_value);
     
@@ -276,7 +275,6 @@ http_response_t* api_validate_json_integer(json_value_t* json,
         }
     }
     
-    json_value_t* value_obj = json_object_get(json, field);
     double double_value = json_get_number(value_obj);
     int64_t value = (int64_t)double_value;
     

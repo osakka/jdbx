@@ -1,8 +1,8 @@
-#include "components/api/api.h"
-#include "components/core/server.h"
-#include "components/database/database.h"
-#include "components/rbac/rbac.h"
-#include "components/rbac/jwt.h"
+#include "api/api.h"
+#include "core/server.h"
+#include "database/database.h"
+#include "rbac/rbac.h"
+#include "rbac/jwt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

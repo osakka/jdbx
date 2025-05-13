@@ -1,5 +1,5 @@
-#include "components/utils/js_file_utils.h"
-#include "components/utils/logger.h"
+#include "utils/js_file_utils.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

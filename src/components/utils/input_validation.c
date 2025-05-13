@@ -1,5 +1,5 @@
-#include "src/include/utils/input_validation.h"
-#include "src/include/utils/logger.h"
+#include "utils/input_validation.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,9 +1,9 @@
-#include "src/include/api/api.h"
-#include "src/include/core/server.h"
-#include "src/include/database/database.h"
-#include "src/include/rbac/rbac.h"
-#include "src/include/rbac/jwt.h"
-#include "src/include/utils/metrics.h"
+#include "api/api.h"
+#include "core/server.h"
+#include "database/database.h"
+#include "rbac/rbac.h"
+#include "rbac/jwt.h"
+#include "utils/metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

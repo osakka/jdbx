@@ -1,6 +1,6 @@
-#include "components/database/database.h"
-#include "components/utils/logger.h"
-#include "simplified_ops.h"
+#include "database/database.h"
+#include "utils/logger.h"
+#include "database/simplified_ops.h"
 
 /**
  * This file replaces the complex database operations with simplified, 

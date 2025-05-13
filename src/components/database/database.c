@@ -1,7 +1,7 @@
-#include "src/include/database/database.h"
-#include "src/include/utils/cache.h"
-#include "src/include/utils/logger.h"
-#include "src/include/query/query_language.h"
+#include "database/database.h"
+#include "utils/cache.h"
+#include "utils/logger.h"
+#include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
