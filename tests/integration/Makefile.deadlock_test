@@ -1,0 +1,39 @@
+CC=gcc
+CFLAGS=-g -Wall -I../src/include
+LDFLAGS=-L../lib -ljsondb -lpthread
+
+# Path to source files
+SRC_DIR=../src/components
+
+# Source files
+SRC_FILES= \
+	$(SRC_DIR)/database/database.c \
+	$(SRC_DIR)/transaction/transaction.c \
+	$(SRC_DIR)/transaction/transaction_log.c \
+	$(SRC_DIR)/database/lock_manager.c \
+	$(SRC_DIR)/utils/json.c \
+	$(SRC_DIR)/utils/logger.c \
+	$(SRC_DIR)/utils/json_helpers.c
+
+# Object files
+OBJ_FILES=$(SRC_FILES:.c=.o)
+
+# Target executable
+TARGET=test_deadlock_detection
+
+# Default target
+all: $(TARGET)
+
+# Build the target
+$(TARGET): test_deadlock_detection.c $(OBJ_FILES)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Clean up
+clean:
+	rm -f $(TARGET) $(OBJ_FILES)
+
+# Run the test
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run

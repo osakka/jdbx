@@ -1,0 +1,37 @@
+# Makefile for deadlock-free version of JSONdb
+# This Makefile modifies the build process to use our simplified, deadlock-free operations
+
+# Include the original Makefile
+include Makefile
+
+# Override the database source files to include our simplified implementations
+DB_SRCS = $(filter-out $(SRC_DIR)/database/database.c, $(wildcard $(SRC_DIR)/database/*.c))
+
+# Special flag to indicate deadlock-free build
+CFLAGS += -DDEADLOCK_FREE_BUILD
+
+# Target to build a deadlock-free version of the library and server
+deadlock_free: $(BIN_DIR)/jsondb_server_deadlock_free $(LIB_DIR)/libjsondb_deadlock_free.a
+
+# Deadlock-free library
+$(LIB_DIR)/libjsondb_deadlock_free.a: $(OBJS)
+	@mkdir -p $(LIB_DIR)
+	$(AR) rcs $@ $(OBJS)
+	@echo "Deadlock-free library built: $@"
+
+# Deadlock-free server
+$(BIN_DIR)/jsondb_server_deadlock_free: $(SRC_DIR)/core/main.c $(LIB_DIR)/libjsondb_deadlock_free.a
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_DIR)/libjsondb_deadlock_free.a $(SERVER_LDFLAGS)
+	@echo "Deadlock-free server built: $@"
+
+# Clean deadlock-free targets
+clean_deadlock_free:
+	rm -f $(BIN_DIR)/jsondb_server_deadlock_free
+	rm -f $(LIB_DIR)/libjsondb_deadlock_free.a
+
+# Add deadlock_free to the clean target
+clean: clean_deadlock_free
+
+# Add .PHONY targets
+.PHONY: deadlock_free clean_deadlock_free

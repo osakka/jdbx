@@ -1,0 +1,59 @@
+# Makefile for testing if cache is disabled
+INCLUDE_DIR = ../include
+SRC_DIR = ../src
+OBJ_DIR = ../build/obj
+BIN_DIR = ../build/bin
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR)
+LDFLAGS = -lm -lpthread
+
+# Test files
+TEST_SRC = test_cache_disabled.c
+TEST_OBJ = $(OBJ_DIR)/tests/test_cache_disabled.o
+TEST_BIN = $(BIN_DIR)/tests/test_cache_disabled
+
+# Database files
+DB_SRCS = $(SRC_DIR)/database/database.c $(SRC_DIR)/database/index.c $(SRC_DIR)/database/schema.c
+DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
+
+# Query files
+QUERY_SRCS = $(SRC_DIR)/query/query_language.c
+QUERY_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(QUERY_SRCS))
+
+# Utils files
+UTILS_SRCS = $(SRC_DIR)/utils/json.c $(SRC_DIR)/utils/logger.c $(SRC_DIR)/utils/cache.c
+UTILS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(UTILS_SRCS))
+
+# All objects
+OBJS = $(TEST_OBJ) $(DB_OBJS) $(QUERY_OBJS) $(UTILS_OBJS)
+
+# Default target
+all: $(TEST_BIN)
+
+# Create test object file
+$(TEST_OBJ): $(TEST_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Create database object files
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Link test program
+$(TEST_BIN): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+	@echo "Test program built: $@"
+
+# Run test
+run: $(TEST_BIN)
+	$(TEST_BIN)
+
+# Clean
+clean:
+	rm -f $(TEST_OBJ) $(TEST_BIN)
+
+.PHONY: all run clean

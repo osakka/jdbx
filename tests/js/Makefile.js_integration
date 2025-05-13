@@ -1,0 +1,61 @@
+# Makefile for JavaScript integration test
+
+CC = gcc
+CFLAGS = -Wall -I../src/include -DTOOLS_BUILD -DUSE_QUICKJS -g -O0 -DDEBUG
+
+# Add QuickJS library and math functions
+LDFLAGS = -pthread -L/opt/qjs/lib/quickjs -lquickjs -lm
+
+# Source files needed for the test
+SRC_FILES = ../src/components/utils/json.c \
+            ../src/components/utils/json_helpers.c \
+            ../src/components/utils/js_file_utils.c \
+            ../src/components/utils/logger.c \
+            ../src/components/utils/cache.c \
+            ../src/components/utils/config_loader.c \
+            ../src/components/database/database.c \
+            ../src/components/database/index.c \
+            ../src/components/database/schema.c \
+            ../src/components/database/lock_manager.c \
+            ../src/components/js/js_engine.c \
+            ../src/components/js/js_api.c \
+            ../src/components/utils/memory/ref_counter.c \
+            ../src/components/utils/memory/ref_json.c
+
+# Object files
+OBJ_FILES = $(SRC_FILES:.c=.o)
+
+# Target executable
+TARGET = test_js_integration
+
+# Default target
+all: $(TARGET)
+
+# Linking rule
+$(TARGET): test_js_integration.o $(OBJ_FILES)
+	@echo "Linking $@..."
+	@mkdir -p ../var/log/jsondb
+	@mkdir -p ../var/data/jsondb
+	$(CC) $^ -o $@ $(LDFLAGS)
+	@echo "Build completed successfully!"
+	@echo "Run with: ./$(TARGET)"
+
+# Compile test_js_integration.c
+test_js_integration.o: test_js_integration.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Generic compilation rule for source files
+%.o: %.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean
+clean:
+	rm -f test_js_integration.o $(OBJ_FILES) $(TARGET)
+
+# Run
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run

@@ -1,0 +1,42 @@
+# Makefile for cache insert test
+
+# Root directory
+ROOT_DIR = ..
+
+# Include and lib directories
+INCLUDE_DIR = $(ROOT_DIR)/include
+LIB_DIR = $(ROOT_DIR)/build/lib
+BIN_DIR = $(ROOT_DIR)/build/bin/tests
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -g -O0 -DDEBUG
+LDFLAGS = -lm -lpthread
+
+# JSONdb library
+JSONDB_LIB = $(LIB_DIR)/libjsondb.a
+
+# Source and binary files
+TEST_SRC = cache_insert_test.c
+TEST_BIN = $(BIN_DIR)/cache_insert_test
+
+# Default target
+all: $(TEST_BIN)
+
+# Create build directory
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# Build test
+$(TEST_BIN): $(TEST_SRC) $(JSONDB_LIB) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(JSONDB_LIB) $(LDFLAGS)
+
+# Run test
+run: $(TEST_BIN)
+	$(TEST_BIN)
+
+# Clean
+clean:
+	rm -f $(TEST_BIN)
+
+.PHONY: all run clean

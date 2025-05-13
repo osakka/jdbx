@@ -1,0 +1,47 @@
+# Makefile for simple cache test
+CC = gcc
+CFLAGS = -Wall -I../include
+LDFLAGS = -lm -lpthread
+
+# Test executable
+TARGET = simple_cache_test
+
+# Source files
+DB_SRC = ../src/database/database.c
+QUERY_SRC = ../src/query/query_language.c
+UTILS_SRC = ../src/utils/json.c ../src/utils/logger.c ../src/utils/cache.c
+
+# Object files
+OBJS = simple_cache_test.o database.o query_language.o json.o logger.o cache.o
+
+# Targets
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+simple_cache_test.o: simple_cache_test.c
+	$(CC) $(CFLAGS) -c $<
+
+database.o: $(DB_SRC)
+	$(CC) $(CFLAGS) -c $<
+
+query_language.o: $(QUERY_SRC)
+	$(CC) $(CFLAGS) -c $<
+
+json.o: ../src/utils/json.c
+	$(CC) $(CFLAGS) -c $<
+
+logger.o: ../src/utils/logger.c
+	$(CC) $(CFLAGS) -c $<
+
+cache.o: ../src/utils/cache.c
+	$(CC) $(CFLAGS) -c $<
+
+clean:
+	rm -f $(TARGET) *.o
+
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run

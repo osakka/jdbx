@@ -1,0 +1,23 @@
+# Simple Makefile for database unit test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../include
+
+# Set up target
+TEST_BIN = bin/unit_test_database
+TEST_SRC = unit/test_database.c
+
+# Include needed source files directly
+DATABASE_SRC = ../src/database/database.c \
+               ../src/utils/json.c \
+               ../src/utils/json_helpers.c
+
+# Compile the test
+$(TEST_BIN): $(TEST_SRC) $(DATABASE_SRC)
+	@mkdir -p bin
+	$(CC) $(CFLAGS) $^ -o $@ -lm
+
+clean:
+	rm -f $(TEST_BIN)
+
+.PHONY: clean

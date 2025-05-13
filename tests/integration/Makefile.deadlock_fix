@@ -1,0 +1,67 @@
+# Makefile for deadlock-free version of JSONdb
+# This is a simplified Makefile that directly builds the server with our fixed implementation
+
+# Directories
+INCLUDE_DIR = include
+BIN_DIR = build/bin
+OBJ_DIR = build/obj
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -DDEADLOCK_FREE_BUILD
+LDFLAGS = -lm -lpthread -lssl -lcrypto
+
+# QuickJS support (if needed)
+QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
+
+# Source files
+CORE_SRCS = src/core/api.c src/core/cors.c src/core/main.c src/core/server.c src/core/ssl.c
+API_SRCS = $(wildcard src/api/*.c)
+QUERY_SRCS = src/query/query_language.c
+TRANS_SRCS = $(wildcard src/transaction/*.c)
+RBAC_SRCS = $(wildcard src/rbac/*.c)
+UTILS_SRCS = $(wildcard src/utils/*.c) $(wildcard src/utils/memory/*.c)
+TOOLS_SRCS = $(wildcard src/tools/*.c)
+JS_SRCS = $(wildcard src/js/*.c) $(wildcard src/js/utils/*.c)
+
+# Special database source - use our simplified implementation
+DB_SRCS = src/database/simplified_db.c src/database/index.c src/database/index_optimized.c src/database/lock_manager.c src/database/schema.c
+
+# Object files
+CORE_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+API_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(API_SRCS))
+DB_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
+QUERY_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(QUERY_SRCS))
+TRANS_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(TRANS_SRCS))
+RBAC_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(RBAC_SRCS))
+UTILS_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(UTILS_SRCS))
+TOOLS_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(TOOLS_SRCS))
+JS_OBJS = $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
+
+# All objects
+OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
+
+# Target
+all: $(BIN_DIR)/jsondb_server_fixed
+
+# Create build directories
+$(OBJ_DIR)/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Link server
+$(BIN_DIR)/jsondb_server_fixed: $(OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(QUICKJS_LIBS)
+	@echo "Deadlock-free server built: $@"
+
+# Clean
+clean:
+	rm -rf $(OBJ_DIR) $(BIN_DIR)/jsondb_server_fixed
+
+# Run server in foreground
+run: $(BIN_DIR)/jsondb_server_fixed
+	$(BIN_DIR)/jsondb_server_fixed
+
+.PHONY: all clean run

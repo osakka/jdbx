@@ -1,0 +1,64 @@
+# Unified Makefile for JSONdb Tests
+# This Makefile provides a centralized way to run tests from their new locations
+
+# Include paths
+INCLUDE_DIR = ../include
+SRC_DIR = ../src
+OBJ_DIR = ../build/obj
+BIN_DIR = ../build/bin
+
+# Compiler and flags
+CC = gcc
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR)
+LDFLAGS = -lm -lpthread
+
+# Test directories
+TEST_DIRS = unit integration performance js database cache
+
+# Default target
+all: test
+
+# Target to run all tests
+test:
+	@echo "Running all tests..."
+	@for dir in $(TEST_DIRS); do \
+		echo "\n=== Running $$dir tests ==="; \
+		$(MAKE) -C $$dir -f Makefile.$$dir || exit 1; \
+	done
+	@echo "\nAll tests passed!"
+
+# Targets for specific test categories
+unit-test:
+	@echo "Running unit tests..."
+	$(MAKE) -C unit -f Makefile.unit
+
+integration-test:
+	@echo "Running integration tests..."
+	$(MAKE) -C integration -f Makefile.integration
+
+performance-test:
+	@echo "Running performance tests..."
+	$(MAKE) -C performance -f Makefile.performance
+
+js-test:
+	@echo "Running JavaScript tests..."
+	$(MAKE) -C js -f Makefile.js
+
+database-test:
+	@echo "Running database tests..."
+	$(MAKE) -C database -f Makefile.database
+
+cache-test:
+	@echo "Running cache tests..."
+	$(MAKE) -C cache -f Makefile.cache
+
+# Clean target
+clean:
+	@echo "Cleaning test artifacts..."
+	@for dir in $(TEST_DIRS); do \
+		echo "Cleaning $$dir..."; \
+		$(MAKE) -C $$dir -f Makefile.$$dir clean || true; \
+	done
+	@echo "Clean complete!"
+
+.PHONY: all test unit-test integration-test performance-test js-test database-test cache-test clean
