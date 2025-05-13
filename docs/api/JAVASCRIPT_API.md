@@ -117,7 +117,7 @@ The database includes a JavaScript helper library (`db_helpers.js`) that provide
 
 ```javascript
 // Load the helper library
-load("functions/db_helpers.js");
+load("/share/js/functions/db_helpers.js");
 ```
 
 ### Using the Collection Class
@@ -171,10 +171,10 @@ The database supports JavaScript validators and transformers for collections.
 
 ### Document Validators
 
-Create a JavaScript file named `validators/{collection_name}.js` that exports a `validateDocument` function.
+Create a JavaScript file named `/share/js/validators/{collection_name}.js` that exports a `validateDocument` function.
 
 ```javascript
-// validators/users.js
+// /share/js/validators/users.js
 function validateDocument(doc) {
   if (!doc.email) {
     addError('email', 'Email is required');
@@ -190,10 +190,10 @@ function validateDocument(doc) {
 
 ### Document Transformers
 
-Create a JavaScript file named `transforms/{collection_name}.js` that exports a `transformDocument` function.
+Create a JavaScript file named `/share/js/transforms/{collection_name}.js` that exports a `transformDocument` function.
 
 ```javascript
-// transforms/users.js
+// /share/js/transforms/users.js
 function transformDocument(doc, operation) {
   // Add timestamps
   if (operation === 'insert') {
@@ -238,7 +238,7 @@ const result = db.callFunction('calculateTotal', [
 
 ```javascript
 // Load the helper library
-load("functions/db_helpers.js");
+load("/share/js/functions/db_helpers.js");
 
 // Create a collection
 const products = new Collection('products');

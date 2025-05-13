@@ -178,7 +178,7 @@ The server provides a comprehensive REST API for managing the database. Here's a
 | `/api/transactions/:id/commit` | POST | Commit a transaction |
 | `/api/transactions/:id/rollback` | DELETE | Rollback a transaction |
 
-For a complete list of API endpoints and documentation, see the [API.md](docs/API.md) file.
+For a complete list of API endpoints and documentation, see the [API.md](docs/api/API.md) file.
 
 ## Client Examples
 
@@ -188,7 +188,7 @@ The repository includes example clients to demonstrate how to interact with the 
 
 ```bash
 # Run the Python client example
-cd examples
+cd share/examples
 ./python_client.py
 ```
 
@@ -198,7 +198,7 @@ This demonstrates the full API workflow from authentication to document operatio
 
 ```bash
 # Run the cURL examples
-cd examples
+cd share/examples
 ./curl_examples.sh
 ```
 
@@ -240,10 +240,10 @@ The server configuration is stored in the database and can be modified via the A
 
 - Port: 5000
 - SSL: Disabled
-- Database Path: `var/data/jsondb/db.json` (relative to binary location)
-- RBAC Path: `var/data/jsondb/rbac.json` (relative to binary location)
-- PID File: `var/run/jsondb_server.pid` (relative to binary location)
-- Log File: `var/log/jsondb/server.log` (relative to binary location)
+- Database Path: `data/jsondb/db.json` (relative to binary location)
+- RBAC Path: `data/jsondb/rbac.json` (relative to binary location)
+- PID File: `data/run/jsondb_server.pid` (relative to binary location)
+- Log File: `data/log/jsondb/server.log` (relative to binary location)
 - JWT Secret: `change-this-secret-in-production`
 
 ### Command-line Options

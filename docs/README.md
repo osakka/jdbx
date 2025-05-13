@@ -1,6 +1,6 @@
 # JSONdb Documentation
 
-This directory (`/doc`) is the authoritative source of truth for all project documentation.
+This directory (`/docs`) is the authoritative source of truth for all project documentation.
 
 ## Documentation Organization
 
@@ -20,7 +20,7 @@ The documentation is organized into these directories:
 - All documentation is written in Markdown format
 - Documentation follows the "One source of truth" principle from `guidelines/CLAUDE.md`
 - README.md files may exist in code directories for context-specific guidance
-- All substantial documentation belongs in the `/doc` directory
+- All substantial documentation belongs in the `/docs` directory
 
 ## Cross-References
 

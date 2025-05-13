@@ -162,7 +162,7 @@ Documents are JSON objects stored in collections.
   - `404 Not Found`: Collection not found
   - `500 Internal Server Error`: Server error
 
-The query parameter supports a comprehensive query language for filtering documents. You can use comparison operators, logical operators, array operators, and more. For detailed documentation on the query language syntax, see [Query Language](QUERY_LANGUAGE.md).
+The query parameter supports a comprehensive query language for filtering documents. You can use comparison operators, logical operators, array operators, and more. For detailed documentation on the query language syntax, see [Query Language](/docs/guides/QUERY_LANGUAGE.md).
 
 ### Pagination
 
@@ -1424,7 +1424,7 @@ These endpoints allow you to manage the document cache system.
 
 ## Query Language Examples
 
-For detailed documentation on the query language syntax, see [Query Language](QUERY_LANGUAGE.md).
+For detailed documentation on the query language syntax, see [Query Language](/docs/guides/QUERY_LANGUAGE.md).
 
 ### Basic Comparisons
 
