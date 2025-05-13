@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/quickjs/quickjs.h"
+#include "src/include/quickjs/quickjs.h"
 
 /**
  * Simple standalone QuickJS test program

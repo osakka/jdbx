@@ -8,14 +8,14 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include "jsondb.h"
-#include "jsondb/api/api.h"
-#include "jsondb/database/database.h"
-#include "jsondb/utils/json.h"
-#include "jsondb/utils/json_helpers.h"
-#include "jsondb/utils/logger.h"
-#include "jsondb/utils/import_export.h"
-#include "jsondb/utils/config_loader.h"
+#include "src/include/jsondb.h"
+#include "components/api/api.h"
+#include "components/database/database.h"
+#include "components/utils/json.h"
+#include "components/utils/json_helpers.h"
+#include "components/utils/logger.h"
+#include "components/utils/import_export.h"
+#include "components/utils/config_loader.h"
 
 /* Default backup directory */
 #define DEFAULT_BACKUP_DIR "./backups"

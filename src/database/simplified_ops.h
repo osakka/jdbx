@@ -1,7 +1,7 @@
 #ifndef SIMPLIFIED_OPS_H
 #define SIMPLIFIED_OPS_H
 
-#include "jsondb/database/database.h"
+#include "components/database/database.h"
 
 /* Simplified, deadlock-free database operations */
 json_value_t* simplified_db_insert_document(database_t* db, const char* collection_name, json_value_t* document);

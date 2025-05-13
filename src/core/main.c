@@ -1,24 +1,24 @@
-#include "jsondb/core/server.h"
-#include "jsondb/database/database.h"
-#include "jsondb/rbac/rbac.h"
-#include "jsondb/api/api.h"
-#include "jsondb/rbac/jwt.h"
-#include "jsondb/utils/metrics.h"
+#include "src/include/core/server.h"
+#include "src/include/database/database.h"
+#include "src/include/rbac/rbac.h"
+#include "src/include/api/api.h"
+#include "src/include/rbac/jwt.h"
+#include "src/include/utils/metrics.h"
 
 /* JavaScript dependencies */
 #ifndef DISABLE_JS
-#include "jsondb/js/js_api.h"
-#include "jsondb/js/js_engine.h"
+#include "src/include/js/js_api.h"
+#include "src/include/js/js_engine.h"
 #else
 /* Include stub typedefs for JavaScript when disabled */
 typedef void js_engine_t;
 /* Function declarations for JavaScript stubs are in api.h */
 #endif
 
-#include "jsondb/rbac/rbac_refcount.h"
-#include "jsondb/utils/logger.h"
-#include "jsondb/utils/config_loader.h"
-#include "jsondb/utils/js_file_utils.h"
+#include "src/include/rbac/rbac_refcount.h"
+#include "src/include/utils/logger.h"
+#include "src/include/utils/config_loader.h"
+#include "src/include/utils/js_file_utils.h"
 #include <stdlib.h> /* For atexit */
 #include <stdio.h>
 #include <stdlib.h>

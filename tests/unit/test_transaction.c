@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <time.h>
 
-#include "jsondb.h"
+#include "src/include/jsondb.h"
 #include "jsondb/database/database.h"
 #include "jsondb/transaction/transaction.h"
 #include "jsondb/transaction/transaction_retry.h"

@@ -1,8 +1,8 @@
-#include "jsondb/api/api.h"
-#include "jsondb/core/server.h"
-#include "jsondb/database/database.h"
-#include "jsondb/rbac/rbac.h"
-#include "jsondb/rbac/jwt.h"
+#include "components/api/api.h"
+#include "components/core/server.h"
+#include "components/database/database.h"
+#include "components/rbac/rbac.h"
+#include "components/rbac/jwt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

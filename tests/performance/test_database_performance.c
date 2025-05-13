@@ -3,7 +3,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "jsondb.h"
+#include "src/include/jsondb.h"
 #include "jsondb/database/database.h"
 #include "jsondb/utils/json.h"
 #include "jsondb/utils/json_helpers.h"

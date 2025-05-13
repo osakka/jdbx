@@ -1,79 +1,136 @@
 # Include Path Updates for Reorganized Source Structure
 
-After reorganizing the source code structure, the include paths in source files need to be updated. This document provides guidelines for updating include statements to conform to the new directory structure.
+After completing the source code reorganization, the include paths in source files have been updated to reflect the new directory structure. This document provides guidelines for using the correct include paths in the codebase.
 
-## New Include Hierarchy
+## Current Include Hierarchy
 
 ```
-include/
-├── api/
-├── core/
-├── database/
-├── js/
-├── query/
-├── rbac/
-├── transaction/
-└── utils/
-    └── memory/
+src/
+├── include/           # Global header files
+│   ├── api/           # API headers
+│   ├── core/          # Core server headers
+│   ├── database/      # Database engine headers
+│   ├── js/            # JavaScript integration headers
+│   ├── query/         # Query language headers 
+│   ├── rbac/          # RBAC headers
+│   ├── transaction/   # Transaction headers
+│   └── utils/         # Utility headers
+│       └── memory/    # Memory management headers
+│
+└── components/        # Component implementation with their headers
+    ├── api/           # API implementation
+    ├── core/          # Core server implementation
+    ├── database/      # Database engine implementation
+    ├── js/            # JavaScript integration implementation
+    ├── query/         # Query language implementation
+    ├── rbac/          # RBAC implementation
+    ├── transaction/   # Transaction implementation
+    └── utils/         # Utility implementation
+        └── memory/    # Memory management implementation
 ```
 
 ## Include Path Conventions
 
-### Internal Component Headers
+### Component Implementation Including Headers
 
-When including a header from the same component, use a relative path:
+When including header files in source code, always use the `src/include/` path:
 
 ```c
-// Before: In src/transaction/transaction.c including transaction.h
-#include "../include/transaction.h"
+// In src/components/transaction/transaction.c including transaction.h
+#include "src/include/transaction/transaction.h"
 
-// After reorganization: 
-#include "transaction/transaction.h"
+// In src/components/api/admin_api.c including database.h
+#include "src/include/database/database.h"
 ```
 
 ### Cross-Component Headers
 
-When including headers from other components, use the component path:
+When including headers from other components, always use the full path:
 
 ```c
-// Before: In src/api/transaction_api.c including transaction.h
-#include "../include/transaction.h"
+// In src/components/api/transaction_api.c including transaction.h
+#include "src/include/transaction/transaction.h"
 
-// After reorganization:
-#include "transaction/transaction.h"
+// In src/components/js/js_api.c including database.h
+#include "src/include/database/database.h"
 ```
 
-## Common Header Replacements
+## Common Header Paths
 
-| Old Include Path | New Include Path |
-|-----------------|------------------|
-| `#include "../include/api.h"` | `#include "api/api.h"` |
-| `#include "../include/database.h"` | `#include "database/database.h"` |
-| `#include "../include/js_engine.h"` | `#include "js/js_engine.h"` |
-| `#include "../include/json.h"` | `#include "utils/json.h"` |
-| `#include "../include/server.h"` | `#include "core/server.h"` |
-| `#include "../include/transaction.h"` | `#include "transaction/transaction.h"` |
-| `#include "../include/query_language.h"` | `#include "query/query_language.h"` |
-| `#include "../include/rbac.h"` | `#include "rbac/rbac.h"` |
-| `#include "../include/jwt.h"` | `#include "rbac/jwt.h"` |
-| `#include "../include/utils/metrics.h"` | `#include "utils/metrics.h"` |
-| `#include "../include/utils/memory/ref_counter.h"` | `#include "utils/memory/ref_counter.h"` |
+| Module | Header Include Path |
+|--------|---------------------|
+| API | `#include "src/include/api/api.h"` |
+| Database | `#include "src/include/database/database.h"` |
+| JavaScript | `#include "src/include/js/js_engine.h"` |
+| JSON | `#include "src/include/utils/json.h"` |
+| Server | `#include "src/include/core/server.h"` |
+| Transaction | `#include "src/include/transaction/transaction.h"` |
+| Query | `#include "src/include/query/query_language.h"` |
+| RBAC | `#include "src/include/rbac/rbac.h"` |
+| JWT | `#include "src/include/rbac/jwt.h"` |
+| Metrics | `#include "src/include/utils/metrics.h"` |
+| Reference Counter | `#include "src/include/utils/memory/ref_counter.h"` |
 
-## Update Process
+## Main Entry Point
 
-The reorganization script (`scripts/reorganize_source.sh`) attempts to update some common include paths automatically. However, additional manual updates may be required. Follow these steps to ensure all include paths are correctly updated:
-
-1. Run the reorganization script
-2. Check for compilation errors related to missing header files
-3. Update include paths according to the new structure
-4. Test the build again
-5. Repeat steps 2-4 until the project builds successfully
-
-## Example Conversion
-
-### Before
+For the main entry point, use the unified jsondb.h header:
 
 ```c
+#include "src/include/jsondb.h"
+```
+
+## External Libraries
+
+External libraries should be included with angle brackets or as recommended by the library:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+```
+
+For QuickJS, use the path:
+
+```c
+#include "src/include/js/quickjs.h"
+#include "src/include/js/quickjs-libc.h"
+```
+
+## Include Migration Script
+
+A migration script (`scripts/maintenance/fix_includes_final.sh`) has been created to automatically update include paths across the codebase. This script:
+
+1. Updates `include/jsondb/` references to use `src/include/`
+2. Updates relative paths using `../include/` to use `src/include/`
+3. Updates the basic `jsondb.h` inclusion to `src/include/jsondb.h`
+4. Updates QuickJS header references
+5. Standardizes component references
+
+To run the script:
+
+```bash
+cd /path/to/project/root
+./scripts/maintenance/fix_includes_final.sh
+```
+
+## Build System
+
+The Makefile has been updated to use only `src/include` and `src/components` directories. The compiler flags now include:
+
+```
+CFLAGS += -I./src
+```
+
+This allows the include statements to work correctly with the new structure.
+
+## Example Code
+
+### Before Reorganization
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "../include/api.h"
 #include "../include/database.h"
 #include "../include/json.h"
@@ -81,21 +138,29 @@ The reorganization script (`scripts/reorganize_source.sh`) attempts to update so
 #include "../include/utils/memory/ref_counter.h"
 ```
 
-### After
+### After Reorganization
 
 ```c
-#include "api/api.h"
-#include "database/database.h"
-#include "utils/json.h"
-#include "transaction/transaction.h"
-#include "utils/memory/ref_counter.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "src/include/api/api.h"
+#include "src/include/database/database.h"
+#include "src/include/utils/json.h"
+#include "src/include/transaction/transaction.h"
+#include "src/include/utils/memory/ref_counter.h"
 ```
 
-## Special Cases
+## Testing Include Paths
 
-1. **External Libraries**: Include paths for external libraries (`quickjs.h`, standard library headers) should remain unchanged
+To verify your include paths are correct, you can run the following commands:
 
-2. **UUID Headers**: The `uuid.h` header should be included as:
-   ```c
-   #include "utils/uuid/uuid.h"
-   ```
+```bash
+# Compile with verbose output
+make -v
+
+# List all includes in a specific file
+gcc -E -I./src your_file.c | grep "#include"
+```
+
+If you encounter any "file not found" errors, check your include paths against this documentation.

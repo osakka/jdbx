@@ -1,11 +1,11 @@
 #ifndef API_H
 #define API_H
 
-#include "jsondb/core/server.h"
-#include "jsondb/database/database.h"
-#include "jsondb/rbac/rbac.h"
-#include "jsondb/rbac/jwt.h"
-#include "jsondb/transaction/transaction.h"
+#include "components/core/server.h"
+#include "components/database/database.h"
+#include "components/rbac/rbac.h"
+#include "components/rbac/jwt.h"
+#include "components/transaction/transaction.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

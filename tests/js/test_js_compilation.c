@@ -1,14 +1,14 @@
-#include "include/jsondb/core/server.h"
-#include "include/jsondb/database/database.h"
-#include "include/jsondb/rbac/rbac.h"
-#include "include/jsondb/api/api.h"
-#include "include/jsondb/rbac/jwt.h"
-#include "include/jsondb/utils/metrics.h"
+#include "src/include/core/server.h"
+#include "src/include/database/database.h"
+#include "src/include/rbac/rbac.h"
+#include "src/include/api/api.h"
+#include "src/include/rbac/jwt.h"
+#include "src/include/utils/metrics.h"
 
 /* JavaScript dependencies */
 #ifndef DISABLE_JS
-#include "include/jsondb/js/js_api.h"
-#include "include/jsondb/js/js_engine.h"
+#include "src/include/js/js_api.h"
+#include "src/include/js/js_engine.h"
 #else
 /* Stub definitions when JavaScript is disabled */
 typedef void js_engine_t;

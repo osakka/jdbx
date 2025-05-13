@@ -1,5 +1,5 @@
-#include "jsondb/utils/js_file_utils.h"
-#include "jsondb/utils/logger.h"
+#include "src/include/utils/js_file_utils.h"
+#include "src/include/utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

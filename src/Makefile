@@ -11,7 +11,7 @@ TEST_DIR = ../tests
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -I../include
+CFLAGS = -Wall -Wextra -I$(INCLUDE_DIR) -I$(SRC_DIR)
 LDFLAGS = -lm -lpthread
 
 # QuickJS support

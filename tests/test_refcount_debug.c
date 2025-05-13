@@ -1,6 +1,6 @@
-#include "../include/utils/memory/ref_counter.h"
-#include "../include/utils/memory/ref_json.h"
-#include "../include/json.h"
+#include "src/include/utils/memory/ref_counter.h"
+#include "src/include/utils/memory/ref_json.h"
+#include "src/include/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

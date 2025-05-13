@@ -4,9 +4,9 @@
  * without relying on complex caching mechanisms that might cause deadlocks.
  */
 
-#include "jsondb/database/database.h"
-#include "jsondb/utils/logger.h"
-#include "jsondb/query/query_language.h"
+#include "src/include/database/database.h"
+#include "src/include/utils/logger.h"
+#include "src/include/query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

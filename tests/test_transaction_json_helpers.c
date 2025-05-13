@@ -1,7 +1,7 @@
-#include "../include/transaction.h"
-#include "../include/json.h"
-#include "../include/server.h"
-#include "../include/utils/json_helpers.h"
+#include "src/include/transaction.h"
+#include "src/include/json.h"
+#include "src/include/server.h"
+#include "src/include/utils/json_helpers.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

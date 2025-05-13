@@ -1,5 +1,5 @@
-#include "jsondb/core/server.h"
-#include "jsondb/api/api.h"
+#include "src/include/core/server.h"
+#include "src/include/api/api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -18,35 +18,44 @@ jsondb/
 │   └── obj/                # Object files
 ├── src/                    # Source code
 │   ├── Makefile            # Main build system
-│   ├── include/            # Global header files
-│   │   └── jsondb.h        # Main include file
-│   └── components/         # Component-based organization
+│   ├── include/            # Global header files - include path for all components
+│   │   ├── jsondb.h        # Main include file
+│   │   ├── api/            # API header files
+│   │   │   └── *.h         # API-specific headers
+│   │   ├── core/           # Core header files
+│   │   │   └── *.h         # Core-specific headers
+│   │   ├── database/       # Database header files
+│   │   │   └── *.h         # Database-specific headers
+│   │   ├── js/             # JavaScript header files
+│   │   │   └── *.h         # JavaScript-specific headers
+│   │   ├── query/          # Query header files
+│   │   │   └── *.h         # Query-specific headers
+│   │   ├── rbac/           # RBAC header files
+│   │   │   └── *.h         # RBAC-specific headers
+│   │   ├── transaction/    # Transaction header files
+│   │   │   └── *.h         # Transaction-specific headers
+│   │   └── utils/          # Utility header files
+│   │       ├── *.h         # Utility-specific headers
+│   │       └── memory/     # Memory management utility headers
+│   └── components/         # Component-based organization 
 │       ├── main.c          # Main entry point
-│       ├── api/            # API implementation with headers
-│       │   ├── api.h       # API header files
+│       ├── api/            # API implementation
 │       │   └── *.c         # API implementation files
-│       ├── core/           # Core server functionality with headers
-│       │   ├── server.h    # Core header files
+│       ├── core/           # Core server functionality
 │       │   └── *.c         # Core implementation files
-│       ├── database/       # Database engine with headers
-│       │   ├── database.h  # Database header files
+│       ├── database/       # Database engine implementation
 │       │   └── *.c         # Database implementation files
-│       ├── js/             # JavaScript integration with headers
-│       │   ├── js_api.h    # JavaScript header files
+│       ├── js/             # JavaScript integration implementation
 │       │   └── *.c         # JavaScript implementation files
-│       ├── query/          # Query language implementation with headers
-│       │   ├── query_language.h # Query header files
+│       ├── query/          # Query language implementation
 │       │   └── *.c         # Query implementation files
-│       ├── rbac/           # Role-based access control with headers
-│       │   ├── rbac.h      # RBAC header files
+│       ├── rbac/           # Role-based access control implementation
 │       │   └── *.c         # RBAC implementation files
-│       ├── tools/          # Server tools with headers
+│       ├── tools/          # Server tools implementation
 │       │   └── *.c         # Tools implementation files
-│       ├── transaction/    # Transaction management with headers
-│       │   ├── transaction.h # Transaction header files
+│       ├── transaction/    # Transaction management implementation
 │       │   └── *.c         # Transaction implementation files
-│       └── utils/          # Utility functions with headers
-│           ├── *.h         # Utility header files
+│       └── utils/          # Utility functions implementation
 │           ├── *.c         # Utility implementation files
 │           └── memory/     # Memory management utilities
 ├── docs/                   # Documentation

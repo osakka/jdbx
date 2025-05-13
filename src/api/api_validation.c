@@ -1,8 +1,8 @@
-#include "jsondb/api/api.h"
-#include "jsondb/utils/input_validation.h"
-#include "jsondb/utils/logger.h"
-#include "jsondb/utils/json.h"
-#include "jsondb/utils/json_helpers.h"
+#include "components/api/api.h"
+#include "components/utils/input_validation.h"
+#include "components/utils/logger.h"
+#include "components/utils/json.h"
+#include "components/utils/json_helpers.h"
 #include <string.h>
 #include <stdlib.h>
 

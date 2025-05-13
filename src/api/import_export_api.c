@@ -1,7 +1,7 @@
-#include "jsondb/api/api.h"
-#include "jsondb/utils/import_export.h"
-#include "jsondb/utils/json_helpers.h"
-#include "jsondb/utils/logger.h"
+#include "components/api/api.h"
+#include "components/utils/import_export.h"
+#include "components/utils/json_helpers.h"
+#include "components/utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

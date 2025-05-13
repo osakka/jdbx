@@ -1,5 +1,5 @@
-#include "jsondb/database/database.h"
-#include "jsondb/utils/logger.h"
+#include "components/database/database.h"
+#include "components/utils/logger.h"
 #include "simplified_ops.h"
 
 /**

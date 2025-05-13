@@ -1,6 +1,6 @@
-#include "jsondb/database/database.h"
-#include "jsondb/utils/json.h"
-#include "jsondb/utils/logger.h"
+#include "components/database/database.h"
+#include "components/utils/json.h"
+#include "components/utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

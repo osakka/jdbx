@@ -67,17 +67,17 @@ The project requires the QuickJS JavaScript engine. You need to set up the Quick
 
 If QuickJS is installed in a system directory (like `/opt/qjs`, `/usr/local`, or `/usr`):
 
-1. Create a `quickjs` directory in the `include` folder:
+1. Create a `js` directory in the `src/include` folder if it doesn't exist already:
    ```bash
-   mkdir -p include/quickjs
+   mkdir -p src/include/js
    ```
 2. Create symbolic links to the QuickJS header files:
    ```bash
    # If QuickJS is installed in /opt/qjs
-   ln -sf /opt/qjs/include/quickjs/*.h include/quickjs/
+   ln -sf /opt/qjs/include/quickjs/*.h src/include/js/
    
    # Or if QuickJS is in /usr/local
-   # ln -sf /usr/local/include/quickjs/*.h include/quickjs/
+   # ln -sf /usr/local/include/quickjs/*.h src/include/js/
    ```
 3. Update the Makefile to include the QuickJS paths:
    ```bash
@@ -93,14 +93,14 @@ If QuickJS is installed in a system directory (like `/opt/qjs`, `/usr/local`, or
 If you prefer to bundle QuickJS with the project:
 
 1. Download QuickJS from https://bellard.org/quickjs/
-2. Create a `quickjs` directory in the `include` folder:
+2. Create a `js` directory in the `src/include` folder if it doesn't exist already:
    ```bash
-   mkdir -p include/quickjs
+   mkdir -p src/include/js
    ```
-3. Copy the necessary header files to the `include/quickjs` directory:
+3. Copy the necessary header files to the `src/include/js` directory:
    ```bash
-   cp /path/to/quickjs/quickjs.h include/quickjs/
-   cp /path/to/quickjs/quickjs-libc.h include/quickjs/
+   cp /path/to/quickjs/quickjs.h src/include/js/
+   cp /path/to/quickjs/quickjs-libc.h src/include/js/
    ```
 4. Copy the library files to the `lib` directory:
    ```bash

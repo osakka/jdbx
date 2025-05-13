@@ -1,7 +1,7 @@
-#include "jsondb/database/database.h"
-#include "jsondb/utils/cache.h"
-#include "jsondb/utils/logger.h"
-#include "jsondb/query/query_language.h"
+#include "src/include/database/database.h"
+#include "src/include/utils/cache.h"
+#include "src/include/utils/logger.h"
+#include "src/include/query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

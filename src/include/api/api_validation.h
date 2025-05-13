@@ -9,8 +9,8 @@
  * using the input validation framework.
  */
 
-#include "jsondb/api/api.h"
-#include "jsondb/utils/json.h"
+#include "components/api/api.h"
+#include "components/utils/json.h"
 #include <stddef.h>
 #include <stdint.h>
 
