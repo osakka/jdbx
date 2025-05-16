@@ -72,9 +72,24 @@ directories:
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LIB_DIR)
 
+# Define custom database objects using only the implementations we want
+CUSTOM_DB_SRCS = $(filter-out $(SRC_DIR)/components/database/database_operations.c, $(filter-out $(SRC_DIR)/components/database/database.c, $(DB_SRCS)))
+CUSTOM_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CUSTOM_DB_SRCS))
+
+# Add back just database_with_optimizations.c
+FINAL_DB_OBJS = $(CUSTOM_DB_OBJS) $(OBJ_DIR)/components/database/database_with_optimizations.o
+
+# Define all optimized objects
+OPTIMIZED_OBJS = $(CORE_OBJS) $(API_OBJS) $(FINAL_DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
+
+# List of objects for Makefile dependencies
+ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS))
+
 # Build static library
-libjsondb: $(OBJS)
-	ar rcs $(LIB_DIR)/libjsondb.a $(OBJS)
+libjsondb: $(ALL_OBJS)
+	@echo "Creating libjsondb.a with optimized implementations..."
+	ar rcs $(LIB_DIR)/libjsondb.a $(OPTIMIZED_OBJS)
 
 # Build server
 server: $(OBJ_DIR)/components/main.o libjsondb

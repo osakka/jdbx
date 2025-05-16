@@ -978,7 +978,20 @@ int main(int argc, char** argv) {
         }
     }
     
+    /* Initialize document indices for faster lookups */
+    if (g_logger) {
+        LOG_INFO("Building document indices for faster lookups");
+    }
+    db_rebuild_indices(g_database);
+    if (g_logger) {
+        LOG_INFO("Document indices built successfully");
+    }
+    
     /* Initialize API context */
+    if (g_logger) {
+        LOG_INFO("Initializing API context with JWT secret: '%s'", g_server_config->jwt_secret);
+    }
+    
     g_api_ctx = api_create_context(g_database, g_rbac, g_server_config->jwt_secret);
     if (!g_api_ctx) {
         if (g_logger) {
@@ -986,6 +999,10 @@ int main(int argc, char** argv) {
         }
         fprintf(stderr, "Error: Failed to create API context\n");
         return 1;
+    }
+    
+    if (g_logger) {
+        LOG_INFO("API context initialized successfully");
     }
 
     /* Initialize metrics registry */

@@ -165,4 +165,12 @@ void db_remove_document_from_indexes(database_t* db, const char* collection,
 json_value_t* db_index_to_json(index_t* index);
 json_value_t* db_index_stats(database_t* db, const char* collection, const char* name);
 
+/**
+ * Rebuild all document indices for improved performance
+ * 
+ * @param db Database instance
+ * @return 1 on success, 0 on failure
+ */
+int db_rebuild_indices(database_t* db);
+
 #endif /* DATABASE_H */
