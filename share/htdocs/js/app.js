@@ -433,19 +433,32 @@ function loadCollections() {
         const tableBody = document.getElementById('collections-table-body');
         tableBody.innerHTML = '';
         
+        debugLog('Collections response:', data);
+        
         if (data.collections && data.collections.length > 0) {
             data.collections.forEach(collection => {
+                // Handle both string-only and object collection formats
+                const collName = typeof collection === 'string' ? collection : collection.name;
+                
+                // Parse the collection object for display
+                const displayData = {
+                    name: collName,
+                    documents_count: typeof collection === 'object' ? collection.documents_count || 0 : 0,
+                    size_bytes: typeof collection === 'object' ? collection.size_bytes || 0 : 0,
+                    last_modified: typeof collection === 'object' ? collection.last_modified || '' : ''
+                };
+                
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${collection.name}</td>
-                    <td>${collection.documents_count}</td>
-                    <td>${formatSize(collection.size_bytes)}</td>
-                    <td>${formatDateTime(collection.last_modified)}</td>
+                    <td>${displayData.name}</td>
+                    <td>${displayData.documents_count}</td>
+                    <td>${formatSize(displayData.size_bytes)}</td>
+                    <td>${formatDateTime(displayData.last_modified)}</td>
                     <td class="actions-column">
-                        <button class="btn btn-sm btn-outline-primary view-documents-btn" data-collection="${collection.name}">
+                        <button class="btn btn-sm btn-outline-primary view-documents-btn" data-collection="${displayData.name}">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-collection-btn" data-collection="${collection.name}">
+                        <button class="btn btn-sm btn-outline-danger delete-collection-btn" data-collection="${displayData.name}">
                             <i class="bi bi-trash"></i>
                         </button>
                     </td>
@@ -482,6 +495,8 @@ function loadCollectionSelector() {
     .then(data => {
         const selector = document.getElementById('collection-selector');
         
+        debugLog('Collection selector data:', data);
+        
         // Keep only the first option
         while (selector.options.length > 1) {
             selector.remove(1);
@@ -489,9 +504,12 @@ function loadCollectionSelector() {
         
         if (data.collections && data.collections.length > 0) {
             data.collections.forEach(collection => {
+                // Handle both string-only and object collection formats
+                const collName = typeof collection === 'string' ? collection : collection.name;
+                
                 const option = document.createElement('option');
-                option.value = collection.name;
-                option.textContent = collection.name;
+                option.value = collName;
+                option.textContent = collName;
                 selector.appendChild(option);
             });
             
@@ -813,8 +831,10 @@ function showNewCollectionModal() {
         <form id="new-collection-form">
             <div class="mb-3">
                 <label for="collection-name" class="form-label">Collection Name</label>
-                <input type="text" class="form-control" id="collection-name" required>
+                <input type="text" class="form-control" id="collection-name" required pattern="[A-Za-z0-9_-]+" title="Collection names can only contain letters, numbers, underscores and hyphens">
+                <div class="form-text">Collection names can only contain letters, numbers, underscores and hyphens</div>
             </div>
+            <div id="collection-create-error" class="alert alert-danger d-none"></div>
             <div class="d-grid gap-2">
                 <button type="submit" class="btn btn-primary">Create Collection</button>
             </div>
@@ -825,13 +845,41 @@ function showNewCollectionModal() {
     document.getElementById('new-collection-form').addEventListener('submit', function(event) {
         event.preventDefault();
         
-        const name = document.getElementById('collection-name').value;
+        // Hide any previous error
+        const errorEl = document.getElementById('collection-create-error');
+        errorEl.classList.add('d-none');
+        
+        // Validate input
+        const name = document.getElementById('collection-name').value.trim();
+        
+        if (!name) {
+            errorEl.textContent = 'Collection name cannot be empty';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+        
+        // Disable form during submission
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+        
         createCollection(name)
             .then(() => {
                 bootstrap.Modal.getInstance(actionModal).hide();
                 refreshCurrentView();
+                showToast(`Collection "${name}" created successfully`, 'success');
             })
-            .catch(error => showToast(`Error creating collection: ${error.message}`, 'error'));
+            .catch(error => {
+                errorEl.textContent = `Error creating collection: ${error.message}`;
+                errorEl.classList.remove('d-none');
+                showToast(`Error creating collection: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                // Re-enable form
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            });
     });
 }
 
@@ -1058,37 +1106,85 @@ function executeConfirmedAction() {
 
 // API Functions
 function createCollection(name) {
-    return fetch(`${API_BASE_URL}/api/collections`, {
+    debugLog(`Creating collection with name: ${name}`);
+    
+    // Add cache-busting and response timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    return fetch(`${API_BASE_URL}/api/collections?_t=${Date.now()}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
+        signal: controller.signal
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            debugLog('Collection creation request timed out');
+            throw new Error('Request timed out after 10 seconds');
+        }
+        throw error;
     })
     .then(response => {
+        clearTimeout(timeoutId);
+        
+        debugLog(`Collection creation response status: ${response.status}`);
+        
         if (!response.ok) {
             return response.json().then(data => {
                 throw new Error(data.error || 'Failed to create collection');
             });
         }
         return response.json();
+    })
+    .then(data => {
+        debugLog('Collection creation response:', data);
+        return data;
     });
 }
 
 function deleteCollection(name) {
-    return fetch(`${API_BASE_URL}/api/collections/${name}`, {
+    debugLog(`Deleting collection: ${name}`);
+    
+    // Add cache-busting and response timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    return fetch(`${API_BASE_URL}/api/collections/${name}?_t=${Date.now()}`, {
         method: 'DELETE',
         headers: {
             'Authorization': `Bearer ${authToken}`
+        },
+        signal: controller.signal
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            debugLog('Collection deletion request timed out');
+            showToast('Request timed out after 10 seconds', 'error');
+            throw new Error('Request timed out after 10 seconds');
         }
+        throw error;
     })
     .then(response => {
+        clearTimeout(timeoutId);
+        
+        debugLog(`Collection deletion response status: ${response.status}`);
+        
         if (!response.ok) {
             return response.json().then(data => {
                 throw new Error(data.error || 'Failed to delete collection');
+            }).catch(e => {
+                // Handle non-JSON responses
+                throw new Error(`Failed to delete collection (${response.status})`);
             });
         }
+        
+        // Refresh the collections list
         loadCollections();
         showToast(`Collection "${name}" deleted successfully`);
     })
