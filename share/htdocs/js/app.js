@@ -855,12 +855,21 @@ function showNewDocumentModal() {
         </div>
     `;
     
-    // Initialize JSON editor
+    // Initialize JSON editor with enhanced options
     const container = document.getElementById('new-document-editor');
     const newDocEditor = new JSONEditor(container, {
         mode: 'tree',
-        modes: ['tree', 'text', 'form'],
-        mainMenuBar: true
+        modes: ['tree', 'text', 'form', 'code'],
+        mainMenuBar: true,
+        onError: function(err) {
+            console.error('JSONEditor error:', err);
+            showToast('Editor error: ' + err.message, 'error');
+        },
+        onModeChange: function(newMode, oldMode) {
+            console.log('Mode changed from', oldMode, 'to', newMode);
+        },
+        navigationBar: true,
+        statusBar: true
     });
     
     // Set initial empty object
@@ -1351,8 +1360,16 @@ function initializeJsonEditor() {
     const container = document.getElementById('json-editor');
     jsonEditor = new JSONEditor(container, {
         mode: 'tree',
-        modes: ['tree', 'text', 'form', 'view'],
-        mainMenuBar: true
+        modes: ['tree', 'text', 'form', 'code', 'view'],
+        mainMenuBar: true,
+        onError: function(err) {
+            console.error('JSONEditor error:', err);
+            showToast('Editor error: ' + err.message, 'error');
+        },
+        navigationBar: true,
+        statusBar: true,
+        search: true,
+        history: true
     });
 }
 
