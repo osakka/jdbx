@@ -14,12 +14,13 @@
 #include <sys/stat.h>
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/config_defaults.h"
 
 /* Server configuration */
 #define DEFAULT_PORT 5000
 #define MAX_CONNECTIONS 100
 #define BUFFER_SIZE 4096
-#define ADMIN_FILES_DIR "/home/claude-3/project/admin"
+#define ADMIN_FILES_DIR DEFAULT_ADMIN_FILES_DIR
 
 /* Server status codes */
 typedef enum {

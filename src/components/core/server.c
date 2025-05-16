@@ -621,21 +621,31 @@ void* handle_client(void* client_data) {
 
         printf("Handling admin route: %s\n", request->path);
 
+        /* Get proper web root directory from server config */
+        const char* web_root = ADMIN_FILES_DIR;
+        extern server_config_t* g_server_config;
+        if (g_server_config && g_server_config->web_root) {
+            web_root = g_server_config->web_root;
+            printf("Using configured web root: %s\n", web_root);
+        } else {
+            printf("Using default web root: %s\n", web_root);
+        }
+        
         /* Always serve static files without authentication for simplicity */
         response = serve_admin_file(request->path);
         printf("File served: %s\n", response ? "yes" : "no");
 
         /* Print debug info about file path if response wasn't generated */
         if (!response) {
-            /* Check if ADMIN_FILES_DIR exists */
-            printf("Admin files directory: %s\n", ADMIN_FILES_DIR);
+            /* Check if web root directory exists */
+            printf("Admin files directory: %s\n", web_root);
             char filepath[512] = {0};
 
             if (strcmp(request->path, "/") == 0) {
-                sprintf(filepath, "%s/index.html", ADMIN_FILES_DIR);
+                sprintf(filepath, "%s/index.html", web_root);
                 printf("Attempting to serve index.html from: %s\n", filepath);
             } else if (strcmp(request->path, "/login") == 0) {
-                sprintf(filepath, "%s/login.html", ADMIN_FILES_DIR);
+                sprintf(filepath, "%s/login.html", web_root);
                 printf("Attempting to serve login.html from: %s\n", filepath);
             }
         }
@@ -1046,23 +1056,30 @@ char* read_file_content(const char* filepath, size_t* size) {
 
 /* Serve admin file from filesystem */
 http_response_t* serve_admin_file(const char* path) {
+    /* Get proper web root directory from server config */
+    const char* web_root = ADMIN_FILES_DIR;
+    extern server_config_t* g_server_config;
+    if (g_server_config && g_server_config->web_root) {
+        web_root = g_server_config->web_root;
+    }
+
     /* Default path (root) to index.html */
     char filepath[512] = {0};
     
     if (strcmp(path, "/") == 0) {
-        sprintf(filepath, "%s/index.html", ADMIN_FILES_DIR);
+        sprintf(filepath, "%s/index.html", web_root);
     } else if (strcmp(path, "/login") == 0) {
-        sprintf(filepath, "%s/login.html", ADMIN_FILES_DIR);
+        sprintf(filepath, "%s/login.html", web_root);
     } else if (strncmp(path, "/admin", 6) == 0) {
         /* Handle /admin prefix redirects */
         if (strcmp(path, "/admin") == 0 || strcmp(path, "/admin/") == 0) {
-            sprintf(filepath, "%s/index.html", ADMIN_FILES_DIR);
+            sprintf(filepath, "%s/index.html", web_root);
         } else {
-            sprintf(filepath, "%s%s", ADMIN_FILES_DIR, path + 6);
+            sprintf(filepath, "%s%s", web_root, path + 6);
         }
     } else {
         /* Handle CSS, JS, and other assets */
-        sprintf(filepath, "%s%s", ADMIN_FILES_DIR, path);
+        sprintf(filepath, "%s%s", web_root, path);
     }
     
     /* Check if file exists */
@@ -1071,7 +1088,7 @@ http_response_t* serve_admin_file(const char* path) {
         /* File not found, try index.html for SPA routing */
         if (strncmp(path, "/admin", 6) == 0 || 
             strchr(path + 1, '.') == NULL) { /* If no file extension, likely a route */
-            sprintf(filepath, "%s/index.html", ADMIN_FILES_DIR);
+            sprintf(filepath, "%s/index.html", web_root);
             
             /* Check if index.html exists */
             if (stat(filepath, &file_stat) != 0 || !S_ISREG(file_stat.st_mode)) {
