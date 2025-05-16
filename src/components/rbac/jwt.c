@@ -101,6 +101,135 @@ static char* base64_url_encode(const unsigned char* input, int length) {
     return b64;
 }
 
+/* URL-safe version of base64 decoding - ADDED MISSING FUNCTION */
+static unsigned char* base64_url_decode(const char* input, int* output_length) {
+    /* Step 1: Make a mutable copy of the input */
+    char* input_copy = strdup(input);
+    if (!input_copy) return NULL;
+    
+    /* Step 2: Convert URL-safe characters back to standard base64 */
+    for (char* p = input_copy; *p; p++) {
+        if (*p == '-') *p = '+';
+        else if (*p == '_') *p = '/';
+    }
+    
+    /* Step 3: Add padding if necessary */
+    int len = strlen(input_copy);
+    int padding = (4 - (len % 4)) % 4;
+    
+    char* padded_input = (char*)malloc(len + padding + 1);
+    if (!padded_input) {
+        free(input_copy);
+        return NULL;
+    }
+    
+    strcpy(padded_input, input_copy);
+    for (int i = 0; i < padding; i++) {
+        padded_input[len + i] = '=';
+    }
+    padded_input[len + padding] = '\0';
+    
+    free(input_copy);
+    
+    /* Step 4: Use regular base64 decode */
+    unsigned char* output = base64_decode(padded_input, output_length);
+    free(padded_input);
+    
+    return output;
+}
+
+/* Simple SHA-256 implementation for JWT */
+static void simple_sha256(const char* input, size_t input_len, unsigned char* output) {
+    /* This is a placeholder for a real SHA-256 implementation
+       In a real implementation, we would use OpenSSL or another crypto library */
+    size_t i;
+    unsigned int hash = 5381;
+
+    /* DJB2 hash algorithm as a placeholder */
+    for (i = 0; i < input_len; i++) {
+        hash = ((hash << 5) + hash) + input[i];
+    }
+
+    /* Convert to bytes */
+    for (i = 0; i < 32; i++) {
+        output[i] = (hash >> (i % 4) * 8) & 0xFF;
+    }
+}
+
+/* Simple HMAC-SHA256 for JWT signing */
+static void hmac_sha256(const char* key, size_t key_len, 
+                       const char* data, size_t data_len, 
+                       unsigned char* output) {
+    /* This is a very simplified HMAC implementation
+       In a real implementation, use OpenSSL HMAC functions */
+    
+    /* Prepare key */
+    unsigned char k_ipad[64] = {0};
+    unsigned char k_opad[64] = {0};
+    unsigned char key_hash[32] = {0};
+    
+    if (key_len > 64) {
+        /* Hash the key if it's too long */
+        /* Using our simple SHA256 implementation */
+        simple_sha256(key, key_len, key_hash);
+        key = (const char*)key_hash;
+        key_len = 32;
+    }
+    
+    /* XOR key with ipad and opad values */
+    size_t i;
+    for (i = 0; i < key_len; i++) {
+        k_ipad[i] = key[i] ^ 0x36;
+        k_opad[i] = key[i] ^ 0x5c;
+    }
+    for (; i < 64; i++) {
+        k_ipad[i] = 0x36;
+        k_opad[i] = 0x5c;
+    }
+    
+    /* Perform inner hash */
+    unsigned char inner_hash[32];
+    
+    /* Concatenate k_ipad with data */
+    size_t total_len = 64 + data_len;
+    char* inner_data = malloc(total_len);
+    if (!inner_data) return;
+    
+    memcpy(inner_data, k_ipad, 64);
+    memcpy(inner_data + 64, data, data_len);
+    
+    /* Hash inner_data */
+    simple_sha256(inner_data, total_len, inner_hash);
+    free(inner_data);
+    
+    /* Perform outer hash */
+    /* Concatenate k_opad with inner_hash */
+    char outer_data[96]; /* 64 + 32 */
+    memcpy(outer_data, k_opad, 64);
+    memcpy(outer_data + 64, inner_hash, 32);
+
+    /* Hash outer_data */
+    simple_sha256(outer_data, 96, output);
+}
+
+/* Sign JWT token */
+static char* jwt_sign(const char* header_payload, const char* secret, const char* alg) {
+    unsigned char digest[32]; /* SHA-256 output size */
+    
+    /* For simplicity, we only support HS256 */
+    if (strcmp(alg, "HS256") != 0) {
+        return NULL;  /* Unsupported algorithm */
+    }
+    
+    /* Compute HMAC */
+    hmac_sha256(secret, strlen(secret), 
+               header_payload, strlen(header_payload), 
+               digest);
+    
+    /* Base64url encode */
+    return base64_url_encode(digest, 32);
+}
+
 /* Create new JWT token */
 jwt_token_t* jwt_create(const char* secret __attribute__((unused))) {
     jwt_token_t* token = (jwt_token_t*)malloc(sizeof(jwt_token_t));
@@ -282,98 +411,6 @@ json_value_t* jwt_get_claim(jwt_token_t* token, const char* key) {
     return json_object_get(token->payload->claims, key);
 }
 
-/* Simple SHA-256 implementation for JWT */
-static void simple_sha256(const char* input, size_t input_len, unsigned char* output) {
-    /* This is a placeholder for a real SHA-256 implementation
-       In a real implementation, we would use OpenSSL or another crypto library */
-    size_t i;
-    unsigned int hash = 5381;
-
-    /* DJB2 hash algorithm as a placeholder */
-    for (i = 0; i < input_len; i++) {
-        hash = ((hash << 5) + hash) + input[i];
-    }
-
-    /* Convert to bytes */
-    for (i = 0; i < 32; i++) {
-        output[i] = (hash >> (i % 4) * 8) & 0xFF;
-    }
-}
-
-/* Simple HMAC-SHA256 for JWT signing */
-static void hmac_sha256(const char* key, size_t key_len, 
-                       const char* data, size_t data_len, 
-                       unsigned char* output) {
-    /* This is a very simplified HMAC implementation
-       In a real implementation, use OpenSSL HMAC functions */
-    
-    /* Prepare key */
-    unsigned char k_ipad[64] = {0};
-    unsigned char k_opad[64] = {0};
-    unsigned char key_hash[32] = {0};
-    
-    if (key_len > 64) {
-        /* Hash the key if it's too long */
-        /* Using our simple SHA256 implementation */
-        simple_sha256(key, key_len, key_hash);
-        key = (const char*)key_hash;
-        key_len = 32;
-    }
-    
-    /* XOR key with ipad and opad values */
-    size_t i;
-    for (i = 0; i < key_len; i++) {
-        k_ipad[i] = key[i] ^ 0x36;
-        k_opad[i] = key[i] ^ 0x5c;
-    }
-    for (; i < 64; i++) {
-        k_ipad[i] = 0x36;
-        k_opad[i] = 0x5c;
-    }
-    
-    /* Perform inner hash */
-    unsigned char inner_hash[32];
-    
-    /* Concatenate k_ipad with data */
-    size_t total_len = 64 + data_len;
-    char* inner_data = malloc(total_len);
-    if (!inner_data) return;
-    
-    memcpy(inner_data, k_ipad, 64);
-    memcpy(inner_data + 64, data, data_len);
-    
-    /* Hash inner_data */
-    simple_sha256(inner_data, total_len, inner_hash);
-    free(inner_data);
-    
-    /* Perform outer hash */
-    /* Concatenate k_opad with inner_hash */
-    char outer_data[96]; /* 64 + 32 */
-    memcpy(outer_data, k_opad, 64);
-    memcpy(outer_data + 64, inner_hash, 32);
-
-    /* Hash outer_data */
-    simple_sha256(outer_data, 96, output);
-}
-
-/* Sign JWT token */
-static char* jwt_sign(const char* header_payload, const char* secret, const char* alg) {
-    unsigned char digest[32]; /* SHA-256 output size */
-    
-    /* For simplicity, we only support HS256 */
-    if (strcmp(alg, "HS256") != 0) {
-        return NULL;  /* Unsupported algorithm */
-    }
-    
-    /* Compute HMAC */
-    hmac_sha256(secret, strlen(secret), 
-               header_payload, strlen(header_payload), 
-               digest);
-    
-    /* Base64url encode */
-    return base64_url_encode(digest, 32);
-}
-
 /* Encode JWT token */
 char* jwt_encode(jwt_token_t* token, const char* secret) {
     if (!token || !token->header || !token->payload || !secret) {
@@ -551,7 +588,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
     
     /* Decode header */
     int header_len;
-    unsigned char* header_json = base64_decode(header_b64, &header_len);
+    unsigned char* header_json = base64_url_decode(header_b64, &header_len);
     if (!header_json) {
         free(token_copy);
         return NULL;
@@ -569,7 +606,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
     
     /* Decode payload */
     int payload_len;
-    unsigned char* payload_json = base64_decode(payload_b64, &payload_len);
+    unsigned char* payload_json = base64_url_decode(payload_b64, &payload_len);
     if (!payload_json) {
         json_free(header);
         free(token_copy);
@@ -697,7 +734,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
     return token;
 }
 
-/* Verify JWT token */
+/* Verify JWT token - FIXED VERSION */
 int jwt_verify(const char* token_str, const char* secret) {
     if (!token_str || !secret) {
         return 0;
@@ -766,7 +803,7 @@ int jwt_verify(const char* token_str, const char* secret) {
         return 0;
     }
     
-    /* Compare signatures */
+    /* Compare signatures - directly compare the signatures since both are URL-safe base64 encoded */
     int result = strcmp(signature, signature_b64) == 0;
     
     /* Clean up */

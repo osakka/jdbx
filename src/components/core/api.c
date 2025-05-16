@@ -4,16 +4,19 @@
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "utils/metrics.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-/* Global metrics registry declaration */
+/* External globals declaration */
 #ifndef TOOLS_BUILD
 extern metrics_registry_t* g_metrics_registry;
+extern logger_config_t* g_logger;
 #else
 metrics_registry_t* g_metrics_registry = NULL;
+logger_config_t* g_logger = NULL;
 #endif
 
 /* API routes */
@@ -187,11 +190,22 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     
     ctx->db = db;
     ctx->rbac = rbac;
-    ctx->jwt_secret = jwt_secret;
+    /* Make a copy of the JWT secret to ensure it remains consistent */
+    ctx->jwt_secret = strdup(jwt_secret);
+    if (!ctx->jwt_secret) {
+        free(ctx);
+        return NULL;
+    }
+    
+    /* Log the JWT secret being used (for debugging) */
+    if (g_logger) {
+        LOG_DEBUG("API context created with JWT secret: '%s'", ctx->jwt_secret);
+    }
     
     /* Initialize transaction manager with capacity for 100 concurrent transactions */
     ctx->transaction_manager = transaction_manager_create(db, 100);
     if (!ctx->transaction_manager) {
+        free((void*)ctx->jwt_secret);
         free(ctx);
         return NULL;
     }
@@ -204,6 +218,9 @@ void api_free_context(api_context_t* ctx) {
     if (ctx) {
         if (ctx->transaction_manager) {
             transaction_manager_free(ctx->transaction_manager);
+        }
+        if (ctx->jwt_secret) {
+            free((void*)ctx->jwt_secret);
         }
         free(ctx);
     }
@@ -227,17 +244,65 @@ char* api_extract_token(http_request_t* request) {
 /* Authenticate request */
 int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     if (!ctx || !request) {
+        if (g_logger) LOG_ERROR("Authentication failed: Invalid context or request");
         return 0;
     }
     
     /* Extract token */
     char* token = api_extract_token(request);
     if (!token) {
+        if (g_logger) LOG_ERROR("Authentication failed: No token found in request");
+        return 0;
+    }
+    
+    if (g_logger) LOG_DEBUG("Authenticating token: %.20s...", token);
+    
+    /* Verify JWT secret is set */
+    if (!ctx->jwt_secret) {
+        if (g_logger) LOG_ERROR("Authentication failed: JWT secret not set in API context");
+        free(token);
         return 0;
     }
     
     /* Verify token */
+    if (g_logger) LOG_DEBUG("Using JWT secret: '%s'", ctx->jwt_secret);
+    
     int result = jwt_verify(token, ctx->jwt_secret);
+    
+    if (result) {
+        if (g_logger) LOG_DEBUG("Token authentication successful");
+    } else {
+        if (g_logger) {
+            LOG_ERROR("Token verification failed");
+            LOG_DEBUG("Token: %.30s...", token);
+            
+            /* Verify token parts */
+            jwt_token_t* decoded = jwt_decode(token);
+            if (decoded) {
+                if (decoded->header) {
+                    LOG_DEBUG("Token header alg: %s, typ: %s", 
+                              decoded->header->alg ? decoded->header->alg : "NULL",
+                              decoded->header->typ ? decoded->header->typ : "NULL");
+                }
+                
+                if (decoded->payload) {
+                    LOG_DEBUG("Token payload - iss: %s, sub: %s, exp: %ld", 
+                              decoded->payload->iss ? decoded->payload->iss : "NULL",
+                              decoded->payload->sub ? decoded->payload->sub : "NULL",
+                              decoded->payload->exp);
+                    
+                    /* Check for token expiration */
+                    if (decoded->payload->exp > 0 && time(NULL) > decoded->payload->exp) {
+                        LOG_ERROR("Token has expired");
+                    }
+                }
+                
+                jwt_free(decoded);
+            } else {
+                LOG_ERROR("Failed to decode token for debugging");
+            }
+        }
+    }
     
     free(token);
     
@@ -263,25 +328,42 @@ static int route_matches(const char* route, const char* path) {
 /* Dispatch request to appropriate handler */
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) {
     if (!ctx || !request) {
+        if (g_logger) LOG_ERROR("API dispatch failed: Invalid context or request");
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Internal server error\"}", "application/json");
     }
     
+    if (g_logger) LOG_DEBUG("Dispatching request: %s %s", 
+                           request->method == HTTP_GET ? "GET" : 
+                           request->method == HTTP_POST ? "POST" : 
+                           request->method == HTTP_PUT ? "PUT" : 
+                           request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+                           request->path);
+    
     /* Find matching route */
     for (int i = 0; routes[i].path != NULL; i++) {
         if (route_matches(routes[i].path, request->path) && routes[i].method == request->method) {
+            if (g_logger) LOG_DEBUG("Found matching route: %s (requires_auth: %d)", 
+                                routes[i].path, routes[i].requires_auth);
+            
             /* Check if route requires authentication */
-            if (routes[i].requires_auth && !api_authenticate_request(ctx, request)) {
-                return create_http_response(HTTP_UNAUTHORIZED, 
-                                          "{\"error\":\"Unauthorized\"}", "application/json");
+            if (routes[i].requires_auth) {
+                if (g_logger) LOG_DEBUG("Route requires authentication, checking token");
+                if (!api_authenticate_request(ctx, request)) {
+                    if (g_logger) LOG_WARNING("Authentication failed for route: %s", routes[i].path);
+                    return create_http_response(HTTP_UNAUTHORIZED, 
+                                              "{\"error\":\"Unauthorized\"}", "application/json");
+                }
             }
             
+            if (g_logger) LOG_DEBUG("Calling handler for route: %s", routes[i].path);
             /* Call handler */
             return routes[i].handler(ctx, request);
         }
     }
     
     /* No matching route */
+    if (g_logger) LOG_WARNING("No matching route found for: %s", request->path);
     return create_http_response(HTTP_NOT_FOUND, 
                               "{\"error\":\"Not found\"}", "application/json");
 }
@@ -333,8 +415,15 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     }
     
     /* Create JWT token */
+    if (g_logger) {
+        LOG_DEBUG("Creating JWT token with secret: '%s'", ctx->jwt_secret);
+    }
+    
     jwt_token_t* token = jwt_create(ctx->jwt_secret);
     if (!token) {
+        if (g_logger) {
+            LOG_ERROR("Failed to create JWT token");
+        }
         json_free(body);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Failed to create token\"}", "application/json");
@@ -351,13 +440,24 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     jwt_add_claim(token, "username", json_create_string(user->username));
     
     /* Encode token */
+    if (g_logger) {
+        LOG_DEBUG("Encoding JWT token with secret: '%s'", ctx->jwt_secret);
+    }
+    
     char* jwt_str = jwt_encode(token, ctx->jwt_secret);
     jwt_free(token);
     
     if (!jwt_str) {
+        if (g_logger) {
+            LOG_ERROR("Failed to encode JWT token");
+        }
         json_free(body);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Failed to encode token\"}", "application/json");
+    }
+    
+    if (g_logger) {
+        LOG_DEBUG("JWT token generated successfully: %.20s...", jwt_str);
     }
     
     /* Create response */
