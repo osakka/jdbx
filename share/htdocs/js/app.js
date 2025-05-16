@@ -383,7 +383,7 @@ function refreshCurrentView() {
 // Data Loading Functions
 function loadDashboardData() {
     // Load dashboard statistics
-    fetch(`${API_BASE_URL}/api/metrics/stats`, {
+    fetch(`${API_BASE_URL}/api/metrics`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
     })
     .then(response => response.json())
@@ -395,33 +395,33 @@ function loadDashboardData() {
         
         // Update charts
         updateHealthChart(data);
+        
+        // Also use the metrics data for activity since it's all in one endpoint
+        loadActivityData(data);
     })
     .catch(error => console.error('Error loading dashboard data:', error));
+}
+
+// Function to load activity data from the metrics response
+function loadActivityData(data) {
+    const activityTable = document.getElementById('activity-table-body');
+    if (!activityTable) return;
     
-    // Load recent activity
-    fetch(`${API_BASE_URL}/api/metrics/activity`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-    })
-    .then(response => response.json())
-    .then(data => {
-        const activityTable = document.getElementById('activity-table-body');
-        activityTable.innerHTML = '';
-        
-        if (data.activities && data.activities.length > 0) {
-            data.activities.forEach(activity => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${formatDateTime(activity.timestamp)}</td>
-                    <td>${activity.action}</td>
-                    <td>${activity.user}</td>
-                `;
-                activityTable.appendChild(row);
-            });
-        } else {
-            activityTable.innerHTML = '<tr><td colspan="3" class="text-center">No recent activity</td></tr>';
-        }
-    })
-    .catch(error => console.error('Error loading activity data:', error));
+    activityTable.innerHTML = '';
+    
+    if (data.activities && data.activities.length > 0) {
+        data.activities.forEach(activity => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${formatDateTime(activity.timestamp)}</td>
+                <td>${activity.action}</td>
+                <td>${activity.user}</td>
+            `;
+            activityTable.appendChild(row);
+        });
+    } else {
+        activityTable.innerHTML = '<tr><td colspan="3" class="text-center">No recent activity</td></tr>';
+    }
 }
 
 function loadCollections() {
@@ -505,20 +505,60 @@ function loadCollectionSelector() {
 }
 
 function loadDocuments(collection, query = '') {
+    // The API supports both ?query= parameter and full JSON query structure
+    // For now, implement the simpler query parameter approach
     const url = query 
         ? `${API_BASE_URL}/api/collections/${collection}/documents?query=${encodeURIComponent(query)}`
         : `${API_BASE_URL}/api/collections/${collection}/documents`;
+        
+    // Add a timestamp to prevent caching issues
+    const finalUrl = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
     
-    fetch(url, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
+    // Add debug logging
+    debugLog(`Loading documents from: ${finalUrl}`);
+    
+    // Set a timeout to avoid hanging indefinitely
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    fetch(finalUrl, {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+        signal: controller.signal
     })
-    .then(response => response.json())
+    .catch(error => {
+        // Clear the timeout 
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            debugLog('Request timed out after 10 seconds');
+            return Promise.reject(new Error('Request timed out after 10 seconds'));
+        }
+        return Promise.reject(error);
+    })
+    .then(response => {
+        // Clear the timeout on response
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            debugLog(`Error response: ${response.status} ${response.statusText}`);
+            return response.json().then(errData => {
+                throw new Error(errData.error || 'Failed to load documents');
+            });
+        }
+        return response.json();
+    })
     .then(data => {
+        debugLog('Documents response:', data);
+        
         const tableBody = document.getElementById('documents-table-body');
         tableBody.innerHTML = '';
         
-        if (data.documents && data.documents.length > 0) {
-            data.documents.forEach(document => {
+        // Check both response formats - some endpoints return documents directly, 
+        // others return them in a "documents" property
+        const documents = data.documents || (Array.isArray(data) ? data : []);
+        
+        if (documents && documents.length > 0) {
+            documents.forEach(document => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${document._id}</td>
@@ -551,7 +591,7 @@ function loadDocuments(collection, query = '') {
             
             // Update pagination info
             document.getElementById('documents-pagination-info').textContent = 
-                `Showing ${data.documents.length} of ${data.total || data.documents.length} documents`;
+                `Showing ${documents.length} of ${data.total || documents.length} documents`;
         } else {
             tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No documents found</td></tr>';
             document.getElementById('documents-pagination-info').textContent = 'Showing 0 of 0 documents';
