@@ -161,10 +161,10 @@ void print_usage(const char* program_name) {
     printf("  -l, --log-level=LEVEL         Set log level (error, warn, info, debug, trace)\n");
     printf("  -b, --db-dir=DIRECTORY        Set database directory\n");
     printf("  -r, --rbac-file=FILE          Set RBAC file path\n");
-    printf("  -p, --pid-file=FILE           Set PID file path\n");
+    printf("  -i, --pid-file=FILE           Set PID file path\n");
     printf("  -o, --log-file=FILE           Set log file path\n");
     printf("  -w, --web-root=DIRECTORY      Set web admin interface root directory\n");
-    printf("  -P, --port=PORT               Set server port (default: 5000)\n");
+    printf("  -p, --port=PORT               Set server port (default: 5000)\n");
     printf("  -H, --host=HOST               Set server bind address (default: 0.0.0.0)\n");
     printf("  -V, --validators-dir=DIR      Set validators directory\n");
     printf("  -T, --transforms-dir=DIR      Set transforms directory\n");
@@ -355,13 +355,13 @@ int main(int argc, char** argv) {
         {"log-level",      required_argument, 0, 'l'},
         {"db-dir",         required_argument, 0, 'b'},
         {"rbac-file",      required_argument, 0, 'r'},
-        {"pid-file",       required_argument, 0, 'p'},
+        {"pid-file",       required_argument, 0, 'i'}, /* Changed from 'p' to 'i' */
         {"log-file",       required_argument, 0, 'o'},
         {"web-root",       required_argument, 0, 'w'},
         {"config",         required_argument, 0, 'c'},
         {"version",        no_argument,       0, 'v'},
         {"js-file",        required_argument, 0, 'j'},
-        {"port",           required_argument, 0, 'P'},
+        {"port",           required_argument, 0, 'p'}, /* Changed from 'P' to 'p' */
         {"host",           required_argument, 0, 'H'},
         {"validators-dir", required_argument, 0, 'V'},
         {"transforms-dir", required_argument, 0, 'T'},
@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
     int opt;
     int option_index = 0;
     
-    while ((opt = getopt_long(argc, argv, "hdftl:b:r:p:o:w:c:vj:P:H:V:T:M:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hdftl:b:r:i:o:w:c:vj:p:H:V:T:M:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 show_help = 1;
@@ -398,7 +398,7 @@ int main(int argc, char** argv) {
             case 'r':
                 rbac_file = optarg;
                 break;
-            case 'p':
+            case 'i': /* Changed from 'p' to 'i' for pid-file */
                 pid_file = optarg;
                 break;
             case 'o':
@@ -416,7 +416,7 @@ int main(int argc, char** argv) {
             case 'j':
                 js_file = optarg;
                 break;
-            case 'P':
+            case 'p': /* Changed from 'P' to 'p' for port */
                 port_str = optarg;
                 break;
             case 'H':
