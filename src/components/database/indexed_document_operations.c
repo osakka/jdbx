@@ -748,10 +748,25 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
                 
                 pthread_mutex_unlock(&db->lock);
                 
-                /* Clone documents outside the lock */
+                /* Clone documents outside the lock with better error handling */
                 for (size_t i = 0; i < batch_size; i++) {
                     if (batch[i] && batch[i]->type == JSON_OBJECT) {
-                        json_array_append(documents_copy, json_clone(batch[i]));
+                        /* Use stringify/parse for safer cloning */
+                        char* doc_str = json_stringify(batch[i]);
+                        if (doc_str) {
+                            json_value_t* cloned_doc = json_parse(doc_str);
+                            free(doc_str);
+                            
+                            if (cloned_doc) {
+                                json_array_append(documents_copy, cloned_doc);
+                            } else {
+                                LOG_ERROR("Failed to parse document JSON in batch processing");
+                            }
+                        } else {
+                            LOG_ERROR("Failed to stringify document in batch processing");
+                        }
+                    } else {
+                        LOG_WARNING("Skipping invalid document in collection at index %zu", processed + i);
                     }
                 }
                 
@@ -760,18 +775,39 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
             
             free(batch);
         } else {
-            /* Fallback to traditional one-by-one copying */
+            /* Fallback to traditional one-by-one copying with safer handling */
+            LOG_WARNING("Using fallback document copying method - this may be slower");
             for (size_t i = 0; i < collection_size; i++) {
                 pthread_mutex_lock(&db->lock);
                 
+                json_value_t* doc = NULL;
                 if (i < collection->value.array.size) {
-                    json_value_t* doc = collection->value.array.items[i];
+                    doc = collection->value.array.items[i];
                     if (doc && doc->type == JSON_OBJECT) {
-                        json_array_append(documents_copy, json_clone(doc));
+                        /* Just extract the document pointer and stringify while locked */
+                        char* doc_str = json_stringify(doc);
+                        pthread_mutex_unlock(&db->lock);
+                        
+                        if (doc_str) {
+                            /* Parse and append outside the lock */
+                            json_value_t* cloned_doc = json_parse(doc_str);
+                            free(doc_str);
+                            
+                            if (cloned_doc) {
+                                json_array_append(documents_copy, cloned_doc);
+                            } else {
+                                LOG_ERROR("Failed to parse document JSON in fallback processing");
+                            }
+                        } else {
+                            LOG_ERROR("Failed to stringify document at index %zu", i);
+                        }
+                    } else {
+                        LOG_WARNING("Skipping invalid document in collection at index %zu", i);
+                        pthread_mutex_unlock(&db->lock);
                     }
+                } else {
+                    pthread_mutex_unlock(&db->lock);
                 }
-                
-                pthread_mutex_unlock(&db->lock);
             }
         }
     }
