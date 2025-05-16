@@ -133,6 +133,23 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
     add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
     add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
     add_response_header(response, "Access-Control-Allow-Credentials: true");
+    
+    /* Ensure success value is present for client */
+    json_value_t* json_response = json_parse(response->body);
+    if (json_response && json_response->type == JSON_OBJECT) {
+        if (!json_object_has(json_response, "success")) {
+            json_object_set(json_response, "success", json_create_boolean(1));
+            
+            /* Update response body */
+            char* updated_body = json_stringify(json_response);
+            if (updated_body) {
+                free(response->body);
+                response->body = updated_body;
+                response->content_length = strlen(updated_body);
+            }
+        }
+        json_free(json_response);
+    }
 
     /* Free token */
     free(token);

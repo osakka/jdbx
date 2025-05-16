@@ -337,8 +337,25 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
                            request->method == HTTP_GET ? "GET" : 
                            request->method == HTTP_POST ? "POST" : 
                            request->method == HTTP_PUT ? "PUT" : 
-                           request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+                           request->method == HTTP_DELETE ? "DELETE" :
+                           request->method == HTTP_OPTIONS ? "OPTIONS" : "UNKNOWN",
                            request->path);
+                           
+    /* Handle OPTIONS requests (CORS preflight) */
+    if (request->method == HTTP_OPTIONS) {
+        if (g_logger) LOG_DEBUG("Handling OPTIONS preflight request for CORS");
+        
+        http_response_t* response = create_http_response(HTTP_OK, "", "text/plain");
+        
+        /* Add CORS headers */
+        add_response_header(response, "Access-Control-Allow-Origin: *");
+        add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+        add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
+        add_response_header(response, "Access-Control-Allow-Credentials: true");
+        add_response_header(response, "Access-Control-Max-Age: 86400");
+        
+        return response;
+    }
     
     /* Find matching route */
     for (int i = 0; routes[i].path != NULL; i++) {
