@@ -13,4 +13,4 @@
  12. We have impeccable git hygiene!
  13. Guidelines are in docs/guidelines, read them
  14. ONLY BUILD USING THE MAKEFILE in src/ directory
- 15. NEVER run binaries directly from the build directory
+ 15. DO NOT run binaries from the build directory, only interact with the server using the script in build we created
