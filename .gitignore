@@ -29,6 +29,9 @@ debug_files.txt
 test_data.json
 test_logs/
 var/
+build/metrics/
+build/lib/libjsondb.a
+build/test_js_run.js
 
 # Compiled binaries
 db_js_test
