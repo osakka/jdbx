@@ -8,7 +8,7 @@
 # It serves as a reference implementation for testing when the build issues are resolved.
 
 # Configuration
-SERVER="http://localhost:8080"
+SERVER="http://localhost:5000"  # Using the default server port
 OUTPUT_DIR="./visualization_output"
 
 # Colors for output

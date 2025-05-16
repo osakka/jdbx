@@ -2,7 +2,7 @@
 # JSON Database Server - cURL Examples
 # This script demonstrates how to interact with the JSON database server using cURL
 
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:5000"  # Using the default server port
 AUTH_TOKEN=""
 
 # Colors for output
