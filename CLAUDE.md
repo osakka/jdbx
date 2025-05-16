@@ -12,3 +12,5 @@
  11. Headers are in src/include
  12. We have impeccable git hygiene!
  13. Guidelines are in docs/guidelines, read them
+ 14. ONLY BUILD USING THE MAKEFILE in src/ directory
+ 15. NEVER run binaries directly from the build directory
