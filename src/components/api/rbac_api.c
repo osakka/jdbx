@@ -995,11 +995,10 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
 
 /* Register RBAC API routes */
 int rbac_api_register_routes(api_route_t* api_routes, int num_routes, database_t* db, 
-                            rbac_system_t* rbac, const char* rbac_file_path) {
+                            rbac_system_t* rbac) {
     /* Suppress unused parameter warnings */
     (void)db;
     (void)rbac;
-    (void)rbac_file_path;
     
     /* Register user management routes */
     api_routes[num_routes++] = (api_route_t){"/api/rbac/users", HTTP_GET, api_handle_rbac_get_users, 1};

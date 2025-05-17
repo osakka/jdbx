@@ -194,11 +194,13 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
 int rbac_db_authenticate_user(database_t* db, const char* username, const char* password);
 
 /**
- * Migrate RBAC from file to database
+ * DEPRECATED: Migrate RBAC from file to database
+ * This function is no longer used as we've removed file-based RBAC fallback.
+ * It is kept here for API compatibility only, but will be removed in a future release.
  * 
  * @param db Database instance
  * @param rbac RBAC system loaded from file
- * @return 1 on success, 0 on failure
+ * @return 1 on success, 0 on failure (always returns 0 now)
  */
 int rbac_db_migrate_from_file(database_t* db, rbac_system_t* rbac);
 

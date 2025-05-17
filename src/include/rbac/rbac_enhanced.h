@@ -13,7 +13,7 @@
  * 3. If not, initialize a new RBAC system and save to database
  * 
  * @param db Database instance
- * @param path Path to RBAC file (deprecated, only used for migration during transition)
+ * @param path Path to RBAC file (ignored, no longer used)
  * @return Initialized RBAC system or NULL on failure
  */
 rbac_system_t* rbac_enhanced_init(database_t* db, const char* path);
@@ -23,7 +23,7 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path);
  * 
  * @param db Database instance
  * @param rbac RBAC system to save
- * @param path Path to RBAC file (deprecated, not used)
+ * @param path Path to RBAC file (ignored, no longer used)
  * @return 1 on success, 0 on failure
  */
 int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path);

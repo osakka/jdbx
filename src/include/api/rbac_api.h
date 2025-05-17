@@ -12,10 +12,9 @@
  * @param num_routes Number of routes
  * @param db Database instance
  * @param rbac RBAC system
- * @param rbac_file_path Path to RBAC file
  * @return Updated number of routes
  */
 int rbac_api_register_routes(api_route_t* api_routes, int num_routes, database_t* db, 
-                            rbac_system_t* rbac, const char* rbac_file_path);
+                            rbac_system_t* rbac);
 
 #endif /* RBAC_API_H */
