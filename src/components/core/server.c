@@ -461,10 +461,10 @@ http_response_t* create_auth_response(http_response_t* response, const char* tok
         return response;
     }
 
-    /* Create Set-Cookie header */
+    /* Create Set-Cookie header with SameSite attribute */
     char cookie_header[512];
     snprintf(cookie_header, sizeof(cookie_header),
-             "Set-Cookie: %s=%s; Path=/; Max-Age=%d; HttpOnly",
+             "Set-Cookie: %s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax",
              ADMIN_AUTH_COOKIE_NAME, token, ADMIN_AUTH_COOKIE_TTL);
 
     /* Add header to response */
@@ -585,8 +585,28 @@ void* handle_client(void* client_data) {
     /* Handle OPTIONS requests for CORS */
     if (request->method == HTTP_UNKNOWN && strncasecmp(buffer, "OPTIONS", 7) == 0) {
         http_response_t* response = create_http_response(HTTP_OK, NULL, "application/json");
+        
+        /* Apply CORS headers to OPTIONS response */
+        printf("CORS: Processing OPTIONS preflight request\n");
+        extern server_config_t* g_server_config;
+        if (g_server_config) {
+            response = apply_cors_headers(response, &g_server_config->cors, request->origin);
+            
+            /* Add explicit preflight headers in case we're using credentials */
+            add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+            add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+            if (request->origin) {
+                char origin_header[512];
+                snprintf(origin_header, sizeof(origin_header), "Access-Control-Allow-Origin: %s", request->origin);
+                add_response_header(response, origin_header);
+                add_response_header(response, "Vary: Origin");
+                add_response_header(response, "Access-Control-Allow-Credentials: true");
+            } else {
+                add_response_header(response, "Access-Control-Allow-Origin: *");
+            }
+        }
+        
         char* response_str = serialize_http_response(response);
-
         if (response_str) {
             size_t response_len = strlen(response_str); /* Safe now with null-termination */
             write(client_fd, response_str, response_len);

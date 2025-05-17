@@ -40,6 +40,7 @@ void init_cors_config(cors_config_t* cors) {
     add_cors_allowed_header(cors, "Content-Type");
     add_cors_allowed_header(cors, "Authorization");
     add_cors_allowed_header(cors, "X-Requested-With");
+    add_cors_allowed_header(cors, "Accept");
     
     /* Add default allowed origin (allow all) */
     add_cors_allowed_origin(cors, "*");
@@ -191,29 +192,63 @@ int is_cors_allowed_origin(cors_config_t* cors, const char* origin) {
 http_response_t* apply_cors_headers(http_response_t* response,
                                    cors_config_t* cors,
                                    const char* origin) {
-    (void)cors; /* Avoid unused parameter warning */
-    (void)origin; /* Avoid unused parameter warning */
     /* Make sure we have a valid response */
     if (!response) {
         return NULL;
     }
 
-    /* Always add CORS headers for simplicity */
-    add_response_header(response, "Access-Control-Allow-Origin: *");
-    add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
-    add_response_header(response, "Access-Control-Allow-Credentials: true");
-    add_response_header(response, "Access-Control-Max-Age: 86400");
+    printf("CORS: Applying CORS headers, origin=%s\n", origin ? origin : "NULL");
+    
+    if (!cors || !cors->enabled) {
+        printf("CORS: No config or disabled, using permissive defaults\n");
+        /* If CORS is not configured, add permissive defaults */
+        add_response_header(response, "Access-Control-Allow-Origin: *");
+        add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+        add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+        add_response_header(response, "Access-Control-Max-Age: 86400");
+        return response;
+    }
 
-    return response;
+    /* Set Access-Control-Allow-Origin header */
+    /* When using credentials, we can't use wildcard origin - must specify exact origin */
+    if (cors->allow_credentials && origin) {
+        /* Check if this specific origin is allowed */
+        if (is_cors_allowed_origin(cors, origin) || is_cors_allowed_origin(cors, "*")) {
+            char origin_header[512];
+            snprintf(origin_header, sizeof(origin_header), "Access-Control-Allow-Origin: %s", origin);
+            add_response_header(response, origin_header);
+            add_response_header(response, "Vary: Origin"); /* Important with dynamic origin */
+        } 
+    } else {
+        /* If no credentials required or no origin in request, 
+           use wildcard if allowed or specific origin */
+        int found_wildcard = 0;
+        
+        /* Check for wildcard in allowed origins */
+        for (int i = 0; i < cors->allowed_origins_count; i++) {
+            if (strcmp(cors->allowed_origins[i], "*") == 0) {
+                found_wildcard = 1;
+                break;
+            }
+        }
+        
+        if (found_wildcard) {
+            add_response_header(response, "Access-Control-Allow-Origin: *");
+        } else if (origin && is_cors_allowed_origin(cors, origin)) {
+            char origin_header[512];
+            snprintf(origin_header, sizeof(origin_header), "Access-Control-Allow-Origin: %s", origin);
+            add_response_header(response, origin_header);
+            add_response_header(response, "Vary: Origin");
+        }
+    }
+    
+    /* Set Access-Control-Allow-Credentials header if needed */
+    if (cors->allow_credentials) {
+        add_response_header(response, "Access-Control-Allow-Credentials: true");
+    }
 
-    /* The code below is unreachable due to the return statement above */
-    /* It is kept as a reference for more complex CORS implementation */
-    /* but should be removed or properly enabled in the future */
-
-    /*
-    // Set Access-Control-Allow-Methods header
-    if (cors && cors->allowed_methods_count > 0) {
+    /* Set Access-Control-Allow-Methods header */
+    if (cors->allowed_methods_count > 0) {
         char methods[512] = "Access-Control-Allow-Methods: ";
         for (int i = 0; i < cors->allowed_methods_count; i++) {
             strcat(methods, cors->allowed_methods[i]);
@@ -224,8 +259,8 @@ http_response_t* apply_cors_headers(http_response_t* response,
         add_response_header(response, methods);
     }
 
-    // Set Access-Control-Allow-Headers header
-    if (cors && cors->allowed_headers_count > 0) {
+    /* Set Access-Control-Allow-Headers header */
+    if (cors->allowed_headers_count > 0) {
         char headers[512] = "Access-Control-Allow-Headers: ";
         for (int i = 0; i < cors->allowed_headers_count; i++) {
             strcat(headers, cors->allowed_headers[i]);
@@ -236,13 +271,10 @@ http_response_t* apply_cors_headers(http_response_t* response,
         add_response_header(response, headers);
     }
 
-    // Set Access-Control-Max-Age header
-    if (cors) {
-        char max_age[64];
-        sprintf(max_age, "Access-Control-Max-Age: %d", cors->max_age);
-        add_response_header(response, max_age);
-    }
-    */
+    /* Set Access-Control-Max-Age header */
+    char max_age[64];
+    sprintf(max_age, "Access-Control-Max-Age: %d", cors->max_age);
+    add_response_header(response, max_age);
 
     return response;
 }

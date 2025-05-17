@@ -1184,11 +1184,30 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
             return NULL;
         }
         
+        /* Add debug logging */
+        if (g_logger) {
+            LOG_DEBUG("Copying %zu documents from collection '%s'", 
+                     collection->value.array.size, collection_name);
+        }
+        
         for (size_t i = 0; i < collection->value.array.size; i++) {
             json_value_t* doc = collection->value.array.items[i];
-            if (doc->type == JSON_OBJECT) {
-                json_array_append(documents_copy, json_clone(doc));
+            if (doc && doc->type == JSON_OBJECT) {
+                /* Clone the document safely with better error handling */
+                char* doc_str = json_stringify(doc);
+                if (doc_str) {
+                    json_value_t* cloned_doc = json_parse(doc_str);
+                    free(doc_str);
+                    if (cloned_doc) {
+                        json_array_append(documents_copy, cloned_doc);
+                    }
+                }
             }
+        }
+        
+        /* Add success logging */
+        if (g_logger) {
+            LOG_DEBUG("Copied %zu documents successfully", documents_copy->value.array.size);
         }
     }
     

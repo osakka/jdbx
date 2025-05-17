@@ -15,3 +15,4 @@
  14. ONLY BUILD USING THE MAKEFILE in src/ directory
  15. DO NOT run binaries from the build directory, only interact with the server using the script in build we created
  16. Server runs on port 5000 by default
+ 17. DO NOT IMPLEMENT MOCK DATA OR DEMO MODE - ALWAYS WORK WITH REAL SERVER DATA

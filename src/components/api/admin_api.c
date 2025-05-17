@@ -35,10 +35,8 @@ http_response_t* api_handle_admin_test(api_context_t* ctx, http_request_t* reque
     /* Create response */
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
 
-    /* Add explicit CORS headers */
-    add_response_header(response, "Access-Control-Allow-Origin: *");
-    add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
+    /* CORS headers will be applied by the server framework */
+    /* We don't need to add them here anymore */
 
     printf("Test endpoint returning response\n");
     return response;
@@ -128,11 +126,8 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
     response = create_auth_response(response, token);
 
-    /* Add explicit CORS headers to ensure browser accepts the response */
-    add_response_header(response, "Access-Control-Allow-Origin: *");
-    add_response_header(response, "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
-    add_response_header(response, "Access-Control-Allow-Credentials: true");
+    /* CORS headers are now handled by apply_cors_headers in server.c */
+    /* Let the central CORS handling function take care of it */
     
     /* Ensure success value is present for client */
     json_value_t* json_response = json_parse(response->body);
