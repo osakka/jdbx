@@ -4,25 +4,35 @@
 
 After thorough investigation, we've identified the root cause of the JSONDB socket binding issues:
 
-1. **Process Lifecycle Management**: The main issue is related to how processes handle socket descriptors during the daemon lifecycle. When the server forks to create a daemon, the socket descriptors need special handling to ensure they're not closed during the standard file descriptor closure process.
+1. **Race Condition in Daemon Initialization**: A critical race condition was identified in the daemon mode initialization sequence. The server would create a socket before forking, then close standard file descriptors during daemonization, and only afterwards try to bind and listen on the socket. This sequence meant that:
+   - Any errors during socket binding couldn't be reported (stdout/stderr were closed)
+   - The socket state might not be properly maintained during the fork operation
 
-2. **Daemon Mode Socket Handling**: Our testing confirmed that the socket binding works in test programs but fails in the main server, particularly in daemon mode. This is because the daemon process closes all file descriptors (including the socket) when detaching from the terminal.
+2. **Process Lifecycle Management**: The main issue is related to how processes handle socket descriptors during the daemon lifecycle. When the server forks to create a daemon, the socket descriptors need special handling to ensure they're not closed during the standard file descriptor closure process.
 
-3. **Socket Creation Timing**: The server was attempting to create and bind sockets after the daemon process initialization, which is not ideal. Socket binding should happen either before daemonizing or with special care to preserve the socket descriptors during the transition.
+3. **Socket Creation Timing**: The server was attempting to perform socket binding after the daemon process initialization, which is not ideal. Socket binding should happen either before daemonizing or after logging is initialized to ensure errors can be captured.
 
 4. **File Descriptor Inheritance**: When a process forks, all file descriptors are inherited by the child process. If these file descriptors are not properly managed, they can be inadvertently closed or modified.
 
 ## Implemented Fixes
 
-We made several improvements to address these issues:
+We made several critical improvements to address these issues:
 
-1. **Socket Descriptor Preservation**: We added code to track and preserve the socket file descriptor during the daemon initialization process, preventing it from being closed with other standard descriptors.
+1. **Fixed Daemon Mode Initialization Sequence**: We restructured the server initialization sequence to:
+   - First create the socket with `server_init()` (same as before)
+   - Complete the daemon process initialization and setup logging
+   - THEN bind and listen on the socket with `server_start()`
+   - With this change, any socket binding errors are properly logged to the log file
 
-2. **Improved Socket Binding**: We enhanced the socket binding logic to handle various error conditions more gracefully and provide detailed diagnostic information.
+2. **Socket Descriptor Preservation**: We added code to track and preserve the socket file descriptor during the daemon initialization process, preventing it from being closed with other standard descriptors.
 
-3. **Port Fallback Mechanism**: We implemented an automatic port fallback mechanism to handle cases where the requested port is already in use.
+3. **Improved Socket Binding**: We enhanced the socket binding logic to handle various error conditions more gracefully and provide detailed diagnostic information.
 
-4. **Comprehensive Testing**: We created a dedicated test script to verify socket binding in various scenarios and with different server modes.
+4. **Port Fallback Mechanism**: We implemented an automatic port fallback mechanism to handle cases where the requested port is already in use.
+
+5. **Enhanced Error Logging**: Added comprehensive error detection and logging throughout the socket lifecycle, ensuring issues are properly captured and reported.
+
+6. **Comprehensive Testing**: We created a dedicated test socket program (`socket_test.c`) to verify socket binding in isolation from the main server code, along with a test script to verify binding in various scenarios.
 
 ## Environment Constraints
 
