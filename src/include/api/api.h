@@ -81,6 +81,9 @@ http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* requ
 http_response_t* api_handle_visualization_collection_stats(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_visualization_document_types(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_visualization_transaction_history(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_visualization_transaction_metrics(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_visualization_transaction_relationships(api_context_t* ctx, http_request_t* request);
 
 /* Backup and restore handlers */
 http_response_t* api_handle_backup_create(api_context_t* ctx, http_request_t* request);
@@ -130,6 +133,19 @@ http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t
 http_response_t* api_handle_transaction_commit(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_transaction_rollback(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_metrics(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_check_deadlocks(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_status(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_logs(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_logs_configure(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_logs_archive(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_logs_report(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_logs_document_history(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_release_savepoint(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx, http_request_t* request);
 
 /* Health and monitoring handlers */
 http_response_t* api_handle_health_check(api_context_t* ctx, http_request_t* request);

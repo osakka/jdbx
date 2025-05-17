@@ -26,7 +26,7 @@ TRANS_SRCS = $(wildcard $(SRC_DIR)/components/transaction/*.c)
 RBAC_SRCS = $(wildcard $(SRC_DIR)/components/rbac/*.c)
 UTILS_SRCS = $(wildcard $(SRC_DIR)/components/utils/*.c)
 TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
-JS_SRCS = $(wildcard $(SRC_DIR)/components/js/*.c)
+JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC_DIR)/components/js/*.c))
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
 # Object files
@@ -50,8 +50,8 @@ ifdef DISABLE_JS
     SERVER_LDFLAGS = $(LDFLAGS)
 else
     # JavaScript is enabled by default
-    SERVER_LDFLAGS = $(LDFLAGS) $(QUICKJS_LIBS) -DENABLE_JS
-    CFLAGS += -DENABLE_JS
+    SERVER_LDFLAGS = $(LDFLAGS) $(QUICKJS_LIBS) -DUSE_QUICKJS
+    CFLAGS += -DUSE_QUICKJS
 endif
 
 # Default target
@@ -170,7 +170,7 @@ js-disabled:
 	$(MAKE) DISABLE_JS=1
 
 js-enabled:
-	$(MAKE) ENABLE_JS=1
+	$(MAKE) USE_QUICKJS=1
 
 metrics:
 	$(MAKE) CFLAGS="$(CFLAGS) -DENABLE_METRICS"

@@ -69,11 +69,10 @@ static api_route_t routes[] = {
     {"/api/visualization/document-types", HTTP_GET, api_handle_visualization_document_types, 1},
     {"/api/visualization/field-distribution", HTTP_GET, api_handle_visualization_field_distribution, 1},
     
-    /* Transaction visualization routes - commented out until implemented
+    /* Transaction visualization routes */
     {"/api/visualization/transaction-history", HTTP_GET, api_handle_visualization_transaction_history, 1},
     {"/api/visualization/transaction-metrics", HTTP_GET, api_handle_visualization_transaction_metrics, 1},
     {"/api/visualization/transaction-relationships", HTTP_GET, api_handle_visualization_transaction_relationships, 1},
-    */
     
     /* Backup and restore routes */
     {"/api/backup", HTTP_POST, api_handle_backup_create, 1},
@@ -153,19 +152,17 @@ static api_route_t routes[] = {
     {"/api/transactions/", HTTP_POST, api_handle_transaction_rollback_to_savepoint, 1},
     {"/api/transactions/", HTTP_DELETE, api_handle_transaction_release_savepoint, 1},
     
-    /* Transaction status and metrics routes - Not implemented yet - will be added in future updates
+    /* Transaction status and metrics routes */
     {"/api/transactions/metrics", HTTP_GET, api_handle_transaction_metrics, 1},
     {"/api/transactions/check-deadlocks", HTTP_POST, api_handle_transaction_check_deadlocks, 1},
     {"/api/transactions/", HTTP_GET, api_handle_transaction_status, 1},
-    */
     
-    /* Transaction log and audit trail routes - Not implemented yet - will be added in future updates 
+    /* Transaction log and audit trail routes */
     {"/api/transactions/logs", HTTP_GET, api_handle_transaction_logs, 1},
     {"/api/transactions/logs/configure", HTTP_POST, api_handle_transaction_logs_configure, 1},
     {"/api/transactions/logs/archive", HTTP_POST, api_handle_transaction_logs_archive, 1},
     {"/api/transactions/logs/report", HTTP_GET, api_handle_transaction_logs_report, 1},
     {"/api/transactions/logs/document-history", HTTP_GET, api_handle_transaction_logs_document_history, 1},
-    */
     
     /* Document operations - these are handled after the more specific paths */
     {"/api/transactions/", HTTP_GET, api_handle_transaction_document_operation, 1},

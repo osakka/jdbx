@@ -15,6 +15,11 @@ typedef void js_engine_t;
 /* Function declarations for JavaScript stubs are in api.h */
 #endif
 
+/* Ensure USE_QUICKJS is defined when JavaScript is enabled */
+#if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
+#define USE_QUICKJS
+#endif
+
 #include "rbac/rbac_refcount.h"
 #include "utils/logger.h"
 #include "utils/config_loader.h"

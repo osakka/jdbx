@@ -14,6 +14,9 @@ The project has reached a stable state with the following components functioning
 - Authentication via JWT tokens with token refresh
 - Document caching system with invalidation
 - Transaction support for atomic operations
+  - Transaction isolation levels
+  - Transaction visualization for monitoring
+  - Transaction logs and metrics
 - JavaScript integration via QuickJS
   - Document validators for data integrity
   - Document transformers for data processing
@@ -33,6 +36,8 @@ The project has reached a stable state with the following components functioning
 - Comprehensive JavaScript functions support
 - Document validators and transformers
 - JavaScript query capabilities
+- Transaction visualization and monitoring
+- Enhanced transaction logging and metrics
 
 ### In Progress
 - Performance optimization for large document sets
@@ -144,6 +149,13 @@ The server provides a comprehensive REST API for managing the database. Here's a
 | `/api/js/validators/register` | POST | Register a document validator |
 | `/api/js/transformers/register` | POST | Register a document transformer |
 | `/api/js/query` | POST | Execute a JavaScript query |
+| `/api/auth/refresh` | POST | Refresh authentication token |
+| `/api/transactions` | POST | Begin a new transaction |
+| `/api/transactions/:id/commit` | POST | Commit a transaction |
+| `/api/transactions/:id/rollback` | DELETE | Rollback a transaction |
+| `/api/visualization/transaction-history` | GET | View transaction history |
+| `/api/visualization/transaction-metrics` | GET | View transaction metrics |
+| `/api/visualization/transaction-relationships` | GET | View transaction relationships |
 
 For a complete list of API endpoints and documentation, see the [API.md](docs/api/API.md) file.
 
@@ -158,6 +170,14 @@ The server uses JWT (JSON Web Token) authentication. To access protected endpoin
    ```
    Authorization: Bearer YOUR_TOKEN_HERE
    ```
+
+#### Token Refresh
+
+The server now supports token refresh for maintaining sessions without requiring the user to log in again:
+
+1. When logging in, you'll receive both an access token and a refresh token
+2. When the access token expires, you can use the `/api/auth/refresh` endpoint with the refresh token to obtain a new access token
+3. This approach improves security by limiting the lifetime of access tokens while maintaining session continuity
 
 ### CORS Support
 

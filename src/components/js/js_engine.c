@@ -1,6 +1,11 @@
 #include "js/js_engine.h"
 #include "utils/logger.h"
 #include "utils/js_file_utils.h"
+
+/* Ensure USE_QUICKJS is defined when JavaScript is enabled */
+#if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
+#define USE_QUICKJS
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

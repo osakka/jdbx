@@ -15,6 +15,11 @@ js_engine_t *g_js_engine = NULL;
 /* Declare make_path_absolute from main.c */
 extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
 
+/* Ensure USE_QUICKJS is defined when JavaScript is enabled */
+#if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
+#define USE_QUICKJS
+#endif
+
 /* Initialize JavaScript engine */
 void js_api_init(database_t *db) {
 #ifndef DISABLE_JS
