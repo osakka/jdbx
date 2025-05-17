@@ -213,6 +213,28 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
         return NULL;
     }
     
+    /* Count the number of routes */
+    int num_routes = 0;
+    while (routes[num_routes].path != NULL) {
+        num_routes++;
+    }
+    
+    /* Initialize routes array with capacity for 50 additional routes */
+    ctx->max_routes = num_routes + 50;
+    ctx->routes = (api_route_t*)malloc(ctx->max_routes * sizeof(api_route_t));
+    if (!ctx->routes) {
+        transaction_manager_free(ctx->transaction_manager);
+        free((void*)ctx->jwt_secret);
+        free(ctx);
+        return NULL;
+    }
+    
+    /* Copy the routes */
+    for (int i = 0; i < num_routes; i++) {
+        ctx->routes[i] = routes[i];
+    }
+    ctx->num_routes = num_routes;
+    
     return ctx;
 }
 
@@ -224,6 +246,9 @@ void api_free_context(api_context_t* ctx) {
         }
         if (ctx->jwt_secret) {
             free((void*)ctx->jwt_secret);
+        }
+        if (ctx->routes) {
+            free(ctx->routes);
         }
         free(ctx);
     }

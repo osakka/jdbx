@@ -24,6 +24,33 @@ The RBAC system uses the following collections in the database:
 - `_users`: User accounts with authentication information
 - `_roles`: Role definitions with permissions
 
+### Collection Structure
+
+#### _users Collection
+
+```json
+{
+  "id": "user123",
+  "username": "admin",
+  "password_hash": "hashed_password_string",
+  "roles": ["role1", "role2"]
+}
+```
+
+#### _roles Collection
+
+```json
+{
+  "id": "role123",
+  "name": "Administrator",
+  "permissions": {
+    "DATABASE:*": ["ADMIN"],
+    "COLLECTION:users": ["READ", "WRITE"],
+    "USER:*": ["READ"]
+  }
+}
+```
+
 ### Indexes
 
 For performance, the following indexes are created:
@@ -37,7 +64,7 @@ For performance, the following indexes are created:
 
 The RBAC system can be managed through the following REST API endpoints:
 
-#### Users
+#### User Management
 
 - `GET /api/rbac/users` - List all users
 - `GET /api/rbac/users/:id` - Get user details
@@ -45,24 +72,68 @@ The RBAC system can be managed through the following REST API endpoints:
 - `PUT /api/rbac/users/:id` - Update user
 - `DELETE /api/rbac/users/:id` - Delete user
 
-#### Roles
+#### Role Management
 
 - `GET /api/rbac/roles` - List all roles
 - `GET /api/rbac/roles/:id` - Get role details
 - `POST /api/rbac/roles` - Create new role
-- `PUT /api/rbac/roles/:id` - Update role
 - `DELETE /api/rbac/roles/:id` - Delete role
 
-#### Permissions
+#### Role-User Management
 
-- `POST /api/rbac/roles/:id/users` - Add user to role
+- `POST /api/rbac/roles/:id/users/:user_id` - Add user to role
 - `DELETE /api/rbac/roles/:id/users/:user_id` - Remove user from role
+
+#### Permission Management
+
 - `POST /api/rbac/roles/:id/permissions` - Grant permission to role
 - `DELETE /api/rbac/roles/:id/permissions` - Revoke permission from role
+
+For detailed API documentation, see [RBAC API Reference](/docs/api/RBAC_API.md).
+
+## Resource Types and Permissions
+
+### Resource Types
+
+The RBAC system supports the following resource types:
+
+- `DATABASE` - Database-level permissions
+- `COLLECTION` - Collection-level permissions
+- `DOCUMENT` - Document-level permissions
+- `USER` - User account permissions
+- `ROLE` - Role definition permissions
+- `PERMISSION` - Permission management permissions
+
+### Permission Types
+
+The following permission types are supported:
+
+- `READ` - Permission to read/view resources
+- `WRITE` - Permission to modify resources
+- `DELETE` - Permission to delete resources
+- `ADMIN` - Full administrative access to resources
 
 ## Migration
 
 During the first startup with the new system, any existing RBAC configuration from files will be automatically migrated to the database. After migration, the file-based configuration will no longer be used.
+
+The migration process includes:
+
+1. Check if the `_users` and `_roles` collections exist in the database
+2. If they do not exist, create them and build necessary indices
+3. Look for legacy file-based RBAC configuration
+4. If found, migrate data from the file to the database collections (one-time migration)
+5. Initialize the RBAC system from the database
+
+## Security Features
+
+The database-based RBAC system includes several security features:
+
+1. Passwords are never stored in plain text, only as hashes
+2. Permission checks are enforced consistently across all API endpoints
+3. Only administrators can create or delete user accounts
+4. Users can only manage their own passwords
+5. JWT tokens are used for authentication
 
 ## Source Code
 
@@ -77,3 +148,31 @@ During the first startup with the new system, any existing RBAC configuration fr
 2. **No fallbacks**: The system does not fall back to file-based storage.
 3. **Clean API**: Clear separation between database operations and RBAC logic.
 4. **Seamless transition**: Automatic migration from file-based to database-based.
+5. **Permission granularity**: Fine-grained control over resources.
+6. **Role-based approach**: Permissions are granted to roles, not directly to users.
+
+## Best Practices
+
+When using the database-based RBAC system:
+
+1. Create a dedicated administrator role with full permissions
+2. Assign users to roles rather than granting permissions directly
+3. Follow the principle of least privilege
+4. Regularly audit user access and permissions
+5. Use wildcard resource IDs (`*`) sparingly
+
+## API Implementation Details
+
+The RBAC API handlers:
+- Validate user authentication using JWT tokens
+- Check user permissions for each operation
+- Extract parameters from request URLs and bodies
+- Perform database operations
+- Format and return appropriate responses
+- Handle error conditions consistently
+
+All API endpoints return standardized responses with appropriate HTTP status codes and JSON-formatted bodies.
+
+## Conclusion
+
+The database-based RBAC system provides a robust, secure, and flexible way to manage access control in JSONdb. By storing all RBAC data in the database, it ensures that permissions are always up-to-date and can be managed through a consistent API interface.

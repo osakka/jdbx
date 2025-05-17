@@ -388,9 +388,9 @@ These endpoints manage users in the system.
 
 ## Role Management
 
-These endpoints manage roles and permissions.
+These endpoints manage roles and permissions. For the new database-based RBAC system, see the dedicated [RBAC API documentation](RBAC_API.md).
 
-### Role Endpoints
+### Role Endpoints (Legacy File-Based RBAC)
 
 #### List Roles
 

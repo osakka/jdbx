@@ -11,19 +11,25 @@
 #include <string.h>
 
 
+/* Forward declaration for API routes */
+typedef struct api_route api_route_t;
+
 /* API context */
 typedef struct api_context {
     database_t* db;
     rbac_system_t* rbac;
     const char* jwt_secret;
     transaction_manager_t* transaction_manager;
+    api_route_t* routes;     /* Array of API routes */
+    int num_routes;          /* Number of routes */
+    int max_routes;          /* Maximum number of routes */
 } api_context_t;
 
 /* API endpoint handler */
 typedef http_response_t* (*api_handler_t)(api_context_t* ctx, http_request_t* request);
 
 /* API route */
-typedef struct {
+typedef struct api_route {
     const char* path;
     http_method_t method;
     api_handler_t handler;

@@ -1010,9 +1010,22 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Register RBAC API routes - disabled for now */
+    /* Register RBAC API routes */
     if (g_logger) {
-        LOG_INFO("RBAC API routes registration is disabled in this build");
+        LOG_INFO("Registering RBAC API routes");
+    }
+    
+    /* Register RBAC API routes */
+    if (g_api_ctx && g_database && g_rbac) {
+        g_api_ctx->num_routes = rbac_api_register_routes(g_api_ctx->routes, g_api_ctx->num_routes, 
+                                                         g_database, g_rbac, rbac_file_path[0] != '\0' ? rbac_file_path : NULL);
+        if (g_logger) {
+            LOG_INFO("RBAC API routes registered successfully");
+        }
+    } else {
+        if (g_logger) {
+            LOG_WARNING("Cannot register RBAC API routes - missing context, database or RBAC system");
+        }
     }
     
     if (g_logger) {

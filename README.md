@@ -2,7 +2,7 @@
 
 A lightweight, multithreaded JSON database server with REST API support and JavaScript integration.
 
-## Current Project Status (v1.0.5-js-features)
+## Current Project Status (v1.0.6-database-rbac)
 
 The project has reached a stable state with the following components functioning:
 
@@ -12,6 +12,10 @@ The project has reached a stable state with the following components functioning
 - Web-based admin interface
 - CORS support with proper handling of preflight requests
 - Authentication via JWT tokens with token refresh
+- Database-based Role-Based Access Control (RBAC)
+  - RBAC API for user, role, and permission management
+  - Seamless migration from file-based to database-based RBAC
+  - Fine-grained permission system
 - Document caching system with invalidation
 - Transaction support for atomic operations
   - Transaction isolation levels
@@ -32,6 +36,9 @@ The project has reached a stable state with the following components functioning
 - SameSite cookie attributes for improved security
 
 ### Recently Added
+- Database-based RBAC system with database collections
+- RBAC API for user, role, and permission management
+- Automatic migration from file-based to database-based RBAC
 - Token refresh mechanism for improved authentication
 - Comprehensive JavaScript functions support
 - Document validators and transformers
@@ -139,6 +146,19 @@ The server provides a comprehensive REST API for managing the database. Here's a
 | `/api/collections/:name/documents/:id` | GET | Get a document |
 | `/api/collections/:name/documents/:id` | PUT | Update a document |
 | `/api/collections/:name/documents/:id` | DELETE | Delete a document |
+| `/api/rbac/users` | GET | List all users |
+| `/api/rbac/users/:id` | GET | Get user by ID |
+| `/api/rbac/users` | POST | Create a new user |
+| `/api/rbac/users/:id` | PUT | Update a user |
+| `/api/rbac/users/:id` | DELETE | Delete a user |
+| `/api/rbac/roles` | GET | List all roles |
+| `/api/rbac/roles/:id` | GET | Get role by ID |
+| `/api/rbac/roles` | POST | Create a new role |
+| `/api/rbac/roles/:id` | DELETE | Delete a role |
+| `/api/rbac/roles/:id/users/:user_id` | POST | Add user to role |
+| `/api/rbac/roles/:id/users/:user_id` | DELETE | Remove user from role |
+| `/api/rbac/roles/:id/permissions` | POST | Grant permission |
+| `/api/rbac/roles/:id/permissions` | DELETE | Revoke permission |
 | `/api/cache/stats` | GET | Get cache statistics |
 | `/api/cache/configure` | POST | Configure cache settings |
 | `/api/cache/clear` | POST | Clear document cache |
@@ -157,7 +177,7 @@ The server provides a comprehensive REST API for managing the database. Here's a
 | `/api/visualization/transaction-metrics` | GET | View transaction metrics |
 | `/api/visualization/transaction-relationships` | GET | View transaction relationships |
 
-For a complete list of API endpoints and documentation, see the [API.md](docs/api/API.md) file.
+For a complete list of API endpoints and documentation, see the [API.md](docs/api/API.md) file and the [RBAC API Reference](docs/api/RBAC_API.md) for details on the new database-based RBAC system.
 
 ## Security
 
@@ -173,11 +193,23 @@ The server uses JWT (JSON Web Token) authentication. To access protected endpoin
 
 #### Token Refresh
 
-The server now supports token refresh for maintaining sessions without requiring the user to log in again:
+The server supports token refresh for maintaining sessions without requiring the user to log in again:
 
 1. When logging in, you'll receive both an access token and a refresh token
 2. When the access token expires, you can use the `/api/auth/refresh` endpoint with the refresh token to obtain a new access token
 3. This approach improves security by limiting the lifetime of access tokens while maintaining session continuity
+
+### Role-Based Access Control (RBAC)
+
+The server uses a database-based RBAC system for fine-grained permission management:
+
+1. All user accounts, roles, and permissions are stored directly in database collections
+2. Permissions can be assigned at the database, collection, document, user, or role level
+3. The system supports four permission types: READ, WRITE, DELETE, and ADMIN
+4. Administrators can manage users, roles, and permissions through the RBAC API
+5. The system automatically migrates existing file-based RBAC data to the database on first startup
+
+For detailed information on the RBAC system, see the [Database-Based RBAC Implementation](docs/reference/DATABASE_RBAC.md) document.
 
 ### CORS Support
 
