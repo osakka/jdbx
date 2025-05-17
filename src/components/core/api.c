@@ -1394,11 +1394,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
         }
         
         /* Hash password */
-        char* password_hash = NULL;
-        
-        /* This function should be defined in rbac.c */
-        extern char* hash_password(const char* password);
-        password_hash = hash_password(new_password);
+        char* password_hash = hash_password(new_password);
         
         if (!password_hash) {
             rbac_free_user(user);

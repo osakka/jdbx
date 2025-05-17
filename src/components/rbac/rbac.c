@@ -117,7 +117,7 @@ static void generate_salt(unsigned char* salt, size_t length) {
 }
 
 /* Hash password with PBKDF2-HMAC-SHA-256 and salt */
-static char* hash_password(const char* password) {
+char* hash_password(const char* password) {
     if (!password) {
         return NULL;
     }

@@ -8,6 +8,7 @@
 
 /* RBAC resource types */
 typedef enum {
+    RBAC_UNKNOWN = -1,
     RBAC_DATABASE,
     RBAC_COLLECTION,
     RBAC_DOCUMENT,
@@ -58,6 +59,7 @@ rbac_user_t* rbac_get_user(rbac_system_t* rbac, const char* user_id);
 rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username);
 int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char* password);
 void rbac_free_user(rbac_user_t* user);
+char* hash_password(const char* password);
 
 /* Role operations */
 rbac_role_t* rbac_create_role(rbac_system_t* rbac, const char* name);

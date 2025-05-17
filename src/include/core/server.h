@@ -43,6 +43,7 @@ typedef enum {
     HTTP_FORBIDDEN = 403,
     HTTP_NOT_FOUND = 404,
     HTTP_METHOD_NOT_ALLOWED = 405,
+    HTTP_CONFLICT = 409,
     HTTP_INTERNAL_SERVER_ERROR = 500
 } http_status_t;
 
