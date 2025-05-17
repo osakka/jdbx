@@ -7,6 +7,8 @@
 
 #include "database/database.h"
 #include "utils/logger.h"
+#include "database/document_index_types.h"
+#include "database/document_index.h"
 #include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,13 +17,13 @@
 #include <time.h>
 
 /* Document index structure for fast lookups by ID */
-typedef struct {
+struct document_index {
     char** ids;               /* Array of document IDs */
     int* positions;           /* Array of positions in the collection array */
     size_t capacity;          /* Capacity of the index */
     size_t size;              /* Current size of the index */
     pthread_mutex_t lock;     /* Lock for index operations */
-} document_index_t;
+};
 
 /* Collection of indices */
 typedef struct {
@@ -147,7 +149,7 @@ static int initialize_index_collection(size_t initial_capacity) {
 /**
  * Free the global index collection
  */
-static void free_index_collection() {
+void free_index_collection() {
     if (!g_index_collection) {
         return;
     }
@@ -313,7 +315,7 @@ static int add_to_index(document_index_t* index, const char* id, int position) {
  * @param id Document ID
  * @return 1 on success, 0 if document not found
  */
-static int remove_from_index(document_index_t* index, const char* id) {
+int remove_from_index(document_index_t* index, const char* id) {
     if (!index || !id) {
         return 0;
     }
@@ -584,7 +586,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
     }
     
     /* Verify position is valid */
-    if (position >= collection->value.array.size) {
+    if (position < 0 || (size_t)position >= collection->value.array.size) {
         LOG_ERROR("Invalid position %d in collection of size %zu", position, collection->value.array.size);
         pthread_mutex_unlock(&db->lock);
         

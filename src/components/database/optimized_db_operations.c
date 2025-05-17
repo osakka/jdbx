@@ -7,6 +7,7 @@
 
 #include "database/database.h"
 #include "utils/logger.h"
+#include "database/document_index.h"
 #include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,7 +41,7 @@ static char* generate_uuid() {
  * 
  * Uses read-only lock to minimize contention
  */
-static json_value_t* find_collection(database_t* db, const char* collection_name) {
+json_value_t* find_collection(database_t* db, const char* collection_name) {
     if (!db || !collection_name) {
         return NULL;
     }

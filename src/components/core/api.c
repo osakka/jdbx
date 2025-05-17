@@ -120,6 +120,7 @@ static api_route_t routes[] = {
     {"/api/cache/stats", HTTP_GET, api_handle_cache_stats, 1},
     {"/api/cache/configure", HTTP_POST, api_handle_cache_configure, 1},
     {"/api/cache/clear", HTTP_POST, api_handle_cache_clear, 1},
+    {"/api/cache/invalidate", HTTP_POST, api_handle_cache_invalidate, 1},
     
     /* Transaction routes */
     {"/api/transactions", HTTP_POST, api_handle_transaction_begin, 1}, /* Create new transaction */

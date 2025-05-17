@@ -1,6 +1,7 @@
 #include "database/database.h"
 #include "utils/cache.h"
 #include "utils/logger.h"
+#include "utils/cache_helpers.h"
 #include "query/query_language.h"
 #include "database/optimized_ops.h"  
 #include "database/indexed_ops.h"
@@ -20,7 +21,7 @@
  */
 
 /* Forward declare functions */
-static int process_cache_invalidations(database_t* db);
+int process_cache_invalidations(database_t* db);
 
 /* Structure to hold collection names for invalidation */
 typedef struct {
@@ -29,7 +30,7 @@ typedef struct {
 } invalidation_list_t;
 
 /* Generate a simple UUID replacement since uuid/uuid.h may not be available */
-static char* generate_simple_uuid() {
+char* generate_simple_uuid() {
     char* uuid = (char*)malloc(37);  /* 36 chars + null terminator */
     if (!uuid) return NULL;
     
@@ -49,7 +50,7 @@ static char* generate_simple_uuid() {
 /* Cache management functions */
 
 /* Generate cache key for a document */
-static char* generate_cache_key(const char* collection, const char* id) {
+char* generate_cache_key(const char* collection, const char* id) {
     if (!collection || !id) return NULL;
 
     /* Format: "collection:id" */
@@ -62,7 +63,7 @@ static char* generate_cache_key(const char* collection, const char* id) {
 }
 
 /* Generate cache key for a collection */
-static char* generate_collection_cache_key(const char* collection) {
+char* generate_collection_cache_key(const char* collection) {
     if (!collection) return NULL;
 
     /* Format: "collection:" */
@@ -120,8 +121,8 @@ static char* generate_query_cache_key(const char* collection, json_value_t* quer
  * @param ttl Time to live for the cache entry (0 for default)
  * @return 1 on success, 0 on failure
  */
-static int store_query_result(database_t* db, const char* collection_name,
-                             json_value_t* query_json, json_value_t* result, time_t ttl) {
+int store_query_result(database_t* db, const char* collection_name,
+                      json_value_t* query_json, json_value_t* result, time_t ttl) {
     if (!db || !db->cache_enabled || !db->cache ||
         !collection_name || !query_json || !result) {
         return 0;
@@ -175,7 +176,7 @@ static int mark_collection_for_invalidation(database_t* db, const char* collecti
  * @param db Database instance
  * @return Number of collections processed
  */
-static int process_cache_invalidations(database_t* db) {
+int process_cache_invalidations(database_t* db) {
     if (!db || !db->cache_enabled || !db->cache) {
         return 0;
     }

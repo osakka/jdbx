@@ -121,6 +121,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
 http_response_t* api_handle_cache_stats(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_cache_clear(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_cache_invalidate(api_context_t* ctx, http_request_t* request);
 
 /* Transaction handlers */
 http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t* request);
