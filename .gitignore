@@ -30,7 +30,9 @@ test_data.json
 test_logs/
 var/
 build/metrics/
-build/lib/libjsondb.a
+# We track libjsondb.a to ensure consistent binary state
+# build/lib/libjsondb.a
+build/obj/
 build/test_js_run.js
 
 # Compiled binaries
