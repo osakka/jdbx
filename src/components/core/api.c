@@ -906,72 +906,1558 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
 
 /* RBAC handlers */
 http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"users\":[]}", "application/json");
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Check if the user has admin privileges */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to list users */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_USER, "*", RBAC_READ)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Create a JSON array of users from the RBAC system's users object */
+    json_value_t* users_array = json_create_array();
+    if (!users_array) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to create users array\"}", "application/json");
+    }
+    
+    /* Iterate through all users in the RBAC system */
+    for (size_t i = 0; i < ctx->rbac->users->value.object.size; i++) {
+        const char* user_id = ctx->rbac->users->value.object.entries[i].key;
+        json_value_t* user_obj = ctx->rbac->users->value.object.entries[i].value;
+        
+        if (user_obj->type == JSON_OBJECT) {
+            /* Create a new user object with a subset of information (exclude password hash) */
+            json_value_t* user = json_create_object();
+            
+            /* Add user ID */
+            json_object_set(user, "id", json_create_string(user_id));
+            
+            /* Add username if present */
+            json_value_t* username = json_object_get(user_obj, "username");
+            if (username && username->type == JSON_STRING) {
+                json_object_set(user, "username", json_create_string(username->value.string));
+            }
+            
+            /* Add roles array if present */
+            json_value_t* roles = json_object_get(user_obj, "roles");
+            if (roles && roles->type == JSON_ARRAY) {
+                /* Create a deep copy of the roles array */
+                json_value_t* roles_copy = json_create_array();
+                for (size_t j = 0; j < roles->value.array.size; j++) {
+                    json_value_t* role_id = roles->value.array.items[j];
+                    if (role_id && role_id->type == JSON_STRING) {
+                        json_array_append(roles_copy, json_create_string(role_id->value.string));
+                    }
+                }
+                json_object_set(user, "roles", roles_copy);
+            }
+            
+            /* Add user to array */
+            json_array_append(users_array, user);
+        }
+    }
+    
+    /* Create response object */
+    json_value_t* response = json_create_object();
+    json_object_set(response, "users", users_array);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_user_get(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract user ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/users/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* target_user_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* requester_user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to view the target user 
+     * The permission check is more permissive if the user is viewing their own profile
+     */
+    if (strcmp(requester_user_id, target_user_id) != 0 && 
+        !rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, target_user_id, RBAC_READ) &&
+        !rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, "*", RBAC_READ)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Get user */
+    rbac_user_t* user = rbac_get_user(ctx->rbac, target_user_id);
+    if (!user) {
+        return create_http_response(HTTP_NOT_FOUND, 
+                                  "{\"error\":\"User not found\"}", "application/json");
+    }
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* user_obj = json_create_object();
+    
+    json_object_set(user_obj, "id", json_create_string(user->id));
+    json_object_set(user_obj, "username", json_create_string(user->username));
+    
+    /* Add roles array */
+    json_value_t* roles_array = json_create_array();
+    for (size_t i = 0; i < user->roles->value.array.size; i++) {
+        json_value_t* role_id = user->roles->value.array.items[i];
+        if (role_id->type == JSON_STRING) {
+            json_array_append(roles_array, json_create_string(role_id->value.string));
+        }
+    }
+    json_object_set(user_obj, "roles", roles_array);
+    
+    /* Add information about the role objects if the user has appropriate permission */
+    if (rbac_check_permission(ctx->rbac, requester_user_id, RBAC_ROLE, "*", RBAC_READ)) {
+        json_value_t* roles_info = json_create_array();
+        
+        for (size_t i = 0; i < user->roles->value.array.size; i++) {
+            json_value_t* role_id_val = user->roles->value.array.items[i];
+            if (role_id_val->type == JSON_STRING) {
+                const char* role_id = role_id_val->value.string;
+                
+                /* Get role */
+                rbac_role_t* role = rbac_get_role(ctx->rbac, role_id);
+                if (role) {
+                    /* Create role info object */
+                    json_value_t* role_info = json_create_object();
+                    json_object_set(role_info, "id", json_create_string(role->id));
+                    json_object_set(role_info, "name", json_create_string(role->name));
+                    
+                    /* Add role info to array */
+                    json_array_append(roles_info, role_info);
+                    
+                    /* Free role */
+                    rbac_free_role(role);
+                }
+            }
+        }
+        
+        json_object_set(user_obj, "role_details", roles_info);
+    }
+    
+    json_object_set(response, "user", user_obj);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    rbac_free_user(user);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_CREATED, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
+    if (!ctx || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Check if the user has admin privileges */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to create users */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_USER, "*", RBAC_WRITE)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        if (body) json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request body\"}", "application/json");
+    }
+    
+    /* Extract username and password */
+    json_value_t* username_val = json_object_get(body, "username");
+    json_value_t* password_val = json_object_get(body, "password");
+    json_value_t* roles_val = json_object_get(body, "roles");
+    
+    if (!username_val || username_val->type != JSON_STRING || 
+        !password_val || password_val->type != JSON_STRING) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Username and password are required\"}", "application/json");
+    }
+    
+    const char* username = username_val->value.string;
+    const char* password = password_val->value.string;
+    
+    /* Validate input */
+    if (strlen(username) < 3) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Username must be at least 3 characters long\"}", "application/json");
+    }
+    
+    if (strlen(password) < 8) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Password must be at least 8 characters long\"}", "application/json");
+    }
+    
+    /* Check if username already exists */
+    if (rbac_get_user_by_username(ctx->rbac, username)) {
+        json_free(body);
+        return create_http_response(HTTP_CONFLICT, 
+                                 "{\"error\":\"Username already exists\"}", "application/json");
+    }
+    
+    /* Create user */
+    rbac_user_t* user = rbac_create_user(ctx->rbac, username, password);
+    if (!user) {
+        json_free(body);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                 "{\"error\":\"Failed to create user\"}", "application/json");
+    }
+    
+    /* Handle roles if provided */
+    if (roles_val && roles_val->type == JSON_ARRAY) {
+        for (size_t i = 0; i < roles_val->value.array.size; i++) {
+            json_value_t* role_id_val = roles_val->value.array.items[i];
+            if (role_id_val && role_id_val->type == JSON_STRING) {
+                const char* role_id = role_id_val->value.string;
+                
+                /* Add user to role */
+                rbac_add_user_to_role(ctx->rbac, user->id, role_id);
+            }
+        }
+    }
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* user_obj = json_create_object();
+    
+    json_object_set(user_obj, "id", json_create_string(user->id));
+    json_object_set(user_obj, "username", json_create_string(user->username));
+    
+    /* Add roles array */
+    json_value_t* roles_array = json_create_array();
+    for (size_t i = 0; i < user->roles->value.array.size; i++) {
+        json_value_t* role_id = user->roles->value.array.items[i];
+        if (role_id && role_id->type == JSON_STRING) {
+            json_array_append(roles_array, json_create_string(role_id->value.string));
+        }
+    }
+    json_object_set(user_obj, "roles", roles_array);
+    
+    json_object_set(response, "user", user_obj);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    json_free(body);
+    rbac_free_user(user);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
 
 http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"user\":{\"id\":\"1\",\"username\":\"admin\"}}", "application/json");
+    if (!ctx || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract user ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/users/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* target_user_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* requester_user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to update the target user 
+     * The permission check is more permissive if the user is updating their own profile,
+     * but updating roles requires admin privileges regardless.
+     */
+    int is_self_update = (strcmp(requester_user_id, target_user_id) == 0);
+    int has_user_write = rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, target_user_id, RBAC_WRITE) ||
+                         rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, "*", RBAC_WRITE);
+    
+    if (!is_self_update && !has_user_write) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        if (body) json_free(body);
+        jwt_free(jwt);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request body\"}", "application/json");
+    }
+    
+    /* Check if user exists */
+    rbac_user_t* user = rbac_get_user(ctx->rbac, target_user_id);
+    if (!user) {
+        json_free(body);
+        jwt_free(jwt);
+        return create_http_response(HTTP_NOT_FOUND, 
+                                  "{\"error\":\"User not found\"}", "application/json");
+    }
+    
+    /* Extract fields to update */
+    json_value_t* username_val = json_object_get(body, "username");
+    json_value_t* password_val = json_object_get(body, "password");
+    json_value_t* roles_val = json_object_get(body, "roles");
+    
+    /* Get the actual JSON user object from the RBAC system */
+    json_value_t* user_obj = json_object_get(ctx->rbac->users, target_user_id);
+    if (!user_obj || user_obj->type != JSON_OBJECT) {
+        rbac_free_user(user);
+        json_free(body);
+        jwt_free(jwt);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to find user in RBAC system\"}", "application/json");
+    }
+    
+    /* Update username if provided */
+    if (username_val && username_val->type == JSON_STRING) {
+        const char* new_username = username_val->value.string;
+        
+        /* Validate username */
+        if (strlen(new_username) < 3) {
+            rbac_free_user(user);
+            json_free(body);
+            jwt_free(jwt);
+            return create_http_response(HTTP_BAD_REQUEST, 
+                                     "{\"error\":\"Username must be at least 3 characters long\"}", "application/json");
+        }
+        
+        /* Check if username is already taken by another user */
+        rbac_user_t* existing_user = rbac_get_user_by_username(ctx->rbac, new_username);
+        if (existing_user && strcmp(existing_user->id, target_user_id) != 0) {
+            rbac_free_user(user);
+            rbac_free_user(existing_user);
+            json_free(body);
+            jwt_free(jwt);
+            return create_http_response(HTTP_CONFLICT, 
+                                     "{\"error\":\"Username already exists\"}", "application/json");
+        }
+        
+        if (existing_user) {
+            rbac_free_user(existing_user);
+        }
+        
+        /* Update username in the JSON object */
+        json_object_set(user_obj, "username", json_create_string(new_username));
+    }
+    
+    /* Update password if provided */
+    if (password_val && password_val->type == JSON_STRING) {
+        const char* new_password = password_val->value.string;
+        
+        /* Validate password */
+        if (strlen(new_password) < 8) {
+            rbac_free_user(user);
+            json_free(body);
+            jwt_free(jwt);
+            return create_http_response(HTTP_BAD_REQUEST, 
+                                     "{\"error\":\"Password must be at least 8 characters long\"}", "application/json");
+        }
+        
+        /* Hash password */
+        char* password_hash = NULL;
+        
+        /* This function should be defined in rbac.c */
+        extern char* hash_password(const char* password);
+        password_hash = hash_password(new_password);
+        
+        if (!password_hash) {
+            rbac_free_user(user);
+            json_free(body);
+            jwt_free(jwt);
+            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                     "{\"error\":\"Failed to hash password\"}", "application/json");
+        }
+        
+        /* Update password_hash in the JSON object */
+        json_object_set(user_obj, "password_hash", json_create_string(password_hash));
+        
+        /* Free password hash */
+        free(password_hash);
+    }
+    
+    /* Update roles if provided - requires admin permissions */
+    if (roles_val && roles_val->type == JSON_ARRAY) {
+        /* Check if user has admin privileges for role management */
+        if (!rbac_check_permission(ctx->rbac, requester_user_id, RBAC_ROLE, "*", RBAC_ADMIN) &&
+            !rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, "*", RBAC_ADMIN)) {
+            rbac_free_user(user);
+            json_free(body);
+            jwt_free(jwt);
+            return create_http_response(HTTP_FORBIDDEN, 
+                                     "{\"error\":\"Permission denied for role management\"}", "application/json");
+        }
+        
+        /* Get the current roles array from the user object */
+        json_value_t* current_roles = json_object_get(user_obj, "roles");
+        if (!current_roles || current_roles->type != JSON_ARRAY) {
+            /* Create roles array if it doesn't exist */
+            current_roles = json_create_array();
+            json_object_set(user_obj, "roles", current_roles);
+        }
+        
+        /* First, remove this user from all existing roles */
+        for (size_t i = 0; i < current_roles->value.array.size; i++) {
+            json_value_t* role_id_val = current_roles->value.array.items[i];
+            if (role_id_val && role_id_val->type == JSON_STRING) {
+                const char* role_id = role_id_val->value.string;
+                
+                /* Get role */
+                json_value_t* role_obj = json_object_get(ctx->rbac->roles, role_id);
+                if (role_obj && role_obj->type == JSON_OBJECT) {
+                    /* Get users array */
+                    json_value_t* users = json_object_get(role_obj, "users");
+                    if (users && users->type == JSON_ARRAY) {
+                        /* Remove user from role */
+                        for (size_t j = 0; j < users->value.array.size; j++) {
+                            json_value_t* user_id_val = users->value.array.items[j];
+                            if (user_id_val && user_id_val->type == JSON_STRING && 
+                                strcmp(user_id_val->value.string, target_user_id) == 0) {
+                                /* Remove user from array */
+                                for (size_t k = j; k < users->value.array.size - 1; k++) {
+                                    users->value.array.items[k] = users->value.array.items[k + 1];
+                                }
+                                users->value.array.size--;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /* Clear current roles array */
+        current_roles->value.array.size = 0;
+        
+        /* Add user to new roles and update roles array */
+        for (size_t i = 0; i < roles_val->value.array.size; i++) {
+            json_value_t* role_id_val = roles_val->value.array.items[i];
+            if (role_id_val && role_id_val->type == JSON_STRING) {
+                const char* role_id = role_id_val->value.string;
+                
+                /* Verify that role exists */
+                json_value_t* role_obj = json_object_get(ctx->rbac->roles, role_id);
+                if (role_obj && role_obj->type == JSON_OBJECT) {
+                    /* Add role ID to user's roles */
+                    json_array_append(current_roles, json_create_string(role_id));
+                    
+                    /* Add user to role's users */
+                    json_value_t* users = json_object_get(role_obj, "users");
+                    if (!users || users->type != JSON_ARRAY) {
+                        /* Create users array if it doesn't exist */
+                        users = json_create_array();
+                        json_object_set(role_obj, "users", users);
+                    }
+                    
+                    /* Check if user is already in role */
+                    int user_in_role = 0;
+                    for (size_t j = 0; j < users->value.array.size; j++) {
+                        json_value_t* user_id_val = users->value.array.items[j];
+                        if (user_id_val && user_id_val->type == JSON_STRING && 
+                            strcmp(user_id_val->value.string, target_user_id) == 0) {
+                            user_in_role = 1;
+                            break;
+                        }
+                    }
+                    
+                    /* Add user to role if not already present */
+                    if (!user_in_role) {
+                        json_array_append(users, json_create_string(target_user_id));
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Get updated user for response */
+    rbac_free_user(user);
+    user = rbac_get_user(ctx->rbac, target_user_id);
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* updated_user = json_create_object();
+    
+    json_object_set(updated_user, "id", json_create_string(user->id));
+    json_object_set(updated_user, "username", json_create_string(user->username));
+    
+    /* Add roles array */
+    json_value_t* roles_array = json_create_array();
+    for (size_t i = 0; i < user->roles->value.array.size; i++) {
+        json_value_t* role_id = user->roles->value.array.items[i];
+        if (role_id->type == JSON_STRING) {
+            json_array_append(roles_array, json_create_string(role_id->value.string));
+        }
+    }
+    json_object_set(updated_user, "roles", roles_array);
+    
+    json_object_set(response, "user", updated_user);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    rbac_free_user(user);
+    json_free(response);
+    json_free(body);
+    jwt_free(jwt);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                 "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract user ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/users/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* target_user_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                 "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                 "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* requester_user_id = jwt->payload->sub;
+    
+    /* Users can't delete themselves, only admins can delete users */
+    if (strcmp(requester_user_id, target_user_id) == 0) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                 "{\"error\":\"You cannot delete your own account\"}", "application/json");
+    }
+    
+    /* Check if user has permission to delete the target user */
+    if (!rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, target_user_id, RBAC_DELETE) &&
+        !rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, "*", RBAC_DELETE)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                 "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Check if user exists */
+    if (!json_object_has(ctx->rbac->users, target_user_id)) {
+        return create_http_response(HTTP_NOT_FOUND, 
+                                 "{\"error\":\"User not found\"}", "application/json");
+    }
+    
+    /* Delete user */
+    if (!rbac_delete_user(ctx->rbac, target_user_id)) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                 "{\"error\":\"Failed to delete user\"}", "application/json");
+    }
+    
+    /* Return success with no content */
     return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
 }
 
 http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"roles\":[]}", "application/json");
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Check if the user has admin privileges */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to list roles */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, "*", RBAC_READ)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Create a JSON array of roles from the RBAC system's roles object */
+    json_value_t* roles_array = json_create_array();
+    if (!roles_array) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to create roles array\"}", "application/json");
+    }
+    
+    /* Iterate through all roles in the RBAC system */
+    for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
+        const char* role_id = ctx->rbac->roles->value.object.entries[i].key;
+        json_value_t* role_obj = ctx->rbac->roles->value.object.entries[i].value;
+        
+        if (role_obj->type == JSON_OBJECT) {
+            /* Create a new role object with relevant information */
+            json_value_t* role = json_create_object();
+            
+            /* Add role ID */
+            json_object_set(role, "id", json_create_string(role_id));
+            
+            /* Add name if present */
+            json_value_t* name = json_object_get(role_obj, "name");
+            if (name && name->type == JSON_STRING) {
+                json_object_set(role, "name", json_create_string(name->value.string));
+            }
+            
+            /* Add users array if present */
+            json_value_t* users = json_object_get(role_obj, "users");
+            if (users && users->type == JSON_ARRAY) {
+                /* Create a deep copy of the users array */
+                json_value_t* users_copy = json_create_array();
+                for (size_t j = 0; j < users->value.array.size; j++) {
+                    json_value_t* user_id = users->value.array.items[j];
+                    if (user_id && user_id->type == JSON_STRING) {
+                        json_array_append(users_copy, json_create_string(user_id->value.string));
+                    }
+                }
+                json_object_set(role, "users", users_copy);
+            }
+            
+            /* Add permissions object if present */
+            json_value_t* permissions = json_object_get(role_obj, "permissions");
+            if (permissions && permissions->type == JSON_OBJECT) {
+                /* Create a deep copy of the permissions object */
+                json_value_t* permissions_copy = json_create_object();
+                for (size_t j = 0; j < permissions->value.object.size; j++) {
+                    const char* perm_key = permissions->value.object.entries[j].key;
+                    json_value_t* perm_val = permissions->value.object.entries[j].value;
+                    
+                    if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+                        json_object_set(permissions_copy, perm_key, 
+                                       json_create_number(perm_val->type == JSON_NUMBER ? 
+                                                         perm_val->value.number : perm_val->value.integer));
+                    }
+                }
+                json_object_set(role, "permissions", permissions_copy);
+            }
+            
+            /* Add role to array */
+            json_array_append(roles_array, role);
+        }
+    }
+    
+    /* Create response object */
+    json_value_t* response = json_create_object();
+    json_object_set(response, "roles", roles_array);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract role ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/roles/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* role_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to view role */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, role_id, RBAC_READ) &&
+        !rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, "*", RBAC_READ)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Get role */
+    rbac_role_t* role = rbac_get_role(ctx->rbac, role_id);
+    if (!role) {
+        return create_http_response(HTTP_NOT_FOUND, 
+                                  "{\"error\":\"Role not found\"}", "application/json");
+    }
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* role_obj = json_create_object();
+    
+    json_object_set(role_obj, "id", json_create_string(role->id));
+    json_object_set(role_obj, "name", json_create_string(role->name));
+    
+    /* Add permissions object */
+    json_value_t* permissions_obj = json_create_object();
+    
+    /* Copy permissions from role */
+    if (role->permissions) {
+        for (size_t i = 0; i < role->permissions->value.object.size; i++) {
+            const char* perm_key = role->permissions->value.object.entries[i].key;
+            json_value_t* perm_val = role->permissions->value.object.entries[i].value;
+            
+            if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+                json_object_set(permissions_obj, perm_key, 
+                               json_create_number(perm_val->type == JSON_NUMBER ? 
+                                                 perm_val->value.number : perm_val->value.integer));
+            }
+        }
+    }
+    
+    json_object_set(role_obj, "permissions", permissions_obj);
+    
+    /* Add users array */
+    json_value_t* users_array = json_create_array();
+    
+    /* Get role users from JSON data */
+    json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
+    if (role_json && role_json->type == JSON_OBJECT) {
+        json_value_t* users = json_object_get(role_json, "users");
+        if (users && users->type == JSON_ARRAY) {
+            for (size_t i = 0; i < users->value.array.size; i++) {
+                json_value_t* user_id_val = users->value.array.items[i];
+                if (user_id_val && user_id_val->type == JSON_STRING) {
+                    /* Add user ID to array */
+                    json_array_append(users_array, json_create_string(user_id_val->value.string));
+                    
+                    /* Optionally, add user details */
+                    const char* user_id_str = user_id_val->value.string;
+                    json_value_t* user_json = json_object_get(ctx->rbac->users, user_id_str);
+                    if (user_json && user_json->type == JSON_OBJECT) {
+                        json_value_t* username_val = json_object_get(user_json, "username");
+                        if (username_val && username_val->type == JSON_STRING) {
+                            /* Create user info object */
+                            json_value_t* user_info = json_create_object();
+                            json_object_set(user_info, "id", json_create_string(user_id_str));
+                            json_object_set(user_info, "username", json_create_string(username_val->value.string));
+                            
+                            /* Add user info to array (replacing the simple ID string) */
+                            users_array->value.array.items[users_array->value.array.size - 1] = user_info;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    json_object_set(role_obj, "users", users_array);
+    
+    json_object_set(response, "role", role_obj);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    rbac_free_role(role);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_CREATED, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
+    if (!ctx || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Check if the user has admin privileges */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to create roles */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, "*", RBAC_WRITE)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        if (body) json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request body\"}", "application/json");
+    }
+    
+    /* Extract role name and permissions */
+    json_value_t* name_val = json_object_get(body, "name");
+    json_value_t* permissions_val = json_object_get(body, "permissions");
+    
+    if (!name_val || name_val->type != JSON_STRING) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Role name is required\"}", "application/json");
+    }
+    
+    const char* name = name_val->value.string;
+    
+    /* Validate input */
+    if (strlen(name) < 2) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                 "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
+    }
+    
+    /* Check if role name already exists */
+    for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
+        json_value_t* role = ctx->rbac->roles->value.object.entries[i].value;
+        json_value_t* role_name = json_object_get(role, "name");
+        
+        if (role_name && role_name->type == JSON_STRING && 
+            strcmp(role_name->value.string, name) == 0) {
+            json_free(body);
+            return create_http_response(HTTP_CONFLICT, 
+                                     "{\"error\":\"Role name already exists\"}", "application/json");
+        }
+    }
+    
+    /* Create role */
+    rbac_role_t* role = rbac_create_role(ctx->rbac, name);
+    if (!role) {
+        json_free(body);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                 "{\"error\":\"Failed to create role\"}", "application/json");
+    }
+    
+    /* Process permissions if provided */
+    if (permissions_val && permissions_val->type == JSON_OBJECT) {
+        for (size_t i = 0; i < permissions_val->value.object.size; i++) {
+            const char* resource_str = permissions_val->value.object.entries[i].key;
+            json_value_t* perms_val = permissions_val->value.object.entries[i].value;
+            
+            /* Parse resource string into type and ID */
+            char* colon = strchr(resource_str, ':');
+            if (colon) {
+                /* Split "type:id" string */
+                int type_len = colon - resource_str;
+                char type_str[32] = {0};
+                strncpy(type_str, resource_str, type_len < 31 ? type_len : 31);
+                
+                /* Convert type string to enum */
+                rbac_resource_type_t resource_type = RBAC_UNKNOWN;
+                if (strcmp(type_str, "database") == 0) {
+                    resource_type = RBAC_DATABASE;
+                } else if (strcmp(type_str, "collection") == 0) {
+                    resource_type = RBAC_COLLECTION;
+                } else if (strcmp(type_str, "document") == 0) {
+                    resource_type = RBAC_DOCUMENT;
+                } else if (strcmp(type_str, "user") == 0) {
+                    resource_type = RBAC_USER;
+                } else if (strcmp(type_str, "role") == 0) {
+                    resource_type = RBAC_ROLE;
+                }
+                
+                const char* resource_id = colon + 1;
+                
+                /* Get permission value */
+                int permission = 0;
+                if (perms_val->type == JSON_NUMBER) {
+                    permission = (int)perms_val->value.number;
+                } else if (perms_val->type == JSON_INTEGER) {
+                    permission = (int)perms_val->value.integer;
+                } else if (perms_val->type == JSON_OBJECT) {
+                    /* Process permission object with read, write, delete, admin flags */
+                    json_value_t* read_val = json_object_get(perms_val, "read");
+                    json_value_t* write_val = json_object_get(perms_val, "write");
+                    json_value_t* delete_val = json_object_get(perms_val, "delete");
+                    json_value_t* admin_val = json_object_get(perms_val, "admin");
+                    
+                    if (read_val && (read_val->type == JSON_BOOLEAN) && read_val->value.boolean) {
+                        permission |= RBAC_READ;
+                    }
+                    
+                    if (write_val && (write_val->type == JSON_BOOLEAN) && write_val->value.boolean) {
+                        permission |= RBAC_WRITE;
+                    }
+                    
+                    if (delete_val && (delete_val->type == JSON_BOOLEAN) && delete_val->value.boolean) {
+                        permission |= RBAC_DELETE;
+                    }
+                    
+                    if (admin_val && (admin_val->type == JSON_BOOLEAN) && admin_val->value.boolean) {
+                        permission |= RBAC_ADMIN;
+                    }
+                }
+                
+                /* Grant permission */
+                if (resource_type != RBAC_UNKNOWN && permission != 0) {
+                    rbac_grant_permission(ctx->rbac, role->id, resource_type, resource_id, permission);
+                }
+            }
+        }
+    }
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* role_obj = json_create_object();
+    
+    json_object_set(role_obj, "id", json_create_string(role->id));
+    json_object_set(role_obj, "name", json_create_string(role->name));
+    
+    /* Add permissions object */
+    json_value_t* permissions_obj = json_create_object();
+    
+    /* Copy permissions from role */
+    if (role->permissions) {
+        for (size_t i = 0; i < role->permissions->value.object.size; i++) {
+            const char* perm_key = role->permissions->value.object.entries[i].key;
+            json_value_t* perm_val = role->permissions->value.object.entries[i].value;
+            
+            if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+                json_object_set(permissions_obj, perm_key, 
+                               json_create_number(perm_val->type == JSON_NUMBER ? 
+                                                 perm_val->value.number : perm_val->value.integer));
+            }
+        }
+    }
+    
+    json_object_set(role_obj, "permissions", permissions_obj);
+    
+    /* Add users array (empty for new role) */
+    json_object_set(role_obj, "users", json_create_array());
+    
+    json_object_set(response, "role", role_obj);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    json_free(body);
+    rbac_free_role(role);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
 
 http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
-    return create_http_response(HTTP_OK, "{\"role\":{\"id\":\"1\",\"name\":\"admin\"}}", "application/json");
+    if (!ctx || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract role ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/roles/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* role_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to update role */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, role_id, RBAC_WRITE) &&
+        !rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, "*", RBAC_WRITE)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Check if role exists */
+    json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
+    if (!role_json || role_json->type != JSON_OBJECT) {
+        return create_http_response(HTTP_NOT_FOUND, 
+                                  "{\"error\":\"Role not found\"}", "application/json");
+    }
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        if (body) json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request body\"}", "application/json");
+    }
+    
+    /* Extract fields to update */
+    json_value_t* name_val = json_object_get(body, "name");
+    json_value_t* permissions_val = json_object_get(body, "permissions");
+    json_value_t* users_val = json_object_get(body, "users");
+    
+    /* Update name if provided */
+    if (name_val && name_val->type == JSON_STRING) {
+        const char* new_name = name_val->value.string;
+        
+        /* Validate name */
+        if (strlen(new_name) < 2) {
+            json_free(body);
+            return create_http_response(HTTP_BAD_REQUEST, 
+                                     "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
+        }
+        
+        /* Check if name is already taken by another role */
+        for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
+            const char* current_role_id = ctx->rbac->roles->value.object.entries[i].key;
+            json_value_t* current_role = ctx->rbac->roles->value.object.entries[i].value;
+            
+            if (strcmp(current_role_id, role_id) != 0 && current_role->type == JSON_OBJECT) {
+                json_value_t* current_name = json_object_get(current_role, "name");
+                if (current_name && current_name->type == JSON_STRING && 
+                    strcmp(current_name->value.string, new_name) == 0) {
+                    json_free(body);
+                    return create_http_response(HTTP_CONFLICT, 
+                                             "{\"error\":\"Role name already exists\"}", "application/json");
+                }
+            }
+        }
+        
+        /* Update name */
+        json_object_set(role_json, "name", json_create_string(new_name));
+    }
+    
+    /* Update permissions if provided */
+    if (permissions_val && permissions_val->type == JSON_OBJECT) {
+        /* Get current permissions */
+        json_value_t* current_permissions = json_object_get(role_json, "permissions");
+        if (!current_permissions || current_permissions->type != JSON_OBJECT) {
+            /* Create permissions object if it doesn't exist */
+            current_permissions = json_create_object();
+            json_object_set(role_json, "permissions", current_permissions);
+        }
+        
+        /* Clear existing permissions */
+        for (size_t i = 0; i < current_permissions->value.object.size; i++) {
+            const char* key = current_permissions->value.object.entries[i].key;
+            json_object_remove(current_permissions, key);
+            /* Adjust index after removal */
+            i--;
+        }
+        
+        /* Add new permissions */
+        for (size_t i = 0; i < permissions_val->value.object.size; i++) {
+            const char* key = permissions_val->value.object.entries[i].key;
+            json_value_t* value = permissions_val->value.object.entries[i].value;
+            
+            if (value && (value->type == JSON_NUMBER || value->type == JSON_INTEGER)) {
+                json_object_set(current_permissions, key, 
+                               json_create_number(value->type == JSON_NUMBER ? 
+                                                 value->value.number : value->value.integer));
+            } else if (value && value->type == JSON_OBJECT) {
+                /* Process permission object with read, write, delete, admin flags */
+                json_value_t* read_val = json_object_get(value, "read");
+                json_value_t* write_val = json_object_get(value, "write");
+                json_value_t* delete_val = json_object_get(value, "delete");
+                json_value_t* admin_val = json_object_get(value, "admin");
+                
+                int permission = 0;
+                
+                if (read_val && (read_val->type == JSON_BOOLEAN) && read_val->value.boolean) {
+                    permission |= RBAC_READ;
+                }
+                
+                if (write_val && (write_val->type == JSON_BOOLEAN) && write_val->value.boolean) {
+                    permission |= RBAC_WRITE;
+                }
+                
+                if (delete_val && (delete_val->type == JSON_BOOLEAN) && delete_val->value.boolean) {
+                    permission |= RBAC_DELETE;
+                }
+                
+                if (admin_val && (admin_val->type == JSON_BOOLEAN) && admin_val->value.boolean) {
+                    permission |= RBAC_ADMIN;
+                }
+                
+                if (permission != 0) {
+                    json_object_set(current_permissions, key, json_create_number(permission));
+                }
+            }
+        }
+    }
+    
+    /* Update users if provided */
+    if (users_val && users_val->type == JSON_ARRAY) {
+        /* Get current users */
+        json_value_t* current_users = json_object_get(role_json, "users");
+        if (!current_users || current_users->type != JSON_ARRAY) {
+            /* Create users array if it doesn't exist */
+            current_users = json_create_array();
+            json_object_set(role_json, "users", current_users);
+        }
+        
+        /* First, remove this role from all users' roles */
+        for (size_t i = 0; i < current_users->value.array.size; i++) {
+            json_value_t* user_id_val = current_users->value.array.items[i];
+            if (user_id_val && user_id_val->type == JSON_STRING) {
+                const char* user_id_str = user_id_val->value.string;
+                
+                /* Get user */
+                json_value_t* user_obj = json_object_get(ctx->rbac->users, user_id_str);
+                if (user_obj && user_obj->type == JSON_OBJECT) {
+                    /* Get user roles */
+                    json_value_t* user_roles = json_object_get(user_obj, "roles");
+                    if (user_roles && user_roles->type == JSON_ARRAY) {
+                        /* Find role in user */
+                        for (size_t j = 0; j < user_roles->value.array.size; j++) {
+                            json_value_t* id = user_roles->value.array.items[j];
+                            if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
+                                /* Remove role from user */
+                                for (size_t k = j; k < user_roles->value.array.size - 1; k++) {
+                                    user_roles->value.array.items[k] = user_roles->value.array.items[k + 1];
+                                }
+                                user_roles->value.array.size--;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /* Clear current users array */
+        current_users->value.array.size = 0;
+        
+        /* Add new users */
+        for (size_t i = 0; i < users_val->value.array.size; i++) {
+            json_value_t* user_id_val = users_val->value.array.items[i];
+            
+            /* Handle both string and object formats */
+            const char* user_id_str = NULL;
+            if (user_id_val->type == JSON_STRING) {
+                user_id_str = user_id_val->value.string;
+            } else if (user_id_val->type == JSON_OBJECT) {
+                json_value_t* id_val = json_object_get(user_id_val, "id");
+                if (id_val && id_val->type == JSON_STRING) {
+                    user_id_str = id_val->value.string;
+                }
+            }
+            
+            if (user_id_str) {
+                /* Check if user exists */
+                json_value_t* user_obj = json_object_get(ctx->rbac->users, user_id_str);
+                if (user_obj && user_obj->type == JSON_OBJECT) {
+                    /* Add user to role */
+                    json_array_append(current_users, json_create_string(user_id_str));
+                    
+                    /* Add role to user's roles */
+                    json_value_t* user_roles = json_object_get(user_obj, "roles");
+                    if (!user_roles || user_roles->type != JSON_ARRAY) {
+                        /* Create roles array if it doesn't exist */
+                        user_roles = json_create_array();
+                        json_object_set(user_obj, "roles", user_roles);
+                    }
+                    
+                    /* Check if role is already in user's roles */
+                    int role_found = 0;
+                    for (size_t j = 0; j < user_roles->value.array.size; j++) {
+                        json_value_t* id = user_roles->value.array.items[j];
+                        if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
+                            role_found = 1;
+                            break;
+                        }
+                    }
+                    
+                    /* Add role to user if not already present */
+                    if (!role_found) {
+                        json_array_append(user_roles, json_create_string(role_id));
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Get updated role for response */
+    rbac_role_t* role = rbac_get_role(ctx->rbac, role_id);
+    
+    /* Create response */
+    json_value_t* response = json_create_object();
+    json_value_t* role_obj = json_create_object();
+    
+    json_object_set(role_obj, "id", json_create_string(role->id));
+    json_object_set(role_obj, "name", json_create_string(role->name));
+    
+    /* Add permissions object */
+    json_value_t* permissions_obj = json_create_object();
+    
+    /* Copy permissions from role */
+    if (role->permissions) {
+        for (size_t i = 0; i < role->permissions->value.object.size; i++) {
+            const char* perm_key = role->permissions->value.object.entries[i].key;
+            json_value_t* perm_val = role->permissions->value.object.entries[i].value;
+            
+            if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+                json_object_set(permissions_obj, perm_key, 
+                               json_create_number(perm_val->type == JSON_NUMBER ? 
+                                                 perm_val->value.number : perm_val->value.integer));
+            }
+        }
+    }
+    
+    json_object_set(role_obj, "permissions", permissions_obj);
+    
+    /* Add users array */
+    json_value_t* users_array = json_create_array();
+    
+    /* Get role users from JSON data */
+    role_json = json_object_get(ctx->rbac->roles, role_id);
+    if (role_json && role_json->type == JSON_OBJECT) {
+        json_value_t* users = json_object_get(role_json, "users");
+        if (users && users->type == JSON_ARRAY) {
+            for (size_t i = 0; i < users->value.array.size; i++) {
+                json_value_t* user_id_val = users->value.array.items[i];
+                if (user_id_val && user_id_val->type == JSON_STRING) {
+                    /* Add user ID to array */
+                    json_array_append(users_array, json_create_string(user_id_val->value.string));
+                }
+            }
+        }
+    }
+    
+    json_object_set(role_obj, "users", users_array);
+    
+    json_object_set(response, "role", role_obj);
+    
+    /* Serialize response */
+    char* response_str = json_stringify(response);
+    
+    /* Free resources */
+    json_free(response);
+    json_free(body);
+    rbac_free_role(role);
+    
+    /* Create and return response */
+    return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* request) {
-    (void)request; /* Avoid unused parameter warning */
-    (void)ctx; /* Avoid unused parameter warning */
-    /* Placeholder implementation */
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    if (!ctx->rbac) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"RBAC system not initialized\"}", "application/json");
+    }
+    
+    /* Extract role ID from path */
+    const char* path = request->path;
+    if (strncmp(path, "/api/roles/", 11) != 0) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    const char* role_id = path + 11;
+    
+    /* Check if the user has appropriate permissions */
+    /* Extract token and get user ID */
+    char* token = api_extract_token(request);
+    if (!token) {
+        /* This should not happen since authorization is already checked in api_dispatch_request */
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Unauthorized\"}", "application/json");
+    }
+    
+    /* Decode token */
+    jwt_token_t* jwt = jwt_decode(token);
+    free(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED, 
+                                  "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_id = jwt->payload->sub;
+    
+    /* Check if user has permission to delete role */
+    if (!rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, role_id, RBAC_DELETE) &&
+        !rbac_check_permission(ctx->rbac, user_id, RBAC_ROLE, "*", RBAC_DELETE)) {
+        jwt_free(jwt);
+        return create_http_response(HTTP_FORBIDDEN, 
+                                  "{\"error\":\"Permission denied\"}", "application/json");
+    }
+    
+    jwt_free(jwt);
+    
+    /* Check if role exists */
+    if (!json_object_has(ctx->rbac->roles, role_id)) {
+        return create_http_response(HTTP_NOT_FOUND, 
+                                  "{\"error\":\"Role not found\"}", "application/json");
+    }
+    
+    /* Special case: Don't allow deletion of the admin role */
+    json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
+    if (role_json && role_json->type == JSON_OBJECT) {
+        json_value_t* name_val = json_object_get(role_json, "name");
+        if (name_val && name_val->type == JSON_STRING && 
+            strcmp(name_val->value.string, "admin") == 0) {
+            return create_http_response(HTTP_FORBIDDEN, 
+                                      "{\"error\":\"Cannot delete the admin role\"}", "application/json");
+        }
+    }
+    
+    /* Delete role */
+    if (!rbac_delete_role(ctx->rbac, role_id)) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to delete role\"}", "application/json");
+    }
+    
+    /* Return success with no content */
     return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
 }
 
