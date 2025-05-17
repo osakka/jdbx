@@ -60,9 +60,12 @@ debugLog('Final API Base URL:', API_BASE_URL);
 // Application State
 let currentView = 'dashboard';
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+let refreshToken = localStorage.getItem('jsondb_refresh_token');
+let tokenExpiresAt = localStorage.getItem('jsondb_token_expires');
 let currentCollection = null;
 let jsonEditor = null;
 let charts = {};
+let tokenRefreshPromise = null; // Promise for in-flight token refresh
 
 // Transaction visualization state
 let transactionHistory = [];
@@ -121,8 +124,7 @@ function showLoginModal() {
 }
 
 function validateToken() {
-    // Since we don't have a dedicated validation endpoint, we can use a simpler approach
-    // Just check if the token exists and hasn't expired
+    // Check if the token exists
     if (!authToken) {
         debugLog('No token found in localStorage');
         return Promise.resolve(false);
@@ -136,7 +138,31 @@ function validateToken() {
         return Promise.resolve(true);
     }
 
-    // Test by making a protected API call
+    // Check if token is expired based on the expiration time we stored
+    const now = Date.now();
+    const expires = parseInt(tokenExpiresAt, 10);
+    
+    // If we have expiration time and it's in the future, token is likely valid
+    if (tokenExpiresAt && !isNaN(expires) && now < expires) {
+        debugLog('Token expiration time looks valid, continuing');
+        return Promise.resolve(true);
+    }
+    
+    // If we have a refresh token, try to refresh the token
+    if (refreshToken) {
+        debugLog('Token expired or expiration unknown, attempting refresh');
+        return refreshAuthToken()
+            .then(success => {
+                debugLog('Token refresh result:', success);
+                return success;
+            })
+            .catch(error => {
+                debugLog('Token refresh error:', error);
+                return false;
+            });
+    }
+
+    // As a last resort, test by making a protected API call
     return fetch(`${API_BASE_URL}/api/admin/test`, {
         method: 'GET',
         headers: {
@@ -153,6 +179,80 @@ function validateToken() {
         debugLog('Token validation error:', error);
         return false;
     });
+}
+
+// Function to refresh the auth token
+function refreshAuthToken() {
+    // If a refresh is already in progress, return that promise
+    if (tokenRefreshPromise) {
+        debugLog('Using existing token refresh request');
+        return tokenRefreshPromise;
+    }
+    
+    // If we don't have a refresh token, we can't refresh
+    if (!refreshToken) {
+        debugLog('No refresh token available');
+        return Promise.resolve(false);
+    }
+    
+    debugLog('Starting token refresh request');
+    
+    // Create the refresh promise
+    tokenRefreshPromise = fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        mode: 'cors',
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Refresh token invalid or expired');
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Store the new tokens
+        if (data && data.token && data.refresh_token) {
+            authToken = data.token;
+            refreshToken = data.refresh_token;
+            
+            // Calculate expiration time and store it
+            const expiresInMs = (data.expires_in || 1800) * 1000; // Default to 30 minutes if not provided
+            tokenExpiresAt = Date.now() + expiresInMs;
+            
+            // Store tokens in localStorage
+            localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+            localStorage.setItem('jsondb_refresh_token', refreshToken);
+            localStorage.setItem('jsondb_token_expires', tokenExpiresAt);
+            
+            debugLog('Token refreshed successfully');
+            return true;
+        } else {
+            debugLog('Refresh response missing token data');
+            return false;
+        }
+    })
+    .catch(error => {
+        debugLog('Token refresh failed:', error);
+        // Clear tokens on refresh failure
+        authToken = null;
+        refreshToken = null;
+        tokenExpiresAt = null;
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem('jsondb_refresh_token');
+        localStorage.removeItem('jsondb_token_expires');
+        throw error;
+    })
+    .finally(() => {
+        // Clear the refresh promise
+        tokenRefreshPromise = null;
+    });
+    
+    return tokenRefreshPromise;
 }
 
 function handleLogin(event) {
@@ -201,6 +301,21 @@ function handleLogin(event) {
             authToken = data.token;
             localStorage.setItem(AUTH_TOKEN_KEY, authToken);
             debugLog('Saved auth token:', authToken);
+            
+            // Store refresh token if available
+            if (data.refresh_token) {
+                refreshToken = data.refresh_token;
+                localStorage.setItem('jsondb_refresh_token', refreshToken);
+                debugLog('Saved refresh token');
+            }
+            
+            // Calculate and store token expiration
+            if (data.expires_in) {
+                const expiresInMs = data.expires_in * 1000;
+                tokenExpiresAt = Date.now() + expiresInMs;
+                localStorage.setItem('jsondb_token_expires', tokenExpiresAt);
+                debugLog(`Token expires in ${data.expires_in} seconds`);
+            }
         } else {
             // For development/testing, use a mock token if not provided
             authToken = 'mock-token';
@@ -235,9 +350,13 @@ function handleLogin(event) {
 }
 
 function handleLogout() {
-    // Clear token
+    // Clear all tokens
     authToken = null;
+    refreshToken = null;
+    tokenExpiresAt = null;
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem('jsondb_refresh_token');
+    localStorage.removeItem('jsondb_token_expires');
     
     // Show login modal
     showLoginModal();
@@ -430,6 +549,81 @@ function addSeedDataIfNeeded() {
             debugLog('Error in addSeedDataIfNeeded:', error);
         });
     }, 2000); // Wait 2 seconds after initialization
+}
+
+// Token refresh utility functions
+
+// Function to check if token needs refresh before making an API call
+function ensureValidToken() {
+    // If we don't have expiration info, just return
+    if (!tokenExpiresAt) {
+        return Promise.resolve();
+    }
+    
+    // Check if token expires soon (within the next minute)
+    const now = Date.now();
+    const expiresInMs = parseInt(tokenExpiresAt, 10) - now;
+    
+    // If token expires in less than a minute and we have a refresh token, refresh it
+    if (expiresInMs < 60000 && refreshToken) {
+        debugLog('Token expires soon, refreshing...');
+        return refreshAuthToken();
+    }
+    
+    // Otherwise, token is still valid
+    return Promise.resolve();
+}
+
+// Function to wrap a fetch call with automatic token refresh
+function fetchWithTokenRefresh(url, options = {}) {
+    // First ensure we have a valid token
+    return ensureValidToken()
+        .then(() => {
+            // Add authorization header if token exists
+            if (authToken && (!options.headers || !options.headers.Authorization)) {
+                options.headers = {
+                    ...options.headers,
+                    'Authorization': `Bearer ${authToken}`
+                };
+            }
+            
+            // Make the request
+            return fetch(url, options);
+        })
+        .then(response => {
+            // If we get a 401 unauthorized, try to refresh token and retry the request
+            if (response.status === 401 && refreshToken) {
+                debugLog('Received 401, attempting token refresh');
+                return refreshAuthToken()
+                    .then(success => {
+                        if (success) {
+                            // Update the authorization header with the new token
+                            if (authToken) {
+                                options.headers = {
+                                    ...options.headers,
+                                    'Authorization': `Bearer ${authToken}`
+                                };
+                            }
+                            
+                            // Retry the request
+                            debugLog('Token refreshed, retrying request');
+                            return fetch(url, options);
+                        } else {
+                            // If token refresh failed, return the original 401 response
+                            debugLog('Token refresh failed, returning original 401 response');
+                            return response;
+                        }
+                    })
+                    .catch(() => {
+                        // If token refresh fails, return the original 401 response
+                        debugLog('Token refresh error, returning original 401 response');
+                        return response;
+                    });
+            }
+            
+            // For other response codes, just return the response
+            return response;
+        });
 }
 
 // Utility Functions

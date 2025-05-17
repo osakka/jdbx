@@ -858,3 +858,145 @@ int jwt_verify(const char* token_str, const char* secret) {
     
     return result;
 }
+
+/* Create a refresh token */
+jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, time_t expiry) {
+    if (!secret || !user_id) {
+        return NULL;
+    }
+    
+    /* Create new token */
+    jwt_token_t* token = jwt_create(secret);
+    if (!token) {
+        return NULL;
+    }
+    
+    /* Set token claims */
+    jwt_set_subject(token, user_id);
+    jwt_set_issuer(token, "jsondb");
+    
+    /* Set expiration (defaults to 7 days if not specified) */
+    if (expiry == 0) {
+        expiry = time(NULL) + (7 * 24 * 60 * 60); /* 7 days */
+    }
+    jwt_set_expiration(token, expiry);
+    
+    /* Add refresh token claim */
+    jwt_add_claim(token, "type", json_create_string("refresh"));
+    
+    return token;
+}
+
+/* Create both access and refresh tokens and return them as a pair */
+char* jwt_create_token_pair(const char* secret, const char* user_id, const char* username, json_value_t** response_json) {
+    if (!secret || !user_id || !username || !response_json) {
+        return NULL;
+    }
+    
+    /* Create access token */
+    jwt_token_t* access_token = jwt_create(secret);
+    if (!access_token) {
+        return NULL;
+    }
+    
+    /* Set access token claims */
+    jwt_set_subject(access_token, user_id);
+    jwt_set_issuer(access_token, "jsondb");
+    jwt_set_expiration(access_token, time(NULL) + (30 * 60)); /* 30 minutes */
+    jwt_add_claim(access_token, "username", json_create_string(username));
+    jwt_add_claim(access_token, "type", json_create_string("access"));
+    
+    /* Create refresh token */
+    jwt_token_t* refresh_token = jwt_create_refresh_token(secret, user_id, 0); /* Use default expiry */
+    if (!refresh_token) {
+        jwt_free(access_token);
+        return NULL;
+    }
+    
+    /* Encode tokens */
+    char* access_token_str = jwt_encode(access_token, secret);
+    char* refresh_token_str = jwt_encode(refresh_token, secret);
+    
+    /* Free token structures */
+    jwt_free(access_token);
+    jwt_free(refresh_token);
+    
+    if (!access_token_str || !refresh_token_str) {
+        if (access_token_str) free(access_token_str);
+        if (refresh_token_str) free(refresh_token_str);
+        return NULL;
+    }
+    
+    /* Create response JSON */
+    json_value_t* response = json_create_object();
+    if (!response) {
+        free(access_token_str);
+        free(refresh_token_str);
+        return NULL;
+    }
+    
+    json_object_set(response, "token", json_create_string(access_token_str));
+    json_object_set(response, "refresh_token", json_create_string(refresh_token_str));
+    json_object_set(response, "user_id", json_create_string(user_id));
+    json_object_set(response, "username", json_create_string(username));
+    json_object_set(response, "expires_in", json_create_number(30 * 60)); /* 30 minutes in seconds */
+    
+    /* Create response string */
+    char* response_str = json_stringify(response);
+    
+    /* Set the response JSON for the caller */
+    *response_json = response;
+    
+    /* Clean up */
+    free(access_token_str);
+    free(refresh_token_str);
+    
+    return response_str;
+}
+
+/* Verify a refresh token and extract the user ID if valid */
+int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char** user_id) {
+    if (!refresh_token || !secret || !user_id) {
+        return 0;
+    }
+    
+    /* Initialize the output parameter */
+    *user_id = NULL;
+    
+    /* First verify the token signature and expiry */
+    if (!jwt_verify(refresh_token, secret)) {
+        return 0;
+    }
+    
+    /* Decode the token to check its claims */
+    jwt_token_t* token = jwt_decode(refresh_token);
+    if (!token) {
+        return 0;
+    }
+    
+    /* Check if it's a refresh token */
+    json_value_t* type_claim = jwt_get_claim(token, "type");
+    if (!type_claim || type_claim->type != JSON_STRING ||
+        strcmp(type_claim->value.string, "refresh") != 0) {
+        jwt_free(token);
+        return 0;
+    }
+    
+    /* Extract user ID from subject claim */
+    if (!token->payload->sub) {
+        jwt_free(token);
+        return 0;
+    }
+    
+    /* Set the output parameter */
+    *user_id = strdup(token->payload->sub);
+    if (!*user_id) {
+        jwt_free(token);
+        return 0;
+    }
+    
+    /* Clean up */
+    jwt_free(token);
+    
+    return 1;
+}

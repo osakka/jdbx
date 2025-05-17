@@ -42,6 +42,7 @@ char* api_extract_token(http_request_t* request);
 /* Authentication handlers */
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* request);
 
 /* Database handlers */
 http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t* request);
@@ -71,6 +72,7 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
 
 /* Metrics handlers */
 http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* request);
 
 /* System information handlers */
 http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* request);
@@ -131,8 +133,11 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
 
 /* Health and monitoring handlers */
 http_response_t* api_handle_health_check(api_context_t* ctx, http_request_t* request);
-http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request);
-http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t* request);
+
+/* Health API metrics handlers */
+http_response_t* health_api_handle_metrics(api_context_t* ctx, http_request_t* request);
+http_response_t* health_api_handle_metrics_available(api_context_t* ctx, http_request_t* request);
+http_response_t* health_api_handle_metrics_export(api_context_t* ctx, http_request_t* request);
 
 /* Health API initialization and endpoint registration */
 void health_api_init(void);

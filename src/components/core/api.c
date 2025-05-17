@@ -25,6 +25,7 @@ static api_route_t routes[] = {
     /* Authentication routes */
     {"/api/auth/login", HTTP_POST, api_handle_login, 0},
     {"/api/auth/register", HTTP_POST, api_handle_register, 0},
+    {"/api/auth/refresh", HTTP_POST, api_handle_token_refresh, 0},
     
     /* Collection routes */
     {"/api/collections", HTTP_GET, api_handle_collections_list, 1},
@@ -55,9 +56,10 @@ static api_route_t routes[] = {
     {"/api/config", HTTP_PUT, api_handle_config_update, 1},
     
     /* Metrics routes */
-    {"/api/metrics", HTTP_GET, api_handle_metrics_get, 1},
-    {"/api/metrics/stats", HTTP_GET, api_handle_metrics_get, 1},
-    {"/api/metrics/activity", HTTP_GET, api_handle_metrics_get, 1},
+    {"/api/metrics", HTTP_GET, health_api_handle_metrics, 1},
+    {"/api/metrics/stats", HTTP_GET, health_api_handle_metrics, 1},
+    {"/api/metrics/activity", HTTP_GET, health_api_handle_metrics, 1},
+    {"/api/metrics/export", HTTP_POST, health_api_handle_metrics_export, 1},
     
     /* System info routes */
     {"/api/system/info", HTTP_GET, api_handle_system_info, 1},
@@ -87,8 +89,8 @@ static api_route_t routes[] = {
 
     /* Health and monitoring routes */
     {"/health", HTTP_GET, api_handle_health_check, 0},
-    {"/metrics", HTTP_GET, api_handle_metrics, 0},
-    {"/metrics/available", HTTP_GET, api_handle_metrics_available, 0},
+    {"/metrics", HTTP_GET, health_api_handle_metrics, 0},
+    {"/metrics/available", HTTP_GET, health_api_handle_metrics_available, 0},
     
     /* Schema validation routes */
     {"/api/schemas", HTTP_GET, api_handle_schema_get, 1},
@@ -454,62 +456,120 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                                   "{\"error\":\"User not found\"}", "application/json");
     }
     
-    /* Create JWT token */
+    /* Create token pair */
     if (g_logger) {
-        LOG_DEBUG("Creating JWT token with secret: '%s'", ctx->jwt_secret);
+        LOG_DEBUG("Creating JWT token pair with secret: '%s'", ctx->jwt_secret);
     }
     
-    jwt_token_t* token = jwt_create(ctx->jwt_secret);
-    if (!token) {
+    json_value_t* response = NULL;
+    char* response_str = jwt_create_token_pair(ctx->jwt_secret, user->id, user->username, &response);
+    
+    if (!response_str || !response) {
         if (g_logger) {
-            LOG_ERROR("Failed to create JWT token");
+            LOG_ERROR("Failed to create token pair");
         }
         json_free(body);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                  "{\"error\":\"Failed to create token\"}", "application/json");
-    }
-    
-    /* Set token claims */
-    jwt_set_subject(token, user->id);
-    jwt_set_issuer(token, "jsondb");
-    
-    /* Set expiration (24 hours) */
-    jwt_set_expiration(token, time(NULL) + 86400);
-    
-    /* Add username claim */
-    jwt_add_claim(token, "username", json_create_string(user->username));
-    
-    /* Encode token */
-    if (g_logger) {
-        LOG_DEBUG("Encoding JWT token with secret: '%s'", ctx->jwt_secret);
-    }
-    
-    char* jwt_str = jwt_encode(token, ctx->jwt_secret);
-    jwt_free(token);
-    
-    if (!jwt_str) {
-        if (g_logger) {
-            LOG_ERROR("Failed to encode JWT token");
-        }
-        json_free(body);
-        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                  "{\"error\":\"Failed to encode token\"}", "application/json");
+                                  "{\"error\":\"Failed to create tokens\"}", "application/json");
     }
     
     if (g_logger) {
-        LOG_DEBUG("JWT token generated successfully: %.20s...", jwt_str);
+        LOG_DEBUG("JWT tokens generated successfully");
     }
     
-    /* Create response */
-    json_value_t* response = json_create_object();
-    json_object_set(response, "token", json_create_string(jwt_str));
-    json_object_set(response, "user_id", json_create_string(user->id));
-    json_object_set(response, "username", json_create_string(user->username));
-    
-    char* response_str = json_stringify(response);
-    json_free(response);
-    free(jwt_str);
+    /* Free resources */
+    free(response_str); /* We'll stringify again below */
     json_free(body);
+    
+    /* Generate the final response string */
+    response_str = json_stringify(response);
+    json_free(response);
+    
+    return create_http_response(HTTP_OK, response_str, "application/json");
+}
+
+/* Handle token refresh request */
+http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST,
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        if (body) json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                                  "{\"error\":\"Invalid request body\"}", "application/json");
+    }
+    
+    /* Extract refresh token */
+    json_value_t* refresh_token_val = json_object_get(body, "refresh_token");
+    if (!refresh_token_val || refresh_token_val->type != JSON_STRING) {
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                                  "{\"error\":\"Refresh token required\"}", "application/json");
+    }
+    
+    const char* refresh_token = refresh_token_val->value.string;
+    
+    /* Verify refresh token and extract user ID */
+    char* user_id = NULL;
+    if (!jwt_verify_refresh_token(refresh_token, ctx->jwt_secret, &user_id)) {
+        if (g_logger) {
+            LOG_ERROR("Invalid refresh token or token expired");
+        }
+        json_free(body);
+        return create_http_response(HTTP_UNAUTHORIZED,
+                                  "{\"error\":\"Invalid or expired refresh token\"}", "application/json");
+    }
+    
+    if (!user_id) {
+        json_free(body);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                                  "{\"error\":\"Failed to extract user ID from token\"}", "application/json");
+    }
+    
+    /* Get user */
+    rbac_user_t* user = rbac_get_user(ctx->rbac, user_id);
+    if (!user) {
+        free(user_id);
+        json_free(body);
+        return create_http_response(HTTP_NOT_FOUND,
+                                  "{\"error\":\"User not found\"}", "application/json");
+    }
+    
+    /* Create new token pair */
+    if (g_logger) {
+        LOG_DEBUG("Creating new JWT token pair for user: %s", user->username);
+    }
+    
+    json_value_t* response = NULL;
+    char* response_str = jwt_create_token_pair(ctx->jwt_secret, user->id, user->username, &response);
+    
+    /* Free user ID since we no longer need it */
+    free(user_id);
+    
+    if (!response_str || !response) {
+        if (g_logger) {
+            LOG_ERROR("Failed to create new token pair");
+        }
+        json_free(body);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                                  "{\"error\":\"Failed to create tokens\"}", "application/json");
+    }
+    
+    if (g_logger) {
+        LOG_DEBUG("New JWT tokens generated successfully");
+    }
+    
+    /* Free resources */
+    free(response_str); /* We'll stringify again below */
+    json_free(body);
+    
+    /* Generate the final response string */
+    response_str = json_stringify(response);
+    json_free(response);
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -2472,8 +2532,202 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
     return create_http_response(HTTP_OK, "{\"config\":{\"port\":8080}}", "application/json");
 }
 
-/* Metrics handler */
+/* Metrics handler for authenticated users accessing /api/metrics endpoints */
 http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+#ifndef TOOLS_BUILD
+    if (!g_metrics_registry) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Metrics registry not initialized\"}", "application/json");
+    }
+    
+    /* Parse the path to determine which metrics to return */
+    char* path = request->path;
+    char* category = NULL;
+    
+    /* Extract the category from the path if present */
+    if (strcmp(path, "/api/metrics/stats") == 0) {
+        category = "stats";
+    } else if (strcmp(path, "/api/metrics/activity") == 0) {
+        category = "activity";
+    }
+    
+    /* Check for query parameters */
+    char* type_filter = NULL;
+    char* name_filter = NULL;
+    
+    if (request->query) {
+        char* query = strdup(request->query);
+        if (query) {
+            char* token = strtok(query, "&");
+            while (token) {
+                if (strncmp(token, "type=", 5) == 0) {
+                    type_filter = strdup(token + 5);
+                } else if (strncmp(token, "name=", 5) == 0) {
+                    name_filter = strdup(token + 5);
+                }
+                token = strtok(NULL, "&");
+            }
+            free(query);
+        }
+    }
+    
+    /* Get all metrics as JSON */
+    char* metrics_json = metrics_get_json(g_metrics_registry);
+    if (!metrics_json) {
+        if (type_filter) free(type_filter);
+        if (name_filter) free(name_filter);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Failed to get metrics\"}", "application/json");
+    }
+    
+    /* If no filters are specified, return all metrics */
+    if (!category && !type_filter && !name_filter) {
+        /* Create response */
+        http_response_t* response = create_http_response(HTTP_OK, metrics_json, "application/json");
+        
+        /* Free metrics JSON */
+        free(metrics_json);
+        
+        return response;
+    }
+    
+    /* Parse the metrics JSON to filter based on the criteria */
+    json_value_t* root = json_parse(metrics_json);
+    if (!root) {
+        if (type_filter) free(type_filter);
+        if (name_filter) free(name_filter);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
+    }
+    
+    /* Create a new metrics array for the filtered metrics */
+    json_value_t* filtered_metrics = json_create_array();
+    if (!filtered_metrics) {
+        if (type_filter) free(type_filter);
+        if (name_filter) free(name_filter);
+        json_free(root);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Memory allocation failure\"}", "application/json");
+    }
+    
+    /* Get the metrics array */
+    json_value_t* metrics_array = json_object_get(root, "metrics");
+    if (metrics_array && metrics_array->type == JSON_ARRAY) {
+        for (size_t i = 0; i < metrics_array->value.array.size; i++) {
+            json_value_t* metric = json_array_get(metrics_array, i);
+            
+            /* Extract metric properties for filtering */
+            json_value_t* name_val = json_object_get(metric, "name");
+            json_value_t* type_val = json_object_get(metric, "type");
+            
+            if (!name_val || name_val->type != JSON_STRING || 
+                !type_val || type_val->type != JSON_STRING) {
+                continue;  /* Skip metrics with missing or invalid required fields */
+            }
+            
+            const char* name = name_val->value.string;
+            const char* type = type_val->value.string;
+            
+            /* Check if this metric matches the filters */
+            int include_metric = 1;
+            
+            /* Apply category filter */
+            if (category) {
+                /* For now, we use simple prefix matching for categories */
+                if (strcmp(category, "stats") == 0) {
+                    /* Include metrics related to statistics */
+                    if (!(strstr(name, "server_") == name || 
+                          strstr(name, "db_") == name || 
+                          strstr(name, "system_") == name)) {
+                        include_metric = 0;
+                    }
+                } else if (strcmp(category, "activity") == 0) {
+                    /* Include metrics related to activity */
+                    if (!(strstr(name, "active_") == name || 
+                          strstr(name, "requests_") == name || 
+                          strstr(name, "operations_") == name || 
+                          strstr(name, "queries_") == name)) {
+                        include_metric = 0;
+                    }
+                }
+            }
+            
+            /* Apply type filter */
+            if (include_metric && type_filter) {
+                if (strcmp(type, type_filter) != 0) {
+                    include_metric = 0;
+                }
+            }
+            
+            /* Apply name filter */
+            if (include_metric && name_filter) {
+                if (strstr(name, name_filter) == NULL) {
+                    include_metric = 0;
+                }
+            }
+            
+            /* If all filters pass, include this metric */
+            if (include_metric) {
+                /* Create a deep copy of the metric */
+                json_value_t* metric_copy = json_clone(metric);
+                if (metric_copy) {
+                    json_array_append(filtered_metrics, metric_copy);
+                }
+            }
+        }
+    }
+    
+    /* Create a new JSON object with the filtered metrics */
+    json_value_t* filtered_obj = json_create_object();
+    if (!filtered_obj) {
+        if (type_filter) free(type_filter);
+        if (name_filter) free(name_filter);
+        json_free(filtered_metrics);
+        json_free(root);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Memory allocation failure\"}", "application/json");
+    }
+    
+    json_object_set(filtered_obj, "metrics", filtered_metrics);
+    
+    /* Convert to JSON string */
+    char* filtered_json = json_stringify(filtered_obj);
+    
+    /* Clean up */
+    if (type_filter) free(type_filter);
+    if (name_filter) free(name_filter);
+    json_free(filtered_obj);  /* This will also free filtered_metrics */
+    json_free(root);
+    free(metrics_json);
+    
+    if (!filtered_json) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to generate response\"}", "application/json");
+    }
+    
+    /* Create response */
+    http_response_t* response = create_http_response(HTTP_OK, filtered_json, "application/json");
+    
+    /* Free filtered JSON */
+    free(filtered_json);
+    
+    return response;
+#else
+    /* In tools build, return empty metrics */
+    return create_http_response(HTTP_OK, "{\"metrics\":[]}", "application/json");
+#endif
+}
+
+/* Metrics handler for public /metrics endpoint (Prometheus/OpenMetrics format) */
+http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request) {
     if (!ctx || !request) {
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid request\"}", "application/json");
@@ -2492,15 +2746,372 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
                                   "{\"error\":\"Failed to get metrics\"}", "application/json");
     }
     
-    /* Create response */
-    http_response_t* response = create_http_response(HTTP_OK, metrics_json, "application/json");
+    /* Convert JSON to Prometheus format (simplified) */
+    json_value_t* root = json_parse(metrics_json);
+    if (!root) {
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
+    }
     
-    /* Free metrics JSON */
+    /* Create a buffer for the Prometheus format output */
+    size_t buffer_size = 10240;  /* Start with 10KB buffer */
+    char* prom_buffer = (char*)malloc(buffer_size);
+    if (!prom_buffer) {
+        json_free(root);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Memory allocation failure\"}", "application/json");
+    }
+    
+    /* Initialize buffer */
+    size_t buffer_used = 0;
+    prom_buffer[0] = '\0';
+    
+    /* Get the metrics array */
+    json_value_t* metrics_array = json_object_get(root, "metrics");
+    if (metrics_array && metrics_array->type == JSON_ARRAY) {
+        for (size_t i = 0; i < metrics_array->value.array.size; i++) {
+            json_value_t* metric = json_array_get(metrics_array, i);
+            
+            /* Extract metric properties */
+            json_value_t* name_val = json_object_get(metric, "name");
+            json_value_t* description_val = json_object_get(metric, "description");
+            json_value_t* type_val = json_object_get(metric, "type");
+            
+            if (!name_val || name_val->type != JSON_STRING || 
+                !type_val || type_val->type != JSON_STRING) {
+                continue;  /* Skip metrics with missing or invalid required fields */
+            }
+            
+            const char* name = name_val->value.string;
+            const char* type = type_val->value.string;
+            const char* description = description_val && description_val->type == JSON_STRING ? 
+                                     description_val->value.string : "";
+            
+            /* Add metric description as a comment */
+            buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                   "# HELP %s %s\n", name, description);
+            
+            /* Add metric type */
+            const char* prom_type = "untyped";
+            if (strcmp(type, "counter") == 0) {
+                prom_type = "counter";
+            } else if (strcmp(type, "gauge") == 0) {
+                prom_type = "gauge";
+            } else if (strcmp(type, "timer") == 0) {
+                prom_type = "summary";
+            } else if (strcmp(type, "histogram") == 0) {
+                prom_type = "histogram";
+            }
+            
+            buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                   "# TYPE %s %s\n", name, prom_type);
+            
+            /* Add metric value(s) based on type */
+            if (strcmp(type, "counter") == 0) {
+                json_value_t* value = json_object_get(metric, "value");
+                if (value && value->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s %g\n", name, value->value.number);
+                }
+            } else if (strcmp(type, "gauge") == 0) {
+                json_value_t* value = json_object_get(metric, "value");
+                if (value && value->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s %g\n", name, value->value.number);
+                }
+            } else if (strcmp(type, "timer") == 0) {
+                json_value_t* count = json_object_get(metric, "count");
+                json_value_t* sum = json_object_get(metric, "sum");
+                json_value_t* min = json_object_get(metric, "min");
+                json_value_t* max = json_object_get(metric, "max");
+                
+                if (count && count->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_count %g\n", name, count->value.number);
+                }
+                
+                if (sum && sum->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_sum %g\n", name, sum->value.number);
+                }
+                
+                if (min && min->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_min %g\n", name, min->value.number);
+                }
+                
+                if (max && max->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_max %g\n", name, max->value.number);
+                }
+            } else if (strcmp(type, "histogram") == 0) {
+                json_value_t* count = json_object_get(metric, "count");
+                json_value_t* sum = json_object_get(metric, "sum");
+                json_value_t* buckets = json_object_get(metric, "buckets");
+                
+                if (count && count->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_count %g\n", name, count->value.number);
+                }
+                
+                if (sum && sum->type == JSON_NUMBER) {
+                    buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                          "%s_sum %g\n", name, sum->value.number);
+                }
+                
+                if (buckets && buckets->type == JSON_ARRAY) {
+                    for (size_t j = 0; j < buckets->value.array.size; j++) {
+                        json_value_t* bucket = json_array_get(buckets, j);
+                        json_value_t* le = json_object_get(bucket, "le");
+                        json_value_t* bucket_count = json_object_get(bucket, "count");
+                        
+                        if (le && le->type == JSON_NUMBER && 
+                            bucket_count && bucket_count->type == JSON_NUMBER) {
+                            buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                                  "%s_bucket{le=\"%g\"} %g\n", 
+                                                  name, le->value.number, bucket_count->value.number);
+                        }
+                    }
+                    
+                    /* Add +Inf bucket with the total count */
+                    if (count && count->type == JSON_NUMBER) {
+                        buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, 
+                                              "%s_bucket{le=\"+Inf\"} %g\n", name, count->value.number);
+                    }
+                }
+            }
+            
+            /* Add extra newline between metrics for readability */
+            buffer_used += snprintf(prom_buffer + buffer_used, buffer_size - buffer_used, "\n");
+            
+            /* Check for buffer overflow and resize if needed */
+            if (buffer_used >= buffer_size - 1024) {
+                buffer_size *= 2;
+                char* new_buffer = (char*)realloc(prom_buffer, buffer_size);
+                if (!new_buffer) {
+                    free(prom_buffer);
+                    json_free(root);
+                    free(metrics_json);
+                    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                              "{\"error\":\"Memory allocation failure\"}", "application/json");
+                }
+                prom_buffer = new_buffer;
+            }
+        }
+    }
+    
+    /* Create response */
+    http_response_t* response = create_http_response(HTTP_OK, prom_buffer, "text/plain");
+    
+    /* Clean up */
+    free(prom_buffer);
+    json_free(root);
     free(metrics_json);
     
     return response;
 #else
     /* In tools build, return empty metrics */
-    return create_http_response(HTTP_OK, "{\"metrics\":[]}", "application/json");
+    return create_http_response(HTTP_OK, "# No metrics available in tools build\n", "text/plain");
+#endif
+}
+
+/* Handler for metrics export to file */
+http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+#ifndef TOOLS_BUILD
+    if (!g_metrics_registry) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Metrics registry not initialized\"}", "application/json");
+    }
+    
+    /* Check if request is POST with JSON body */
+    if (request->method != HTTP_POST) {
+        return create_http_response(HTTP_METHOD_NOT_ALLOWED,
+                                  "{\"error\":\"Method not allowed\"}", "application/json");
+    }
+    
+    /* Parse JSON request body */
+    json_value_t* req_body = json_parse(request->body);
+    if (!req_body) {
+        return create_http_response(HTTP_BAD_REQUEST,
+                                  "{\"error\":\"Invalid JSON request body\"}", "application/json");
+    }
+    
+    /* Extract export path */
+    json_value_t* export_path_val = json_object_get(req_body, "export_path");
+    if (!export_path_val || export_path_val->type != JSON_STRING) {
+        json_free(req_body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                                  "{\"error\":\"export_path is required in request body\"}", 
+                                  "application/json");
+    }
+    
+    const char* export_path = export_path_val->value.string;
+    
+    /* Export metrics to file */
+    int result = metrics_registry_export(g_metrics_registry, export_path);
+    
+    /* Clean up */
+    json_free(req_body);
+    
+    if (!result) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                                  "{\"error\":\"Failed to export metrics to file\"}", 
+                                  "application/json");
+    }
+    
+    /* Return success response */
+    char success_response[256];
+    snprintf(success_response, sizeof(success_response),
+           "{\"success\":true,\"message\":\"Metrics exported to %s\"}", export_path);
+    
+    return create_http_response(HTTP_OK, success_response, "application/json");
+#else
+    /* In tools build, return error */
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                              "{\"error\":\"Metrics export not available in tools build\"}", 
+                              "application/json");
+#endif
+}
+
+/* Handler to list available metrics */
+http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !request) {
+        return create_http_response(HTTP_BAD_REQUEST, 
+                                  "{\"error\":\"Invalid request\"}", "application/json");
+    }
+    
+#ifndef TOOLS_BUILD
+    if (!g_metrics_registry) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Metrics registry not initialized\"}", "application/json");
+    }
+    
+    /* Get metrics JSON representation */
+    char* metrics_json = metrics_get_json(g_metrics_registry);
+    if (!metrics_json) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to get metrics\"}", "application/json");
+    }
+    
+    /* Parse the JSON to extract just the names and types */
+    json_value_t* root = json_parse(metrics_json);
+    if (!root) {
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
+    }
+    
+    /* Create a new JSON object for the response */
+    json_value_t* response_obj = json_create_object();
+    if (!response_obj) {
+        json_free(root);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Memory allocation failure\"}", "application/json");
+    }
+    
+    /* Create arrays for each metric type */
+    json_value_t* counters_array = json_create_array();
+    json_value_t* gauges_array = json_create_array();
+    json_value_t* timers_array = json_create_array();
+    json_value_t* histograms_array = json_create_array();
+    
+    if (!counters_array || !gauges_array || !timers_array || !histograms_array) {
+        if (counters_array) json_free(counters_array);
+        if (gauges_array) json_free(gauges_array);
+        if (timers_array) json_free(timers_array);
+        if (histograms_array) json_free(histograms_array);
+        json_free(response_obj);
+        json_free(root);
+        free(metrics_json);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Memory allocation failure\"}", "application/json");
+    }
+    
+    /* Get the metrics array */
+    json_value_t* metrics_array = json_object_get(root, "metrics");
+    if (metrics_array && metrics_array->type == JSON_ARRAY) {
+        for (size_t i = 0; i < metrics_array->value.array.size; i++) {
+            json_value_t* metric = json_array_get(metrics_array, i);
+            
+            /* Extract metric properties */
+            json_value_t* name_val = json_object_get(metric, "name");
+            json_value_t* type_val = json_object_get(metric, "type");
+            json_value_t* description_val = json_object_get(metric, "description");
+            
+            if (!name_val || name_val->type != JSON_STRING || 
+                !type_val || type_val->type != JSON_STRING) {
+                continue;  /* Skip metrics with missing or invalid required fields */
+            }
+            
+            /* Create a simple object with name and description */
+            json_value_t* metric_info = json_create_object();
+            if (!metric_info) {
+                continue;  /* Skip on memory allocation failure */
+            }
+            
+            /* Add name and description */
+            json_object_set(metric_info, "name", json_create_string(name_val->value.string));
+            
+            if (description_val && description_val->type == JSON_STRING) {
+                json_object_set(metric_info, "description", 
+                               json_create_string(description_val->value.string));
+            } else {
+                json_object_set(metric_info, "description", json_create_string(""));
+            }
+            
+            /* Add to the appropriate array based on type */
+            if (strcmp(type_val->value.string, "counter") == 0) {
+                json_array_append(counters_array, metric_info);
+            } else if (strcmp(type_val->value.string, "gauge") == 0) {
+                json_array_append(gauges_array, metric_info);
+            } else if (strcmp(type_val->value.string, "timer") == 0) {
+                json_array_append(timers_array, metric_info);
+            } else if (strcmp(type_val->value.string, "histogram") == 0) {
+                json_array_append(histograms_array, metric_info);
+            } else {
+                json_free(metric_info);  /* Unknown type, free the object */
+            }
+        }
+    }
+    
+    /* Add arrays to response object */
+    json_object_set(response_obj, "counters", counters_array);
+    json_object_set(response_obj, "gauges", gauges_array);
+    json_object_set(response_obj, "timers", timers_array);
+    json_object_set(response_obj, "histograms", histograms_array);
+    
+    /* Convert to JSON string */
+    char* response_json = json_stringify(response_obj);
+    
+    /* Clean up JSON objects */
+    json_free(response_obj);
+    json_free(root);
+    free(metrics_json);
+    
+    if (!response_json) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to generate response\"}", "application/json");
+    }
+    
+    /* Create response */
+    http_response_t* response = create_http_response(HTTP_OK, response_json, "application/json");
+    
+    /* Free response JSON */
+    free(response_json);
+    
+    return response;
+#else
+    /* In tools build, return empty metrics */
+    return create_http_response(HTTP_OK, 
+                              "{\"counters\":[],\"gauges\":[],\"timers\":[],\"histograms\":[]}", 
+                              "application/json");
 #endif
 }

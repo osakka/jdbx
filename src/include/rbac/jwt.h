@@ -40,6 +40,11 @@ int jwt_verify(const char* token_str, const char* secret);
 jwt_token_t* jwt_decode(const char* token_str);
 char* jwt_encode(jwt_token_t* token, const char* secret);
 
+/* Refresh token functions */
+jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, time_t expiry);
+char* jwt_create_token_pair(const char* secret, const char* user_id, const char* username, json_value_t** response_json);
+int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char** user_id);
+
 /* JWT header operations */
 void jwt_set_algorithm(jwt_token_t* token, const char* alg);
 

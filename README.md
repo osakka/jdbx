@@ -2,7 +2,7 @@
 
 A lightweight, multithreaded JSON database server with REST API support and JavaScript integration.
 
-## Current Project Status (v1.0.4-clean-repo)
+## Current Project Status (v1.0.5-js-features)
 
 The project has reached a stable state with the following components functioning:
 
@@ -11,10 +11,14 @@ The project has reached a stable state with the following components functioning
 - RESTful API with proper error handling
 - Web-based admin interface
 - CORS support with proper handling of preflight requests
-- Authentication via JWT tokens
+- Authentication via JWT tokens with token refresh
 - Document caching system with invalidation
 - Transaction support for atomic operations
 - JavaScript integration via QuickJS
+  - Document validators for data integrity
+  - Document transformers for data processing
+  - Custom JavaScript functions
+  - JavaScript query capabilities
 - Build system using the Makefile
 
 ### Recently Fixed
@@ -24,16 +28,21 @@ The project has reached a stable state with the following components functioning
 - Repository structure cleanup and organization
 - SameSite cookie attributes for improved security
 
+### Recently Added
+- Token refresh mechanism for improved authentication
+- Comprehensive JavaScript functions support
+- Document validators and transformers
+- JavaScript query capabilities
+
 ### In Progress
 - Performance optimization for large document sets
 - Enhanced error reporting and diagnostics
-- More comprehensive JavaScript API integration
 
 ### Next Development Phase
 - Metrics and monitoring improvements
-- Documentation updates to match current implementation
 - Extended test coverage
 - Schema validation enhancements
+- WebSocket support for real-time updates
 
 ## Requirements
 
@@ -129,6 +138,12 @@ The server provides a comprehensive REST API for managing the database. Here's a
 | `/api/cache/configure` | POST | Configure cache settings |
 | `/api/cache/clear` | POST | Clear document cache |
 | `/api/cache/invalidate` | POST | Process cache invalidations |
+| `/api/js/eval` | POST | Evaluate JavaScript code |
+| `/api/js/functions/register` | POST | Register a JavaScript function |
+| `/api/js/functions/:name` | POST | Execute a JavaScript function |
+| `/api/js/validators/register` | POST | Register a document validator |
+| `/api/js/transformers/register` | POST | Register a document transformer |
+| `/api/js/query` | POST | Execute a JavaScript query |
 
 For a complete list of API endpoints and documentation, see the [API.md](docs/api/API.md) file.
 
@@ -170,6 +185,8 @@ Usage: jsondb_server [options]
 Options:
   --port <number>       Set the server port (default: 5000)
   --daemon              Run server as a daemon in the background
+  --js_eval <code>      Execute JavaScript code
+  --js_eval_file <path> Execute JavaScript from file
   --help, -h            Display this help message
   --version, -v         Display version information
 ```
@@ -183,6 +200,11 @@ The project follows a clean, maintainable structure organized into logical compo
   - **include/**: Header files with clean namespace hierarchy
 - **build/**: Build artifacts and runtime environment
 - **share/**: Example code and web interface
+  - **examples/**: Example code snippets and demos
+  - **js-examples/**: JavaScript function examples
+- **functions/**: JavaScript user functions
+- **validators/**: JavaScript document validators
+- **transforms/**: JavaScript document transformers
 - **etc/**: Configuration files
 - **docs/**: Documentation organized by topic
 
