@@ -15,11 +15,14 @@
  * 3. If not, initialize a new RBAC system and save to database
  * 
  * @param db Database instance
- * @param path Path to RBAC file (deprecated, only used for migration during transition)
+ * @param path Path to RBAC file (ignored, no longer used)
  * @return Initialized RBAC system or NULL on failure
  */
 rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
     rbac_system_t* rbac = NULL;
+    
+    /* Suppress unused parameter warning */
+    (void)path;
     
     if (!db) {
         LOG_ERROR("Database is NULL, cannot initialize RBAC");
@@ -43,24 +46,6 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
         }
         
         LOG_ERROR("Failed to load RBAC from database");
-    }
-    
-    /* One-time migration from file if path is provided */
-    if (path) {
-        LOG_INFO("Attempting one-time migration from file %s", path);
-        rbac = rbac_load(path);
-        if (rbac) {
-            /* Migrate to database */
-            LOG_INFO("Migrating RBAC from file to database");
-            if (rbac_db_migrate_from_file(db, rbac)) {
-                LOG_INFO("RBAC migration successful");
-                return rbac;
-            }
-            
-            LOG_ERROR("Failed to migrate RBAC to database");
-            rbac_free(rbac);
-            rbac = NULL;
-        }
     }
     
     /* Initialize new RBAC system */

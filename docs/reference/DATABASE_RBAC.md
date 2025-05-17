@@ -115,15 +115,16 @@ The following permission types are supported:
 
 ## Migration
 
-During the first startup with the new system, any existing RBAC configuration from files will be automatically migrated to the database. After migration, the file-based configuration will no longer be used.
+As of the latest update, file-based RBAC has been fully deprecated with no fallback mechanism. The system now exclusively uses database-based RBAC with no file-based alternatives.
 
-The migration process includes:
+The startup process includes:
 
 1. Check if the `_users` and `_roles` collections exist in the database
 2. If they do not exist, create them and build necessary indices
-3. Look for legacy file-based RBAC configuration
-4. If found, migrate data from the file to the database collections (one-time migration)
-5. Initialize the RBAC system from the database
+3. Initialize the RBAC system from the database
+4. If no RBAC data exists in the database, create a new default RBAC system
+
+> **Important**: Any existing file-based RBAC configuration will be ignored. If you're upgrading from a previous version that used file-based RBAC, you'll need to manually set up your users and roles through the RBAC API.
 
 ## Security Features
 
@@ -147,7 +148,7 @@ The database-based RBAC system includes several security features:
 1. **Database as single source of truth**: All RBAC configuration is stored in the database.
 2. **No fallbacks**: The system does not fall back to file-based storage.
 3. **Clean API**: Clear separation between database operations and RBAC logic.
-4. **Seamless transition**: Automatic migration from file-based to database-based.
+4. **Complete cutover**: Full removal of file-based RBAC with no migration path.
 5. **Permission granularity**: Fine-grained control over resources.
 6. **Role-based approach**: Permissions are granted to roles, not directly to users.
 

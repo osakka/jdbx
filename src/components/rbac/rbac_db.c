@@ -1200,25 +1200,13 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     return has_permission;
 }
 
-/* Migrate RBAC from file to database */
+/**
+ * DEPRECATED: This function is no longer used as we've removed file-based RBAC fallback
+ * It is kept here for API compatibility only, but will be removed in a future release
+ */
 int rbac_db_migrate_from_file(database_t* db, rbac_system_t* rbac) {
-    if (!db || !rbac) {
-        return 0;
-    }
-    
-    /* Initialize RBAC collections if they don't exist */
-    rbac_db_status_t status = rbac_db_init_collections(db);
-    if (!status.success) {
-        LOG_ERROR("Failed to initialize RBAC collections: %s", status.error_message);
-        if (status.error_message) free(status.error_message);
-        return 0;
-    }
-    
-    /* Save RBAC to database */
-    if (!rbac_db_save(db, rbac)) {
-        LOG_ERROR("Failed to save RBAC to database");
-        return 0;
-    }
-    
-    return 1;
+    (void)db;
+    (void)rbac;
+    LOG_WARNING("rbac_db_migrate_from_file is deprecated and will be removed in a future release");
+    return 0; /* Always fail - migration is no longer supported */
 }
