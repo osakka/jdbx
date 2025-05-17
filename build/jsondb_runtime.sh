@@ -163,7 +163,7 @@ stop_server() {
 
 # Show usage if no arguments
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 {start|stop|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
+    echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
     exit 1
 fi
 
@@ -191,7 +191,7 @@ while [ $# -gt 0 ]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 {start|stop|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
+            echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
             exit 1
             ;;
     esac
@@ -205,12 +205,16 @@ case "$COMMAND" in
     stop)
         stop_server
         ;;
+    restart)
+        stop_server;
+        start_server;
+        ;;
     status)
         check_status
         ;;
     *)
         echo "Unknown command: $COMMAND"
-        echo "Usage: $0 {start|stop|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
+        echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
         exit 1
         ;;
 esac
