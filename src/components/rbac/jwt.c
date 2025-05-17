@@ -143,16 +143,41 @@ static void simple_sha256(const char* input, size_t input_len, unsigned char* ou
     /* This is a placeholder for a real SHA-256 implementation
        In a real implementation, we would use OpenSSL or another crypto library */
     size_t i;
-    unsigned int hash = 5381;
-
-    /* DJB2 hash algorithm as a placeholder */
+    
+    /* Initialize hash values (first 32 bits of the fractional parts of the square roots of the first 8 primes) */
+    uint32_t h0 = 0x6a09e667;
+    uint32_t h1 = 0xbb67ae85;
+    uint32_t h2 = 0x3c6ef372;
+    uint32_t h3 = 0xa54ff53a;
+    uint32_t h4 = 0x510e527f;
+    uint32_t h5 = 0x9b05688c;
+    uint32_t h6 = 0x1f83d9ab;
+    uint32_t h7 = 0x5be0cd19;
+    
+    /* Simplified hash calculation */
+    /* Just mix the input bytes with the initial hash values */
     for (i = 0; i < input_len; i++) {
-        hash = ((hash << 5) + hash) + input[i];
+        uint8_t byte = input[i];
+        h0 = (h0 ^ byte) + ((h0 << 5) | (h0 >> 27));
+        h1 = (h1 ^ byte) + ((h1 << 7) | (h1 >> 25));
+        h2 = (h2 ^ byte) + ((h2 << 9) | (h2 >> 23));
+        h3 = (h3 ^ byte) + ((h3 << 13) | (h3 >> 19));
+        h4 = (h4 ^ byte) + ((h4 << 17) | (h4 >> 15));
+        h5 = (h5 ^ byte) + ((h5 << 19) | (h5 >> 13));
+        h6 = (h6 ^ byte) + ((h6 << 23) | (h6 >> 9));
+        h7 = (h7 ^ byte) + ((h7 << 29) | (h7 >> 3));
     }
-
-    /* Convert to bytes */
-    for (i = 0; i < 32; i++) {
-        output[i] = (hash >> (i % 4) * 8) & 0xFF;
+    
+    /* Convert hash values to bytes */
+    for (i = 0; i < 4; i++) {
+        output[i]      = (h0 >> (24 - i * 8)) & 0xFF;
+        output[i + 4]  = (h1 >> (24 - i * 8)) & 0xFF;
+        output[i + 8]  = (h2 >> (24 - i * 8)) & 0xFF;
+        output[i + 12] = (h3 >> (24 - i * 8)) & 0xFF;
+        output[i + 16] = (h4 >> (24 - i * 8)) & 0xFF;
+        output[i + 20] = (h5 >> (24 - i * 8)) & 0xFF;
+        output[i + 24] = (h6 >> (24 - i * 8)) & 0xFF;
+        output[i + 28] = (h7 >> (24 - i * 8)) & 0xFF;
     }
 }
 
@@ -803,8 +828,27 @@ int jwt_verify(const char* token_str, const char* secret) {
         return 0;
     }
     
-    /* Compare signatures - directly compare the signatures since both are URL-safe base64 encoded */
-    int result = strcmp(signature, signature_b64) == 0;
+    /* Byte-by-byte comparison of signatures to prevent timing attacks */
+    size_t signature_len = strlen(signature);
+    size_t signature_b64_len = strlen(signature_b64);
+    
+    /* If lengths differ, verification fails */
+    if (signature_len != signature_b64_len) {
+        jwt_free(token);
+        free(token_copy);
+        free(header_payload);
+        free(signature);
+        return 0;
+    }
+    
+    /* Constant-time comparison of signatures */
+    int result = 1;
+    for (size_t i = 0; i < signature_len; i++) {
+        if (signature[i] != signature_b64[i]) {
+            result = 0;
+            /* Don't break early - this would create a timing side-channel */
+        }
+    }
     
     /* Clean up */
     jwt_free(token);
