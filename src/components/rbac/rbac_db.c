@@ -259,7 +259,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
     
     /* Check if RBAC collections exist */
     if (!rbac_db_exists(db)) {
-        LOG_WARN("RBAC collections not found in database");
+        LOG_WARNING("RBAC collections not found in database");
         return NULL;
     }
     

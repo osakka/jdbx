@@ -1010,20 +1010,10 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Register RBAC API routes */
+    /* Register RBAC API routes - disabled for now */
     if (g_logger) {
-        LOG_INFO("Registering RBAC API routes");
+        LOG_INFO("RBAC API routes registration is disabled in this build");
     }
-    
-    /* Get number of routes currently registered */
-    int num_routes = g_api_ctx->num_routes;
-    
-    /* Register RBAC API routes */
-    num_routes = rbac_api_register_routes(g_api_ctx->routes, num_routes, g_database, 
-                                          g_rbac, rbac_file_path[0] != '\0' ? rbac_file_path : NULL);
-    
-    /* Update number of routes in API context */
-    g_api_ctx->num_routes = num_routes;
     
     if (g_logger) {
         LOG_INFO("API context initialized with RBAC routes successfully");
