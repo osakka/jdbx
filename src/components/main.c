@@ -1,7 +1,10 @@
 #include "core/server.h"
 #include "database/database.h"
 #include "rbac/rbac.h"
+#include "rbac/rbac_enhanced.h"
+#include "rbac/rbac_db.h"
 #include "api/api.h"
+#include "api/rbac_api.h"
 #include "rbac/jwt.h"
 #include "utils/metrics.h"
 
@@ -238,7 +241,8 @@ void cleanup() {
         if (g_logger) {
             LOG_INFO("Saving RBAC configuration");
         }
-        rbac_refcount_save(g_rbac_ref, rbac_file_path);
+        /* Use database-only RBAC save */
+        rbac_enhanced_save(g_database, g_rbac, NULL);
     }
 
     /* Clean up in a safe order to avoid double-free issues */
@@ -933,26 +937,7 @@ int main(int argc, char** argv) {
         LOG_INFO("PID: %d", getpid());
     }
 
-    /* Initialize RBAC if needed */
-    if (rbac_file_path[0] != '\0') {
-        if (g_logger) {
-            LOG_INFO("Initializing RBAC from '%s'", rbac_file_path);
-        }
-        
-        /* Use rbac_load per rbac.h (line 52) */
-        g_rbac = rbac_load(rbac_file_path);
-        if (!g_rbac) {
-            if (g_logger) {
-                LOG_WARNING("Failed to load RBAC from '%s', creating new configuration", rbac_file_path);
-            }
-            g_rbac = rbac_init();  /* Use rbac_init per rbac.h (line 49) */
-        }
-    } else {
-        /* Initialize with defaults if no path provided */
-        g_rbac = rbac_init();
-    }
-    
-    /* Initialize database */
+    /* Initialize database first */
     if (db_file_path[0] != '\0') {
         if (g_logger) {
             LOG_INFO("Initializing database from '%s'", db_file_path);
@@ -983,6 +968,25 @@ int main(int argc, char** argv) {
         }
     }
     
+    /* Initialize RBAC using enhanced system */
+    if (g_logger) {
+        LOG_INFO("Initializing RBAC using enhanced system");
+    }
+        
+    /* Use rbac_enhanced_init to check database first */
+    g_rbac = rbac_enhanced_init(g_database, rbac_file_path[0] != '\0' ? rbac_file_path : NULL);
+    if (!g_rbac) {
+        if (g_logger) {
+            LOG_ERROR("Failed to initialize RBAC system");
+        }
+        fprintf(stderr, "Error: Failed to initialize RBAC system\n");
+        return 1;
+    }
+    
+    if (g_logger) {
+        LOG_INFO("RBAC system initialized successfully");
+    }
+    
     /* Initialize document indices for faster lookups */
     if (g_logger) {
         LOG_INFO("Building document indices for faster lookups");
@@ -1006,8 +1010,23 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    /* Register RBAC API routes */
     if (g_logger) {
-        LOG_INFO("API context initialized successfully");
+        LOG_INFO("Registering RBAC API routes");
+    }
+    
+    /* Get number of routes currently registered */
+    int num_routes = g_api_ctx->num_routes;
+    
+    /* Register RBAC API routes */
+    num_routes = rbac_api_register_routes(g_api_ctx->routes, num_routes, g_database, 
+                                          g_rbac, rbac_file_path[0] != '\0' ? rbac_file_path : NULL);
+    
+    /* Update number of routes in API context */
+    g_api_ctx->num_routes = num_routes;
+    
+    if (g_logger) {
+        LOG_INFO("API context initialized with RBAC routes successfully");
     }
 
     /* Initialize metrics registry */
