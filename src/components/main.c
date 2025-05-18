@@ -475,7 +475,7 @@ int main(int argc, char** argv) {
     /* Override configuration with command line arguments */
     if (run_daemon) {
         g_server_config->verbose_mode = 0;
-    } else if (run_foreground) {
+    } else if (verbose_mode) {
         g_server_config->verbose_mode = 1;
     }
     
@@ -982,6 +982,112 @@ int main(int argc, char** argv) {
         }
     }
     
+    /* Initialize document indices for faster lookups */
+    if (g_logger) {
+        LOG_INFO("Building document indices for faster lookups");
+    }
+    db_rebuild_indices(g_database);
+    if (g_logger) {
+        LOG_INFO("Document indices built successfully");
+    }
+
+    /* 
+     * SERVER INITIALIZATION - Moved after database initialization but before RBAC and API
+     * This ensures the database is ready before network services start
+     */
+    printf("Initializing server...\n");
+    if (g_logger) {
+        LOG_INFO("Initializing server with the following configuration:");
+        LOG_INFO("  - Host: %s", g_server_config->host ? g_server_config->host : "0.0.0.0");
+        LOG_INFO("  - Port: %d", g_server_config->port);
+        LOG_INFO("  - Max connections: %d", g_server_config->max_connections);
+        LOG_INFO("  - Database path: %s", g_server_config->db_path ? g_server_config->db_path : "in-memory");
+        LOG_INFO("  - Web root: %s", g_server_config->web_root ? g_server_config->web_root : DEFAULT_WEB_ROOT);
+        LOG_INFO("  - CORS enabled: %s", g_server_config->cors.enabled ? "yes" : "no");
+        LOG_INFO("  - JS enabled: %s", g_server_config->js_enabled ? "yes" : "no");
+        LOG_INFO("  - PID file: %s", g_server_config->pid_file ? g_server_config->pid_file : "none");
+    }
+    
+    /* Create the socket but DON'T bind yet - just initialization */
+    server_status_t status = server_init(g_server_config);
+    if (status != SERVER_OK) {
+        if (g_logger) {
+            LOG_ERROR("Failed to initialize server (status: %d)", status);
+            LOG_ERROR("Socket descriptor: %d", g_server_config->socket_fd);
+        }
+        fprintf(stderr, "Error: Failed to initialize server\n");
+        return 1;
+    }
+    
+    if (g_logger) {
+        LOG_INFO("Server initialized successfully (socket FD: %d)", g_server_config->socket_fd);
+    }
+    printf("Server initialized successfully\n");
+    
+    /* Save the socket descriptor for later - we'll need it after forking */
+    int main_socket_fd = g_server_config->socket_fd;
+    printf("Socket descriptor stored: %d\n", main_socket_fd);
+    
+    /* Check socket state before server_start */
+    if (g_server_config->socket_fd > 0) {
+        int socket_error = 0;
+        socklen_t error_len = sizeof(socket_error);
+        
+        if (getsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
+            printf("Socket validation failed: %s\n", strerror(errno));
+            if (g_logger) {
+                LOG_WARNING("Socket validation failed before server_start: %s", strerror(errno));
+            }
+        } else if (socket_error != 0) {
+            printf("Socket has error state: %s\n", strerror(socket_error));
+            if (g_logger) {
+                LOG_WARNING("Socket has error state before server_start: %s", strerror(socket_error));
+            }
+        } else {
+            printf("Socket is valid before server_start\n");
+            if (g_logger) {
+                LOG_DEBUG("Socket is valid before server_start");
+            }
+        }
+    } else {
+        printf("Invalid socket file descriptor (%d) before server_start\n", g_server_config->socket_fd);
+        if (g_logger) {
+            LOG_WARNING("Invalid socket file descriptor (%d) before server_start", g_server_config->socket_fd);
+        }
+    }
+    
+    /* Bind and start server listening immediately after initialization */
+    printf("Starting server and binding to port %d...\n", g_server_config->port);
+    if (g_logger) {
+        LOG_INFO("Starting server and binding to port %d (socket FD: %d)",
+                 g_server_config->port, g_server_config->socket_fd);
+    }
+    
+    status = server_start(g_server_config);
+    if (status != SERVER_OK) {
+        if (g_logger) {
+            LOG_ERROR("Failed to start server (status: %d)", status);
+            
+            /* Provide more detailed error message based on status */
+            if (status == SERVER_BIND_ERROR) {
+                LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", g_server_config->port);
+            } else if (status == SERVER_LISTEN_ERROR) {
+                LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
+            } else if (status == SERVER_SOCKET_ERROR) {
+                LOG_ERROR("Server failed to create socket. Check system resources.");
+            } else if (status == SERVER_THREAD_ERROR) {
+                LOG_ERROR("Server failed to create accept thread. Check system resources.");
+            }
+        }
+        fprintf(stderr, "Error: Failed to start server\n");
+        return 1;
+    }
+    
+    if (g_logger) {
+        LOG_INFO("Server started successfully and is now listening on port %d", g_server_config->port);
+    }
+    printf("Server started successfully and is now listening on port %d\n", g_server_config->port);
+    
     /* Initialize RBAC using enhanced system */
     if (g_logger) {
         LOG_INFO("Initializing RBAC using enhanced system");
@@ -999,15 +1105,6 @@ int main(int argc, char** argv) {
     
     if (g_logger) {
         LOG_INFO("RBAC system initialized successfully");
-    }
-    
-    /* Initialize document indices for faster lookups */
-    if (g_logger) {
-        LOG_INFO("Building document indices for faster lookups");
-    }
-    db_rebuild_indices(g_database);
-    if (g_logger) {
-        LOG_INFO("Document indices built successfully");
     }
     
     /* Initialize API context */
@@ -1097,203 +1194,22 @@ int main(int argc, char** argv) {
             printf("Warning: API context not available, health endpoints not registered\n");
         }
     }
-
-    /* 
-     * SERVER INITIALIZATION - THIS MUST HAPPEN BEFORE DAEMONIZING
-     * This ensures we can report socket errors to the terminal before closing
-     * standard output/error
-     */
-    printf("Initializing server...\n");
-    if (g_logger) {
-        LOG_INFO("Initializing server with the following configuration:");
-        LOG_INFO("  - Host: %s", g_server_config->host ? g_server_config->host : "0.0.0.0");
-        LOG_INFO("  - Port: %d", g_server_config->port);
-        LOG_INFO("  - Max connections: %d", g_server_config->max_connections);
-        LOG_INFO("  - Database path: %s", g_server_config->db_path ? g_server_config->db_path : "in-memory");
-        LOG_INFO("  - Web root: %s", g_server_config->web_root ? g_server_config->web_root : DEFAULT_WEB_ROOT);
-        LOG_INFO("  - CORS enabled: %s", g_server_config->cors.enabled ? "yes" : "no");
-        LOG_INFO("  - JS enabled: %s", g_server_config->js_enabled ? "yes" : "no");
-        LOG_INFO("  - PID file: %s", g_server_config->pid_file ? g_server_config->pid_file : "none");
-    }
-    
-    /* Create the socket but DON'T bind yet - just initialization */
-    server_status_t status = server_init(g_server_config);
-    if (status != SERVER_OK) {
-        if (g_logger) {
-            LOG_ERROR("Failed to initialize server (status: %d)", status);
-            LOG_ERROR("Socket descriptor: %d", g_server_config->socket_fd);
-        }
-        fprintf(stderr, "Error: Failed to initialize server\n");
-        return 1;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Server initialized successfully (socket FD: %d)", g_server_config->socket_fd);
-    }
-    printf("Server initialized successfully\n");
-    
-    /* Save the socket descriptor for later - we'll need it after forking */
-    int main_socket_fd = g_server_config->socket_fd;
-    printf("Socket descriptor stored: %d\n", main_socket_fd);
-    
-    /* Check socket state before server_start */
-    if (g_server_config->socket_fd > 0) {
-        int socket_error = 0;
-        socklen_t error_len = sizeof(socket_error);
-        
-        if (getsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-            printf("Socket validation failed: %s\n", strerror(errno));
-            if (g_logger) {
-                LOG_WARNING("Socket validation failed before server_start: %s", strerror(errno));
-            }
-        } else if (socket_error != 0) {
-            printf("Socket has error state: %s\n", strerror(socket_error));
-            if (g_logger) {
-                LOG_WARNING("Socket has error state before server_start: %s", strerror(socket_error));
-            }
-        } else {
-            printf("Socket is valid before server_start\n");
-            if (g_logger) {
-                LOG_DEBUG("Socket is valid before server_start");
-            }
-        }
-    } else {
-        printf("Invalid socket file descriptor (%d) before server_start\n", g_server_config->socket_fd);
-        if (g_logger) {
-            LOG_WARNING("Invalid socket file descriptor (%d) before server_start", g_server_config->socket_fd);
-        }
-    }
     
     /* 
-     * IMPORTANT: We do server_init (creates socket) for both foreground and daemon mode
-     * But for server_start (binds and listens on socket):
-     * - In foreground mode: we do it now, before handling signals
-     * - In daemon mode: we'll do it AFTER logging is initialized, to ensure we can log any errors
+     * Socket binding and initialization has already been performed earlier for both modes
+     * No need to perform separate binding logic here anymore
      */
-    if (g_server_config->verbose_mode) {
-        /* We're in foreground mode, so start the server immediately */
-        printf("Starting server on port %d (foreground mode)...\n", g_server_config->port);
-        printf("Socket descriptor: %d\n", g_server_config->socket_fd);
-        printf("Host: %s\n", g_server_config->host ? g_server_config->host : "0.0.0.0");
-            
-        if (g_logger) {
-            LOG_INFO("Starting server on %s:%d (socket FD: %d)", 
-                    g_server_config->host ? g_server_config->host : "0.0.0.0", 
-                    g_server_config->port, 
-                    g_server_config->socket_fd);
-        }
-        
-        printf("Calling server_start...\n");
-        status = server_start(g_server_config);
-        printf("server_start returned status: %d\n", status);
-        
-        if (status != SERVER_OK) {
-            printf("Failed to start server (status: %d, socket FD: %d)\n", status, g_server_config->socket_fd);
-            
-            if (g_logger) {
-                LOG_ERROR("Failed to start server (status: %d, socket FD: %d)", status, g_server_config->socket_fd);
-                
-                /* Provide more detailed error message based on status */
-                if (status == SERVER_BIND_ERROR) {
-                    LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", g_server_config->port);
-                    
-                    /* Try to detect what's using the port */
-                    char cmd[256];
-                    char output[1024] = {0};
-                    FILE *fp;
-                    
-                    snprintf(cmd, sizeof(cmd), "ss -tuln | grep %d 2>&1 || netstat -tuln | grep %d 2>&1", 
-                             g_server_config->port, g_server_config->port);
-                    fp = popen(cmd, "r");
-                    if (fp) {
-                        if (fread(output, 1, sizeof(output) - 1, fp) > 0) {
-                            LOG_ERROR("Port %d is already in use: %s", g_server_config->port, output);
-                        }
-                        pclose(fp);
-                    }
-                } else if (status == SERVER_LISTEN_ERROR) {
-                    LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
-                } else if (status == SERVER_SOCKET_ERROR) {
-                    LOG_ERROR("Server failed to create socket. Check system resources.");
-                } else if (status == SERVER_THREAD_ERROR) {
-                    LOG_ERROR("Server failed to create accept thread. Check system resources.");
-                }
-            }
-            fprintf(stderr, "Error: Failed to start server. Status code: %d\n", status);
-            
-            /* Provide more detailed error message based on status */
-            if (status == SERVER_BIND_ERROR) {
-                fprintf(stderr, "Failed to bind to port %d. Check if port is already in use or if permissions are insufficient.\n", g_server_config->port);
-            } else if (status == SERVER_LISTEN_ERROR) {
-                fprintf(stderr, "Failed to listen on port %d after binding.\n", g_server_config->port);
-            } else if (status == SERVER_SOCKET_ERROR) {
-                fprintf(stderr, "Failed to create socket. Check system resources.\n");
-            } else if (status == SERVER_THREAD_ERROR) {
-                fprintf(stderr, "Failed to create accept thread. Check system resources.\n");
-            }
-            
-            return 1;
-        }
-        
-        if (g_logger) {
-            LOG_INFO("Server started successfully on %s:%d (socket FD: %d)", 
-                    g_server_config->host ? g_server_config->host : "0.0.0.0", 
-                    g_server_config->port, 
-                    g_server_config->socket_fd);
-            LOG_INFO("Server is now accepting connections");
-        }
-        
-        printf("Server started successfully on port %d\n", g_server_config->port);
-        printf("VERIFICATION: Running netstat to verify port binding...\n");
-        system("netstat -tuln | grep 5000 || echo 'Port 5000 not found in netstat!'");
-        printf("VERIFICATION: Socket binding check completed.\n");
-    } else {
-        /* 
-         * We're in daemon mode, so DON'T start the server yet.
-         * We'll start it after forking so we can preserve the socket
-         */
-        printf("Socket initialized but not yet bound in daemon mode (will bind after logging is initialized)\n");
-    }
 
     if (g_server_config->verbose_mode) {
         /* Keep the server running in foreground mode */
         printf("Server running on %s:%d. Press Ctrl+C to stop.\n", 
                g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
     } else {
-        /* In daemon mode, now we need to start the server since we've initialized logging */
-        if (g_logger) {
-            LOG_INFO("Starting server on %s:%d (socket FD: %d) in daemon mode", 
-                    g_server_config->host ? g_server_config->host : "0.0.0.0", 
-                    g_server_config->port, 
-                    g_server_config->socket_fd);
-        }
-        
-        status = server_start(g_server_config);
-        if (status != SERVER_OK) {
-            if (g_logger) {
-                LOG_ERROR("Failed to start server in daemon mode (status: %d, socket FD: %d)", 
-                          status, g_server_config->socket_fd);
-                
-                /* Provide more detailed error message based on status */
-                if (status == SERVER_BIND_ERROR) {
-                    LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", 
-                             g_server_config->port);
-                } else if (status == SERVER_LISTEN_ERROR) {
-                    LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
-                } else if (status == SERVER_SOCKET_ERROR) {
-                    LOG_ERROR("Server failed to create socket. Check system resources.");
-                } else if (status == SERVER_THREAD_ERROR) {
-                    LOG_ERROR("Server failed to create accept thread. Check system resources.");
-                }
-            }
-            return 1;
-        }
-        
-        /* Log success now that we've started in daemon mode */
+        /* In daemon mode, log the server status since we've already initialized the server earlier */
         if (g_logger) {
             LOG_INFO("Server running in daemon mode on %s:%d", 
                     g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
-            LOG_INFO("Server is now accepting connections");
+            LOG_INFO("Server is accepting connections on socket FD: %d", g_server_config->socket_fd);
         }
     }
     

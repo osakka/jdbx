@@ -29,6 +29,8 @@ The project has reached a stable state with the following components functioning
 - Build system using the Makefile
 
 ### Recently Fixed
+- Socket binding thread synchronization issues and race conditions
+- Server initialization sequence for proper component dependency handling
 - CORS implementation for cross-origin requests
 - Web interface collection creation and document management
 - Unused function warnings and integration of previously uncalled functions
