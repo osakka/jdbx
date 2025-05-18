@@ -164,8 +164,8 @@ void print_usage(const char* program_name) {
     printf("Options:\n");
     printf("  -h, --help                    Display this help message and exit\n");
     printf("  -d, --daemon                  Run as a daemon (background mode)\n");
-    printf("  -f, --foreground              Run in foreground mode\n");
     printf("  -t, --terminate               Terminate running server instance\n");
+    printf("  -V, --verbose                 Enable verbose logging\n");
     printf("  -l, --log-level=LEVEL         Set log level (error, warn, info, debug, trace)\n");
     printf("  -b, --db-dir=DIRECTORY        Set database directory\n");
     printf("  -r, --rbac-file=FILE          Set RBAC file path\n");
@@ -174,7 +174,7 @@ void print_usage(const char* program_name) {
     printf("  -w, --web-root=DIRECTORY      Set web admin interface root directory\n");
     printf("  -p, --port=PORT               Set server port (default: 5000)\n");
     printf("  -H, --host=HOST               Set server bind address (default: 0.0.0.0)\n");
-    printf("  -V, --validators-dir=DIR      Set validators directory\n");
+    printf("  -Q, --validators-dir=DIR      Set validators directory\n");
     printf("  -T, --transforms-dir=DIR      Set transforms directory\n");
     printf("  -M, --metrics-dir=DIR         Set metrics directory\n");
     printf("  -c, --config=FILE             Load configuration from file\n");
@@ -314,6 +314,9 @@ void cleanup() {
 }
 
 int main(int argc, char** argv) {
+    /* Variables for command line options */
+    int verbose_mode = 0;
+    
     /* Initialize binary directory for path resolution */
     config_init_binary_dir();
 
@@ -359,7 +362,6 @@ int main(int argc, char** argv) {
     static struct option long_options[] = {
         {"help",           no_argument,       0, 'h'},
         {"daemon",         no_argument,       0, 'd'},
-        {"foreground",     no_argument,       0, 'f'},
         {"terminate",      no_argument,       0, 't'},
         {"log-level",      required_argument, 0, 'l'},
         {"db-dir",         required_argument, 0, 'b'},
@@ -369,10 +371,11 @@ int main(int argc, char** argv) {
         {"web-root",       required_argument, 0, 'w'},
         {"config",         required_argument, 0, 'c'},
         {"version",        no_argument,       0, 'v'},
+        {"verbose",        no_argument,       0, 'V'},
         {"js-file",        required_argument, 0, 'j'},
         {"port",           required_argument, 0, 'p'}, /* Changed from 'P' to 'p' */
         {"host",           required_argument, 0, 'H'},
-        {"validators-dir", required_argument, 0, 'V'},
+        {"validators-dir", required_argument, 0, 'Q'},
         {"transforms-dir", required_argument, 0, 'T'},
         {"metrics-dir",    required_argument, 0, 'M'},
         {0, 0, 0, 0}
@@ -382,18 +385,16 @@ int main(int argc, char** argv) {
     int opt;
     int option_index = 0;
     
-    while ((opt = getopt_long(argc, argv, "hdftl:b:r:i:o:w:c:vj:p:H:V:T:M:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hdtl:b:r:i:o:w:c:vVj:p:H:Q:T:M:", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 show_help = 1;
                 break;
             case 'd':
                 run_daemon = 1;
-                run_foreground = 0;
                 break;
-            case 'f':
-                run_foreground = 1;
-                run_daemon = 0;
+            case 'V':
+                verbose_mode = 1;
                 break;
             case 't':
                 terminate_server = 1;
@@ -431,7 +432,7 @@ int main(int argc, char** argv) {
             case 'H':
                 host_str = optarg;
                 break;
-            case 'V':
+            case 'Q':
                 validators_dir = optarg;
                 break;
             case 'T':
@@ -473,9 +474,9 @@ int main(int argc, char** argv) {
     
     /* Override configuration with command line arguments */
     if (run_daemon) {
-        g_server_config->foreground_mode = 0;
+        g_server_config->verbose_mode = 0;
     } else if (run_foreground) {
-        g_server_config->foreground_mode = 1;
+        g_server_config->verbose_mode = 1;
     }
     
     if (log_level_str) {
@@ -633,7 +634,7 @@ int main(int argc, char** argv) {
     printf("Validators directory: %s\n", g_server_config->validators_dir ? g_server_config->validators_dir : DEFAULT_VALIDATORS_DIR);
     printf("Transforms directory: %s\n", g_server_config->transforms_dir ? g_server_config->transforms_dir : DEFAULT_TRANSFORMS_DIR);
     printf("Metrics directory: %s\n", g_server_config->metrics_dir ? g_server_config->metrics_dir : DEFAULT_METRICS_DIR);
-    printf("Foreground mode: %s\n", g_server_config->foreground_mode ? "yes" : "no");
+    printf("Foreground mode: %s\n", g_server_config->verbose_mode ? "yes" : "no");
     
     /* If running in script mode, initialize JavaScript now if enabled */
     if (js_file) {
@@ -676,7 +677,7 @@ int main(int argc, char** argv) {
     printf("Starting server...\n");
     
     /* In foreground mode, always remove any existing PID file */
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         if (g_server_config->pid_file && access(g_server_config->pid_file, F_OK) != -1) {
             printf("Removing existing PID file in foreground mode\n");
             if (unlink(g_server_config->pid_file) != 0) {
@@ -813,7 +814,7 @@ int main(int argc, char** argv) {
     }
 
     /* Start in daemon mode if requested */
-    if (!g_server_config->foreground_mode) {
+    if (!g_server_config->verbose_mode) {
         printf("Starting in daemon mode...\n");
         
         /* Fork the process */
@@ -892,7 +893,7 @@ int main(int argc, char** argv) {
     }
     
     /* Initialize logger */
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         /* In foreground mode, direct logs to stdout/stderr */
         if (!logger_init(NULL, g_server_config->log_level)) {
             fprintf(stderr, "Error: Failed to initialize console logger\n");
@@ -924,7 +925,7 @@ int main(int argc, char** argv) {
     }
     
     /* Now that logger is initialized, write PID file if needed (in foreground mode) */
-    if (g_server_config->foreground_mode && g_server_config->pid_file) {
+    if (g_server_config->verbose_mode && g_server_config->pid_file) {
         /* Make sure pid_file_path is set */
         if (pid_file_path[0] == '\0') {
             strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
@@ -1055,7 +1056,7 @@ int main(int argc, char** argv) {
     }
     
     /* If in foreground mode, print more verbose output */
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         /* Initialize JavaScript if enabled */
         if (g_server_config->js_enabled) {
 #ifndef DISABLE_JS
@@ -1169,7 +1170,7 @@ int main(int argc, char** argv) {
      * - In foreground mode: we do it now, before handling signals
      * - In daemon mode: we'll do it AFTER logging is initialized, to ensure we can log any errors
      */
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         /* We're in foreground mode, so start the server immediately */
         printf("Starting server on port %d (foreground mode)...\n", g_server_config->port);
         printf("Socket descriptor: %d\n", g_server_config->socket_fd);
@@ -1254,7 +1255,7 @@ int main(int argc, char** argv) {
         printf("Socket initialized but not yet bound in daemon mode (will bind after logging is initialized)\n");
     }
 
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         /* Keep the server running in foreground mode */
         printf("Server running on %s:%d. Press Ctrl+C to stop.\n", 
                g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
@@ -1297,7 +1298,7 @@ int main(int argc, char** argv) {
     }
     
     /* Wait for signal - different handling in foreground vs daemon */
-    if (g_server_config->foreground_mode) {
+    if (g_server_config->verbose_mode) {
         /* In foreground mode, we can simply pause */
         if (g_logger) {
             LOG_INFO("Server is now running in foreground mode, waiting for signals");
