@@ -36,8 +36,30 @@ server_config_t* g_server_config = NULL;
 static client_conn_t* clients = NULL;
 static pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Server state indicators */
+static enum {
+    SOCKET_STATE_UNINITIALIZED,
+    SOCKET_STATE_CREATED,
+    SOCKET_STATE_BOUND,
+    SOCKET_STATE_LISTENING,
+    SOCKET_STATE_READY,
+    SOCKET_STATE_ERROR
+} g_socket_state = SOCKET_STATE_UNINITIALIZED;
+
+static enum {
+    THREAD_STATE_UNINITIALIZED,
+    THREAD_STATE_CREATING,
+    THREAD_STATE_RUNNING,
+    THREAD_STATE_ERROR
+} g_thread_state = THREAD_STATE_UNINITIALIZED;
+
 /* Flag for server running state */
 static int server_running = 0;
+
+/* Mutex for thread synchronization */
+static pthread_mutex_t thread_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t thread_init_cond = PTHREAD_COND_INITIALIZER;
+static int thread_initialized = 0;
 
 /* HTTP method string to enum conversion */
 http_method_t parse_http_method(const char* method_str) {
@@ -896,11 +918,17 @@ server_status_t server_init(server_config_t* config) {
 server_status_t server_start(server_config_t* config) {
     extern logger_config_t* g_logger;
     
+    /* Initialize socket and thread states */
+    g_socket_state = SOCKET_STATE_UNINITIALIZED;
+    g_thread_state = THREAD_STATE_UNINITIALIZED;
+    thread_initialized = 0;
+    
     if (!config) {
         fprintf(stderr, "Error: Null server configuration passed to server_start\n");
         if (g_logger) {
             LOG_ERROR("Null server configuration passed to server_start");
         }
+        g_socket_state = SOCKET_STATE_ERROR;
         return SERVER_ERROR;
     }
 
@@ -914,8 +942,12 @@ server_status_t server_start(server_config_t* config) {
         if (g_logger) {
             LOG_ERROR("Invalid socket file descriptor (%d)", config->socket_fd);
         }
+        g_socket_state = SOCKET_STATE_ERROR;
         return SERVER_ERROR;
     }
+    
+    /* Update socket state to CREATED */
+    g_socket_state = SOCKET_STATE_CREATED;
 
     if (config->port <= 0 || config->port > 65535) {
         fprintf(stderr, "Error: Invalid port number (%d)\n", config->port);
@@ -1031,6 +1063,14 @@ server_status_t server_start(server_config_t* config) {
     
     if (g_logger) {
         LOG_DEBUG("Initial bind result: %d", bind_result);
+    }
+    
+    /* Update socket state if binding succeeded */
+    if (bind_result == 0) {
+        g_socket_state = SOCKET_STATE_BOUND;
+        if (g_logger) {
+            LOG_DEBUG("Socket state updated to BOUND");
+        }
     }
     
     /* If binding fails, try alternative approaches */
@@ -1297,6 +1337,14 @@ server_status_t server_start(server_config_t* config) {
         LOG_DEBUG("Listen result: %d", listen_result);
     }
     
+    /* Update socket state if listen succeeded */
+    if (listen_result == 0) {
+        g_socket_state = SOCKET_STATE_LISTENING;
+        if (g_logger) {
+            LOG_DEBUG("Socket state updated to LISTENING");
+        }
+    }
+    
     if (listen_result < 0) {
         /* Listen failed - detailed logging and diagnostics */
         if (g_logger) {
@@ -1434,6 +1482,19 @@ server_status_t server_start(server_config_t* config) {
     }
     printf("Successfully bound to port %d and listening for connections\n", config->port);
     
+    /* DEBUG: Verify port is visible in netstat */
+    printf("DEBUG: Verifying port visibility with netstat...\n");
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "netstat -tuln | grep :%d || echo 'Port %d NOT FOUND in netstat'", 
+            config->port, config->port);
+    system(cmd);
+    
+    /* Set socket state to READY - this is the signal that socket is fully prepared */
+    g_socket_state = SOCKET_STATE_READY;
+    if (g_logger) {
+        LOG_INFO("Socket state set to READY, socket is fully prepared for accepting connections");
+    }
+    
     /* Set server running flag */
     server_running = 1;
     
@@ -1499,8 +1560,26 @@ server_status_t server_start(server_config_t* config) {
     
     memcpy(thread_config, config, sizeof(server_config_t));
     
-    /* Ensure the socket FD is correctly set and valid */
-    thread_config->socket_fd = global_socket_fd;
+    /* THIS IS CRITICAL: Ensure the socket FD is correctly set and valid */
+    thread_config->socket_fd = config->socket_fd; /* Use the original socket FD */
+    
+    /* Print socket FD information for debugging */
+    printf("DEBUG: Original config->socket_fd = %d\n", config->socket_fd);
+    printf("DEBUG: Global socket_fd = %d\n", global_socket_fd);
+    printf("DEBUG: Thread config->socket_fd = %d\n", thread_config->socket_fd);
+    
+    /* Double check that the socket is still in a valid state */
+    int thread_socket_error = 0;
+    socklen_t thread_error_len = sizeof(thread_socket_error);
+    if (getsockopt(thread_config->socket_fd, SOL_SOCKET, SO_ERROR, &thread_socket_error, &thread_error_len) < 0) {
+        printf("DEBUG: Failed to check socket state before thread creation: %s (errno=%d)\n",
+               strerror(errno), errno);
+    } else if (thread_socket_error != 0) {
+        printf("DEBUG: Socket has error state before thread creation: %s (error=%d)\n",
+               strerror(thread_socket_error), thread_socket_error);
+    } else {
+        printf("DEBUG: Socket is valid before thread creation\n");
+    }
     
     /* Verify socket validity before passing to thread */
     if (thread_config->socket_fd <= 0) {
@@ -1514,32 +1593,8 @@ server_status_t server_start(server_config_t* config) {
         return SERVER_SOCKET_ERROR;
     }
     
-    /* Double-check socket state */
-    int thread_socket_error = 0;
-    socklen_t thread_error_len = sizeof(thread_socket_error);
-    if (getsockopt(thread_config->socket_fd, SOL_SOCKET, SO_ERROR, &thread_socket_error, &thread_error_len) < 0) {
-        if (g_logger) {
-            LOG_ERROR("Failed to check socket state before thread creation: %s (errno=%d)",
-                     strerror(errno), errno);
-        }
-        fprintf(stderr, "Error: Failed to check socket state before thread creation: %s (errno=%d)\n",
-               strerror(errno), errno);
-        free(thread_config);
-        pthread_attr_destroy(&thread_attr);
-        return SERVER_SOCKET_ERROR;
-    }
-    
-    if (thread_socket_error != 0) {
-        if (g_logger) {
-            LOG_ERROR("Socket has error state before thread creation: %s (error=%d)",
-                     strerror(thread_socket_error), thread_socket_error);
-        }
-        fprintf(stderr, "Error: Socket has error state before thread creation: %s (error=%d)\n",
-               strerror(thread_socket_error), thread_socket_error);
-        free(thread_config);
-        pthread_attr_destroy(&thread_attr);
-        return SERVER_SOCKET_ERROR;
-    }
+    /* Double-check socket state - already done above, no need to repeat */
+    printf("DEBUG: Socket descriptor %d is valid and ready for thread\n", thread_config->socket_fd);
     
     /* Verify the socket is in listening state */
     int thread_acceptconn = 0;
@@ -1566,28 +1621,65 @@ server_status_t server_start(server_config_t* config) {
     }
     printf("Creating server accept thread with socket FD: %d\n", thread_config->socket_fd);
     
+    /* Ensure socket is in READY state before creating thread */
+    if (g_socket_state != SOCKET_STATE_READY) {
+        if (g_logger) {
+            LOG_ERROR("Socket is not in READY state before thread creation (current state: %d)", g_socket_state);
+        }
+        fprintf(stderr, "Error: Socket is not in READY state before thread creation\n");
+        free(thread_config);
+        pthread_attr_destroy(&thread_attr);
+        return SERVER_SOCKET_ERROR;
+    }
+    
+    /* Initialize thread synchronization */
+    pthread_mutex_lock(&thread_init_mutex);
+    thread_initialized = 0;
+    pthread_mutex_unlock(&thread_init_mutex);
+    
     /* Try creating thread with retry logic */
+    printf("DEBUG: Attempting to create server_accept_loop thread...\n");
     int max_retries = 3;
     int retry_count = 0;
     int thread_result = -1;
     
     while (retry_count < max_retries) {
         /* Create the thread with detailed logging */
+        printf("DEBUG: Creating thread attempt %d of %d\n", retry_count + 1, max_retries);
+        
+        /* Verify socket is still valid before creating thread */
+        int create_socket_error = 0;
+        socklen_t create_error_len = sizeof(create_socket_error);
+        if (getsockopt(thread_config->socket_fd, SOL_SOCKET, SO_ERROR, &create_socket_error, &create_error_len) < 0) {
+            printf("DEBUG: Socket check failed before pthread_create: %s\n", strerror(errno));
+        } else if (create_socket_error != 0) {
+            printf("DEBUG: Socket has error state before pthread_create: %s\n", strerror(create_socket_error));
+        } else {
+            printf("DEBUG: Socket is valid before pthread_create\n");
+        }
+        
+        /* Create thread with detailed error reporting */
+        errno = 0;
         thread_result = pthread_create(&accept_thread, &thread_attr, server_accept_loop, (void*)thread_config);
         
         if (thread_result == 0) {
             /* Thread created successfully */
+            printf("DEBUG: Thread created successfully with ID %lu\n", (unsigned long)accept_thread);
             break;
         }
         
         /* Thread creation failed - log and retry */
         retry_count++;
+        printf("DEBUG: Failed to create thread: %s (errno=%d, pthread_error=%d)\n", 
+               strerror(thread_result), errno, thread_result);
+        
         if (g_logger) {
             LOG_WARNING("Failed to create accept thread (attempt %d of %d): %s (errno=%d)",
                        retry_count, max_retries, strerror(thread_result), thread_result);
         }
         
         /* Small delay before retry */
+        printf("DEBUG: Sleeping 100ms before retry...\n");
         usleep(100000); /* 100ms */
     }
     
@@ -1641,6 +1733,19 @@ server_status_t server_start(server_config_t* config) {
         LOG_DEBUG("Detaching server accept thread (tid: %lu)", (unsigned long)accept_thread);
     }
     
+    /* Check if thread is actually alive before detaching */
+    printf("DEBUG: Checking if thread %lu is alive...\n", (unsigned long)accept_thread);
+    if (pthread_kill(accept_thread, 0) != 0) {
+        printf("ERROR: Thread %lu does not exist or is not accessible!\n", (unsigned long)accept_thread);
+        if (g_logger) {
+            LOG_ERROR("Thread %lu does not exist or is not accessible: %s", 
+                     (unsigned long)accept_thread, strerror(errno));
+        }
+        return SERVER_THREAD_ERROR;
+    } else {
+        printf("DEBUG: Thread %lu exists and is accessible.\n", (unsigned long)accept_thread);
+    }
+    
     int detach_result = pthread_detach(accept_thread);
     if (detach_result != 0) {
         if (g_logger) {
@@ -1649,18 +1754,60 @@ server_status_t server_start(server_config_t* config) {
         }
     }
     
-    /* Check if thread is running by sleeping briefly */
+    /* Wait for thread to initialize with timeout using condition variable */
     if (g_logger) {
-        LOG_DEBUG("Waiting for thread to initialize (sleeping 100ms)");
+        LOG_DEBUG("Waiting for thread to initialize using condition variable");
     }
     
-    usleep(100000); /* 100ms sleep to let thread start */
+    /* Set up timeout for waiting (5 seconds) */
+    struct timespec timeout;
+    clock_gettime(CLOCK_REALTIME, &timeout);
+    timeout.tv_sec += 5; /* 5 second timeout */
     
+    /* Wait for thread initialization with proper synchronization */
+    int wait_result = 0;
+    printf("DEBUG: Waiting for thread initialization signal...\n");
+    
+    pthread_mutex_lock(&thread_init_mutex);
+    while (thread_initialized == 0 && wait_result == 0) {
+        wait_result = pthread_cond_timedwait(&thread_init_cond, &thread_init_mutex, &timeout);
+    }
+    pthread_mutex_unlock(&thread_init_mutex);
+    
+    /* Check wait result */
+    if (wait_result == ETIMEDOUT) {
+        if (g_logger) {
+            LOG_ERROR("Timeout waiting for thread to initialize");
+        }
+        fprintf(stderr, "Error: Timeout waiting for thread to initialize\n");
+        
+        /* Check if thread is still alive */
+        if (pthread_kill(accept_thread, 0) != 0) {
+            printf("ERROR: Thread %lu no longer exists: %s\n", 
+                   (unsigned long)accept_thread, strerror(errno));
+        } else {
+            printf("DEBUG: Thread %lu exists but didn't signal initialization\n", 
+                   (unsigned long)accept_thread);
+        }
+        
+        return SERVER_THREAD_ERROR;
+    }
+    
+    /* Check if thread is properly initialized */
+    if (g_thread_state != THREAD_STATE_RUNNING) {
+        if (g_logger) {
+            LOG_ERROR("Thread is not in RUNNING state (current state: %d)", g_thread_state);
+        }
+        fprintf(stderr, "Error: Thread is not in RUNNING state\n");
+        return SERVER_THREAD_ERROR;
+    }
+    
+    /* Check server_running flag as additional validation */
     if (!server_running) {
         if (g_logger) {
-            LOG_ERROR("Server thread created but server_running flag not set. Thread may have exited.");
+            LOG_ERROR("Thread initialized but server_running flag not set");
         }
-        fprintf(stderr, "Error: Server thread created but exited immediately\n");
+        fprintf(stderr, "Error: Thread initialized but server_running flag not set\n");
         return SERVER_THREAD_ERROR;
     }
     
@@ -1682,6 +1829,9 @@ void* server_accept_loop(void* config_ptr) {
         LOG_INFO("Starting server accept thread");
     }
     
+    /* Update thread state to creating */
+    g_thread_state = THREAD_STATE_CREATING;
+    
     server_config_t* config = (server_config_t*)config_ptr;
     
     /* Check arguments with detailed logging */
@@ -1691,6 +1841,7 @@ void* server_accept_loop(void* config_ptr) {
             LOG_ERROR("NULL server configuration passed to accept loop");
         }
         server_running = 0; /* Clear running flag so main thread can detect failure */
+        g_thread_state = THREAD_STATE_ERROR;
         return NULL;
     }
     
@@ -1701,11 +1852,30 @@ void* server_accept_loop(void* config_ptr) {
             LOG_ERROR("Invalid socket file descriptor (%d) in accept loop", config->socket_fd);
         }
         server_running = 0; /* Clear running flag so main thread can detect failure */
+        g_thread_state = THREAD_STATE_ERROR;
+        return NULL;
+    }
+    
+    /* Verify socket is in READY state before accepting connections */
+    if (g_socket_state != SOCKET_STATE_READY) {
+        if (g_logger) {
+            LOG_ERROR("Socket is not in READY state (current state: %d)", g_socket_state);
+        }
+        fprintf(stderr, "Error: Socket is not in READY state before starting accept loop\n");
+        server_running = 0;
+        g_thread_state = THREAD_STATE_ERROR;
         return NULL;
     }
     
     /* Set server running flag to indicate thread has started */
     server_running = 1;
+    
+    /* Signal to the main thread that initialization is complete */
+    pthread_mutex_lock(&thread_init_mutex);
+    thread_initialized = 1;
+    g_thread_state = THREAD_STATE_RUNNING;
+    pthread_cond_signal(&thread_init_cond);
+    pthread_mutex_unlock(&thread_init_mutex);
     
     if (g_logger) {
         LOG_DEBUG("Server running flag set to indicate thread has started");
@@ -1758,24 +1928,37 @@ void* server_accept_loop(void* config_ptr) {
         LOG_DEBUG("Verifying socket is in LISTENING state");
     }
     
+    printf("DEBUG: Thread checking if socket FD %d is actually in LISTENING state\n", config->socket_fd);
     int socket_status;
     socklen_t status_len = sizeof(socket_status);
     if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &socket_status, &status_len) < 0) {
+        int check_errno = errno; /* Save errno */
         fprintf(stderr, "Error: Failed to check if socket is in listening state: %s (errno=%d)\n", 
-               strerror(errno), errno);
+               strerror(check_errno), check_errno);
+        printf("DEBUG: getsockopt(SO_ACCEPTCONN) failed with error: %s (errno=%d)\n", 
+               strerror(check_errno), check_errno);
         if (g_logger) {
             LOG_ERROR("Failed to check if socket is in listening state: %s (errno=%d)", 
-                     strerror(errno), errno);
+                     strerror(check_errno), check_errno);
         }
     } else if (socket_status == 0) {
-        fprintf(stderr, "Error: Socket is not in listening state\n");
+        fprintf(stderr, "Error: Socket is not in listening state (SO_ACCEPTCONN=0)\n");
+        printf("DEBUG: Socket is not in listening state (SO_ACCEPTCONN=0)\n");
         if (g_logger) {
-            LOG_ERROR("Socket is not in listening state");
+            LOG_ERROR("Socket is not in listening state (SO_ACCEPTCONN=0)");
         }
-        server_running = 0;
-        return NULL;
+        
+        /* Try to fix the socket by re-enabling listening */
+        printf("DEBUG: Attempting to restart socket in listening state...\n");
+        if (listen(config->socket_fd, 10) == 0) {
+            printf("DEBUG: Successfully restarted socket in listening state\n");
+        } else {
+            printf("DEBUG: Failed to restart socket in listening state: %s\n", strerror(errno));
+            server_running = 0;
+            return NULL;
+        }
     } else {
-        printf("Socket %d is confirmed to be in listening state\n", config->socket_fd);
+        printf("Socket %d is confirmed to be in listening state (SO_ACCEPTCONN=1)\n", config->socket_fd);
         if (g_logger) {
             LOG_INFO("Socket %d is confirmed to be in listening state", config->socket_fd);
         }
