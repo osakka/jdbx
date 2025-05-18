@@ -1,3 +1,5 @@
+# JSONdb Development Guidelines
+
 - Do not make minimal implementations. Delete partial concept files and ideas. Focus on:
   1. One source of truth
   2. One build (always result is bin/jsondb_server)
@@ -16,3 +18,6 @@
  15. DO NOT run binaries from the build directory, only interact with the server using the script in build we created
  16. Server runs on port 5000 by default
  17. DO NOT IMPLEMENT MOCK DATA OR DEMO MODE - ALWAYS WORK WITH REAL SERVER DATA
+ 18. Maintain zero-warning policy - always compile with -Wall -Wextra
+ 19. Use proper string handling to prevent buffer overflows
+ 20. Document all fixes thoroughly for future reference

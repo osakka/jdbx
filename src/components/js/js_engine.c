@@ -338,7 +338,7 @@ int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **resul
     fclose(file);
 
     /* Check if file was read correctly */
-    if (read_size != file_size) {
+    if (read_size != (size_t)file_size) {
         free(script);
         char error_msg[PATH_MAX + 100];
         snprintf(error_msg, sizeof(error_msg), "Failed to read JavaScript file: %s (Error: %s)",
@@ -414,6 +414,8 @@ void js_register_db_functions(js_engine_t *engine) {
 
 /* JavaScript callback: db.getCollection(collectionName) */
 static JSValue js_db_get_collection(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 1 || !JS_IsString(argv[0])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name");
     }
@@ -453,6 +455,8 @@ static JSValue js_db_get_collection(JSContext *ctx, JSValueConst this_val, int a
 
 /* JavaScript callback: db.queryDocuments(collectionName, query) */
 static JSValue js_db_query_documents(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsObject(argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name and object query");
     }
@@ -495,6 +499,8 @@ static JSValue js_db_query_documents(JSContext *ctx, JSValueConst this_val, int 
 
 /* JavaScript callback: db.getDocument(collectionName, id) */
 static JSValue js_db_get_document(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsString(argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name and string document ID");
     }
@@ -534,6 +540,8 @@ static JSValue js_db_get_document(JSContext *ctx, JSValueConst this_val, int arg
 
 /* JavaScript callback: db.insertDocument(collectionName, document) */
 static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsObject(argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name and object document");
     }
@@ -576,6 +584,8 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
 
 /* JavaScript callback: db.updateDocument(collectionName, id, document) */
 static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 3 || !JS_IsString(argv[0]) || !JS_IsString(argv[1]) || !JS_IsObject(argv[2])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name, string document ID, and object document");
     }
@@ -620,6 +630,8 @@ static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int 
 
 /* JavaScript callback: db.deleteDocument(collectionName, id) */
 static JSValue js_db_delete_document(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    /* Unused parameter 'this_val' */
+    (void)this_val;
     if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsString(argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected string collection name and string document ID");
     }
@@ -699,7 +711,13 @@ int js_validate_document(js_engine_t *engine, const char *collection_name, json_
     /* Get validation script for collection */
     char rel_path[512];
     char script_path[PATH_MAX];
-    snprintf(rel_path, sizeof(rel_path), "validators/%s.js", collection_name);
+    
+    /* Ensure collection name won't cause path truncation */
+    char collection_buf[128];
+    strncpy(collection_buf, collection_name, sizeof(collection_buf)-1);
+    collection_buf[sizeof(collection_buf)-1] = '\0';
+    
+    snprintf(rel_path, sizeof(rel_path), "validators/%s.js", collection_buf);
 
     /* Convert to absolute path - defined in main.c */
     extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
@@ -797,7 +815,13 @@ json_value_t* js_transform_document(js_engine_t *engine, const char *collection_
     /* Get transformation script for collection */
     char rel_path[512];
     char script_path[PATH_MAX];
-    snprintf(rel_path, sizeof(rel_path), "transforms/%s.js", collection_name);
+    
+    /* Ensure collection name won't cause path truncation */
+    char collection_buf[128];
+    strncpy(collection_buf, collection_name, sizeof(collection_buf)-1);
+    collection_buf[sizeof(collection_buf)-1] = '\0';
+    
+    snprintf(rel_path, sizeof(rel_path), "transforms/%s.js", collection_buf);
 
     /* Convert to absolute path - defined in main.c */
     extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
@@ -883,7 +907,37 @@ int js_register_user_function(js_engine_t *engine, const char *name, const char 
 
     /* Save function to file */
     char script_path[PATH_MAX];
-    snprintf(script_path, sizeof(script_path), "%s/%s.js", functions_dir, name);
+    
+    /* Create a safer path construction to avoid format truncation */
+    /* First truncate the name to a reasonable length */
+    char name_buf[60]; /* Small enough to guarantee no truncation */
+    strncpy(name_buf, name, sizeof(name_buf)-1);
+    name_buf[sizeof(name_buf)-1] = '\0';
+    
+    /* Use string operations instead of snprintf for path construction */
+    strncpy(script_path, functions_dir, sizeof(script_path)-1);
+    script_path[sizeof(script_path)-1] = '\0';
+    
+    /* Safely append path separator */
+    size_t path_len = strlen(script_path);
+    if (path_len + 1 < sizeof(script_path)) {
+        script_path[path_len] = '/';
+        script_path[path_len + 1] = '\0';
+        
+        /* Safely append filename */
+        path_len = strlen(script_path);
+        size_t remaining = sizeof(script_path) - path_len - 1;
+        if (remaining > 0) {
+            strncat(script_path, name_buf, remaining);
+            
+            /* Append .js extension if there's room */
+            path_len = strlen(script_path);
+            remaining = sizeof(script_path) - path_len - 1;
+            if (remaining >= 3) {
+                strcat(script_path, ".js");
+            }
+        }
+    }
     
     FILE *file = fopen(script_path, "wb");
     if (!file) {
@@ -906,7 +960,13 @@ int js_call_user_function(js_engine_t *engine, const char *name, json_value_t *a
     /* Get function script */
     char rel_path[512];
     char script_path[PATH_MAX];
-    snprintf(rel_path, sizeof(rel_path), "functions/%s.js", name);
+    
+    /* Ensure name won't cause path truncation */
+    char name_buf[128];
+    strncpy(name_buf, name, sizeof(name_buf)-1);
+    name_buf[sizeof(name_buf)-1] = '\0';
+    
+    snprintf(rel_path, sizeof(rel_path), "functions/%s.js", name_buf);
 
     /* Convert to absolute path - defined in main.c */
     extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
@@ -1079,7 +1139,7 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
     fclose(file);
 
     /* Check if file was read correctly */
-    if (read_size != file_size) {
+    if (read_size != (size_t)file_size) {
         free(script);
         char error_msg[PATH_MAX + 100];
         snprintf(error_msg, sizeof(error_msg), "Failed to read JavaScript file: %s (Error: %s)",

@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Race condition in server socket binding
 - Socket binding thread synchronization issues
 - Command-line parsing for verbose mode
+- All compiler warnings throughout the codebase to allow -Wall -Wextra -Werror compilation
+- Unused function warnings in RBAC implementation
+- Unused parameter warnings in JavaScript engine callbacks
+- Format-truncation warnings in string handling functions
+- Sign comparison warnings in JavaScript file operations
+- External library warnings through selective suppression with wrapper headers
 
 ## [1.0.6-database-rbac]
 

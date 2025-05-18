@@ -193,63 +193,8 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
     return role;
 }
 
-/* Convert rbac_user_t to user document */
-static json_value_t* rbac_user_to_doc(rbac_user_t* user) {
-    if (!user) {
-        return NULL;
-    }
-    
-    /* Create user document */
-    json_value_t* user_doc = json_create_object();
-    if (!user_doc) {
-        return NULL;
-    }
-    
-    /* Set user fields */
-    json_object_set(user_doc, "id", json_create_string(user->id));
-    json_object_set(user_doc, "username", json_create_string(user->username));
-    json_object_set(user_doc, "password_hash", json_create_string(user->password_hash));
-    
-    /* Copy roles array */
-    json_value_t* roles = json_create_array();
-    for (size_t i = 0; i < user->roles->value.array.size; i++) {
-        json_value_t* role_id = user->roles->value.array.items[i];
-        if (role_id->type == JSON_STRING) {
-            json_array_append(roles, json_create_string(role_id->value.string));
-        }
-    }
-    json_object_set(user_doc, "roles", roles);
-    
-    return user_doc;
-}
-
-/* Convert rbac_role_t to role document */
-static json_value_t* rbac_role_to_doc(rbac_role_t* role) {
-    if (!role) {
-        return NULL;
-    }
-    
-    /* Create role document */
-    json_value_t* role_doc = json_create_object();
-    if (!role_doc) {
-        return NULL;
-    }
-    
-    /* Set role fields */
-    json_object_set(role_doc, "id", json_create_string(role->id));
-    json_object_set(role_doc, "name", json_create_string(role->name));
-    
-    /* Deep copy permissions */
-    char* permissions_str = json_stringify(role->permissions);
-    json_value_t* permissions = json_parse(permissions_str);
-    free(permissions_str);
-    json_object_set(role_doc, "permissions", permissions);
-    
-    /* Add empty users array */
-    json_object_set(role_doc, "users", json_create_array());
-    
-    return role_doc;
-}
+/* NOTE: Previous unused conversion functions removed to fix compiler warnings.
+   The code directly uses json_clone() for document operations instead. */
 
 /* Load RBAC system from database */
 rbac_system_t* rbac_db_load(database_t* db) {

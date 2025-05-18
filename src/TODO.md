@@ -142,9 +142,16 @@ This document contains detailed analysis of issues identified in BUILD_STATUS.md
 3. Fix JavaScript engine initialization (noted error in logs)
 4. Update documentation to match reality
 5. Address port mismatch in documentation (completed)
-6. Complete placeholder implementations
-7. Improve JWT implementation security
-8. Implement transaction support (lowest priority)
+6. Fix compiler warnings throughout the codebase
+   - [x] Unused function warnings
+   - [x] Unused parameter warnings
+   - [x] Format-truncation warnings
+   - [x] Sign comparison warnings
+   - [x] External library warnings
+   - [x] Document fixes in COMPILER_WARNING_FIXES_2025.md
+7. Complete placeholder implementations
+8. Improve JWT implementation security
+9. Implement transaction support (lowest priority)
 
 ## Approach
 

@@ -75,6 +75,9 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
  * @return 1 on success, 0 on failure
  */
 int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path) {
+    /* The path parameter is unused in database-based RBAC, but kept for API compatibility */
+    (void)path;
+    
     if (!db || !rbac) {
         return 0;
     }

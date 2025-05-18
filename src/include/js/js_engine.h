@@ -9,7 +9,7 @@
 
 /* QuickJS headers - only included when QuickJS support is enabled */
 #ifdef USE_QUICKJS
-#include "js/quickjs.h"
+#include "js/quickjs_wrapper.h" /* Using our wrapper to suppress warnings */
 #endif
 
 /* JS context for database operations */
