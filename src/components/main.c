@@ -1243,6 +1243,9 @@ int main(int argc, char** argv) {
         }
         
         printf("Server started successfully on port %d\n", g_server_config->port);
+        printf("VERIFICATION: Running netstat to verify port binding...\n");
+        system("netstat -tuln | grep 5000 || echo 'Port 5000 not found in netstat!'");
+        printf("VERIFICATION: Socket binding check completed.\n");
     } else {
         /* 
          * We're in daemon mode, so DON'T start the server yet.

@@ -99,8 +99,8 @@ typedef struct {
     char* metrics_dir;              /* Path to metrics directory */
 
     /* Runtime settings */
-    int foreground_mode;         /* 0 for daemon mode, 1 for foreground mode */
     log_level_t log_level;       /* Logging level */
+    int verbose_mode;            /* Enable verbose logging */
     int js_enabled;              /* Enable JavaScript engine */
     char* jwt_secret;            /* JWT secret key */
 

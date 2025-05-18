@@ -25,8 +25,8 @@
 /** Default maximum number of simultaneous connections */
 #define DEFAULT_MAX_CONNECTIONS 100
 
-/** Default to foreground mode (0 for daemon, 1 for foreground) */
-#define DEFAULT_FOREGROUND_MODE 0
+/** Default verbose mode (0 for normal, 1 for verbose) */
+#define DEFAULT_VERBOSE_MODE 0
 
 /*==============================================================================
  * Path Defaults (relative to install directory unless absolute)

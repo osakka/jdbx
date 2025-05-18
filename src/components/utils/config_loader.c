@@ -1111,68 +1111,68 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
     }
     
-    /* Parse foreground mode setting */
+    /* Parse verbose mode setting */
     if (g_logger) {
-        LOG_DEBUG("Processing 'foreground_mode' setting");
-        LOG_TRACE("Looking for 'foreground_mode' property in configuration");
+        LOG_DEBUG("Processing 'verbose_mode' setting");
+        LOG_TRACE("Looking for 'verbose_mode' property in configuration");
     }
     
-    json_value_t* foreground_val = json_object_get(json, "foreground_mode");
+    json_value_t* foreground_val = json_object_get(json, "verbose_mode");
     if (foreground_val) {
         if (g_logger) {
-            LOG_TRACE("Found 'foreground_mode' of type %s", json_type_name(foreground_val->type));
+            LOG_TRACE("Found 'verbose_mode' of type %s", json_type_name(foreground_val->type));
         }
         
-        int old_mode = config->foreground_mode;
+        int old_mode = config->verbose_mode;
         
         if (foreground_val->type == JSON_BOOLEAN) {
-            config->foreground_mode = foreground_val->value.boolean;
+            config->verbose_mode = foreground_val->value.boolean;
             if (g_logger) {
-                LOG_TRACE("Parsing foreground_mode as boolean: %d", config->foreground_mode);
+                LOG_TRACE("Parsing verbose_mode as boolean: %d", config->verbose_mode);
             }
         } else if (foreground_val->type == JSON_INTEGER) {
-            config->foreground_mode = (foreground_val->value.integer != 0);
+            config->verbose_mode = (foreground_val->value.integer != 0);
             if (g_logger) {
-                LOG_TRACE("Parsing foreground_mode as integer: %ld -> %d", 
-                         foreground_val->value.integer, config->foreground_mode);
+                LOG_TRACE("Parsing verbose_mode as integer: %ld -> %d", 
+                         foreground_val->value.integer, config->verbose_mode);
             }
         } else if (foreground_val->type == JSON_STRING) {
-            config->foreground_mode = parse_bool(foreground_val->value.string);
+            config->verbose_mode = parse_bool(foreground_val->value.string);
             if (g_logger) {
-                LOG_TRACE("Parsing foreground_mode as string: '%s' -> %d", 
-                         foreground_val->value.string, config->foreground_mode);
+                LOG_TRACE("Parsing verbose_mode as string: '%s' -> %d", 
+                         foreground_val->value.string, config->verbose_mode);
             }
         } else {
             if (g_logger) {
-                LOG_WARNING("Invalid type for 'foreground_mode' (expected boolean, integer, or string, got %s), "
+                LOG_WARNING("Invalid type for 'verbose_mode' (expected boolean, integer, or string, got %s), "
                            "using default: %d", 
-                           json_type_name(foreground_val->type), DEFAULT_FOREGROUND_MODE);
+                           json_type_name(foreground_val->type), DEFAULT_VERBOSE_MODE);
             }
-            config->foreground_mode = DEFAULT_FOREGROUND_MODE;
+            config->verbose_mode = DEFAULT_VERBOSE_MODE;
         }
         
         if (g_logger) {
-            if (old_mode != config->foreground_mode) {
-                LOG_DEBUG("Config: Changed foreground_mode from %d to %d", old_mode, config->foreground_mode);
+            if (old_mode != config->verbose_mode) {
+                LOG_DEBUG("Config: Changed verbose_mode from %d to %d", old_mode, config->verbose_mode);
                 
-                if (config->foreground_mode) {
-                    LOG_INFO("Server will run in foreground mode (not as daemon)");
+                if (config->verbose_mode) {
+                    LOG_INFO("Server will run in verbose mode (not as daemon)");
                 } else {
-                    LOG_INFO("Server will run in daemon mode (background)");
+                    LOG_INFO("Server will run in server mode (background)");
                 }
             } else {
-                LOG_DEBUG("Config: foreground_mode remains at %d", config->foreground_mode);
+                LOG_DEBUG("Config: verbose_mode remains at %d", config->verbose_mode);
             }
         }
     } else {
         if (g_logger) {
-            LOG_DEBUG("No foreground_mode specified, using default: %d", DEFAULT_FOREGROUND_MODE);
-            config->foreground_mode = DEFAULT_FOREGROUND_MODE;
+            LOG_DEBUG("No verbose_mode specified, using default: %d", DEFAULT_VERBOSE_MODE);
+            config->verbose_mode = DEFAULT_VERBOSE_MODE;
             
-            if (config->foreground_mode) {
-                LOG_INFO("Server will run in foreground mode (not as daemon)");
+            if (config->verbose_mode) {
+                LOG_INFO("Server will run in verbose mode (not as daemon)");
             } else {
-                LOG_INFO("Server will run in daemon mode (background)");
+                LOG_INFO("Server will run in server mode (background)");
             }
         }
     }
@@ -1542,10 +1542,10 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
             if (g_logger) {
                 LOG_DEBUG("Config: Set log_level to %d", config->log_level);
             }
-        } else if (strcasecmp(key, "foreground_mode") == 0) {
-            config->foreground_mode = parse_bool(value);
+        } else if (strcasecmp(key, "verbose_mode") == 0) {
+            config->verbose_mode = parse_bool(value);
             if (g_logger) {
-                LOG_DEBUG("Config: Set foreground_mode to %d", config->foreground_mode);
+                LOG_DEBUG("Config: Set verbose_mode to %d", config->verbose_mode);
             }
         } else if (strcasecmp(key, "js_enabled") == 0) {
             config->js_enabled = parse_bool(value);
@@ -1702,7 +1702,7 @@ void config_init_defaults(server_config_t* config) {
     config->max_connections = DEFAULT_MAX_CONNECTIONS;
     
     /* Runtime settings */
-    config->foreground_mode = DEFAULT_FOREGROUND_MODE;
+    config->verbose_mode = 0;  /* Default to non-verbose mode */
     config->log_level = DEFAULT_LOG_LEVEL;
     config->js_enabled = DEFAULT_JS_ENABLED;
     config->use_ssl = DEFAULT_SSL_ENABLED;
