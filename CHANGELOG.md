@@ -8,16 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Improved database locking system using read-write locks for higher concurrency
 - Improved server startup sequence with proper dependency ordering
 - Enhanced socket binding thread synchronization
 - Better error handling for socket binding failures
 
 ### Changed
+- Database operations now use read-write locks to reduce contention and improve performance
 - Socket initialization and binding now occurs after database initialization but before RBAC and API initialization
 - Improved command-line verbose mode handling
 - Removed deprecated foreground mode in favor of verbose mode
 
 ### Fixed
+- Race conditions in database operations with improved locking strategy
 - Race condition in server socket binding
 - Socket binding thread synchronization issues
 - Command-line parsing for verbose mode
