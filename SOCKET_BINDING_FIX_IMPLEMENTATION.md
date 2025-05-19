@@ -1,1 +1,0 @@
-/opt/jsondb/docs/socket-binding/IMPLEMENTATION_SUMMARY.md
