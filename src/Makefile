@@ -30,15 +30,7 @@ JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
 # Initialization components
-INIT_SRCS = $(SRC_DIR)/components/init_core.c \
-            $(SRC_DIR)/components/init_config.c \
-            $(SRC_DIR)/components/init_logger.c \
-            $(SRC_DIR)/components/init_database.c \
-            $(SRC_DIR)/components/init_daemon.c \
-            $(SRC_DIR)/components/init_socket.c \
-            $(SRC_DIR)/components/init_rbac.c \
-            $(SRC_DIR)/components/init_api.c \
-            $(SRC_DIR)/components/init_threads.c
+INIT_SRCS = $(wildcard $(SRC_DIR)/initialize/*.c)
 
 # Thread pool implementation
 # Note: Now integrated into server.c directly
@@ -88,6 +80,7 @@ directories:
 	@mkdir -p $(OBJ_DIR)/components/utils
 	@mkdir -p $(OBJ_DIR)/components/tools
 	@mkdir -p $(OBJ_DIR)/components/js
+	@mkdir -p $(OBJ_DIR)/initialize
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LIB_DIR)
 
