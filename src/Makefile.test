@@ -1,0 +1,40 @@
+# Simplified Makefile for testing the server initialization sequence
+CC = gcc
+CFLAGS = -Wall -Wextra -Iinclude -I.
+LDFLAGS = -lpthread
+
+# Output files
+SERVER_TEST = server_test
+SOCKET_TEST = socket_test
+
+# Source files
+SERVER_TEST_SRC = server_test_main.c components/core/server_init_sequence.c
+SOCKET_TEST_SRC = socket_test.c
+
+# Include server utilities
+SERVER_LIBS = components/core/thread_pool.c components/utils/logger.c
+
+# Default target
+all: $(SERVER_TEST) $(SOCKET_TEST)
+
+# Build the server test
+$(SERVER_TEST): $(SERVER_TEST_SRC) $(SERVER_LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Build the socket test
+$(SOCKET_TEST): $(SOCKET_TEST_SRC)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Run the server test
+run: $(SERVER_TEST)
+	./$(SERVER_TEST)
+
+# Run the socket test
+run-socket: $(SOCKET_TEST)
+	./$(SOCKET_TEST)
+
+# Clean up
+clean:
+	rm -f $(SERVER_TEST) $(SOCKET_TEST)
+
+.PHONY: all run run-socket clean

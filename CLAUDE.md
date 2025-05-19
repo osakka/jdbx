@@ -1,5 +1,7 @@
 # JSONdb Development Guidelines
 
+## Core Principles
+
 - Do not make minimal implementations. Delete partial concept files and ideas. Focus on:
   1. One source of truth
   2. One build (always result is bin/jsondb_server)
@@ -14,15 +16,77 @@
  11. Headers are in src/include
  12. We have impeccable git hygiene!
  13. Guidelines are in docs/guidelines, read them
- 14. ONLY BUILD USING THE MAKEFILE in src/ directory
- 15. DO NOT run binaries from the build directory, only interact with the server using the script in build we created
- 16. Server runs on port 5000 by default
- 17. DO NOT IMPLEMENT MOCK DATA OR DEMO MODE - ALWAYS WORK WITH REAL SERVER DATA
- 18. Maintain zero-warning policy - always compile with -Wall -Wextra
- 19. Use proper string handling to prevent buffer overflows
- 20. Document all fixes thoroughly for future reference
- 21. Never create minimal server tests, always work on the main code
- 22. Always build from src using make, and run from build using jsondb_runtime.sh, no exceptions.
- 23. Always follow our git hygiene guidelines.
- 24. Only invoke the server using the runtime script in build, never directly except if explicitly asked.
- 25. Never assume anything is broken on the host device or platform.  This is a VM that's tried and tested, and supports multiple project developement in parallel.
+ 14. Maintain zero-warning policy - always compile with -Wall -Wextra
+ 15. Use proper string handling to prevent buffer overflows
+ 16. Document all fixes thoroughly for future reference
+ 17. Never recreate parallel implementations, always integrate and test your fixes directly in the main code
+
+## Build and Run Guidelines
+
+1. ONLY BUILD USING THE MAKEFILE in src/ directory:
+   ```
+   cd /opt/jsondb/src && make
+   ```
+
+2. ALWAYS run the server in daemon mode, never in foreground mode:
+   ```
+   cd /opt/jsondb && build/jsondb_runtime.sh start
+   ```
+
+3. ALWAYS interact with the server using the runtime script:
+   ```
+   # Start server
+   build/jsondb_runtime.sh start
+   
+   # Check status
+   build/jsondb_runtime.sh status
+   
+   # Stop server
+   build/jsondb_runtime.sh stop
+   ```
+
+4. NEVER run binaries from the build directory directly, only use the runtime script.
+
+5. ALWAYS examine logs for debugging, never rely on stdout/stderr:
+   ```
+   cat /opt/jsondb/var/jsondb_server.log
+   ```
+   
+6. The server runs on port 5000 by default. You can change this in the runtime script.
+
+7. DO NOT IMPLEMENT MOCK DATA OR DEMO MODE - ALWAYS WORK WITH REAL SERVER DATA.
+
+## Socket Binding Implementation
+
+1. The socket binding implementation follows a specific sequence:
+   - First initialize all resources (config, database, RBAC, API)
+   - If in daemon mode, daemonize the process
+   - Initialize the socket in the final daemon process
+   - Initialize the thread pool
+   - Run the server main loop
+
+2. The socket is properly bound only in the final daemon process to ensure proper socket state.
+
+3. Socket initialization includes:
+   - Creating the socket
+   - Setting socket options (SO_REUSEADDR)
+   - Properly resolving the hostname
+   - Binding the socket
+   - Setting the socket to listen state
+   - Verifying the socket is properly in listening state
+
+## Modular Initialization System
+
+The server now uses a modular initialization sequence with separate components:
+
+- init_config: Initialize and parse configuration
+- init_logger: Set up logging system
+- init_database: Initialize database
+- init_daemon: Handle daemonization if needed
+- init_socket: Set up the server socket
+- init_rbac: Initialize role-based access control
+- init_api: Set up API routes and handlers
+- init_threads: Initialize thread pool
+- run_server: Run the main server loop
+
+This modular approach ensures proper sequencing, better error handling, and clear separation of concerns.

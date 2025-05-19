@@ -1,0 +1,2 @@
+Unknown command: --foreground
+Usage: ./build/jsondb_runtime.sh {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]

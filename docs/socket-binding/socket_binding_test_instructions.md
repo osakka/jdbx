@@ -145,14 +145,29 @@ If you encounter issues during testing:
 
 ## Advanced Testing
 
-For more advanced testing, you can use the debug scripts in the `scripts/debug` directory:
+For more advanced testing, you can use the minimal socket binding test program included in the source code:
+
+```bash
+cd /opt/jsondb/src
+gcc -Wall -Wextra socket_bind_test.c -o socket_bind_test
+./socket_bind_test 5000  # Test with port 5000
+```
+
+This program tests the essential socket binding functionality:
+1. Creating a socket
+2. Setting socket options (SO_REUSEADDR)
+3. Binding to the specified port
+4. Setting the socket to listen state
+5. Verifying the socket is in listening state
+
+You can also use the debug scripts in the `scripts/debug` directory:
 
 ```bash
 cd /opt/jsondb
 scripts/debug/test_socket_binding.sh
 ```
 
-This script performs a series of comprehensive tests to verify the socket binding implementation.
+These scripts perform a series of comprehensive tests to verify the socket binding implementation.
 
 ## Reporting Issues
 

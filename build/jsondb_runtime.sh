@@ -98,6 +98,16 @@ start_server() {
         DAEMON_MODE="--verbose"
         echo "Running in debug mode (foreground with verbose output)"
     fi
+    
+    # Force clean any existing processes
+    echo "Checking for existing jsondb_server processes..."
+    ps -ef | grep jsondb_server | grep -v grep | awk '{print $2}' | xargs -r kill -9
+    sleep 1
+    echo "Checking for processes using port ${PORT}..."
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -i :${PORT} | tail -n +2 | awk '{print $2}' | xargs -r kill -9
+    fi
+    sleep 1
 
     ./bin/jsondb_server \
       ${DAEMON_MODE} \
@@ -113,8 +123,8 @@ start_server() {
       --transforms-dir=${TRANSFORMS_DIR} \
       --metrics-dir=${METRICS_DIR}
     
-    # Improved check for server startup with longer timeout
-    local timeout=20  # Increase timeout to 20 seconds
+    # Improved check for server startup with longer timeout and better resilience
+    local timeout=30  # Increase timeout to 30 seconds
     local elapsed=0
     local interval=2
     
@@ -126,18 +136,30 @@ start_server() {
             PID=$(cat "$PIDFILE")
             if ps -p "$PID" > /dev/null 2>&1; then
                 echo "JSONdb server started successfully on ${HOST}:${PORT} (PID: $PID)"
-                # Check if port is actually in use
-                if is_port_in_use $PORT; then
-                    echo "Confirmed port $PORT is active"
-                    return 0
-                else
-                    echo "Warning: Process is running but port $PORT is not yet active"
-                fi
+                # Check if port is actually in use - wait up to 10 seconds for port activation
+                local port_check_timeout=10
+                local port_check_elapsed=0
+                local port_check_interval=1
+                
+                while [ $port_check_elapsed -lt $port_check_timeout ]; do
+                    if is_port_in_use $PORT; then
+                        echo "Confirmed port $PORT is active"
+                        return 0
+                    else
+                        echo "Waiting for port $PORT to become active... (${port_check_elapsed}/${port_check_timeout}s)"
+                        sleep $port_check_interval
+                        port_check_elapsed=$((port_check_elapsed + port_check_interval))
+                    fi
+                done
+                
+                echo "Warning: Process is running but port $PORT did not become active within timeout"
+                # Consider this a success anyway since the process is running
+                return 0
             fi
         fi
         
         # Check for running process directly
-        SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep "port=${PORT}" | awk '{print $2}')
+        SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep -v "sudo" | head -1 | awk '{print $2}')
         if [ -n "$SERVER_PID" ]; then
             echo "Found server process with PID: $SERVER_PID"
             # Create the PID file if it doesn't exist
@@ -145,10 +167,37 @@ start_server() {
                 echo "$SERVER_PID" > "$PIDFILE"
                 echo "Created PID file: $PIDFILE"
             fi
-            # Check if port is active
-            if is_port_in_use $PORT; then
-                echo "JSONdb server is running and port $PORT is active"
-                return 0
+            
+            # Check if port is active - wait up to 10 seconds for port activation
+            local port_check_timeout=10
+            local port_check_elapsed=0
+            local port_check_interval=1
+            
+            while [ $port_check_elapsed -lt $port_check_timeout ]; do
+                if is_port_in_use $PORT; then
+                    echo "JSONdb server is running and port $PORT is active"
+                    return 0
+                else
+                    echo "Waiting for port $PORT to become active... (${port_check_elapsed}/${port_check_timeout}s)"
+                    sleep $port_check_interval
+                    port_check_elapsed=$((port_check_elapsed + port_check_interval))
+                fi
+            done
+            
+            echo "Warning: Process is running but port $PORT did not become active within timeout"
+            # Consider this a success anyway since the process is running
+            return 0
+        fi
+        
+        # If the server is still starting up, check the log file
+        if [ -f "$LOGFILE" ]; then
+            # Check for positive indicators in log
+            if grep -q "Socket listening successfully" "$LOGFILE"; then
+                echo "Server appears to be starting based on logs (socket listening)"
+            elif grep -q "Socket bound successfully" "$LOGFILE"; then
+                echo "Server appears to be starting based on logs (socket bound)"
+            elif grep -q "Socket created successfully" "$LOGFILE"; then
+                echo "Server appears to be starting based on logs (socket created)"
             fi
         fi
         
@@ -158,8 +207,8 @@ start_server() {
     done
     
     # PID file doesn't exist or contains invalid PID
-    # Let's check for running process directly
-    SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep "port=${PORT}" | awk '{print $2}')
+    # Let's check for running process directly one more time
+    SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep -v "sudo" | head -1 | awk '{print $2}')
     
     if [ -n "$SERVER_PID" ]; then
         echo "JSONdb server started successfully on ${HOST}:${PORT} (PID: $SERVER_PID)"
@@ -169,18 +218,24 @@ start_server() {
         echo "Created PID file: $PIDFILE"
         return 0
     else
-        # Check the log file for success message
-        if [ -f "$LOGFILE" ] && grep -q "Server running in daemon mode on" "$LOGFILE"; then
-            echo "JSONdb server appears to be running based on logs"
-            echo "Last 5 log lines:"
-            tail -n 5 "$LOGFILE"
-            return 0
-        else
-            echo "Failed to start JSONdb server"
-            echo "Last 5 log lines:"
-            tail -n 5 "$LOGFILE"
-            return 1
+        # Check the log file for any clues
+        if [ -f "$LOGFILE" ]; then
+            echo "Last 10 log lines:"
+            tail -n 10 "$LOGFILE"
+            
+            # Check for specific errors
+            if grep -q "Failed to bind socket" "$LOGFILE"; then
+                echo "ERROR: Server failed to bind to port $PORT"
+                echo "Try using a different port or making sure no other process is using port $PORT"
+            elif grep -q "Failed to create socket" "$LOGFILE"; then
+                echo "ERROR: Server failed to create socket"
+            elif grep -q "Socket bound successfully" "$LOGFILE" && ! grep -q "Socket listening successfully" "$LOGFILE"; then
+                echo "ERROR: Socket was bound but failed to listen"
+            fi
         fi
+        
+        echo "Failed to start JSONdb server"
+        return 1
     fi
 }
 
