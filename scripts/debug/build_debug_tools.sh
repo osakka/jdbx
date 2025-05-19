@@ -27,12 +27,11 @@ log_error() {
 # Directory paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-DEBUG_DIR="$PROJECT_ROOT/build/debug"
+DEBUG_DIR="$SCRIPT_DIR"
 TOOLS_DIR="$DEBUG_DIR/tools"
 
 # Create required directories
 log_info "Creating debug directories"
-mkdir -p "$DEBUG_DIR"
 mkdir -p "$TOOLS_DIR"
 mkdir -p "$DEBUG_DIR/logs"
 
@@ -121,8 +120,8 @@ log_error() {
 }
 
 # Main directory paths
-DEBUG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_ROOT="$(cd "$DEBUG_DIR/.." && pwd)"
+DEBUG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$DEBUG_DIR/../.." && pwd)"
 LOG_DIR="$DEBUG_DIR/logs"
 
 # Create logs directory if not exists
