@@ -1,5 +1,7 @@
 # Socket Binding Fix Implementation
 
+> **DEPRECATED**: This document is superseded by [SOCKET_BINDING_FINAL_FIX.md](./SOCKET_BINDING_FINAL_FIX.md) and [THREAD_POOL_SUMMARY.md](./THREAD_POOL_SUMMARY.md) which contain the most up-to-date information about the socket binding implementation and thread pool integration.
+
 This document provides technical details about the socket binding fix implemented to solve API request issues in the JSONdb server.
 
 ## Code Changes

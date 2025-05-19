@@ -1,5 +1,7 @@
 # Socket Binding Status Report
 
+> **DEPRECATED**: This document is superseded by [SOCKET_BINDING_FINAL_FIX.md](./SOCKET_BINDING_FINAL_FIX.md) which contains the most up-to-date information about the socket binding implementation.
+
 ## Summary
 
 We have successfully implemented and fixed the core socket binding issues in the JSONdb server, but there are still some issues with the complete server startup process that need to be addressed.

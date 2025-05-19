@@ -1,5 +1,7 @@
 # Socket Binding Fix - Executive Summary
 
+> **DEPRECATED**: This document is superseded by [SOCKET_BINDING_FINAL_FIX.md](./SOCKET_BINDING_FINAL_FIX.md) which contains the most up-to-date information about the socket binding implementation.
+
 ## Problem
 
 The JSONdb server was experiencing issues with API endpoints returning 500 Internal Server Error responses. The root cause was identified as:

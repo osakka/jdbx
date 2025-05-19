@@ -1,5 +1,7 @@
 # Compiler Warning Fixes
 
+> **DEPRECATED**: This document is superseded by [/docs/compiler/COMPILER_WARNING_FIXES.md](/docs/compiler/COMPILER_WARNING_FIXES.md) which contains the most up-to-date information about compiler warning fixes.
+
 This document provides a comprehensive overview of the compiler warnings that were fixed in the JSONdb codebase and the strategies and best practices used to address them systematically.
 
 ## Why Fix Compiler Warnings?

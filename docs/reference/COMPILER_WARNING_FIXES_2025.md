@@ -1,5 +1,7 @@
 # Compiler Warning Fixes (2025 Update)
 
+> **DEPRECATED**: This document is superseded by [/docs/compiler/COMPILER_WARNING_FIXES.md](/docs/compiler/COMPILER_WARNING_FIXES.md) which contains the most up-to-date information about compiler warning fixes.
+
 This document describes the approach and fixes implemented to eliminate all compiler warnings from the JSONdb codebase in our 2025 maintenance update.
 
 ## Summary of Fixes

@@ -1,5 +1,7 @@
 # JSON Database Server Implementation Status
 
+> **DEPRECATED**: This document is superseded by [/docs/implementation/IMPLEMENTATION_COMPLETE.md](/docs/implementation/IMPLEMENTATION_COMPLETE.md) which contains the most up-to-date information about the implementation status.
+
 This document provides a comprehensive overview of the current state of the JSON database server implementation, including core features, integration points, and future development areas.
 
 ## Overview
