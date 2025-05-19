@@ -2,7 +2,7 @@
 
 A lightweight, multithreaded JSON database server with REST API support and JavaScript integration.
 
-## Current Project Status (v1.0.7-production-ready)
+## Current Project Status (v1.0.7-production-notready)
 
 The project has reached a stable state with the following components functioning:
 
@@ -26,7 +26,6 @@ The project has reached a stable state with the following components functioning
   - Document transformers for data processing
   - Custom JavaScript functions
   - JavaScript query capabilities
-- Build system using the Makefile
 
 ### Recently Fixed
 - Compiler warnings throughout the codebase for production readiness
@@ -58,12 +57,10 @@ The project has reached a stable state with the following components functioning
 - Additional security hardening measures
 
 ### Next Development Phase
+- WebSocket support for real-time updates
+- Schema validation enhancements
 - Metrics and monitoring improvements
 - Extended test coverage
-- Schema validation enhancements
-- WebSocket support for real-time updates
-- Containerization support
-- CI/CD pipeline enhancements
 
 ## Requirements
 
