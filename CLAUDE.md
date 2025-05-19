@@ -21,3 +21,8 @@
  18. Maintain zero-warning policy - always compile with -Wall -Wextra
  19. Use proper string handling to prevent buffer overflows
  20. Document all fixes thoroughly for future reference
+ 21. Never create minimal server tests, always work on the main code
+ 22. Always build from src using make, and run from build using jsondb_runtime.sh, no exceptions.
+ 23. Always follow our git hygiene guidelines.
+ 24. Only invoke the server using the runtime script in build, never directly except if explicitly asked.
+ 25. Never assume anything is broken on the host device or platform.  This is a VM that's tried and tested, and supports multiple project developement in parallel.

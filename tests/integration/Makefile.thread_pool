@@ -1,0 +1,53 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../../src/include
+LDFLAGS = -pthread
+
+SRC_DIR = ../../src
+BUILD_DIR = ../../build
+OBJ_DIR = $(BUILD_DIR)/obj
+
+# Test source file
+TEST_SRC = test_thread_pool.c
+
+# Thread pool source files
+THREAD_POOL_SRC = $(SRC_DIR)/components/core/thread_pool.c
+
+# Object files
+TEST_OBJ = $(OBJ_DIR)/test_thread_pool.o
+THREAD_POOL_OBJ = $(OBJ_DIR)/thread_pool.o
+
+# Target executable
+TARGET = test_thread_pool
+
+# Default target
+all: $(TARGET)
+
+# Create directories if they don't exist
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+# Compile the test program
+$(TEST_OBJ): $(TEST_SRC) | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile the thread pool
+$(THREAD_POOL_OBJ): $(THREAD_POOL_SRC) | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Link the test program
+$(TARGET): $(TEST_OBJ) $(THREAD_POOL_OBJ)
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+# Clean up
+clean:
+	rm -f $(TARGET) $(TEST_OBJ) $(THREAD_POOL_OBJ)
+
+# Run the test
+run: $(TARGET)
+	./$(TARGET)
+
+# Run with custom parameters (tasks, min_threads, max_threads)
+run_custom: $(TARGET)
+	./$(TARGET) $(TASKS) $(MIN_THREADS) $(MAX_THREADS)
+
+.PHONY: all clean run run_custom

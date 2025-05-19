@@ -266,19 +266,66 @@ delete_document() {
     fi
 }
 
+# Test Health API (direct via curl)
+test_health_api() {
+    print_section "Testing Health API"
+    
+    echo "Calling health API endpoint..."
+    
+    response=$(curl -s "$BASE_URL/api/health")
+    
+    print_response "$response"
+    
+    if echo "$response" | jq -e '.status == "ok"' > /dev/null; then
+        print_success "Health API is operational!"
+    else
+        print_error "Health API check failed!"
+    fi
+}
+
 # Main execution
 echo -e "${BLUE}JSON Database Server - cURL Examples${NC}"
 echo "This script demonstrates how to interact with the JSON database server."
 
-# Run the examples
-authenticate
-create_collection
-list_collections
-create_document
-get_document
-update_document
-query_documents
-delete_document
-query_documents  # Verify deletion
+# Check if user provided a specific command
+if [ $# -gt 0 ]; then
+    case "$1" in
+        "health")
+            test_health_api
+            ;;
+        "auth")
+            authenticate
+            ;;
+        "all")
+            # Run all examples
+            test_health_api
+            authenticate
+            create_collection
+            list_collections
+            create_document
+            get_document
+            update_document
+            query_documents
+            delete_document
+            query_documents  # Verify deletion
+            ;;
+        *)
+            echo "Unknown command: $1"
+            echo "Available commands: health, auth, all"
+            ;;
+    esac
+else
+    # Default - run all examples
+    test_health_api
+    authenticate
+    create_collection
+    list_collections
+    create_document
+    get_document
+    update_document
+    query_documents
+    delete_document
+    query_documents  # Verify deletion
+fi
 
 echo -e "\n${GREEN}Finished running examples!${NC}"

@@ -343,6 +343,8 @@ void db_close(database_t* db) {
     }
 
     pthread_mutex_destroy(&db->lock);
+    
+    LOG_DEBUG("Database synchronization primitives destroyed");
 
     free(db);
     LOG_INFO("Database closed successfully");

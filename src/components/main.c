@@ -28,6 +28,7 @@ typedef void js_engine_t;
 #include "utils/config_loader.h"
 #include "utils/config_defaults.h"  /* For centralized defaults */
 #include "utils/js_file_utils.h"
+#include "utils/daemonize.h"  /* For daemonize_process function */
 #include <stdlib.h> /* For atexit */
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,9 @@ typedef void js_engine_t;
 #include <dirent.h> /* For directory operations */
 #include <limits.h> /* For PATH_MAX */
 #include <getopt.h> /* For getopt_long */
+#include <sys/signalfd.h> /* For signalfd */
+#include <sys/select.h> /* For select */
+#include <sys/time.h> /* For struct timeval */
 
 // Global variables for cleanup handling
 // g_server_config is now declared in config_loader.h/c
@@ -340,7 +344,7 @@ int main(int argc, char** argv) {
     
     /* Command line options */
     int show_help = 0;
-    int run_daemon = 0;
+    int run_daemon = 1; /* Default to daemon mode */
     int run_foreground = 0;
     int terminate_server = 0;
     int show_version = 0;
@@ -473,10 +477,12 @@ int main(int argc, char** argv) {
     }
     
     /* Override configuration with command line arguments */
-    if (run_daemon) {
-        g_server_config->verbose_mode = 0;
-    } else if (verbose_mode) {
+    /* Default to daemon mode (verbose_mode=0) unless verbose (-V) is explicitly set */
+    g_server_config->verbose_mode = 0;
+    
+    if (verbose_mode) {
         g_server_config->verbose_mode = 1;
+        run_daemon = 0; /* Don't run in daemon mode if verbose is set */
     }
     
     if (log_level_str) {
@@ -813,85 +819,33 @@ int main(int argc, char** argv) {
         }
     }
 
-    /* Start in daemon mode if requested */
-    if (!g_server_config->verbose_mode) {
-        printf("Starting in daemon mode...\n");
+    /* Initialize database first */
+    if (db_file_path[0] != '\0') {
+        printf("Initializing database from '%s'...\n", db_file_path);
         
-        /* Fork the process */
-        pid_t pid = fork();
-        
-        if (pid < 0) {
-            fprintf(stderr, "Error: Failed to fork process\n");
+        /* Use db_init per database.h (line 112) */
+        g_database = db_init(db_file_path);
+        if (!g_database) {
+            printf("Failed to open database from '%s', creating new database\n", db_file_path);
+            /* Cannot create database from scratch directly, use db_init */
+            fprintf(stderr, "Error: Failed to initialize database\n");
             return 1;
-        }
-        
-        if (pid > 0) {
-            /* Parent process exits without running cleanup */
-            /* We must NOT call cleanup in the parent, so we unregister it */
-            cleanup_registered = 0;  /* Prevent cleanup from running in parent */
-            printf("Server started in background (PID: %d)\n", pid);
-            return 0;
-        }
-        
-        /* Child process continues */
-        
-        /* Create a new session */
-        if (setsid() < 0) {
-            fprintf(stderr, "Error: Failed to create new session\n");
-            return 1;
-        }
-        
-        /* Keep a record of the socket FD if it exists before closing FDs */
-        int socket_fd = -1;
-        if (g_server_config && g_server_config->socket_fd > 0) {
-            socket_fd = g_server_config->socket_fd;
-            printf("Preserving socket FD %d during daemon initialization\n", socket_fd);
-        }
-        
-        /* Close standard file descriptors, being careful not to close socket */
-        if (STDIN_FILENO != socket_fd) close(STDIN_FILENO);
-        if (STDOUT_FILENO != socket_fd) close(STDOUT_FILENO);
-        if (STDERR_FILENO != socket_fd) close(STDERR_FILENO);
-        
-        /* Redirect standard file descriptors to /dev/null */
-        int fd = open("/dev/null", O_RDWR);
-        if (fd < 0) {
-            return 1;  /* Cannot log error as stdout/stderr are closed */
-        }
-        
-        /* Make sure we don't accidentally overwrite the socket FD */
-        if (fd == socket_fd) {
-            int new_fd = dup(fd);
-            close(fd);
-            fd = new_fd;
-        }
-        
-        dup2(fd, STDIN_FILENO);
-        dup2(fd, STDOUT_FILENO);
-        dup2(fd, STDERR_FILENO);
-        
-        if (fd > STDERR_FILENO) {
-            close(fd);
-        }
-        
-        /* Write PID to file */
-        if (g_server_config->pid_file) {
-            /* Make sure the PID file path is stored in our global variable for cleanup */
-            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
-            pid_file_path[PATH_MAX - 1] = '\0';
-            
-            FILE* pid_fp = fopen(g_server_config->pid_file, "w");
-            if (pid_fp) {
-                fprintf(pid_fp, "%d\n", getpid());
-                fclose(pid_fp);
-                /* Cannot log here as logger may not be initialized yet */
-            }
-            /* Cannot report error here as stderr is closed */
         }
     } else {
-        /* PID file writing now happens after logger initialization */
+        printf("No database path specified, using in-memory database\n");
+        /* Use db_init with NULL path for in-memory */
+        g_database = db_init(NULL);
+        if (!g_database) {
+            fprintf(stderr, "Error: Failed to create in-memory database\n");
+            return 1;
+        }
     }
-    
+
+    /* Initialize document indices for faster lookups */
+    printf("Building document indices for faster lookups...\n");
+    db_rebuild_indices(g_database);
+    printf("Document indices built successfully\n");
+
     /* Initialize logger */
     if (g_server_config->verbose_mode) {
         /* In foreground mode, direct logs to stdout/stderr */
@@ -923,171 +877,7 @@ int main(int argc, char** argv) {
             LOG_INFO("Default file logger initialized: %s", DEFAULT_LOG_FILE);
         }
     }
-    
-    /* Now that logger is initialized, write PID file if needed (in foreground mode) */
-    if (g_server_config->verbose_mode && g_server_config->pid_file) {
-        /* Make sure pid_file_path is set */
-        if (pid_file_path[0] == '\0') {
-            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
-            pid_file_path[PATH_MAX - 1] = '\0';
-            LOG_DEBUG("Set pid_file_path to '%s'", pid_file_path);
-        }
-        
-        FILE* pid_fp = fopen(g_server_config->pid_file, "w");
-        if (pid_fp) {
-            fprintf(pid_fp, "%d\n", getpid());
-            fclose(pid_fp);
-            LOG_INFO("PID file written: %s (PID: %d)", g_server_config->pid_file, getpid());
-        } else {
-            LOG_ERROR("Failed to write PID file '%s': %s", 
-                     g_server_config->pid_file, strerror(errno));
-        }
-    }
-    
-    /* Log server startup */
-    if (g_logger) {
-        LOG_INFO("Starting JSON Database Server");
-        LOG_INFO("Binary directory: %s", config_get_binary_dir());
-        LOG_INFO("PID: %d", getpid());
-    }
 
-    /* Initialize database first */
-    if (db_file_path[0] != '\0') {
-        if (g_logger) {
-            LOG_INFO("Initializing database from '%s'", db_file_path);
-        }
-        
-        /* Use db_init per database.h (line 112) */
-        g_database = db_init(db_file_path);
-        if (!g_database) {
-            if (g_logger) {
-                LOG_WARNING("Failed to open database from '%s', creating new database", db_file_path);
-            }
-            /* Cannot create database from scratch directly, use db_init */
-            fprintf(stderr, "Error: Failed to initialize database\n");
-            return 1;
-        }
-    } else {
-        if (g_logger) {
-            LOG_WARNING("No database path specified, using in-memory database");
-        }
-        /* Use db_init with NULL path for in-memory */
-        g_database = db_init(NULL);
-        if (!g_database) {
-            if (g_logger) {
-                LOG_ERROR("Failed to create in-memory database");
-            }
-            fprintf(stderr, "Error: Failed to create in-memory database\n");
-            return 1;
-        }
-    }
-    
-    /* Initialize document indices for faster lookups */
-    if (g_logger) {
-        LOG_INFO("Building document indices for faster lookups");
-    }
-    db_rebuild_indices(g_database);
-    if (g_logger) {
-        LOG_INFO("Document indices built successfully");
-    }
-
-    /* 
-     * SERVER INITIALIZATION - Moved after database initialization but before RBAC and API
-     * This ensures the database is ready before network services start
-     */
-    printf("Initializing server...\n");
-    if (g_logger) {
-        LOG_INFO("Initializing server with the following configuration:");
-        LOG_INFO("  - Host: %s", g_server_config->host ? g_server_config->host : "0.0.0.0");
-        LOG_INFO("  - Port: %d", g_server_config->port);
-        LOG_INFO("  - Max connections: %d", g_server_config->max_connections);
-        LOG_INFO("  - Database path: %s", g_server_config->db_path ? g_server_config->db_path : "in-memory");
-        LOG_INFO("  - Web root: %s", g_server_config->web_root ? g_server_config->web_root : DEFAULT_WEB_ROOT);
-        LOG_INFO("  - CORS enabled: %s", g_server_config->cors.enabled ? "yes" : "no");
-        LOG_INFO("  - JS enabled: %s", g_server_config->js_enabled ? "yes" : "no");
-        LOG_INFO("  - PID file: %s", g_server_config->pid_file ? g_server_config->pid_file : "none");
-    }
-    
-    /* Create the socket but DON'T bind yet - just initialization */
-    server_status_t status = server_init(g_server_config);
-    if (status != SERVER_OK) {
-        if (g_logger) {
-            LOG_ERROR("Failed to initialize server (status: %d)", status);
-            LOG_ERROR("Socket descriptor: %d", g_server_config->socket_fd);
-        }
-        fprintf(stderr, "Error: Failed to initialize server\n");
-        return 1;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Server initialized successfully (socket FD: %d)", g_server_config->socket_fd);
-    }
-    printf("Server initialized successfully\n");
-    
-    /* Save the socket descriptor for later - we'll need it after forking */
-    int main_socket_fd = g_server_config->socket_fd;
-    printf("Socket descriptor stored: %d\n", main_socket_fd);
-    
-    /* Check socket state before server_start */
-    if (g_server_config->socket_fd > 0) {
-        int socket_error = 0;
-        socklen_t error_len = sizeof(socket_error);
-        
-        if (getsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-            printf("Socket validation failed: %s\n", strerror(errno));
-            if (g_logger) {
-                LOG_WARNING("Socket validation failed before server_start: %s", strerror(errno));
-            }
-        } else if (socket_error != 0) {
-            printf("Socket has error state: %s\n", strerror(socket_error));
-            if (g_logger) {
-                LOG_WARNING("Socket has error state before server_start: %s", strerror(socket_error));
-            }
-        } else {
-            printf("Socket is valid before server_start\n");
-            if (g_logger) {
-                LOG_DEBUG("Socket is valid before server_start");
-            }
-        }
-    } else {
-        printf("Invalid socket file descriptor (%d) before server_start\n", g_server_config->socket_fd);
-        if (g_logger) {
-            LOG_WARNING("Invalid socket file descriptor (%d) before server_start", g_server_config->socket_fd);
-        }
-    }
-    
-    /* Bind and start server listening immediately after initialization */
-    printf("Starting server and binding to port %d...\n", g_server_config->port);
-    if (g_logger) {
-        LOG_INFO("Starting server and binding to port %d (socket FD: %d)",
-                 g_server_config->port, g_server_config->socket_fd);
-    }
-    
-    status = server_start(g_server_config);
-    if (status != SERVER_OK) {
-        if (g_logger) {
-            LOG_ERROR("Failed to start server (status: %d)", status);
-            
-            /* Provide more detailed error message based on status */
-            if (status == SERVER_BIND_ERROR) {
-                LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", g_server_config->port);
-            } else if (status == SERVER_LISTEN_ERROR) {
-                LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
-            } else if (status == SERVER_SOCKET_ERROR) {
-                LOG_ERROR("Server failed to create socket. Check system resources.");
-            } else if (status == SERVER_THREAD_ERROR) {
-                LOG_ERROR("Server failed to create accept thread. Check system resources.");
-            }
-        }
-        fprintf(stderr, "Error: Failed to start server\n");
-        return 1;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Server started successfully and is now listening on port %d", g_server_config->port);
-    }
-    printf("Server started successfully and is now listening on port %d\n", g_server_config->port);
-    
     /* Initialize RBAC using enhanced system */
     if (g_logger) {
         LOG_INFO("Initializing RBAC using enhanced system");
@@ -1139,10 +929,236 @@ int main(int argc, char** argv) {
         }
     }
     
-    if (g_logger) {
-        LOG_INFO("API context initialized with RBAC routes successfully");
-    }
+    /* Initialize health API */
+    printf("Initializing health monitoring API...\n");
+    health_api_init();
 
+    /* Register health API endpoints if API context is available */
+    if (g_api_ctx) {
+        register_health_api_endpoints(g_api_ctx);
+        if (g_logger) {
+            LOG_INFO("Health API endpoints registered");
+        }
+        printf("Health API endpoints registered\n");
+    } else {
+        if (g_logger) {
+            LOG_WARNING("API context not available, health endpoints not registered");
+        }
+        printf("Warning: API context not available, health endpoints not registered\n");
+    }
+    
+    if (g_logger) {
+        LOG_INFO("API context initialized with all routes successfully");
+    }
+    
+    /* DAEMON MODE: Start in daemon mode if requested - RIGHT AFTER API CONTEXT IS READY */
+    /* IMPORTANT: We must daemonize BEFORE creating any sockets to preserve file descriptors properly */
+    if (!g_server_config->verbose_mode) {
+        printf("Starting in daemon mode BEFORE socket operations...\n");
+        if (g_logger) {
+            LOG_INFO("Starting in daemon mode BEFORE socket operations");
+        }
+        
+        /* Use daemonize_process from utils/daemonize.h */
+        int daemonize_result = daemonize_process(g_server_config->pid_file);
+        
+        if (daemonize_result < 0) {
+            fprintf(stderr, "Error: Failed to daemonize process\n");
+            if (g_logger) {
+                LOG_ERROR("Failed to daemonize process");
+            }
+            return 1;
+        }
+        
+        if (daemonize_result > 0) {
+            /* Parent process exits without running cleanup */
+            /* We must NOT call cleanup in the parent, so we unregister it */
+            cleanup_registered = 0;  /* Prevent cleanup from running in parent */
+            printf("Server started in background mode\n");
+            return 0;
+        }
+        
+        /* Child process continues */
+        
+        /* Make sure the PID file path is stored in our global variable for cleanup */
+        if (g_server_config->pid_file) {
+            strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
+            pid_file_path[PATH_MAX - 1] = '\0';
+            if (g_logger) {
+                LOG_INFO("PID file path set to %s", pid_file_path);
+            }
+        }
+        
+        if (g_logger) {
+            LOG_INFO("Daemon process initialized successfully (PID: %d)", getpid());
+        }
+    }
+    
+    /* Initialize server with the API context - AFTER daemonization */
+    printf("Initializing server with API context (PID: %d)...\n", getpid());
+    if (g_logger) {
+        LOG_INFO("Initializing server with API context at %p (PID: %d)", (void*)g_api_ctx, getpid());
+    }
+    
+    /* FIXED: Create socket AFTER daemonization in current process to ensure descriptor is valid */
+    /* Create the socket but DON'T bind yet - just initialization */
+    printf("Creating socket in process with PID: %d\n", getpid());
+    
+    server_status_t status = server_init(g_server_config, g_api_ctx);
+    if (status != SERVER_OK) {
+        if (g_logger) {
+            LOG_ERROR("Failed to initialize server with API context (status: %d)", status);
+            LOG_ERROR("Socket descriptor: %d", g_server_config->socket_fd);
+        }
+        fprintf(stderr, "Error: Failed to initialize server\n");
+        return 1;
+    }
+    
+    if (g_logger) {
+        LOG_INFO("Server initialized successfully with API context (socket FD: %d)", g_server_config->socket_fd);
+    }
+    printf("Server initialized successfully\n");
+    
+    /* Save the socket descriptor for later - we'll need it after forking */
+    int main_socket_fd = g_server_config->socket_fd;
+    printf("Socket descriptor stored: %d\n", main_socket_fd);
+    
+    /* Start the server immediately after initialization with API context */
+    printf("Starting server and binding to port %d...\n", g_server_config->port);
+    if (g_logger) {
+        LOG_INFO("Starting server and binding to port %d (socket FD: %d)",
+                 g_server_config->port, g_server_config->socket_fd);
+    }
+    printf("Socket file descriptor before server_start: %d\n", g_server_config->socket_fd);
+    
+    /* Verify socket file descriptor is valid */
+    if (g_server_config->socket_fd <= 0) {
+        if (g_logger) {
+            LOG_ERROR("Invalid socket file descriptor before server_start: %d", g_server_config->socket_fd);
+        }
+        fprintf(stderr, "Error: Invalid socket file descriptor: %d\n", g_server_config->socket_fd);
+        
+        /* Try to recreate socket */
+        if (g_logger) {
+            LOG_INFO("Attempting to recreate socket");
+        }
+        printf("Attempting to recreate socket...\n");
+        
+        /* Recreate socket with correct configuration */
+        g_server_config->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (g_server_config->socket_fd < 0) {
+            if (g_logger) {
+                LOG_ERROR("Failed to recreate socket: %s (errno=%d)", strerror(errno), errno);
+            }
+            fprintf(stderr, "Error: Failed to recreate socket: %s (errno=%d)\n", strerror(errno), errno);
+            return 1;
+        }
+        
+        /* Set socket options */
+        int opt = 1;
+        if (setsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            if (g_logger) {
+                LOG_ERROR("Failed to set SO_REUSEADDR on new socket: %s (errno=%d)", strerror(errno), errno);
+            }
+            fprintf(stderr, "Error: Failed to set SO_REUSEADDR: %s (errno=%d)\n", strerror(errno), errno);
+            close(g_server_config->socket_fd);
+            g_server_config->socket_fd = 0;
+            return 1;
+        }
+        
+        /* Test bind to validate socket (non-blocking) */
+        struct sockaddr_in test_addr;
+        memset(&test_addr, 0, sizeof(test_addr));
+        test_addr.sin_family = AF_INET;
+        test_addr.sin_addr.s_addr = INADDR_ANY;
+        test_addr.sin_port = htons(0);  /* Any available port */
+        
+        if (bind(g_server_config->socket_fd, (struct sockaddr*)&test_addr, sizeof(test_addr)) < 0) {
+            if (g_logger) {
+                LOG_ERROR("Socket validation failed: %s (errno=%d)", strerror(errno), errno);
+            }
+            fprintf(stderr, "Error: Socket validation failed: %s (errno=%d)\n", strerror(errno), errno);
+            close(g_server_config->socket_fd);
+            g_server_config->socket_fd = 0;
+            return 1;
+        }
+        
+        /* Unbind for real server_start later */
+        close(g_server_config->socket_fd);
+        g_server_config->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (g_server_config->socket_fd < 0) {
+            if (g_logger) {
+                LOG_ERROR("Failed to re-create socket after validation: %s (errno=%d)", strerror(errno), errno);
+            }
+            fprintf(stderr, "Error: Failed to re-create socket after validation: %s (errno=%d)\n", strerror(errno), errno);
+            return 1;
+        }
+        
+        /* Set socket options again */
+        if (setsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            if (g_logger) {
+                LOG_ERROR("Failed to set SO_REUSEADDR on final socket: %s (errno=%d)", strerror(errno), errno);
+            }
+            fprintf(stderr, "Error: Failed to set SO_REUSEADDR on final socket: %s (errno=%d)\n", strerror(errno), errno);
+            close(g_server_config->socket_fd);
+            g_server_config->socket_fd = 0;
+            return 1;
+        }
+        
+        if (g_logger) {
+            LOG_INFO("Socket recreated successfully with FD: %d", g_server_config->socket_fd);
+        }
+        printf("Socket recreated successfully with FD: %d\n", g_server_config->socket_fd);
+    }
+    
+    printf("About to call server_start with socket_fd=%d (PID: %d)\n", g_server_config->socket_fd, getpid());
+    
+    /* Extra debug - print netstat before start */
+    printf("Network ports before binding:\n");
+    system("netstat -tuln | grep -E ':(5000|6000)' || echo 'No test ports in use'");
+    printf("\n");
+    
+    server_status_t start_status = server_start(g_server_config);
+    printf("server_start returned status: %d (0=success, others=error)\n", start_status);
+    
+    /* Check if server is actually listening */
+    printf("Network ports after binding attempt:\n");
+    system("netstat -tuln | grep -E ':(5000|6000)' || echo 'No test ports in use'");
+    printf("\n");
+    
+    if (start_status != SERVER_OK) {
+        if (g_logger) {
+            LOG_ERROR("Failed to start server (status: %d)", start_status);
+            
+            /* Provide more detailed error message based on status */
+            if (start_status == SERVER_BIND_ERROR) {
+                LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", g_server_config->port);
+                fprintf(stderr, "Bind error: Failed to bind to port %d. Check if port is already in use.\n", g_server_config->port);
+            } else if (start_status == SERVER_LISTEN_ERROR) {
+                LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
+                fprintf(stderr, "Listen error: Failed to listen on port %d after binding.\n", g_server_config->port);
+            } else if (start_status == SERVER_SOCKET_ERROR) {
+                LOG_ERROR("Server failed to create socket. Check system resources.");
+                fprintf(stderr, "Socket error: Failed to create socket. Check system resources.\n");
+            } else if (start_status == SERVER_THREAD_ERROR) {
+                LOG_ERROR("Server failed to create accept thread. Check system resources.");
+                fprintf(stderr, "Thread error: Failed to create accept thread. Check system resources.\n");
+            } else {
+                fprintf(stderr, "Unknown error (status: %d) starting server.\n", start_status);
+            }
+        } else {
+            fprintf(stderr, "Error: Failed to start server (status: %d)\n", start_status);
+        }
+        
+        /* Try to run netstat to see if anything is on the port */
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "netstat -tuln | grep ':%d' || echo 'Port %d not found in netstat'", 
+                 g_server_config->port, g_server_config->port);
+        system(cmd);
+        
+        return 1;
+    }
+    
     /* Initialize metrics registry */
     /* Use metrics_registry_create per metrics.h (line 74) */
     g_metrics_registry = metrics_registry_create();
@@ -1151,6 +1167,36 @@ int main(int argc, char** argv) {
             LOG_WARNING("Failed to initialize metrics registry");
         }
     }
+    
+    /* REMOVED: Daemonize code moved earlier in startup sequence */
+    if (g_server_config->verbose_mode) {
+        /* Now that logger is initialized, write PID file if needed (in foreground mode) */
+        if (g_server_config->pid_file) {
+            /* Make sure pid_file_path is set */
+            if (pid_file_path[0] == '\0') {
+                strncpy(pid_file_path, g_server_config->pid_file, PATH_MAX - 1);
+                pid_file_path[PATH_MAX - 1] = '\0';
+                LOG_DEBUG("Set pid_file_path to '%s'", pid_file_path);
+            }
+            
+            FILE* pid_fp = fopen(g_server_config->pid_file, "w");
+            if (pid_fp) {
+                fprintf(pid_fp, "%d\n", getpid());
+                fclose(pid_fp);
+                LOG_INFO("PID file written: %s (PID: %d)", g_server_config->pid_file, getpid());
+            } else {
+                LOG_ERROR("Failed to write PID file '%s': %s", 
+                         g_server_config->pid_file, strerror(errno));
+            }
+        }
+    }
+    
+    /* Check if the server socket is actually bound correctly */
+    printf("Final server socket check:\n");
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "netstat -tuln | grep -E ':%d' || echo 'Server port %d not found - this means socket binding failed'", 
+             g_server_config->port, g_server_config->port);
+    system(cmd);
     
     /* If in foreground mode, print more verbose output */
     if (g_server_config->verbose_mode) {
@@ -1175,61 +1221,52 @@ int main(int argc, char** argv) {
             }
             printf("JavaScript support is disabled in configuration\n");
         }
-
-        /* Initialize health API */
-        printf("Initializing health monitoring API...\n");
-        health_api_init();
-
-        /* Register health API endpoints if API context is available */
-        if (g_api_ctx) {
-            register_health_api_endpoints(g_api_ctx);
-            if (g_logger) {
-                LOG_INFO("Health API endpoints registered");
-            }
-            printf("Health API endpoints registered\n");
+    }
+    
+    /* Log server startup */
+    if (g_logger) {
+        LOG_INFO("JSON Database Server started");
+        LOG_INFO("Binary directory: %s", config_get_binary_dir());
+        LOG_INFO("PID: %d", getpid());
+        LOG_INFO("Server running on %s:%d", 
+                g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
+        LOG_INFO("Server is accepting connections on socket FD: %d", g_server_config->socket_fd);
+    }
+    
+    /* Use our reworked server initialization with thread pool */
+    if (g_logger) {
+        LOG_INFO("Using improved server initialization with thread pool");
+    } else {
+        printf("Using improved server initialization with thread pool\n");
+    }
+    
+    /* Ignore SIGPIPE to prevent crashes on closed sockets */
+    struct sigaction sa_pipe;
+    memset(&sa_pipe, 0, sizeof(sa_pipe));
+    sa_pipe.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &sa_pipe, NULL);
+    
+    /* Set socket options before server initialization */
+    g_server_config->max_connections = 50;  /* Increased from default */
+    
+    printf("Starting server with dynamic thread pool implementation...\n");
+    printf("Thread pool size: min=%d, max=%d\n", g_server_config->max_connections / 4, g_server_config->max_connections);
+    
+    /* Start the server with our thread pool implementation - this will run until shutdown is requested */
+    server_status_t server_status = server_initialize_and_run(g_server_config, g_api_ctx);
+    
+    /* Handle server status */
+    if (server_status != SERVER_OK) {
+        if (g_logger) {
+            LOG_ERROR("Server failed to start or run with status: %d", server_status);
         } else {
-            if (g_logger) {
-                LOG_WARNING("API context not available, health endpoints not registered");
-            }
-            printf("Warning: API context not available, health endpoints not registered\n");
+            fprintf(stderr, "Server failed to start or run with status: %d\n", server_status);
         }
-    }
-    
-    /* 
-     * Socket binding and initialization has already been performed earlier for both modes
-     * No need to perform separate binding logic here anymore
-     */
-
-    if (g_server_config->verbose_mode) {
-        /* Keep the server running in foreground mode */
-        printf("Server running on %s:%d. Press Ctrl+C to stop.\n", 
-               g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
     } else {
-        /* In daemon mode, log the server status since we've already initialized the server earlier */
         if (g_logger) {
-            LOG_INFO("Server running in daemon mode on %s:%d", 
-                    g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
-            LOG_INFO("Server is accepting connections on socket FD: %d", g_server_config->socket_fd);
-        }
-    }
-    
-    /* Wait for signal - different handling in foreground vs daemon */
-    if (g_server_config->verbose_mode) {
-        /* In foreground mode, we can simply pause */
-        if (g_logger) {
-            LOG_INFO("Server is now running in foreground mode, waiting for signals");
-        }
-        printf("Server is running. Press Ctrl+C to terminate.\n");
-        pause();
-    } else {
-        /* In daemon mode, we sleep for a very long time instead of using pause() */
-        if (g_logger) {
-            LOG_INFO("Server is running in daemon mode, starting main loop");
-        }
-        
-        /* Signal handling will wake up from this sleep if needed */
-        while (1) {
-            sleep(3600); /* Sleep for an hour at a time */
+            LOG_INFO("Server shutdown completed successfully");
+        } else {
+            printf("Server shutdown completed successfully\n");
         }
     }
     

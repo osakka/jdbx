@@ -1,0 +1,33 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../../src/include
+LDFLAGS = -pthread
+
+# Test source file
+TEST_SRC = thread_pool_test.c
+
+# Thread pool source files
+THREAD_POOL_SRC = ../../src/components/core/thread_pool.c
+
+# Target executable
+TARGET = thread_pool_test
+
+# Default target
+all: $(TARGET)
+
+# Compile the test program
+$(TARGET): $(TEST_SRC) $(THREAD_POOL_SRC)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+# Clean up
+clean:
+	rm -f $(TARGET)
+
+# Run the test
+run: $(TARGET)
+	./$(TARGET)
+
+# Run with custom parameters (tasks, min_threads, max_threads)
+run_custom: $(TARGET)
+	./$(TARGET) $(TASKS) $(MIN_THREADS) $(MAX_THREADS)
+
+.PHONY: all clean run run_custom

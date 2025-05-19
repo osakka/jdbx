@@ -11,19 +11,8 @@
 #include <string.h>
 
 
-/* Forward declaration for API routes */
-typedef struct api_route api_route_t;
-
-/* API context */
-typedef struct api_context {
-    database_t* db;
-    rbac_system_t* rbac;
-    const char* jwt_secret;
-    transaction_manager_t* transaction_manager;
-    api_route_t* routes;     /* Array of API routes */
-    int num_routes;          /* Number of routes */
-    int max_routes;          /* Maximum number of routes */
-} api_context_t;
+/* API context forward declaration */
+typedef struct api_context api_context_t;
 
 /* API endpoint handler */
 typedef http_response_t* (*api_handler_t)(api_context_t* ctx, http_request_t* request);
@@ -36,12 +25,24 @@ typedef struct api_route {
     int requires_auth;
 } api_route_t;
 
+/* API context */
+typedef struct api_context {
+    database_t* db;
+    rbac_system_t* rbac;
+    const char* jwt_secret;
+    transaction_manager_t* transaction_manager;
+    api_route_t* routes;     /* Dynamically allocated array of API routes */
+    int num_routes;          /* Number of routes */
+    int max_routes;          /* Maximum number of routes */
+} api_context_t;
+
 /* API function prototypes */
 api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const char* jwt_secret);
 void api_free_context(api_context_t* ctx);
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request);
 int api_authenticate_request(api_context_t* ctx, http_request_t* request);
 char* api_extract_token(http_request_t* request);
+int init_shared_api_context(void); /* Initialize shared memory for API context */
 
 /* API handler prototypes */
 

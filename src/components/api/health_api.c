@@ -556,15 +556,37 @@ http_response_t* health_api_handle_metrics_export(api_context_t *ctx, http_reque
 #endif
 }
 
-/* Register health API endpoints - would need to be implemented properly */
+/* Register health API endpoints */
 void register_health_api_endpoints(api_context_t *ctx) {
     /* Initialize health API */
     health_api_init();
     
-    /* This is just a placeholder as the actual registration function is not implemented */
-    (void)ctx;
+    if (!ctx) {
+        if (g_logger) {
+            LOG_ERROR("Failed to register health API endpoints: NULL context");
+        }
+        return;
+    }
+    
+    /* Check if we have enough space for our routes */
+    if (ctx->num_routes + 4 > ctx->max_routes) {
+        if (g_logger) {
+            LOG_ERROR("Failed to register health API endpoints: Not enough space in routes array");
+            LOG_ERROR("Current routes: %d, Max routes: %d, Need to add: 4", 
+                     ctx->num_routes, ctx->max_routes);
+        }
+        return;
+    }
+    
+    /* Register health check endpoint */
+    ctx->routes[ctx->num_routes++] = (api_route_t){"/api/health", HTTP_GET, api_handle_health_check, 0};
+    
+    /* Register metrics endpoints */
+    ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics", HTTP_GET, health_api_handle_metrics, 1};
+    ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics/available", HTTP_GET, health_api_handle_metrics_available, 1};
+    ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics/export", HTTP_POST, health_api_handle_metrics_export, 1};
     
     if (g_logger) {
-        LOG_INFO("Health API endpoints registered");
+        LOG_INFO("Health API endpoints registered - added 4 routes");
     }
 }

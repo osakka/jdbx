@@ -15,6 +15,7 @@
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/config_defaults.h"
+#include "core/thread_pool.h"
 
 /* Server configuration */
 #define DEFAULT_PORT 5000
@@ -111,6 +112,7 @@ typedef struct {
     /* References */
     struct api_context* api_ctx;  /* API context */
     struct metrics_registry* metrics; /* Metrics registry */
+    thread_pool_t* thread_pool;   /* Thread pool for handling client connections */
 
     /* Status */
     int error;                   /* Error code */
@@ -151,14 +153,18 @@ typedef struct {
 typedef struct {
     int client_fd;
     struct sockaddr_in address;
-    pthread_t thread;
+    struct api_context *api_ctx;  /* Reference to the API context */
 } client_conn_t;
 
 /* Function prototypes */
-server_status_t server_init(server_config_t* config);
+server_status_t server_init(server_config_t* config, struct api_context* api_ctx);
 server_status_t server_start(server_config_t* config);
 void* server_accept_loop(void* config_ptr);
 void server_stop(server_config_t* config);
+
+/* Reworked server initialization with thread pool (new implementation) */
+server_status_t server_initialize_and_run(server_config_t* config, struct api_context* api_ctx);
+void server_request_shutdown(void);
 void* handle_client(void* client_data);
 http_request_t* parse_http_request(const char* request_str);
 void free_http_request(http_request_t* request);

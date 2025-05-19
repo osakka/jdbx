@@ -18,7 +18,7 @@ LDFLAGS = -lpthread -lm
 QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
 
 # Source files (excluding tests)
-CORE_SRCS = $(wildcard $(SRC_DIR)/components/core/*.c)
+CORE_SRCS = $(filter-out $(SRC_DIR)/components/core/server_init_reworked.c,$(wildcard $(SRC_DIR)/components/core/*.c))
 API_SRCS = $(wildcard $(SRC_DIR)/components/api/*.c)
 DB_SRCS = $(wildcard $(SRC_DIR)/components/database/*.c)
 QUERY_SRCS = $(wildcard $(SRC_DIR)/components/query/*.c)
@@ -28,6 +28,12 @@ UTILS_SRCS = $(wildcard $(SRC_DIR)/components/utils/*.c)
 TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
 JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC_DIR)/components/js/*.c))
 MAIN_SRC = $(SRC_DIR)/components/main.c
+
+# Reworked server implementation
+REWORKED_SERVER_SRC = $(SRC_DIR)/components/core/server_init_reworked.c
+REWORKED_SERVER_OBJ = $(OBJ_DIR)/components/core/server_init_reworked.o
+THREAD_POOL_SRC = $(SRC_DIR)/components/core/thread_pool.c
+THREAD_POOL_OBJ = $(OBJ_DIR)/components/core/thread_pool.o
 
 # Object files
 CORE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
@@ -81,10 +87,11 @@ FINAL_DB_OBJS = $(CUSTOM_DB_OBJS) $(OBJ_DIR)/components/database/database_with_o
 
 # Define all optimized objects
 OPTIMIZED_OBJS = $(CORE_OBJS) $(API_OBJS) $(FINAL_DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(REWORKED_SERVER_OBJ) $(THREAD_POOL_OBJ)
 
 # List of objects for Makefile dependencies
-ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS))
+ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS)) \
+           $(REWORKED_SERVER_OBJ) $(THREAD_POOL_OBJ)
 
 # Build static library
 libjsondb: $(ALL_OBJS)

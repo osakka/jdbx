@@ -181,59 +181,76 @@ static api_route_t routes[] = {
 };
 
 /* Create API context */
+
 api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const char* jwt_secret) {
     if (!db || !rbac || !jwt_secret) {
+        if (g_logger) {
+            LOG_ERROR("API context creation failed: Missing required components");
+        }
         return NULL;
     }
-    
+
     api_context_t* ctx = (api_context_t*)malloc(sizeof(api_context_t));
     if (!ctx) {
+        if (g_logger) {
+            LOG_ERROR("API context creation failed: Memory allocation failed");
+        }
         return NULL;
     }
-    
+
+    /* Initialize basic fields */
     ctx->db = db;
     ctx->rbac = rbac;
-    /* Make a copy of the JWT secret to ensure it remains consistent */
     ctx->jwt_secret = strdup(jwt_secret);
     if (!ctx->jwt_secret) {
         free(ctx);
+        if (g_logger) {
+            LOG_ERROR("API context creation failed: JWT secret copy failed");
+        }
         return NULL;
     }
-    
-    /* Log the JWT secret being used (for debugging) */
-    if (g_logger) {
-        LOG_DEBUG("API context created with JWT secret: '%s'", ctx->jwt_secret);
-    }
-    
+
     /* Initialize transaction manager with capacity for 100 concurrent transactions */
     ctx->transaction_manager = transaction_manager_create(db, 100);
     if (!ctx->transaction_manager) {
         free((void*)ctx->jwt_secret);
         free(ctx);
+        if (g_logger) {
+            LOG_ERROR("API context creation failed: Transaction manager creation failed");
+        }
         return NULL;
     }
-    
-    /* Count the number of routes */
+
+    /* Count the number of static routes */
     int num_routes = 0;
     while (routes[num_routes].path != NULL) {
         num_routes++;
     }
-    
-    /* Initialize routes array with capacity for 50 additional routes */
+
+    /* Allocate memory for routes (50 extra slots for dynamic registration) */
     ctx->max_routes = num_routes + 50;
     ctx->routes = (api_route_t*)malloc(ctx->max_routes * sizeof(api_route_t));
     if (!ctx->routes) {
         transaction_manager_free(ctx->transaction_manager);
         free((void*)ctx->jwt_secret);
         free(ctx);
+        if (g_logger) {
+            LOG_ERROR("API context creation failed: Routes array allocation failed");
+        }
         return NULL;
     }
-    
+
     /* Copy the routes */
     for (int i = 0; i < num_routes; i++) {
         ctx->routes[i] = routes[i];
     }
     ctx->num_routes = num_routes;
+
+    /* No need to initialize metrics registry, not in this struct anymore */
+    
+    if (g_logger) {
+        LOG_INFO("API context created with %d routes", ctx->num_routes);
+    }
     
     return ctx;
 }
@@ -374,11 +391,26 @@ static int route_matches(const char* route, const char* path) {
 
 /* Dispatch request to appropriate handler */
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) {
+    
     if (!ctx || !request) {
-        if (g_logger) LOG_ERROR("API dispatch failed: Invalid context or request");
+        if (g_logger) {
+            LOG_ERROR("API dispatch failed: Invalid context or request");
+            LOG_ERROR("Context=%p, Request=%p", (void*)ctx, (void*)request);
+        }
+        printf("API dispatch failed: Invalid context or request. Context=%p, Request=%p\n", (void*)ctx, (void*)request);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Internal server error\"}", "application/json");
     }
+    
+    if (!request->path) {
+        if (g_logger) LOG_ERROR("API dispatch failed: Request has NULL path");
+        printf("API dispatch failed: Request has NULL path\n");
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Internal server error\"}", "application/json");
+    }
+    
+    printf("API dispatch: Processing request for path '%s'\n", request->path);
+    printf("API context: Routes=%p, num_routes=%d\n", (void*)ctx->routes, ctx->num_routes);
     
     if (g_logger) LOG_DEBUG("Dispatching request: %s %s", 
                            request->method == HTTP_GET ? "GET" : 

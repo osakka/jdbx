@@ -22,6 +22,8 @@ static int db_collections_initialized = 0;
  * @return Initialized RBAC system
  */
 rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
+    /* Path parameter is for legacy compatibility and is unused */
+    (void)path; /* Mark as unused to prevent compiler warning */
     rbac_system_t* rbac = NULL;
     int db_load_success = 0;
     
@@ -156,6 +158,8 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
  * @return 1 on success, 0 on failure
  */
 int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path) {
+    /* Path parameter is for legacy compatibility and is unused */
+    (void)path; /* Mark as unused to prevent compiler warning */
     /* Static flag to prevent recursive save operations */
     static int save_in_progress = 0;
     

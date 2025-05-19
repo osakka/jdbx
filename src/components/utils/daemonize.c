@@ -25,29 +25,65 @@ extern logger_config_t* g_logger;
  * @return 0 on success, -1 on failure, 1 if parent process (should exit)
  */
 int daemonize_process(const char* pid_file) {
-    /* Fork the process */
+    /* First fork - separate from current session */
     pid_t pid = fork();
     
     if (pid < 0) {
-        fprintf(stderr, "Failed to fork process: %s\n", strerror(errno));
+        fprintf(stderr, "Failed to fork process (first fork): %s\n", strerror(errno));
         return -1;
     }
     
     if (pid > 0) {
-        /* Parent process - should exit */
-        printf("Server started in background (PID: %d)\n", pid);
+        /* Parent process from first fork - should exit */
+        printf("Server initializing daemon process (PID: %d)\n", pid);
         return 1;
     }
     
-    /* Child process continues */
+    /* Child process continues - now we're in the intermediate process */
     
-    /* Create a new session */
+    /* Create a new session with no controlling terminal */
     if (setsid() < 0) {
         fprintf(stderr, "Failed to create new session: %s\n", strerror(errno));
         return -1;
     }
     
-    /* Close standard file descriptors */
+    /* IMPORTANT: Record the current PID for logging */
+    pid_t daemon_pid = getpid();
+    printf("DAEMONIZE DEBUG: Intermediate process PID is %d (after setsid)\n", daemon_pid);
+    fflush(stdout);
+    
+    /* Second fork - fully detach from terminal */
+    pid = fork();
+    
+    if (pid < 0) {
+        fprintf(stderr, "Failed to fork process (second fork): %s\n", strerror(errno));
+        return -1;
+    }
+    
+    if (pid > 0) {
+        /* Intermediate process exits */
+        _exit(0); /* Use _exit to avoid flushing buffers or calling atexit handlers */
+    }
+    
+    /* Final daemon process continues */
+    daemon_pid = getpid();
+    printf("DAEMONIZE DEBUG: Final daemon process PID is %d\n", daemon_pid);
+    fflush(stdout);
+    
+    /* Reset file mode creation mask to ensure proper permissions */
+    umask(0);
+    
+    /* Change working directory to root to avoid keeping directories mounted */
+    if (chdir("/") < 0) {
+        fprintf(stderr, "Failed to change working directory: %s\n", strerror(errno));
+        /* Not fatal, continue execution */
+    }
+    
+    /* Save original stdout/stderr for debug messages */
+    int original_stdout = dup(STDOUT_FILENO);
+    int original_stderr = dup(STDERR_FILENO);
+    
+    /* Close all standard file descriptors */
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
@@ -55,15 +91,48 @@ int daemonize_process(const char* pid_file) {
     /* Redirect standard file descriptors to /dev/null */
     int fd = open("/dev/null", O_RDWR);
     if (fd < 0) {
-        return -1;  /* Cannot log error as stdout/stderr are closed */
+        if (original_stdout > 0) {
+            FILE* saved_stdout = fdopen(original_stdout, "w");
+            if (saved_stdout) {
+                fprintf(saved_stdout, "DAEMONIZE ERROR: Failed to open /dev/null: %s\n", strerror(errno));
+                fflush(saved_stdout);
+                fclose(saved_stdout);
+            }
+        }
+        return -1;  /* Error opening /dev/null */
     }
     
-    dup2(fd, STDIN_FILENO);
-    dup2(fd, STDOUT_FILENO);
-    dup2(fd, STDERR_FILENO);
+    /* Ensure stdin, stdout, stderr point to /dev/null */
+    if (fd != STDIN_FILENO) {
+        dup2(fd, STDIN_FILENO);
+    }
     
+    if (fd != STDOUT_FILENO) {
+        dup2(fd, STDOUT_FILENO);
+    }
+    
+    if (fd != STDERR_FILENO) {
+        dup2(fd, STDERR_FILENO);
+    }
+    
+    /* Close the original fd if it's not one of the standard descriptors */
     if (fd > STDERR_FILENO) {
         close(fd);
+    }
+    
+    /* Log success to original stdout and then close it */
+    if (original_stdout > 0) {
+        FILE* saved_stdout = fdopen(original_stdout, "w");
+        if (saved_stdout) {
+            fprintf(saved_stdout, "DAEMONIZE DEBUG: Process successfully daemonized (PID: %d)\n", daemon_pid);
+            fflush(saved_stdout);
+            fclose(saved_stdout);
+        }
+    }
+    
+    /* Close original stderr if it was duplicated */
+    if (original_stderr > 0) {
+        close(original_stderr);
     }
     
     /* Write PID to file if provided */
