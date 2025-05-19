@@ -286,8 +286,8 @@ void cleanup() {
         server_config_t* server = g_server_config;
         g_server_config = NULL;  /* Clear global reference */
 
-        /* Stop the server if it's still running */
-        server_stop(server);
+        /* Request shutdown if the server is still running */
+        server_request_shutdown();
 
         /* Properly free CORS configuration */
         free_cors_config(&server->cors);
@@ -1000,163 +1000,22 @@ int main(int argc, char** argv) {
         LOG_INFO("Initializing server with API context at %p (PID: %d)", (void*)g_api_ctx, getpid());
     }
     
-    /* FIXED: Create socket AFTER daemonization in current process to ensure descriptor is valid */
-    /* Create the socket but DON'T bind yet - just initialization */
-    printf("Creating socket in process with PID: %d\n", getpid());
-    
-    server_status_t status = server_init(g_server_config, g_api_ctx);
-    if (status != SERVER_OK) {
-        if (g_logger) {
-            LOG_ERROR("Failed to initialize server with API context (status: %d)", status);
-            LOG_ERROR("Socket descriptor: %d", g_server_config->socket_fd);
-        }
-        fprintf(stderr, "Error: Failed to initialize server\n");
-        return 1;
-    }
-    
+    /* Use the new server initialization sequence with thread pool */
     if (g_logger) {
-        LOG_INFO("Server initialized successfully with API context (socket FD: %d)", g_server_config->socket_fd);
+        LOG_INFO("Using improved server initialization with thread pool");
     }
-    printf("Server initialized successfully\n");
+    printf("Using improved server initialization with thread pool\n");
     
-    /* Save the socket descriptor for later - we'll need it after forking */
-    int main_socket_fd = g_server_config->socket_fd;
-    printf("Socket descriptor stored: %d\n", main_socket_fd);
+    /* Set socket options before server initialization */
+    g_server_config->max_connections = 50;  /* Increased from default */
     
-    /* Start the server immediately after initialization with API context */
-    printf("Starting server and binding to port %d...\n", g_server_config->port);
+    /* Log server startup plans */
+    printf("Starting server with dynamic thread pool implementation...\n");
+    printf("Thread pool size: min=%d, max=%d\n", g_server_config->max_connections / 4, g_server_config->max_connections);
     if (g_logger) {
-        LOG_INFO("Starting server and binding to port %d (socket FD: %d)",
-                 g_server_config->port, g_server_config->socket_fd);
-    }
-    printf("Socket file descriptor before server_start: %d\n", g_server_config->socket_fd);
-    
-    /* Verify socket file descriptor is valid */
-    if (g_server_config->socket_fd <= 0) {
-        if (g_logger) {
-            LOG_ERROR("Invalid socket file descriptor before server_start: %d", g_server_config->socket_fd);
-        }
-        fprintf(stderr, "Error: Invalid socket file descriptor: %d\n", g_server_config->socket_fd);
-        
-        /* Try to recreate socket */
-        if (g_logger) {
-            LOG_INFO("Attempting to recreate socket");
-        }
-        printf("Attempting to recreate socket...\n");
-        
-        /* Recreate socket with correct configuration */
-        g_server_config->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (g_server_config->socket_fd < 0) {
-            if (g_logger) {
-                LOG_ERROR("Failed to recreate socket: %s (errno=%d)", strerror(errno), errno);
-            }
-            fprintf(stderr, "Error: Failed to recreate socket: %s (errno=%d)\n", strerror(errno), errno);
-            return 1;
-        }
-        
-        /* Set socket options */
-        int opt = 1;
-        if (setsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            if (g_logger) {
-                LOG_ERROR("Failed to set SO_REUSEADDR on new socket: %s (errno=%d)", strerror(errno), errno);
-            }
-            fprintf(stderr, "Error: Failed to set SO_REUSEADDR: %s (errno=%d)\n", strerror(errno), errno);
-            close(g_server_config->socket_fd);
-            g_server_config->socket_fd = 0;
-            return 1;
-        }
-        
-        /* Test bind to validate socket (non-blocking) */
-        struct sockaddr_in test_addr;
-        memset(&test_addr, 0, sizeof(test_addr));
-        test_addr.sin_family = AF_INET;
-        test_addr.sin_addr.s_addr = INADDR_ANY;
-        test_addr.sin_port = htons(0);  /* Any available port */
-        
-        if (bind(g_server_config->socket_fd, (struct sockaddr*)&test_addr, sizeof(test_addr)) < 0) {
-            if (g_logger) {
-                LOG_ERROR("Socket validation failed: %s (errno=%d)", strerror(errno), errno);
-            }
-            fprintf(stderr, "Error: Socket validation failed: %s (errno=%d)\n", strerror(errno), errno);
-            close(g_server_config->socket_fd);
-            g_server_config->socket_fd = 0;
-            return 1;
-        }
-        
-        /* Unbind for real server_start later */
-        close(g_server_config->socket_fd);
-        g_server_config->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (g_server_config->socket_fd < 0) {
-            if (g_logger) {
-                LOG_ERROR("Failed to re-create socket after validation: %s (errno=%d)", strerror(errno), errno);
-            }
-            fprintf(stderr, "Error: Failed to re-create socket after validation: %s (errno=%d)\n", strerror(errno), errno);
-            return 1;
-        }
-        
-        /* Set socket options again */
-        if (setsockopt(g_server_config->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            if (g_logger) {
-                LOG_ERROR("Failed to set SO_REUSEADDR on final socket: %s (errno=%d)", strerror(errno), errno);
-            }
-            fprintf(stderr, "Error: Failed to set SO_REUSEADDR on final socket: %s (errno=%d)\n", strerror(errno), errno);
-            close(g_server_config->socket_fd);
-            g_server_config->socket_fd = 0;
-            return 1;
-        }
-        
-        if (g_logger) {
-            LOG_INFO("Socket recreated successfully with FD: %d", g_server_config->socket_fd);
-        }
-        printf("Socket recreated successfully with FD: %d\n", g_server_config->socket_fd);
-    }
-    
-    printf("About to call server_start with socket_fd=%d (PID: %d)\n", g_server_config->socket_fd, getpid());
-    
-    /* Extra debug - print netstat before start */
-    printf("Network ports before binding:\n");
-    system("netstat -tuln | grep -E ':(5000|6000)' || echo 'No test ports in use'");
-    printf("\n");
-    
-    server_status_t start_status = server_start(g_server_config);
-    printf("server_start returned status: %d (0=success, others=error)\n", start_status);
-    
-    /* Check if server is actually listening */
-    printf("Network ports after binding attempt:\n");
-    system("netstat -tuln | grep -E ':(5000|6000)' || echo 'No test ports in use'");
-    printf("\n");
-    
-    if (start_status != SERVER_OK) {
-        if (g_logger) {
-            LOG_ERROR("Failed to start server (status: %d)", start_status);
-            
-            /* Provide more detailed error message based on status */
-            if (start_status == SERVER_BIND_ERROR) {
-                LOG_ERROR("Server failed to bind to port %d. Check if port is already in use.", g_server_config->port);
-                fprintf(stderr, "Bind error: Failed to bind to port %d. Check if port is already in use.\n", g_server_config->port);
-            } else if (start_status == SERVER_LISTEN_ERROR) {
-                LOG_ERROR("Server failed to listen on port %d after binding.", g_server_config->port);
-                fprintf(stderr, "Listen error: Failed to listen on port %d after binding.\n", g_server_config->port);
-            } else if (start_status == SERVER_SOCKET_ERROR) {
-                LOG_ERROR("Server failed to create socket. Check system resources.");
-                fprintf(stderr, "Socket error: Failed to create socket. Check system resources.\n");
-            } else if (start_status == SERVER_THREAD_ERROR) {
-                LOG_ERROR("Server failed to create accept thread. Check system resources.");
-                fprintf(stderr, "Thread error: Failed to create accept thread. Check system resources.\n");
-            } else {
-                fprintf(stderr, "Unknown error (status: %d) starting server.\n", start_status);
-            }
-        } else {
-            fprintf(stderr, "Error: Failed to start server (status: %d)\n", start_status);
-        }
-        
-        /* Try to run netstat to see if anything is on the port */
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "netstat -tuln | grep ':%d' || echo 'Port %d not found in netstat'", 
-                 g_server_config->port, g_server_config->port);
-        system(cmd);
-        
-        return 1;
+        LOG_INFO("Starting server with dynamic thread pool implementation");
+        LOG_INFO("Thread pool size: min=%d, max=%d", g_server_config->max_connections / 4, g_server_config->max_connections);
+        LOG_INFO("Binding to %s:%d", g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
     }
     
     /* Initialize metrics registry */
@@ -1230,14 +1089,6 @@ int main(int argc, char** argv) {
         LOG_INFO("PID: %d", getpid());
         LOG_INFO("Server running on %s:%d", 
                 g_server_config->host ? g_server_config->host : "0.0.0.0", g_server_config->port);
-        LOG_INFO("Server is accepting connections on socket FD: %d", g_server_config->socket_fd);
-    }
-    
-    /* Use our reworked server initialization with thread pool */
-    if (g_logger) {
-        LOG_INFO("Using improved server initialization with thread pool");
-    } else {
-        printf("Using improved server initialization with thread pool\n");
     }
     
     /* Ignore SIGPIPE to prevent crashes on closed sockets */
@@ -1245,12 +1096,6 @@ int main(int argc, char** argv) {
     memset(&sa_pipe, 0, sizeof(sa_pipe));
     sa_pipe.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, &sa_pipe, NULL);
-    
-    /* Set socket options before server initialization */
-    g_server_config->max_connections = 50;  /* Increased from default */
-    
-    printf("Starting server with dynamic thread pool implementation...\n");
-    printf("Thread pool size: min=%d, max=%d\n", g_server_config->max_connections / 4, g_server_config->max_connections);
     
     /* Start the server with our thread pool implementation - this will run until shutdown is requested */
     server_status_t server_status = server_initialize_and_run(g_server_config, g_api_ctx);

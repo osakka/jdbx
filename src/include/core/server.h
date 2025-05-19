@@ -156,14 +156,33 @@ typedef struct {
     struct api_context *api_ctx;  /* Reference to the API context */
 } client_conn_t;
 
-/* Function prototypes */
-server_status_t server_init(server_config_t* config, struct api_context* api_ctx);
-server_status_t server_start(server_config_t* config);
-void* server_accept_loop(void* config_ptr);
-void server_stop(server_config_t* config);
+/* Server initialization and control functions */
 
-/* Reworked server initialization with thread pool (new implementation) */
+/**
+ * Initialize and run the server with the thread pool implementation
+ *
+ * This is the main entry point for starting the JSONdb server.
+ * It handles signal setup, socket initialization, thread pool creation,
+ * and runs the server in the current thread.
+ *
+ * @param config Server configuration
+ * @param api_ctx API context for request handling
+ * @return Server status code
+ */
 server_status_t server_initialize_and_run(server_config_t* config, struct api_context* api_ctx);
+
+/**
+ * Request a graceful server shutdown
+ * 
+ * This function can be called from any thread to initiate a server shutdown
+ */
+void server_request_shutdown(void);
+
+/* Deprecated functions - maintained for backward compatibility */
+server_status_t server_init(server_config_t* config, struct api_context* api_ctx) __attribute__((deprecated));
+server_status_t server_start(server_config_t* config) __attribute__((deprecated));
+void* server_accept_loop(void* config_ptr) __attribute__((deprecated));
+void server_stop(server_config_t* config) __attribute__((deprecated));
 void server_request_shutdown(void);
 void* handle_client(void* client_data);
 http_request_t* parse_http_request(const char* request_str);

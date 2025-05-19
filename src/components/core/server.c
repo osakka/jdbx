@@ -1,13 +1,14 @@
 /**
- * Updated Socket binding fix for JSONdb Server
+ * JSONdb Server Implementation
  * 
- * This file contains a refactored implementation of the server
- * socket binding and thread management to ensure that all socket
- * operations happen in the correct order.
+ * This file contains the server implementation with thread pool
+ * for efficient connection handling and proper socket binding/initialization.
  */
 
 #include "core/server.h"
 #include "api/api.h"
+#include "utils/daemonize.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,35 +19,23 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/syscall.h> /* For SYS_gettid */
+#include <signal.h>
+#include <time.h>
+#include <sys/syscall.h>
+
+/* Graceful shutdown flag */
+static volatile int g_shutdown_requested = 0;
+
+/* Signal pipe for safe shutdown */
+static int g_signal_pipe[2] = {-1, -1};
 
 /* Forward declarations */
-static int create_and_bind_socket(server_config_t* config);
-static int set_socket_to_listen(server_config_t* config);
-static int verify_socket_state(server_config_t* config);
-static pthread_t create_accept_thread(server_config_t* config);
-
-/* Global socket state indicator */
-static enum {
-    SOCKET_STATE_UNINITIALIZED,
-    SOCKET_STATE_CREATED,
-    SOCKET_STATE_BOUND,
-    SOCKET_STATE_LISTENING,
-    SOCKET_STATE_READY,
-    SOCKET_STATE_ERROR
-} g_socket_state = SOCKET_STATE_UNINITIALIZED;
-
-/* Global accept thread indicator */
-static enum {
-    THREAD_STATE_UNINITIALIZED,
-    THREAD_STATE_CREATING,
-    THREAD_STATE_RUNNING,
-    THREAD_STATE_ERROR
-} g_thread_state = THREAD_STATE_UNINITIALIZED;
-
-/* Server is running flag - accessible by accept thread */
-static volatile int server_running = 0;
-static pthread_mutex_t server_running_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int initialize_socket(server_config_t* config);
+static int initialize_thread_pool(server_config_t* config);
+static void* accept_thread_func(void* arg);
+static void handle_signals(void);
+static void signal_handler(int sig);
+static int set_socket_non_blocking(int socket_fd);
 
 /* Adapter function for thread pool compatibility */
 static void handle_client_adapter(void* client_data) {
@@ -54,1125 +43,490 @@ static void handle_client_adapter(void* client_data) {
     handle_client(client_data);
 }
 
-/* Signal handler for SIGALRM */
-static void alarm_handler(int sig) {
-    fprintf(stderr, "ALARM: Thread creation timeout detected! (signal: %d)\n", sig);
-    fprintf(stderr, "ALARM: Server may be deadlocked, please check logs\n");
-    fprintf(stderr, "ALARM: Current thread state: %d\n", g_thread_state);
-    fflush(stderr);
-    
-    /* Try to continue execution - don't exit immediately */
-}
-
-/* Helper functions for thread-safe server_running flag access */
-static void set_server_running(int value) {
-    pthread_mutex_lock(&server_running_mutex);
-    server_running = value;
-    pthread_mutex_unlock(&server_running_mutex);
-}
-
-static int get_server_running(void) {
-    int value;
-    pthread_mutex_lock(&server_running_mutex);
-    value = server_running;
-    pthread_mutex_unlock(&server_running_mutex);
-    return value;
-}
-
-/* Simplified thread synchronization */
-/* We're using a simple global flag instead of complex condition variables */
-static volatile int thread_initialized = 0;
-
 /**
- * Initialize server with socket creation and API context
+ * Initialize and run the server with improved design
+ * 
+ * This function implements a better initialization sequence:
+ * 1. Set up signal handlers FIRST
+ * 2. Initialize socket AFTER daemonization (if applicable)
+ * 3. Create thread pool
+ * 4. Enter accept loop in main thread
+ * 
+ * @param config Server configuration
+ * @param api_ctx API context
+ * @return Server status
  */
-server_status_t server_init(server_config_t* config, api_context_t* api_ctx) {
-    if (!config) {
-        fprintf(stderr, "Error: NULL server configuration passed to server_init\n");
+server_status_t server_initialize_and_run(server_config_t* config, api_context_t* api_ctx) {
+    if (!config || !api_ctx) {
+        fprintf(stderr, "Error: Invalid server config or API context\n");
         return SERVER_ERROR;
     }
-
-    printf(">>> SERVER_INIT: Starting in PID %d, port=%d, host=%s\n", 
-           getpid(), config->port, config->host ? config->host : "0.0.0.0");
     
-    /* Register signal handlers */
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = alarm_handler;
-    if (sigaction(SIGALRM, &sa, NULL) < 0) {
-        fprintf(stderr, "Warning: Failed to register SIGALRM handler: %s\n", strerror(errno));
-    } else {
-        printf("Registered SIGALRM handler for thread creation timeout protection\n");
-    }
-
-    /* Store the API context in the server config for sharing with client threads */
+    /* Store API context in config */
     config->api_ctx = api_ctx;
     
-    if (g_logger) {
-        LOG_INFO("API context set in server config: %p", (void*)api_ctx);
-    }
-
-    /* Set default values if not specified */
-    if (config->max_connections <= 0) {
-        config->max_connections = 10; /* Set to default */
-    }
+    /* Set up signal handling first (before any threads) */
+    handle_signals();
     
-    /* Initialize the thread pool */
-    thread_pool_config_t pool_config = {
-        .min_threads = 4,                    /* Start with 4 threads */
-        .max_threads = config->max_connections, /* Scale up to max connections */
-        .queue_size = config->max_connections * 2, /* Double the queue size */
-        .idle_timeout = 60                   /* 1 minute idle timeout */
-    };
-    
-    config->thread_pool = thread_pool_create_config(&pool_config);
-    if (!config->thread_pool) {
-        fprintf(stderr, "Error: Failed to create thread pool\n");
+    /* Create signal pipe for safe shutdown */
+    if (pipe(g_signal_pipe) < 0) {
+        fprintf(stderr, "Error: Failed to create signal pipe: %s\n", strerror(errno));
         return SERVER_ERROR;
     }
     
-    printf("Thread pool created successfully with %d-%d threads\n", 
-           pool_config.min_threads, pool_config.max_threads);
-
-    /* Create socket with detailed logging */
-    printf("Creating server socket...\n");
-    fflush(stdout);
+    /* Set pipe to non-blocking */
+    for (int i = 0; i < 2; i++) {
+        int flags = fcntl(g_signal_pipe[i], F_GETFL, 0);
+        if (flags < 0 || fcntl(g_signal_pipe[i], F_SETFL, flags | O_NONBLOCK) < 0) {
+            fprintf(stderr, "Warning: Failed to set signal pipe to non-blocking\n");
+        }
+    }
     
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0) {
-        perror("Socket creation failed");
-        fprintf(stderr, "Socket creation failed: %s (errno=%d)\n", strerror(errno), errno);
+    /* Print startup message */
+    printf("Starting JSONdb server on port %d...\n", config->port);
+    
+    /* Initialize socket */
+    if (initialize_socket(config) != 0) {
+        fprintf(stderr, "Error: Failed to initialize server socket\n");
         return SERVER_SOCKET_ERROR;
     }
     
-    printf("Socket created successfully with fd=%d (PID: %d)\n", socket_fd, getpid());
-    fflush(stdout);
+    printf("Socket initialization successful (fd=%d)\n", config->socket_fd);
+    
+    /* Initialize thread pool */
+    if (initialize_thread_pool(config) != 0) {
+        fprintf(stderr, "Error: Failed to initialize thread pool\n");
+        return SERVER_THREAD_ERROR;
+    }
+    
+    /* Start accept loop in the current thread */
+    printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
+    accept_thread_func(config);
+    
+    /* Clean up resources */
+    printf("Shutting down server...\n");
+    
+    /* Close socket */
+    if (config->socket_fd > 0) {
+        close(config->socket_fd);
+        config->socket_fd = 0;
+    }
+    
+    /* Destroy thread pool */
+    if (config->thread_pool) {
+        thread_pool_destroy(config->thread_pool);
+        config->thread_pool = NULL;
+    }
+    
+    /* Close signal pipe */
+    for (int i = 0; i < 2; i++) {
+        if (g_signal_pipe[i] >= 0) {
+            close(g_signal_pipe[i]);
+            g_signal_pipe[i] = -1;
+        }
+    }
+    
+    printf("Server shutdown complete\n");
+    
+    return SERVER_OK;
+}
+
+/**
+ * Initialize server socket
+ */
+static int initialize_socket(server_config_t* config) {
+    if (!config) {
+        fprintf(stderr, "Error: NULL server configuration\n");
+        return -1;
+    }
+    
+    /* Create socket */
+    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd < 0) {
+        fprintf(stderr, "Error: Failed to create socket: %s\n", strerror(errno));
+        return -1;
+    }
+    
+    printf("Created socket with descriptor %d\n", socket_fd);
     
     /* Set socket options */
     int opt = 1;
-    
-    printf("Setting socket options on fd=%d (server PID: %d, thread: %lu)\n", 
-           socket_fd, getpid(), (unsigned long)pthread_self());
-    
-    /* Set SO_REUSEADDR - critical for quick restarts */
-    printf("Setting SO_REUSEADDR socket option on fd=%d\n", socket_fd);
-    
     if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt SO_REUSEADDR failed");
-        fprintf(stderr, "Failed to set SO_REUSEADDR: %s (errno=%d)\n", strerror(errno), errno);
+        fprintf(stderr, "Error: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
         close(socket_fd);
-        return SERVER_SOCKET_ERROR;
+        return -1;
     }
     
-    /* Set timeouts for better debugging */
+    /* Set timeouts */
     struct timeval timeout;
     timeout.tv_sec = 30;  /* 30 second timeout */
     timeout.tv_usec = 0;
     
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_RCVTIMEO: %s (errno=%d)\n", 
-               strerror(errno), errno);
-    } else {
-        printf("Set socket receive timeout to 30 seconds\n");
+        fprintf(stderr, "Warning: Failed to set SO_RCVTIMEO: %s\n", strerror(errno));
     }
     
     if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_SNDTIMEO: %s (errno=%d)\n", 
-               strerror(errno), errno);
-    } else {
-        printf("Set socket send timeout to 30 seconds\n");
+        fprintf(stderr, "Warning: Failed to set SO_SNDTIMEO: %s\n", strerror(errno));
     }
     
-    /* Set socket to non-blocking mode */
-    #ifdef O_NONBLOCK
-    printf("Setting socket to non-blocking mode for better error handling\n");
-    int flags = fcntl(socket_fd, F_GETFL, 0);
-    if (flags >= 0) {
-        if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-            fprintf(stderr, "Warning: Failed to set socket non-blocking: %s (errno=%d)\n", 
-                   strerror(errno), errno);
-        } else {
-            printf("Successfully set socket non-blocking\n");
-        }
-    }
-    #endif
-    
-    /* Set SO_REUSEPORT if available */
-    #ifdef SO_REUSEPORT
-    printf("Setting SO_REUSEPORT socket option on fd=%d\n", socket_fd);
-    
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_REUSEPORT: %s (errno=%d) - continuing anyway\n", 
-               strerror(errno), errno);
-        /* Non-fatal - continue execution */
-    } else {
-        printf("SO_REUSEPORT set successfully\n");
-    }
-    #endif
-
-    /* Save the socket descriptor to the config */
-    config->socket_fd = socket_fd;
-    
-    printf("Server socket initialized successfully (fd=%d)\n", config->socket_fd);
-    g_socket_state = SOCKET_STATE_CREATED;
-    
-    return SERVER_OK;
-}
-
-/**
- * Start server - handles binding, listening, and thread creation
- * This function has been separated into distinct phases to ensure proper ordering
- */
-server_status_t server_start(server_config_t* config) {
-    if (!config) {
-        fprintf(stderr, "Error: Null server configuration passed to server_start\n");
-        return SERVER_ERROR;
-    }
-    
-    printf(">>> SERVER_START: Starting in PID %d, socket_fd: %d, port: %d\n", 
-           getpid(), config->socket_fd, config->port);
-    fflush(stdout);
-
-    /* Create a new socket if the existing one is invalid */
-    if (config->socket_fd <= 0) {
-        printf("Socket file descriptor is invalid (%d), recreating...\n", config->socket_fd);
-        
-        /* Create new socket */
-        int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (socket_fd < 0) {
-            fprintf(stderr, "Socket recreation failed: %s (errno=%d)\n", strerror(errno), errno);
-            return SERVER_SOCKET_ERROR;
-        }
-        
-        /* Set socket options */
-        int opt = 1;
-        
-        if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            fprintf(stderr, "Failed to set SO_REUSEADDR: %s (errno=%d)\n", strerror(errno), errno);
-            close(socket_fd);
-            return SERVER_SOCKET_ERROR;
-        }
-        
-        #ifdef SO_REUSEPORT
-        setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-        #endif
-        
-        /* Save the socket descriptor */
-        config->socket_fd = socket_fd;
-        
-        printf("Socket recreated successfully with fd=%d\n", config->socket_fd);
-        g_socket_state = SOCKET_STATE_CREATED;
-    }
-
-    /* PHASE 1: Create and bind socket */
-    int bind_result = create_and_bind_socket(config);
-    if (bind_result != SERVER_OK) {
-        fprintf(stderr, "Error: Socket binding failed\n");
-        return bind_result;
-    }
-    
-    /* PHASE 2: Set socket to listen state */
-    int listen_result = set_socket_to_listen(config);
-    if (listen_result != SERVER_OK) {
-        fprintf(stderr, "Error: Socket listen failed\n");
-        return listen_result;
-    }
-    
-    /* PHASE 3: Verify socket is in proper state */
-    int verify_result = verify_socket_state(config);
-    if (verify_result != SERVER_OK) {
-        fprintf(stderr, "Error: Socket state verification failed\n");
-        return verify_result;
-    }
-    
-    /* Double-check socket is working and in the right state */
-    printf("Running final socket validation check before creating thread...\n");
-    {
-        int socket_error = 0;
-        socklen_t error_len = sizeof(socket_error);
-        if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-            fprintf(stderr, "Error in final socket check: getsockopt failed: %s (errno=%d)\n", 
-                    strerror(errno), errno);
-        } else if (socket_error != 0) {
-            fprintf(stderr, "Error in final socket check: Socket has error state: %s (error=%d)\n", 
-                    strerror(socket_error), socket_error);
-        } else {
-            printf("Socket is in good state - ready for accept thread\n");
-        }
-
-        /* Verify listening state */
-        int acceptconn = 0;
-        socklen_t acceptconn_len = sizeof(acceptconn);
-        if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-            fprintf(stderr, "Error in final socket check: Failed to check SO_ACCEPTCONN: %s (errno=%d)\n", 
-                    strerror(errno), errno);
-        } else {
-            printf("Socket FD %d listening state: %s\n", 
-                  config->socket_fd, acceptconn ? "LISTENING" : "NOT LISTENING");
-        }
-    }
-    
-    /* Test socket with direct accept to make sure it's working properly */
-    printf("Testing socket with non-blocking accept...\n");
-    {
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
-        FD_SET(config->socket_fd, &read_fds);
-        
-        struct timeval tv;
-        tv.tv_sec = 0;  /* 0 second timeout - just testing */
-        tv.tv_usec = 100000;  /* 100ms */
-        
-        int select_result = select(config->socket_fd + 1, &read_fds, NULL, NULL, &tv);
-        printf("Select test result: %d (result > 0 means connection available)\n", select_result);
-    }
-    
-    /* Run netstat to verify socket is actually visible to the system */
-    printf("Running netstat to verify socket is visible...\n");
-    {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "netstat -tuln | grep ':%d' || echo 'Port %d not visible in netstat'", 
-                 config->port, config->port);
-        system(cmd);
-    }
-    
-    /* Mark server as running before thread creation */
-    set_server_running(1);
-    printf("Set server_running flag to 1\n");
-    fflush(stdout);
-    
-    /* PHASE 4: Create accept thread with proper socket descriptor */
-    printf("Creating accept thread with socket_fd=%d...\n", config->socket_fd);
-    fflush(stdout);
-    
-    /* Verify socket is still valid and in listening state */
-    int acceptconn = 0;
-    socklen_t acceptconn_len = sizeof(acceptconn);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Error in final socket check: Failed to check SO_ACCEPTCONN: %s (errno=%d)\n", 
-                strerror(errno), errno);
-    } else {
-        printf("Pre-thread socket FD %d listening state: %s\n", 
-              config->socket_fd, acceptconn ? "LISTENING" : "NOT LISTENING");
-    }
-    fflush(stdout);
-    
-    pthread_t accept_thread = create_accept_thread(config);
-    if (accept_thread == 0) {
-        fprintf(stderr, "Error: Failed to create accept thread\n");
-        set_server_running(0);
-        return SERVER_THREAD_ERROR;
-    }
-    printf("Accept thread created with ID %lu\n", (unsigned long)accept_thread);
-    fflush(stdout);
-    
-    /* Wait until the thread is fully initialized */
-    printf("Waiting for thread to initialize...\n");
-    fflush(stdout);
-    
-    /* Check thread_initialized flag with progressive backoff */
-    int wait_count = 0;
-    int max_wait_attempts = 30; /* Try for about 15 seconds in total */
-    int base_sleep_time = 100000; /* 100ms */
-    
-    while (wait_count < max_wait_attempts && thread_initialized != 1) {
-        int sleep_time = base_sleep_time * (1 + (wait_count / 5)); /* Gradually increase sleep time */
-        printf("Waiting for thread initialization (attempt %d/%d)...\n", wait_count + 1, max_wait_attempts);
-        fflush(stdout);
-        usleep(sleep_time);
-        wait_count++;
-        
-        /* Check if thread had an error */
-        if (thread_initialized < 0) {
-            fprintf(stderr, "Thread initialization failed with error\n");
-            fflush(stderr);
-            return SERVER_THREAD_ERROR;
-        }
-    }
-    
-    if (thread_initialized != 1) {
-        fprintf(stderr, "Thread initialization timed out after %d attempts\n", max_wait_attempts);
-        fflush(stderr);
-        return SERVER_THREAD_ERROR;
-    }
-    
-    printf("Thread initialization completed successfully\n");
-    fflush(stdout);
-
-    printf("Server started successfully and is accepting connections on port %d\n", config->port);
-    printf("Connect to http://%s:%d/ to access the server\n", 
-           config->host ? config->host : "localhost", config->port);
-    
-    return SERVER_OK;
-}
-
-/**
- * Create and bind socket to the specified address and port
- */
-static int create_and_bind_socket(server_config_t* config) {
-    if (!config) return SERVER_ERROR;
-    
-    /* Verify essential configuration */
-    printf(">>> BIND_SOCKET: Binding socket %d to port %d in PID %d\n", 
-           config->socket_fd, config->port, getpid());
-    fflush(stdout);
-    
-    if (config->socket_fd <= 0) {
-        fprintf(stderr, "Error: Invalid socket file descriptor (%d)\n", config->socket_fd);
-        return SERVER_ERROR;
-    }
-
-    if (config->port <= 0 || config->port > 65535) {
-        fprintf(stderr, "Error: Invalid port number (%d)\n", config->port);
-        return SERVER_ERROR;
-    }
-
     /* Create address structure */
     struct sockaddr_in address;
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-
-    /* Always bind to all interfaces for listening */
     address.sin_addr.s_addr = INADDR_ANY;
-    
-    /* Use the configured port */
     address.sin_port = htons(config->port);
     
-    /* Log binding information */
-    printf("Binding to all interfaces (0.0.0.0) on port %d (network byte order: %d)\n", 
-           config->port, ntohs(address.sin_port));
-    if (config->host != NULL) {
-        printf("Server will be advertised as: %s\n", config->host);
-    }
+    printf("Binding to port %d...\n", config->port);
     
-    /* Check if socket is already in use */
-    char netstat_cmd[256];
-    printf("Checking if port %d is already in use:\n", config->port);
-    snprintf(netstat_cmd, sizeof(netstat_cmd), 
-             "netstat -tuln | grep ':%d' || echo 'Port %d is available'", 
-             config->port, config->port);
-    system(netstat_cmd);
-    
-    /* Check if we have permission to bind to this port */
-    printf("Checking bind permission for port %d (ports < 1024 require root)\n", config->port);
-    if (config->port < 1024 && geteuid() != 0) {
-        printf("Warning: Port %d requires root privileges, might fail\n", config->port);
-    }
-    
-    /* Validate socket before binding */
-    printf("Validating socket before bind operation\n");
-    
-    int socket_error = 0;
-    socklen_t error_len = sizeof(socket_error);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-        fprintf(stderr, "Warning: Socket validation failed: %s (errno=%d)\n", 
-                strerror(errno), errno);
-    } else if (socket_error != 0) {
-        fprintf(stderr, "Warning: Socket has error state: %s (error=%d)\n", 
-                strerror(socket_error), socket_error);
-    } else {
-        printf("Socket is valid before bind\n");
-    }
-    
-    /* Double-check socket is valid before binding */
-    int pre_bind_error = 0;
-    socklen_t pre_bind_error_len = sizeof(pre_bind_error);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &pre_bind_error, &pre_bind_error_len) < 0) {
-        fprintf(stderr, "Warning: Failed to check socket state before binding: %s (errno=%d)\n", 
-                strerror(errno), errno);
-    } else if (pre_bind_error != 0) {
-        fprintf(stderr, "Warning: Socket has error state before binding: %s (error=%d)\n", 
-                strerror(pre_bind_error), pre_bind_error);
-    } else {
-        printf("Socket is in good state before binding\n");
-    }
-    
-    /* Attempt to bind socket */
-    printf("Binding socket %d to port %d with PID %d...\n", config->socket_fd, config->port, getpid());
-    
-    /* First attempt to bind with configured port */
-    int bind_result = bind(config->socket_fd, (struct sockaddr*)&address, sizeof(address));
-    int bind_errno = errno;  /* Save original errno */
-    
-    printf("Initial bind result: %d, errno: %d (%s)\n", 
-           bind_result, bind_errno, strerror(bind_errno));
-    
-    /* If binding fails, try alternative approaches */
-    if (bind_result < 0) {
-        fprintf(stderr, "Failed to bind socket to port %d on address %s: %s (errno=%d)\n", 
-                config->port, config->host ? config->host : "0.0.0.0", 
-                strerror(bind_errno), bind_errno);
+    /* Bind socket */
+    if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        fprintf(stderr, "Error: Failed to bind socket: %s\n", strerror(errno));
         
-        /* Handle port already in use */
-        if (bind_errno == EADDRINUSE) {
-            fprintf(stderr, "Port %d is already in use\n", config->port);
-            
-            /* Try with a different port */
+        /* Try using an alternate port if the original port is in use */
+        if (errno == EADDRINUSE) {
             int alternate_port = config->port + 1;
-            
-            fprintf(stderr, "Trying alternate port %d...\n", alternate_port);
-            
-            /* Close and recreate socket to ensure clean state */
-            close(config->socket_fd);
-            
-            config->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-            if (config->socket_fd < 0) {
-                fprintf(stderr, "Error: Failed to recreate socket: %s (errno=%d)\n", 
-                        strerror(errno), errno);
-                return SERVER_SOCKET_ERROR;
-            }
-            
-            /* Set socket options again */
-            int socket_opt = 1;
-            if (setsockopt(config->socket_fd, SOL_SOCKET, SO_REUSEADDR, &socket_opt, sizeof(socket_opt)) < 0) {
-                fprintf(stderr, "Error: Failed to set SO_REUSEADDR on new socket: %s (errno=%d)\n", 
-                        strerror(errno), errno);
-                close(config->socket_fd);
-                config->socket_fd = 0;
-                return SERVER_SOCKET_ERROR;
-            }
-            
-            #ifdef SO_REUSEPORT
-            setsockopt(config->socket_fd, SOL_SOCKET, SO_REUSEPORT, &socket_opt, sizeof(socket_opt));
-            #endif
+            printf("Port %d is in use, trying alternate port %d...\n", config->port, alternate_port);
             
             /* Update port in address structure */
             address.sin_port = htons(alternate_port);
+            
+            /* Try binding again */
+            if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+                fprintf(stderr, "Error: Failed to bind socket to alternate port: %s\n", strerror(errno));
+                close(socket_fd);
+                return -1;
+            }
+            
+            /* Update config with new port */
             config->port = alternate_port;
-            
-            /* Try binding with alternate port */
-            bind_result = bind(config->socket_fd, (struct sockaddr*)&address, sizeof(address));
-            if (bind_result < 0) {
-                fprintf(stderr, "Error: Failed to bind socket to alternate port %d: %s (errno=%d)\n", 
-                        alternate_port, strerror(errno), errno);
-                close(config->socket_fd);
-                config->socket_fd = 0;
-                return SERVER_BIND_ERROR;
-            }
-            
-            fprintf(stderr, "Successfully bound to alternate port %d\n", alternate_port);
+            printf("Successfully bound to alternate port %d\n", alternate_port);
         } else {
-            /* Other binding error - cleanup and return error */
-            fprintf(stderr, "Error: Failed to bind socket to port %d: %s (errno=%d)\n", 
-                    config->port, strerror(bind_errno), bind_errno);
-            close(config->socket_fd);
-            config->socket_fd = 0;
-            return SERVER_BIND_ERROR;
+            close(socket_fd);
+            return -1;
         }
-    } else {
-        /* Binding successful on first attempt */
-        printf("Successfully bound to port %d on first attempt\n", config->port);
     }
     
-    /* Success! */
-    g_socket_state = SOCKET_STATE_BOUND;
-    printf("Socket successfully bound to port %d\n", config->port);
+    /* Set socket to listen state */
+    if (listen(socket_fd, config->max_connections > 0 ? config->max_connections : 10) < 0) {
+        fprintf(stderr, "Error: Failed to listen on socket: %s\n", strerror(errno));
+        close(socket_fd);
+        return -1;
+    }
     
-    return SERVER_OK;
+    /* Set socket to non-blocking mode */
+    if (set_socket_non_blocking(socket_fd) < 0) {
+        fprintf(stderr, "Warning: Failed to set socket to non-blocking mode\n");
+    }
+    
+    /* Store socket descriptor in config */
+    config->socket_fd = socket_fd;
+    
+    printf("Socket successfully initialized and listening on port %d\n", config->port);
+    
+    return 0;
 }
 
 /**
- * Set socket to listening state
+ * Initialize thread pool
  */
-static int set_socket_to_listen(server_config_t* config) {
-    if (!config) return SERVER_ERROR;
-    
-    if (config->socket_fd <= 0) {
-        fprintf(stderr, "Error: Invalid socket file descriptor (%d) for listen\n", config->socket_fd);
-        return SERVER_ERROR;
-    }
-    
-    /* Ensure max_connections is reasonable */
-    int backlog = config->max_connections;
-    if (backlog <= 0) {
-        backlog = 10; /* Default value */
-    }
-    
-    printf("Setting socket %d to listen with backlog=%d\n", config->socket_fd, backlog);
-    
-    /* Attempt to listen */
-    int listen_result = listen(config->socket_fd, backlog);
-    int listen_errno = errno; /* Save original errno */
-    
-    printf("Listen result: %d\n", listen_result);
-    
-    if (listen_result < 0) {
-        fprintf(stderr, "Error: Failed to listen on socket: %s (errno=%d)\n", 
-                strerror(listen_errno), listen_errno);
-        
-        /* Try with minimum backlog as fallback */
-        if (backlog > 1) {
-            fprintf(stderr, "Retrying listen with minimum backlog...\n");
-            
-            listen_result = listen(config->socket_fd, 1);
-            if (listen_result < 0) {
-                fprintf(stderr, "Error: Fallback listen also failed: %s (errno=%d)\n", 
-                        strerror(errno), errno);
-                close(config->socket_fd);
-                config->socket_fd = 0;
-                return SERVER_LISTEN_ERROR;
-            }
-            
-            fprintf(stderr, "Fallback listen succeeded with minimum backlog\n");
-        } else {
-            close(config->socket_fd);
-            config->socket_fd = 0;
-            return SERVER_LISTEN_ERROR;
-        }
-    } else {
-        printf("Successfully set socket %d to listen state with backlog=%d\n", 
-              config->socket_fd, backlog);
-    }
-    
-    g_socket_state = SOCKET_STATE_LISTENING;
-    
-    return SERVER_OK;
-}
-
-/**
- * Verify socket is in proper state for accepting connections
- */
-static int verify_socket_state(server_config_t* config) {
-    if (!config) return SERVER_ERROR;
-    
-    if (config->socket_fd <= 0) {
-        fprintf(stderr, "Error: Invalid socket file descriptor (%d) for verification\n", config->socket_fd);
-        return SERVER_ERROR;
-    }
-    
-    printf("Verifying socket %d state...\n", config->socket_fd);
-    
-    /* Check socket error state */
-    int socket_error = 0;
-    socklen_t error_len = sizeof(socket_error);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-        fprintf(stderr, "Warning: Socket validation failed: %s (errno=%d)\n", 
-                strerror(errno), errno);
-    } else if (socket_error != 0) {
-        fprintf(stderr, "Warning: Socket has error state: %s (error=%d)\n", 
-                strerror(socket_error), socket_error);
-        return SERVER_SOCKET_ERROR;
-    } else {
-        printf("Socket is valid with no errors\n");
-    }
-    
-    /* Check if socket is in listening state */
-    int acceptconn = 0;
-    socklen_t acceptconn_len = sizeof(acceptconn);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s (errno=%d)\n", 
-                strerror(errno), errno);
-    } else {
-        printf("Socket %d listening state: %s\n", 
-              config->socket_fd, acceptconn ? "LISTENING" : "NOT LISTENING");
-        
-        if (!acceptconn) {
-            fprintf(stderr, "Error: Socket is NOT in listening state after listen() call\n");
-            return SERVER_SOCKET_ERROR;
-        }
-    }
-    
-    /* Verify with netstat */
-    printf("Verifying port %d visibility with netstat...\n", config->port);
-    char cmd[256];
-    char output[512] = {0};
-    snprintf(cmd, sizeof(cmd), "netstat -tuln | grep :%d || echo 'Port %d NOT FOUND in netstat'", 
-             config->port, config->port);
-    FILE* fp = popen(cmd, "r");
-    if (fp) {
-        fread(output, 1, sizeof(output)-1, fp);
-        pclose(fp);
-        printf("Netstat result: %s\n", output);
-    } else {
-        printf("Error running netstat command: %s\n", strerror(errno));
-    }
-    
-    /* Set socket to non-blocking for accept */
-#ifdef O_NONBLOCK
-    printf("Setting socket to non-blocking mode\n");
-    
-    int flags = fcntl(config->socket_fd, F_GETFL, 0);
-    if (flags >= 0) {
-        if (fcntl(config->socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-            fprintf(stderr, "Warning: Failed to set socket non-blocking: %s (errno=%d)\n", 
-                   strerror(errno), errno);
-        } else {
-            printf("Successfully set socket non-blocking\n");
-        }
-    }
-#endif
-    
-    g_socket_state = SOCKET_STATE_READY;
-    
-    return SERVER_OK;
-}
-
-/**
- * Thread function for accepting connections
- */
-void* server_accept_loop(void* config_ptr) {
-    /* Save the thread ID for debugging */
-    pid_t tid = syscall(SYS_gettid);
-    
-    printf(">>> ACCEPT_THREAD: Starting in thread ID %lu, PID: %d, tid: %d\n", 
-           (unsigned long)pthread_self(), getpid(), tid);
-    fflush(stdout);  /* Force output to be visible immediately */
-    
-    /* Set thread state to CREATING initially - will change to RUNNING later */
-    g_thread_state = THREAD_STATE_CREATING;
-    printf("Thread started initialization\n");
-    fflush(stdout);
-    
-    server_config_t* config = (server_config_t*)config_ptr;
-    
-    /* Validate configuration */
+static int initialize_thread_pool(server_config_t* config) {
     if (!config) {
-        fprintf(stderr, "Error: NULL server configuration passed to accept loop\n");
-        
-        /* Signal initialization failure */
-        g_thread_state = THREAD_STATE_ERROR;
-        thread_initialized = -1; /* Error flag for main thread */
-        printf("Thread initialization failed: NULL server configuration\n");
-        fflush(stdout);
-        
+        fprintf(stderr, "Error: NULL server configuration\n");
+        return -1;
+    }
+    
+    /* Calculate thread pool size based on configuration */
+    int min_threads = 4;  /* Default minimum */
+    int max_threads = config->max_connections > 0 ? config->max_connections : 16;
+    
+    thread_pool_config_t pool_config = {
+        .min_threads = min_threads,
+        .max_threads = max_threads,
+        .queue_size = max_threads * 4,  /* Queue size proportional to max threads */
+        .idle_timeout = 60  /* 1 minute idle timeout */
+    };
+    
+    /* Create thread pool */
+    config->thread_pool = thread_pool_create_config(&pool_config);
+    if (!config->thread_pool) {
+        fprintf(stderr, "Error: Failed to create thread pool\n");
+        return -1;
+    }
+    
+    printf("Thread pool created successfully with %d-%d threads\n", 
+           pool_config.min_threads, pool_config.max_threads);
+    
+    return 0;
+}
+
+/**
+ * Accept thread function
+ */
+static void* accept_thread_func(void* arg) {
+    server_config_t* config = (server_config_t*)arg;
+    
+    if (!config) {
+        fprintf(stderr, "Error: NULL server configuration in accept thread\n");
+        return NULL;
+    }
+    
+    /* Get thread ID for logging */
+    pthread_t tid = pthread_self();
+    pid_t system_tid = (pid_t)syscall(SYS_gettid);
+    
+    printf("Accept thread started (pthread_id=%lu, system_tid=%d)\n", 
+           (unsigned long)tid, system_tid);
+    
+    /* Verify socket is valid */
+    if (config->socket_fd <= 0) {
+        fprintf(stderr, "Error: Invalid socket descriptor in accept thread\n");
         return NULL;
     }
     
     /* Verify API context is available */
     if (!config->api_ctx) {
-        fprintf(stderr, "Error: NULL API context in accept loop\n");
-        
-        /* Signal initialization failure */
-        g_thread_state = THREAD_STATE_ERROR;
-        thread_initialized = -1; /* Error flag for main thread */
-        printf("Thread initialization failed: NULL API context\n");
-        fflush(stdout);
-        
+        fprintf(stderr, "Error: NULL API context in accept thread\n");
         return NULL;
     }
     
-    /* Verify socket with detailed logging */
-    if (config->socket_fd <= 0) {
-        fprintf(stderr, "Error: Invalid socket descriptor (%d) in accept loop\n", config->socket_fd);
-        
-        /* Signal initialization failure */
-        g_thread_state = THREAD_STATE_ERROR;
-        thread_initialized = -1; /* Error flag for main thread */
-        printf("Thread initialization failed: Invalid socket descriptor\n");
-        fflush(stdout);
-        
+    /* Verify thread pool is available */
+    if (!config->thread_pool) {
+        fprintf(stderr, "Error: NULL thread pool in accept thread\n");
         return NULL;
     }
     
-    /* Now that all validation is complete, set the thread state to RUNNING */
-    g_thread_state = THREAD_STATE_RUNNING;
-    thread_initialized = 1;  /* Signal that thread is initialized */
-    printf("Thread initialized and running\n");
-    fflush(stdout);
-    
-    /* Explicitly set the server_running flag to indicate we should run */
-    set_server_running(1);
-    printf("Thread confirmed server_running flag is set to 1\n");
-    
-    /* Check server_running flag */
-    if (!get_server_running()) {
-        fprintf(stderr, "Error: server_running flag is not set in accept loop\n");
-        
-        /* Signal initialization failure */
-        g_thread_state = THREAD_STATE_ERROR;
-        thread_initialized = -1; /* Error flag for main thread */
-        printf("Thread initialization failed: server_running flag not set\n");
-        fflush(stdout);
-        
-        return NULL;
-    }
-    
-    /* Verify socket is in listening state */
-    int acceptconn = 0;
-    socklen_t acceptconn_len = sizeof(acceptconn);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Error: Failed to check if socket is in listening state: %s (errno=%d)\n", 
-               strerror(errno), errno);
-    } else if (acceptconn == 0) {
-        fprintf(stderr, "Error: Socket is not in listening state\n");
-        
-        /* Try to restart listening */
-        if (listen(config->socket_fd, 10) < 0) {
-            fprintf(stderr, "Error: Failed to restart socket in listening state: %s (errno=%d)\n", 
-                   strerror(errno), errno);
-            
-            /* Signal initialization failure */
-            g_thread_state = THREAD_STATE_ERROR;
-            thread_initialized = -1; /* Error flag for main thread */
-            printf("Thread initialization failed: Failed to restart socket in listening state\n");
-            fflush(stdout);
-            
-            return NULL;
-        } else {
-            fprintf(stderr, "Socket was not in listening state, but successfully restarted listening\n");
-        }
-    } else {
-        printf("Socket is confirmed to be in LISTENING state\n");
-    }
-    
-    /* Verify socket state */
-    int socket_error = 0;
-    socklen_t error_len = sizeof(socket_error);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) < 0) {
-        fprintf(stderr, "Error: Failed to check socket state: %s (errno=%d)\n", 
-               strerror(errno), errno);
-    } else if (socket_error != 0) {
-        fprintf(stderr, "Error: Socket has error state: %s (error=%d)\n", 
-               strerror(socket_error), socket_error);
-        
-        /* Signal initialization failure */
-        g_thread_state = THREAD_STATE_ERROR;
-        thread_initialized = -1; /* Error flag for main thread */
-        printf("Thread initialization failed: Socket has error state\n");
-        fflush(stdout);
-        
-        return NULL;
-    } else {
-        printf("Socket error check passed - socket is in good state\n");
-    }
-    
-    /* Check if the socket is actually visible via netstat/ss */
-    printf("Verifying socket visibility in netstat/ss...\n");
-    char cmd[256];
-    char output[1024] = {0};
-    FILE *fp;
-    
-    snprintf(cmd, sizeof(cmd), 
-             "netstat -tuln | grep %d 2>/dev/null || ss -tuln | grep %d 2>/dev/null", 
-             config->port, config->port);
-             
-    fp = popen(cmd, "r");
-    if (fp) {
-        if (fread(output, 1, sizeof(output) - 1, fp) > 0) {
-            output[sizeof(output) - 1] = '\0';
-            printf("Socket found in netstat/ss: %s\n", output);
-        } else {
-            printf("Socket NOT found in netstat/ss - this may indicate a problem\n");
-        }
-        pclose(fp);
-    }
-    
-    /* Ensure proper initialization signal and state is set before entering accept loop */
-    printf("Server accept thread is fully initialized and ready to accept connections\n");
-    fflush(stdout);
-    
-    /* Log the API context address for debugging */
-    printf("API context in accept thread: %p\n", (void*)config->api_ctx);
-    if (g_logger) {
-        LOG_INFO("API context in accept thread: %p", (void*)config->api_ctx);
-    }
-    
-    /* Prepare to accept connections */
+    /* Accept loop */
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int client_fd;
-    int accept_result;  /* Restore this variable - it's needed for error handling */
-    int total_connections = 0;
+    int connection_count = 0;
     
-    printf("Starting accept loop on socket %d for port %d\n", config->socket_fd, config->port);
+    /* Set up file descriptor set for select */
+    fd_set read_fds;
+    int max_fd = config->socket_fd;
     
-    /* Accept connections until server_running flag is cleared */
-    while (get_server_running()) {
-        /* Use select to wait for connections with timeout */
-        fd_set read_fds;
+    /* If signal pipe is active, include it in select */
+    if (g_signal_pipe[0] >= 0 && g_signal_pipe[0] > max_fd) {
+        max_fd = g_signal_pipe[0];
+    }
+    
+    printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
+    
+    /* Continue until shutdown is requested */
+    while (!g_shutdown_requested) {
+        /* Clear and set file descriptor set */
         FD_ZERO(&read_fds);
         FD_SET(config->socket_fd, &read_fds);
         
+        /* Add signal pipe to set */
+        if (g_signal_pipe[0] >= 0) {
+            FD_SET(g_signal_pipe[0], &read_fds);
+        }
+        
+        /* Wait for activity with timeout */
         struct timeval tv;
         tv.tv_sec = 1;  /* 1 second timeout */
         tv.tv_usec = 0;
         
-        int select_result = select(config->socket_fd + 1, &read_fds, NULL, NULL, &tv);
+        int activity = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
         
-        /* Handle select errors */
-        if (select_result < 0) {
+        /* Check for errors */
+        if (activity < 0) {
             if (errno == EINTR) {
-                /* Interrupted by signal, just continue */
+                /* Interrupted by signal, continue */
                 continue;
             }
             
-            fprintf(stderr, "Select failed in accept loop: %s (errno=%d)\n", 
-                   strerror(errno), errno);
+            fprintf(stderr, "Error: select() failed: %s\n", strerror(errno));
+            break;
+        }
+        
+        /* Check for timeout */
+        if (activity == 0) {
+            /* No activity, continue */
+            continue;
+        }
+        
+        /* Check for signal pipe activity */
+        if (g_signal_pipe[0] >= 0 && FD_ISSET(g_signal_pipe[0], &read_fds)) {
+            /* Received shutdown signal */
+            char buffer[10];
+            read(g_signal_pipe[0], buffer, sizeof(buffer));
+            printf("Received shutdown signal in accept thread\n");
+            break;
+        }
+        
+        /* Check for socket activity */
+        if (FD_ISSET(config->socket_fd, &read_fds)) {
+            /* Accept connection */
+            client_fd = accept(config->socket_fd, (struct sockaddr*)&client_addr, &client_len);
             
-            /* If socket is invalid, exit thread */
-            if (errno == EBADF) {
-                fprintf(stderr, "Socket is invalid (bad file descriptor), exiting accept loop\n");
-                break;
-            }
-            
-            /* Try to recover socket state */
-            if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-                fprintf(stderr, "Error checking socket state: %s (errno=%d)\n", 
-                       strerror(errno), errno);
-            } else if (acceptconn == 0) {
-                fprintf(stderr, "Socket is not in listening state, trying to recover...\n");
-                
-                /* Try restarting listen */
-                if (listen(config->socket_fd, 10) < 0) {
-                    fprintf(stderr, "Failed to restart listening: %s (errno=%d)\n", 
-                           strerror(errno), errno);
-                    break;
-                } else {
-                    fprintf(stderr, "Successfully restarted socket in listening state\n");
+            if (client_fd < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    /* Non-blocking socket with no connections ready */
+                    continue;
                 }
-            }
-            
-            continue;
-        }
-        
-        /* Timeout - continue loop */
-        if (select_result == 0) {
-            continue;
-        }
-        
-        /* Activity detected - try to accept */
-        accept_result = accept(config->socket_fd, (struct sockaddr*)&client_addr, &client_len);
-        client_fd = accept_result;  /* Store in client_fd for use in subsequent code */
-        if (client_fd < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                /* Non-blocking socket with no connections ready */
+                
+                fprintf(stderr, "Error: accept() failed: %s\n", strerror(errno));
                 continue;
             }
             
-            fprintf(stderr, "Accept failed: %s (errno=%d)\n", strerror(errno), errno);
-            continue;
-        }
-        
-        /* Connection accepted successfully! */
-        total_connections++;
-        printf("Accepted connection #%d from %s:%d\n", 
-              total_connections, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        
-        /* Create client connection structure */
-        client_conn_t* client = (client_conn_t*)malloc(sizeof(client_conn_t));
-        if (!client) {
-            fprintf(stderr, "Failed to allocate memory for client connection\n");
-            close(client_fd);
-            continue;
-        }
-        
-        /* Initialize the client connection */
-        client->client_fd = client_fd;
-        client->address = client_addr;
-        client->api_ctx = config->api_ctx; /* Pass the API context to the client handler */
-        
-        /* Add client handling task to thread pool using adapter function */
-        if (thread_pool_add_work(config->thread_pool, handle_client_adapter, client) != 0) {
-            fprintf(stderr, "Failed to add client handling work to thread pool\n");
-            free(client);
-            close(client_fd);
-            continue;
-        }
-        
-        printf("Added client connection from %s:%d to thread pool queue\n", 
-              inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        
-        /* Log thread pool statistics every 10 connections */
-        if (total_connections % 10 == 0) {
-            int active_threads = 0;
-            int queue_size = 0;
-            uint64_t tasks_processed = 0;
+            /* Connection accepted */
+            connection_count++;
+            printf("Accepted connection #%d from %s:%d\n", 
+                   connection_count, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
             
-            thread_pool_stats(config->thread_pool, &active_threads, &queue_size, &tasks_processed);
+            /* Create client connection structure */
+            client_conn_t* client = (client_conn_t*)malloc(sizeof(client_conn_t));
+            if (!client) {
+                fprintf(stderr, "Error: Failed to allocate memory for client connection\n");
+                close(client_fd);
+                continue;
+            }
             
-            printf("Thread pool stats: active=%d, queue=%d, processed=%llu\n", 
-                  active_threads, queue_size, (unsigned long long)tasks_processed);
+            /* Initialize client connection */
+            client->client_fd = client_fd;
+            client->address = client_addr;
+            client->api_ctx = config->api_ctx;
+            
+            /* Add client to thread pool using our adapter function */
+            if (thread_pool_add_work(config->thread_pool, handle_client_adapter, client) != 0) {
+                fprintf(stderr, "Error: Failed to add client to thread pool\n");
+                free(client);
+                close(client_fd);
+                continue;
+            }
+            
+            /* Log thread pool statistics periodically */
+            if (connection_count % 10 == 0) {
+                int active_threads = 0;
+                int queue_size = 0;
+                uint64_t tasks_processed = 0;
+                
+                thread_pool_stats(config->thread_pool, &active_threads, &queue_size, &tasks_processed);
+                
+                printf("Thread pool stats: active=%d, queue=%d, processed=%llu\n", 
+                       active_threads, queue_size, (unsigned long long)tasks_processed);
+            }
         }
     }
     
-    printf("Accept thread exiting (handled %d connections)\n", total_connections);
-    
-    /* Free config memory */
-    free(config_ptr);
+    printf("Accept loop terminated after handling %d connections\n", connection_count);
     
     return NULL;
 }
 
 /**
- * Create the thread that will accept connections
- * 
- * This function has been enhanced to support better debugging and timeouts
+ * Set up signal handlers
  */
-static pthread_t create_accept_thread(server_config_t* config) {
-    if (!config) return 0;
+static void handle_signals(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
     
-    printf("Creating thread for accepting connections (PID: %d)...\n", getpid());
-    fflush(stdout);  /* Force output to be visible immediately */
-    
-    /* Verify socket state */
-    if (config->socket_fd <= 0) {
-        fprintf(stderr, "Error: Invalid socket descriptor (%d) for thread creation\n", 
-                config->socket_fd);
-        return 0;
+    /* Register signal handlers */
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        fprintf(stderr, "Warning: Failed to register SIGINT handler\n");
     }
     
-    /* Verify API context */
-    if (!config->api_ctx) {
-        fprintf(stderr, "Error: NULL API context for thread creation\n");
-        return 0;
+    if (sigaction(SIGTERM, &sa, NULL) < 0) {
+        fprintf(stderr, "Warning: Failed to register SIGTERM handler\n");
     }
     
-    printf("Socket FD is %d, API context is %p\n", config->socket_fd, (void*)config->api_ctx);
-    fflush(stdout);  /* Force output to be visible immediately */
-    
-    /* Set alarm to prevent indefinite hanging during thread creation */
-    alarm(60); /* Set a 60-second timeout alarm */
-    printf("Set 60-second safety timeout to prevent hanging\n");
-    fflush(stdout);
-    
-    /* Test the socket is actually in listening state */
-    int acceptconn = 0;
-    socklen_t acceptconn_len = sizeof(acceptconn);
-    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Error: Failed to check if socket is in listening state: %s (errno=%d)\n", 
-               strerror(errno), errno);
-    } else if (acceptconn == 0) {
-        fprintf(stderr, "Error: Socket is not in listening state! Cannot create thread\n");
-        return 0;
-    } else {
-        printf("Socket FD %d confirmed to be in LISTENING state\n", config->socket_fd);
+    if (sigaction(SIGPIPE, &sa, NULL) < 0) {
+        fprintf(stderr, "Warning: Failed to register SIGPIPE handler\n");
     }
     
-    /* Create a thread-specific copy of the config - DEEP COPY TO ENSURE THREAD SAFETY */
-    server_config_t* thread_config = malloc(sizeof(server_config_t));
-    if (!thread_config) {
-        perror("Failed to allocate memory for thread config");
-        return 0;
-    }
-    
-    /* Copy the config */
-    memcpy(thread_config, config, sizeof(server_config_t));
-    
-    /* Set the server_running flag to indicate the server should run */
-    set_server_running(1);
-    printf("Set server_running flag to 1\n");
-    
-    /* Double-check socket descriptor is valid */
-    printf("Passing socket FD %d to accept thread\n", thread_config->socket_fd);
-    
-    /* Double-check API context is valid */
-    printf("Passing API context %p to accept thread\n", (void*)thread_config->api_ctx);
-
-    /* Reset thread initialization flag */
-    thread_initialized = 0;
-    
-    /* Create the accept thread */
-    pthread_t accept_thread;
-    pthread_attr_t thread_attr;
-    int attr_init_result = pthread_attr_init(&thread_attr);
-    if (attr_init_result != 0) {
-        fprintf(stderr, "Thread attributes initialization failed: %s (errno=%d)\n",
-                strerror(attr_init_result), attr_init_result);
-        free(thread_config);
-        return 0;
-    }
-    
-    int thread_result = pthread_create(&accept_thread, &thread_attr, server_accept_loop, thread_config);
-    
-    /* Clean up thread attributes */
-    pthread_attr_destroy(&thread_attr);
-    
-    if (thread_result != 0) {
-        fprintf(stderr, "Failed to create server accept thread: %s (errno=%d)\n", 
-                strerror(thread_result), thread_result);
-        free(thread_config);
-        return 0;
-    }
-    
-    printf("Created accept thread with ID %lu\n", (unsigned long)accept_thread);
-    
-    /* Cancel the safety timeout alarm */
-    alarm(0);
-    printf("Cancelled safety timeout alarm after successful thread creation\n");
-    fflush(stdout);
-    
-    return accept_thread;
+    printf("Signal handlers registered\n");
 }
 
-/* NOT USED ANYMORE - We now force thread_initialized = 1 to avoid deadlocks */
-#if 0
 /**
- * Wait for thread to initialize properly with timeout - IMPROVED VERSION
- * 
- * This function is NOT USED anymore - we force thread_initialized=1 to avoid deadlocks
+ * Signal handler function
  */
-static int wait_for_thread_initialization(pthread_t thread_id, int timeout_ms) {
-    (void)thread_id;   /* Unused parameter */
+static void signal_handler(int sig) {
+    /* Set shutdown flag */
+    g_shutdown_requested = 1;
     
-    printf("Waiting for thread initialization (improved implementation)...\n");
-    fflush(stdout);
+    /* Only certain operations are safe in signal handlers */
+    const char* signal_name = sig == SIGINT ? "SIGINT" :
+                              sig == SIGTERM ? "SIGTERM" :
+                              sig == SIGPIPE ? "SIGPIPE" : "Unknown";
     
-    /* Actively wait for the thread_initialized flag to be set */
-    int elapsed_time = 0;
-    int sleep_interval = 50000; /* 50ms intervals */
+    /* Write to stderr (should be safe) */
+    char buffer[100];
+    snprintf(buffer, sizeof(buffer), "Received signal %s (%d), initiating shutdown\n", signal_name, sig);
+    write(STDERR_FILENO, buffer, strlen(buffer));
     
-    while (elapsed_time < timeout_ms) {
-        /* Check if thread has initialized */
-        if (thread_initialized == 1) {
-            printf("Thread initialization successful (detected after %d ms)\n", elapsed_time);
-            fflush(stdout);
-            return 0;
-        }
-        
-        /* Check if thread had an error */
-        if (thread_initialized < 0) {
-            printf("Thread initialization failed with error\n");
-            fflush(stdout);
-            return -1;
-        }
-        
-        /* Sleep for a short interval */
-        usleep(sleep_interval);
-        elapsed_time += sleep_interval / 1000;
+    /* Write to signal pipe (safe) */
+    if (g_signal_pipe[1] >= 0) {
+        char byte = 1;
+        write(g_signal_pipe[1], &byte, 1);
     }
-    
-    /* Timeout reached */
-    printf("Thread initialization timed out after %d ms\n", timeout_ms);
-    fflush(stdout);
-    
-    /* Even though we timed out, we'll continue anyway in case the thread is still initializing */
-    printf("Continuing despite timeout - thread may still be initializing\n");
-    fflush(stdout);
-    
-    return 0; /* Return success to allow server to continue */
 }
-#endif
 
 /**
- * Stop the server
+ * Request server shutdown from another function
  */
+void server_request_shutdown(void) {
+    /* Set shutdown flag */
+    g_shutdown_requested = 1;
+    
+    /* Signal through pipe */
+    if (g_signal_pipe[1] >= 0) {
+        char byte = 1;
+        write(g_signal_pipe[1], &byte, 1);
+    }
+    
+    printf("Server shutdown requested\n");
+}
+
+/**
+ * Set socket to non-blocking mode
+ */
+static int set_socket_non_blocking(int socket_fd) {
+    int flags = fcntl(socket_fd, F_GETFL, 0);
+    if (flags < 0) {
+        fprintf(stderr, "Error: fcntl(F_GETFL) failed: %s\n", strerror(errno));
+        return -1;
+    }
+    
+    if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        fprintf(stderr, "Error: fcntl(F_SETFL, O_NONBLOCK) failed: %s\n", strerror(errno));
+        return -1;
+    }
+    
+    return 0;
+}
+
+/*
+ * Legacy compatibility functions (deprecated)
+ * These stubs maintain backward compatibility but are not used
+ * in the new implementation. All new code should use server_initialize_and_run.
+ */
+
+server_status_t server_init(server_config_t* config, struct api_context* api_ctx) {
+    fprintf(stderr, "Warning: server_init() is deprecated, use server_initialize_and_run() instead.\n");
+    
+    /* Store the API context in the server config for sharing with client threads */
+    if (config && api_ctx) {
+        config->api_ctx = api_ctx;
+    }
+    
+    return SERVER_OK;
+}
+
+server_status_t server_start(server_config_t* config) {
+    fprintf(stderr, "Warning: server_start() is deprecated, use server_initialize_and_run() instead.\n");
+    return SERVER_OK;
+}
+
+void* server_accept_loop(void* config_ptr) {
+    fprintf(stderr, "Warning: server_accept_loop() is deprecated.\n");
+    return NULL;
+}
+
 void server_stop(server_config_t* config) {
-    if (!config) {
-        fprintf(stderr, "Warning: Attempt to stop NULL server config\n");
-        return;
-    }
-    
-    /* Set server stop flag */
-    set_server_running(0);
-    
-    /* Close server socket */
-    if (config->socket_fd > 0) {
-        printf("Closing server socket (FD: %d)\n", config->socket_fd);
-        close(config->socket_fd);
-        config->socket_fd = 0;
-    }
-    
-    /* Destroy thread pool if it exists */
-    if (config->thread_pool) {
-        printf("Waiting for thread pool to finish processing...\n");
-        thread_pool_wait(config->thread_pool);
-        thread_pool_destroy(config->thread_pool);
-        config->thread_pool = NULL;
-        printf("Thread pool destroyed successfully\n");
-    } else {
-        /* If no thread pool, just wait a short time for any in-progress operations */
-        usleep(100000);  /* 100ms delay */
-    }
-    
-    printf("Server stopped successfully\n");
+    fprintf(stderr, "Warning: server_stop() is deprecated, use server_request_shutdown() instead.\n");
+    server_request_shutdown();
 }
