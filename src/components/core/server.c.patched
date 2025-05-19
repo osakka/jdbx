@@ -1,3 +1,10 @@
+/**
+ * JSONdb Server Implementation
+ * 
+ * This file contains the server implementation with thread pool
+ * for efficient connection handling and proper socket binding/initialization.
+ */
+
 #include "core/server.h"
 #include "api/api.h"
 #include "utils/daemonize.h"
@@ -198,132 +205,312 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
 }
 
 /**
- * Initialize server socket - SIMPLIFIED VERSION
- * 
- * This is a simplified version that focuses on reliable socket binding
- * without any complex options or error recovery. It uses only the most
- * basic socket operations to ensure reliable binding.
+ * Initialize server socket
  */
+#define DEBUG_SOCKET_BINDING 1
+
 static int initialize_socket(server_config_t* config) {
     if (!config) {
         fprintf(stderr, "Error: NULL server configuration\n");
         return -1;
     }
     
-    /* Create socket in blocking mode */
+    /* Log initialization attempt */
+    if (g_logger) {
+        LOG_INFO("Starting socket initialization on %s:%d", config->host ? config->host : "0.0.0.0", config->port);
+    }
+    
+    /* Create socket */
     int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) {
         fprintf(stderr, "Error: Failed to create socket: %s\n", strerror(errno));
         return -1;
     }
     
-    /* Initialize address structure */
+    printf("Created socket with descriptor %d\n", socket_fd);
+    
+    /* Set socket options */
+    int opt = 1;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        fprintf(stderr, "Error: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
+        close(socket_fd);
+        return -1;
+    }
+    
+    /* Set timeouts */
+    struct timeval timeout;
+    timeout.tv_sec = 30;  /* 30 second timeout */
+    timeout.tv_usec = 0;
+    
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "Warning: Failed to set SO_RCVTIMEO: %s\n", strerror(errno));
+    }
+    
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "Warning: Failed to set SO_SNDTIMEO: %s\n", strerror(errno));
+    }
+    
+    /* Create address structure */
     struct sockaddr_in address;
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_port = htons(config->port);
     
-    /* Set SO_REUSEADDR to allow rebinding */
-    int reuse = 1;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_REUSEADDR on socket\n");
-    }
-    
-    /* Resolve the hostname */
-    if (config->host != NULL && strcmp(config->host, "0.0.0.0") != 0) {
-        if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
-            /* Bind to localhost */
-            address.sin_addr.s_addr = inet_addr("127.0.0.1");
-            printf("Using localhost (127.0.0.1) for binding\n");
-        } else {
-            /* Try to resolve hostname */
-            struct addrinfo hints, *result;
-            memset(&hints, 0, sizeof(hints));
-            hints.ai_family = AF_INET;
-            hints.ai_socktype = SOCK_STREAM;
-            
-            int status = getaddrinfo(config->host, NULL, &hints, &result);
-            if (status == 0 && result != NULL) {
-                /* Use the first result */
-                struct sockaddr_in* resolved_addr = (struct sockaddr_in*)result->ai_addr;
-                address.sin_addr = resolved_addr->sin_addr;
-                
-                char ip_str[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &address.sin_addr, ip_str, INET_ADDRSTRLEN);
-                printf("Resolved hostname %s to IP: %s\n", config->host, ip_str);
-                
-                freeaddrinfo(result);
-            } else {
-                /* Fallback to INADDR_ANY */
-                fprintf(stderr, "Warning: Failed to resolve host '%s', falling back to 0.0.0.0\n", config->host);
-                address.sin_addr.s_addr = INADDR_ANY;
-            }
-        }
-    } else {
+    /* Handle hostname configuration */
+    if (config->host == NULL || strcmp(config->host, "0.0.0.0") == 0) {
         /* Bind to any address */
         address.sin_addr.s_addr = INADDR_ANY;
-        printf("Using INADDR_ANY (0.0.0.0) for binding\n");
+        printf("Binding to all interfaces (0.0.0.0) on port %d...\n", config->port);
+    } else if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
+        /* Bind to localhost */
+        address.sin_addr.s_addr = inet_addr("127.0.0.1");
+        printf("Binding to localhost (127.0.0.1) on port %d...\n", config->port);
+    } else {
+        /* Try to resolve hostname */
+        struct addrinfo hints, *result;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        
+        int status = getaddrinfo(config->host, NULL, &hints, &result);
+        if (status == 0 && result != NULL) {
+            /* Use the first result */
+            struct sockaddr_in* resolved_addr = (struct sockaddr_in*)result->ai_addr;
+            address.sin_addr = resolved_addr->sin_addr;
+            
+            char ip_str[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &address.sin_addr, ip_str, INET_ADDRSTRLEN);
+            printf("Binding to resolved hostname %s (%s) on port %d...\n", 
+                   config->host, ip_str, config->port);
+            
+            freeaddrinfo(result);
+        } else {
+            /* Fallback to direct conversion */
+            if (inet_pton(AF_INET, config->host, &address.sin_addr) <= 0) {
+                fprintf(stderr, "Error: Failed to resolve host '%s', falling back to 0.0.0.0\n", 
+                        config->host);
+                address.sin_addr.s_addr = INADDR_ANY;
+                printf("Binding to all interfaces (0.0.0.0) on port %d...\n", config->port);
+            } else {
+                printf("Binding to IP address %s on port %d...\n", config->host, config->port);
+            }
+        }
     }
     
-    /* Print what port we're trying to bind to */
-    printf("Binding to port %d\n", config->port);
+    address.sin_port = htons(config->port);
     
-    /* Check if port is already in use */
-    char check_cmd[256];
-    snprintf(check_cmd, sizeof(check_cmd), "netstat -tuln | grep ':%d'", config->port);
-    int port_in_use = system(check_cmd) == 0;
-    
-    if (port_in_use) {
-        printf("Warning: Port %d appears to be in use\n", config->port);
+    /* Try binding socket */
+    if (g_logger) {
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &address.sin_addr, ip_str, INET_ADDRSTRLEN);
+        LOG_INFO("Attempting to bind to %s:%d", ip_str, config->port);
     }
     
-    /* Simple bind with clear error reporting */
+    /* Add more detailed bind debugging */
+    char bind_debug_cmd[256];
+    snprintf(bind_debug_cmd, sizeof(bind_debug_cmd), 
+             "netstat -tuln | grep ':%d' || echo 'Port %d free before binding'", 
+             config->port, config->port);
+    system(bind_debug_cmd);
+    
     if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        fprintf(stderr, "Error: Failed to bind socket to port %d: %s (errno=%d)\n", 
-                config->port, strerror(errno), errno);
+        /* Try using an alternate port if the original port is in use */
+        if (errno == EADDRINUSE) {
+            int alternate_port = config->port + 1;
+            
+            if (g_logger) {
+                LOG_WARNING("Port %d is in use, trying alternate port %d", config->port, alternate_port);
+            } else {
+                fprintf(stderr, "Warning: Port %d is in use, trying alternate port %d...\n", 
+                        config->port, alternate_port);
+            }
+            
+            /* Run netstat to verify port is actually in use */
+            char check_cmd[256];
+            snprintf(check_cmd, sizeof(check_cmd), 
+                     "netstat -tuln | grep ':%d' || echo 'Port %d NOT FOUND in netstat despite EADDRINUSE'", 
+                     config->port, config->port);
+            system(check_cmd);
+            
+            /* Update port in address structure */
+            address.sin_port = htons(alternate_port);
+            
+            /* Try binding again */
+            if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+                int bind_errno = errno;
+                if (g_logger) {
+                    LOG_ERROR("Failed to bind socket to alternate port %d: %s (errno=%d)", 
+                            alternate_port, strerror(bind_errno), bind_errno);
+                } else {
+                    fprintf(stderr, "Error: Failed to bind socket to alternate port %d: %s (errno=%d)\n", 
+                           alternate_port, strerror(bind_errno), bind_errno);
+                }
+                
+                /* Run additional diagnostics */
+                system("ss -tuln | grep -E ':(5000|6000|8000|8888|9000)' || echo 'No test ports in use'");
+                
+                close(socket_fd);
+                return -1;
+            }
+            
+            /* Update config with new port */
+            config->port = alternate_port;
+            
+            if (g_logger) {
+                LOG_INFO("Successfully bound to alternate port %d", alternate_port);
+            } else {
+                printf("Successfully bound to alternate port %d\n", alternate_port);
+            }
+        } else {
+            int bind_errno = errno;
+            if (g_logger) {
+                LOG_ERROR("Failed to bind socket to port %d: %s (errno=%d)", 
+                        config->port, strerror(bind_errno), bind_errno);
+            } else {
+                fprintf(stderr, "Error: Failed to bind socket to port %d: %s (errno=%d)\n", 
+                       config->port, strerror(bind_errno), bind_errno);
+            }
+            
+            /* Run additional diagnostics */
+            system("ss -tuln | grep -E ':(5000|6000|8000|8888|9000)' || echo 'No test ports in use'");
+            
+            close(socket_fd);
+            return -1;
+        }
+    }
+    
+    /* Check if binding was actually successful */
+    struct sockaddr_in bound_addr;
+    socklen_t addr_len = sizeof(bound_addr);
+    if (getsockname(socket_fd, (struct sockaddr*)&bound_addr, &addr_len) < 0) {
+        if (g_logger) {
+            LOG_WARNING("Failed to get bound socket name: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to get bound socket name: %s\n", strerror(errno));
+        }
+    } else {
+        char bound_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &bound_addr.sin_addr, bound_ip, INET_ADDRSTRLEN);
+        int bound_port = ntohs(bound_addr.sin_port);
+        
+        if (g_logger) {
+            LOG_INFO("Socket actually bound to %s:%d", bound_ip, bound_port);
+        } else {
+            printf("Socket actually bound to %s:%d\n", bound_ip, bound_port);
+        }
+        
+        /* Verify port with netstat */
+        char verify_cmd[256];
+        snprintf(verify_cmd, sizeof(verify_cmd), 
+                 "netstat -tuln | grep ':%d' || echo 'Port %d NOT FOUND in netstat despite successful bind'", 
+                 bound_port, bound_port);
+        system(verify_cmd);
+    }
+    
+    /* Set socket to listen state */
+    if (g_logger) {
+        LOG_INFO("Setting socket to listen state with backlog %d", 
+                config->max_connections > 0 ? config->max_connections : 10);
+    }
+    
+    int listen_result = listen(socket_fd, config->max_connections > 0 ? config->max_connections : 10);
+    if (listen_result < 0) {
+        int listen_errno = errno;
+        if (g_logger) {
+            LOG_ERROR("Failed to listen on socket: %s (errno=%d)", 
+                     strerror(listen_errno), listen_errno);
+        } else {
+            fprintf(stderr, "Error: Failed to listen on socket: %s (errno=%d)\n", 
+                   strerror(listen_errno), listen_errno);
+        }
         close(socket_fd);
         return -1;
     }
     
-    printf("Socket bound successfully\n");
-    
-    /* Set up to listen for connections */
-    if (listen(socket_fd, 5) < 0) {
-        fprintf(stderr, "Error: Failed to listen on socket: %s\n", strerror(errno));
-        close(socket_fd);
-        return -1;
-    }
-    
-    printf("Socket listening successfully\n");
-    
-    /* Verify the socket is in listening state */
+    /* Verify listening state */
     int acceptconn = 0;
     socklen_t acceptconn_len = sizeof(acceptconn);
     if (getsockopt(socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+        if (g_logger) {
+            LOG_WARNING("Failed to check SO_ACCEPTCONN: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+        }
     } else {
-        printf("Socket listening state: %s\n", acceptconn ? "LISTENING" : "NOT LISTENING");
+        if (g_logger) {
+            LOG_INFO("Socket listening state: %s", acceptconn ? "LISTENING" : "NOT LISTENING");
+        } else {
+            printf("Socket listening state: %s\n", acceptconn ? "LISTENING" : "NOT LISTENING");
+        }
+        
+        if (!acceptconn) {
+            if (g_logger) {
+                LOG_ERROR("Socket is NOT in listening state despite successful listen() call");
+            } else {
+                fprintf(stderr, "Error: Socket is NOT in listening state despite successful listen() call\n");
+            }
+            
+            /* Socket is not actually listening, try to recover */
+            close(socket_fd);
+            return -1;
+        }
     }
     
-    /* SHORT DELAY: Give OS time to register socket in network tables */
-    printf("Adding brief delay for OS registration...\n");
+    /* IMPORTANT: Verify the socket is actually listening with netstat before setting non-blocking mode.
+     * Setting to non-blocking too early can cause issues with the bind and listen operations.
+     */
+    if (g_logger) {
+        LOG_INFO("Checking if socket is visible in network tables before setting non-blocking mode");
+    }
+    
+    /* Run ss command to check if the socket is visible */
+    char ss_cmd[256];
+    snprintf(ss_cmd, sizeof(ss_cmd), 
+             "ss -tlnp | grep ':%d' || echo 'Socket on port %d not found in ss output'", 
+             config->port, config->port);
+    system(ss_cmd);
+    
+    /* Sleep briefly to ensure OS has registered the socket in network tables */
     sleep(1);
     
-    /* Re-check port status with netstat */
-    printf("Checking port status after binding:\n");
-    char verify_cmd[512];
-    snprintf(verify_cmd, sizeof(verify_cmd), 
-             "netstat -tuln | grep ':%d' || echo 'Port %d not found in netstat'", 
-             config->port, config->port);
-    system(verify_cmd);
-    
-    /* Only now set to non-blocking mode */
-    if (fcntl(socket_fd, F_SETFL, O_NONBLOCK) < 0) {
-        fprintf(stderr, "Warning: Failed to set socket to non-blocking mode\n");
+    /* NOW set socket to non-blocking mode after verifying it's properly listening */
+    if (set_socket_non_blocking(socket_fd) < 0) {
+        if (g_logger) {
+            LOG_WARNING("Failed to set socket to non-blocking mode: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to set socket to non-blocking mode: %s\n", strerror(errno));
+        }
+    } else {
+        if (g_logger) {
+            LOG_DEBUG("Socket set to non-blocking mode");
+        }
     }
+    
+    /* Verify binding and listening one more time */
+    char final_verify_cmd[256];
+    snprintf(final_verify_cmd, sizeof(final_verify_cmd), 
+             "netstat -tuln | grep ':%d' || ss -tuln | grep ':%d' || echo 'Port %d STILL NOT FOUND in netstat or ss'", 
+             config->port, config->port, config->port);
+    system(final_verify_cmd);
     
     /* Store socket descriptor in config */
     config->socket_fd = socket_fd;
+    
+    /* CRITICAL: Verify the socket is in blocking mode at creation */
+    int flags = fcntl(socket_fd, F_GETFL, 0);
+    if (flags != -1 && (flags & O_NONBLOCK)) {
+        LOG_ERROR("Socket was created in non-blocking mode, fixing...");
+        if (fcntl(socket_fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+            LOG_ERROR("Failed to set socket to blocking mode: %s", strerror(errno));
+        }
+    }
+    
+    if (g_logger) {
+        LOG_INFO("Socket successfully initialized and listening on port %d (fd=%d)", 
+                config->port, socket_fd);
+    } else {
+        printf("Socket successfully initialized and listening on port %d (fd=%d)\n", 
+              config->port, socket_fd);
+    }
     
     return 0;
 }
@@ -432,6 +619,8 @@ static void* accept_thread_func(void* arg) {
     if (g_signal_pipe[0] >= 0 && g_signal_pipe[0] > max_fd) {
         max_fd = g_signal_pipe[0];
     }
+    
+    printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
     
     /* Continue until shutdown is requested */
     while (!g_shutdown_requested) {
