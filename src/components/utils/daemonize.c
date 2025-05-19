@@ -47,10 +47,9 @@ int daemonize_process(const char* pid_file) {
         return -1;
     }
     
-    /* IMPORTANT: Record the current PID for logging */
+    /* Record the current PID for logging */
     pid_t daemon_pid = getpid();
     printf("DAEMONIZE DEBUG: Intermediate process PID is %d (after setsid)\n", daemon_pid);
-    fflush(stdout);
     
     /* Second fork - fully detach from terminal */
     pid = fork();
@@ -68,20 +67,29 @@ int daemonize_process(const char* pid_file) {
     /* Final daemon process continues */
     daemon_pid = getpid();
     printf("DAEMONIZE DEBUG: Final daemon process PID is %d\n", daemon_pid);
-    fflush(stdout);
     
     /* Reset file mode creation mask to ensure proper permissions */
     umask(0);
     
-    /* Change working directory to root to avoid keeping directories mounted */
-    if (chdir("/") < 0) {
-        fprintf(stderr, "Failed to change working directory: %s\n", strerror(errno));
-        /* Not fatal, continue execution */
+    /* IMPORTANT: Do NOT change working directory to root - maintaining original directory */
+    /* This is the key fix - comment out the chdir("/") call that was causing socket binding issues */
+    
+    /* Save original stdout for debugging */
+    int original_stdout = dup(STDOUT_FILENO);
+    
+    /* Get current working directory for logging */
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("DAEMONIZE DEBUG: Maintaining working directory: %s\n", cwd);
     }
     
-    /* Save original stdout/stderr for debug messages */
-    int original_stdout = dup(STDOUT_FILENO);
-    int original_stderr = dup(STDERR_FILENO);
+    /* Write a debug log before closing stdin/stdout/stderr */
+    FILE* debug_log = fopen("/opt/jsondb/var/daemon_debug.log", "w");
+    if (debug_log) {
+        fprintf(debug_log, "DAEMON DEBUG: Final daemon process (PID: %d) starting in directory: %s\n", 
+                daemon_pid, cwd);
+        fclose(debug_log);
+    }
     
     /* Close all standard file descriptors */
     close(STDIN_FILENO);
@@ -91,14 +99,7 @@ int daemonize_process(const char* pid_file) {
     /* Redirect standard file descriptors to /dev/null */
     int fd = open("/dev/null", O_RDWR);
     if (fd < 0) {
-        if (original_stdout > 0) {
-            FILE* saved_stdout = fdopen(original_stdout, "w");
-            if (saved_stdout) {
-                fprintf(saved_stdout, "DAEMONIZE ERROR: Failed to open /dev/null: %s\n", strerror(errno));
-                fflush(saved_stdout);
-                fclose(saved_stdout);
-            }
-        }
+        /* Can't log to stderr anymore, just return error */
         return -1;  /* Error opening /dev/null */
     }
     
@@ -125,14 +126,8 @@ int daemonize_process(const char* pid_file) {
         FILE* saved_stdout = fdopen(original_stdout, "w");
         if (saved_stdout) {
             fprintf(saved_stdout, "DAEMONIZE DEBUG: Process successfully daemonized (PID: %d)\n", daemon_pid);
-            fflush(saved_stdout);
             fclose(saved_stdout);
         }
-    }
-    
-    /* Close original stderr if it was duplicated */
-    if (original_stderr > 0) {
-        close(original_stderr);
     }
     
     /* Write PID to file if provided */

@@ -2,6 +2,7 @@
 #include "utils/config_loader.h"
 #include "utils/config_defaults.h"
 #include "utils/logger.h"
+#include "utils/path_normalizer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -307,6 +308,27 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         return status;
     }
 
+    /* Load configuration from environment variables */
+    INIT_LOG_PROGRESS("CONFIG", "Loading settings from environment variables");
+    load_paths_from_env(heap_config);
+    
+    /* Normalize all paths to absolute */
+    INIT_LOG_PROGRESS("CONFIG", "Normalizing paths to absolute");
+    normalize_config_paths(heap_config, config_get_binary_dir());
+    
+    /* Log all configuration values for debugging */
+    INIT_LOG_DEBUG("CONFIG", "Final configuration settings:");
+    INIT_LOG_DEBUG("CONFIG", "  Port: %d", heap_config->port);
+    INIT_LOG_DEBUG("CONFIG", "  Host: %s", heap_config->host ? heap_config->host : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Database path: %s", heap_config->db_path ? heap_config->db_path : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  RBAC file: %s", heap_config->rbac_path ? heap_config->rbac_path : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  PID file: %s", heap_config->pid_file ? heap_config->pid_file : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Log file: %s", heap_config->log_file ? heap_config->log_file : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Web root: %s", heap_config->web_root ? heap_config->web_root : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Validators dir: %s", heap_config->validators_dir ? heap_config->validators_dir : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Transforms dir: %s", heap_config->transforms_dir ? heap_config->transforms_dir : "(null)");
+    INIT_LOG_DEBUG("CONFIG", "  Metrics dir: %s", heap_config->metrics_dir ? heap_config->metrics_dir : "(null)");
+    
     /* Set the output parameter */
     *config_out = heap_config;
     

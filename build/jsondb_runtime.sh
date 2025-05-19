@@ -1,21 +1,77 @@
 #!/bin/bash
-# Simple run script for JSONdb server
+# Enhanced run script for JSONdb server with environment variable support
 
-# Configuration
-DBPATH='./var/jsondb_database.json'
-RBACFILE='./var/json_rbac.json'
-LOGFILE='./var/jsondb_server.log'
-PIDFILE='./var/jsondb_server.pid'
-WEBROOT='../share/htdocs'
-LOGLEVEL='debug'
-PORT=5000
-HOST='0.0.0.0'
-VALIDATORS_DIR='./var/validators'
-TRANSFORMS_DIR='./var/transforms'
-METRICS_DIR='./var/metrics'
-
-# Go to the build directory
+# Go to the build directory first
 cd "$(dirname "$0")"
+
+# Source environment configuration if exists
+ENV_FILE="./var/jsondb_server.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "Loading configuration from $ENV_FILE"
+    source "$ENV_FILE"
+else
+    echo "Warning: Environment file $ENV_FILE not found, using defaults"
+fi
+
+# Allow for custom environment file from command line (--env-file parameter)
+for arg in "$@"; do
+    if [[ "$arg" == --env-file=* ]]; then
+        CUSTOM_ENV_FILE="${arg#*=}"
+        if [ -f "$CUSTOM_ENV_FILE" ]; then
+            echo "Loading custom environment file: $CUSTOM_ENV_FILE"
+            source "$CUSTOM_ENV_FILE"
+            ENV_FILE="$CUSTOM_ENV_FILE"
+        else
+            echo "Error: Custom environment file not found: $CUSTOM_ENV_FILE"
+            exit 1
+        fi
+        break
+    fi
+done
+
+# Set default values if not in environment
+: ${JSONDB_PORT:=5000}
+: ${JSONDB_HOST:="0.0.0.0"}
+: ${JSONDB_VERBOSE:="false"}
+: ${JSONDB_LOG_LEVEL:="debug"}
+
+# Set base paths if not already defined
+: ${JSONDB_BASE_DIR:="/opt/jsondb"}
+: ${JSONDB_BUILD_DIR:="${JSONDB_BASE_DIR}/build"}
+: ${JSONDB_VAR_DIR:="${JSONDB_BASE_DIR}/var"}
+: ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
+
+# Ensure absolute paths using base directories
+: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/jsondb_database.json"}
+: ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/json_rbac.json"} 
+: ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb_server.log"}
+: ${JSONDB_PID_FILE:="${JSONDB_VAR_DIR}/jsondb_server.pid"}
+: ${JSONDB_WEB_ROOT:="${JSONDB_SHARE_DIR}/htdocs"}
+: ${JSONDB_VALIDATORS_DIR:="${JSONDB_VAR_DIR}/validators"}
+: ${JSONDB_TRANSFORMS_DIR:="${JSONDB_VAR_DIR}/transforms"}
+: ${JSONDB_METRICS_DIR:="${JSONDB_VAR_DIR}/metrics"}
+
+# Set configuration from environment to variables used in script
+DBPATH="$JSONDB_DB_DIR"
+RBACFILE="$JSONDB_RBAC_FILE"
+LOGFILE="$JSONDB_LOG_FILE"
+PIDFILE="$JSONDB_PID_FILE"
+WEBROOT="$JSONDB_WEB_ROOT"
+LOGLEVEL="$JSONDB_LOG_LEVEL"
+PORT=$JSONDB_PORT
+HOST="$JSONDB_HOST"
+VALIDATORS_DIR="$JSONDB_VALIDATORS_DIR"
+TRANSFORMS_DIR="$JSONDB_TRANSFORMS_DIR"
+METRICS_DIR="$JSONDB_METRICS_DIR"
+
+# Display configuration for debugging
+echo "Using configuration:"
+echo "  Database path: $DBPATH"
+echo "  RBAC file: $RBACFILE"
+echo "  Log file: $LOGFILE"
+echo "  PID file: $PIDFILE"
+echo "  Host: $HOST"
+echo "  Port: $PORT"
 
 # Add QuickJS library directory to library path if needed
 if [ -d "/opt/qjs/lib/quickjs" ]; then
@@ -282,31 +338,90 @@ DEBUG_MODE=0
 COMMAND=$1
 shift
 
-# Parse remaining arguments
+# Parse remaining arguments (these override environment variables)
 while [ $# -gt 0 ]; do
     case "$1" in
         --port=*)
             PORT="${1#*=}"
+            JSONDB_PORT="$PORT"
             ;;
         --host=*)
             HOST="${1#*=}"
+            JSONDB_HOST="$HOST"
+            ;;
+        --db-dir=*|--db-path=*)
+            DBPATH="${1#*=}"
+            JSONDB_DB_DIR="$DBPATH"
+            ;;
+        --rbac-file=*)
+            RBACFILE="${1#*=}"
+            JSONDB_RBAC_FILE="$RBACFILE"
+            ;;
+        --log-file=*)
+            LOGFILE="${1#*=}"
+            JSONDB_LOG_FILE="$LOGFILE"
+            ;;
+        --pid-file=*)
+            PIDFILE="${1#*=}"
+            JSONDB_PID_FILE="$PIDFILE"
+            ;;
+        --web-root=*)
+            WEBROOT="${1#*=}"
+            JSONDB_WEB_ROOT="$WEBROOT"
+            ;;
+        --log-level=*)
+            LOGLEVEL="${1#*=}"
+            JSONDB_LOG_LEVEL="$LOGLEVEL"
             ;;
         --validators-dir=*)
             VALIDATORS_DIR="${1#*=}"
+            JSONDB_VALIDATORS_DIR="$VALIDATORS_DIR"
             ;;
         --transforms-dir=*)
             TRANSFORMS_DIR="${1#*=}"
+            JSONDB_TRANSFORMS_DIR="$TRANSFORMS_DIR"
             ;;
         --metrics-dir=*)
             METRICS_DIR="${1#*=}"
+            JSONDB_METRICS_DIR="$METRICS_DIR"
+            ;;
+        --max-connections=*)
+            JSONDB_MAX_CONNECTIONS="${1#*=}"
             ;;
         --debug)
             DEBUG_MODE=1
+            JSONDB_DEBUG_MODE="true"
+            JSONDB_VERBOSE="true"
             echo "Debug mode enabled"
+            ;;
+        --env-file=*)
+            ENV_FILE="${1#*=}"
+            if [ -f "$ENV_FILE" ]; then
+                echo "Loading custom environment file: $ENV_FILE"
+                source "$ENV_FILE"
+            else
+                echo "Error: Custom environment file not found: $ENV_FILE"
+                exit 1
+            fi
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR] [--debug]"
+            echo "Usage: $0 {start|stop|restart|status|run} [OPTIONS]"
+            echo "Options:"
+            echo "  --port=PORT                Set server port"
+            echo "  --host=HOST                Set server bind address"
+            echo "  --db-dir=PATH              Set database directory/file"
+            echo "  --rbac-file=FILE           Set RBAC file path"
+            echo "  --log-file=FILE            Set log file path"
+            echo "  --pid-file=FILE            Set PID file path"
+            echo "  --log-level=LEVEL          Set log level (error, warn, info, debug, trace)"
+            echo "  --web-root=DIR             Set web root directory"
+            echo "  --validators-dir=DIR       Set validators directory"
+            echo "  --transforms-dir=DIR       Set transforms directory"
+            echo "  --metrics-dir=DIR          Set metrics directory"
+            echo "  --max-connections=NUM      Set maximum connections"
+            echo "  --debug                    Enable debug mode"
+            echo "  --env-file=FILE            Use custom environment file"
             exit 1
             ;;
     esac
