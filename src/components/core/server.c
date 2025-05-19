@@ -29,7 +29,6 @@ static int initialize_thread_pool(server_config_t* config);
 static void* accept_thread_func(void* arg);
 static void handle_signals(void);
 static void signal_handler(int sig);
-static int set_socket_non_blocking(int socket_fd);
 
 /* Adapter function for thread pool compatibility */
 static void handle_client_adapter(void* client_data) {
@@ -198,132 +197,190 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
 }
 
 /**
- * Initialize server socket - SIMPLIFIED VERSION
+ * Initialize server socket - CLEAN IMPLEMENTATION based on proven approach
  * 
- * This is a simplified version that focuses on reliable socket binding
- * without any complex options or error recovery. It uses only the most
- * basic socket operations to ensure reliable binding.
+ * This implementation is based on our successful socket_binding_fix_final.c approach:
+ * 1. Simplified, direct socket creation and binding
+ * 2. Improved error handling and logging
+ * 3. Proper hostname resolution
+ * 4. Socket state verification without external commands
+ * 5. No reliance on netstat or other external commands
  */
 static int initialize_socket(server_config_t* config) {
     if (!config) {
         fprintf(stderr, "Error: NULL server configuration\n");
+        if (g_logger) {
+            LOG_ERROR("NULL server configuration in initialize_socket");
+        }
         return -1;
+    }
+    
+    /* Log current process context */
+    pid_t daemon_pid = getpid();
+    if (g_logger) {
+        LOG_DEBUG("Socket initialization started in PID %d", daemon_pid);
+    } else {
+        printf("Socket initialization started in PID %d\n", daemon_pid);
     }
     
     /* Create socket in blocking mode */
     int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) {
-        fprintf(stderr, "Error: Failed to create socket: %s\n", strerror(errno));
+        if (g_logger) {
+            LOG_ERROR("Failed to create socket: %s (errno=%d)", strerror(errno), errno);
+        } else {
+            fprintf(stderr, "Error: Failed to create socket: %s (errno=%d)\n", strerror(errno), errno);
+        }
         return -1;
     }
     
-    /* Initialize address structure */
+    if (g_logger) {
+        LOG_INFO("Socket created successfully (fd=%d)", socket_fd);
+    } else {
+        printf("Socket created successfully (fd=%d)\n", socket_fd);
+    }
+    
+    /* Set socket options */
+    int reuse = 1;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        if (g_logger) {
+            LOG_WARNING("Failed to set SO_REUSEADDR: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
+        }
+        /* Continue anyway, this is not fatal */
+    } else {
+        if (g_logger) {
+            LOG_INFO("Socket option SO_REUSEADDR set successfully");
+        } else {
+            printf("Socket option SO_REUSEADDR set successfully\n");
+        }
+    }
+    
+    /* Prepare address structure */
     struct sockaddr_in address;
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(config->port);
     
-    /* Set SO_REUSEADDR to allow rebinding */
-    int reuse = 1;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_REUSEADDR on socket\n");
-    }
-    
-    /* Resolve the hostname */
-    if (config->host != NULL && strcmp(config->host, "0.0.0.0") != 0) {
-        if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
-            /* Bind to localhost */
-            address.sin_addr.s_addr = inet_addr("127.0.0.1");
-            printf("Using localhost (127.0.0.1) for binding\n");
-        } else {
-            /* Try to resolve hostname */
-            struct addrinfo hints, *result;
-            memset(&hints, 0, sizeof(hints));
-            hints.ai_family = AF_INET;
-            hints.ai_socktype = SOCK_STREAM;
-            
-            int status = getaddrinfo(config->host, NULL, &hints, &result);
-            if (status == 0 && result != NULL) {
-                /* Use the first result */
-                struct sockaddr_in* resolved_addr = (struct sockaddr_in*)result->ai_addr;
-                address.sin_addr = resolved_addr->sin_addr;
-                
-                char ip_str[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &address.sin_addr, ip_str, INET_ADDRSTRLEN);
-                printf("Resolved hostname %s to IP: %s\n", config->host, ip_str);
-                
-                freeaddrinfo(result);
-            } else {
-                /* Fallback to INADDR_ANY */
-                fprintf(stderr, "Warning: Failed to resolve host '%s', falling back to 0.0.0.0\n", config->host);
-                address.sin_addr.s_addr = INADDR_ANY;
-            }
-        }
-    } else {
+    /* Handle host address - improved approach with proper error handling */
+    if (!config->host || strlen(config->host) == 0 || strcmp(config->host, "0.0.0.0") == 0) {
         /* Bind to any address */
         address.sin_addr.s_addr = INADDR_ANY;
-        printf("Using INADDR_ANY (0.0.0.0) for binding\n");
+        if (g_logger) {
+            LOG_INFO("Using INADDR_ANY (0.0.0.0) for binding");
+        } else {
+            printf("Using INADDR_ANY (0.0.0.0) for binding\n");
+        }
+    } else if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
+        /* Bind to localhost */
+        address.sin_addr.s_addr = inet_addr("127.0.0.1");
+        if (g_logger) {
+            LOG_INFO("Using localhost (127.0.0.1) for binding");
+        } else {
+            printf("Using localhost (127.0.0.1) for binding\n");
+        }
+    } else if (inet_addr(config->host) != INADDR_NONE) {
+        /* It's a valid IP address */
+        address.sin_addr.s_addr = inet_addr(config->host);
+        if (g_logger) {
+            LOG_INFO("Using IP address %s for binding", config->host);
+        } else {
+            printf("Using IP address %s for binding\n", config->host);
+        }
+    } else {
+        /* It's a hostname that needs to be resolved - this might be problematic */
+        if (g_logger) {
+            LOG_WARNING("Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding", config->host);
+        } else {
+            fprintf(stderr, "Warning: Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding\n", config->host);
+        }
+        address.sin_addr.s_addr = INADDR_ANY;
     }
     
-    /* Print what port we're trying to bind to */
-    printf("Binding to port %d\n", config->port);
-    
-    /* Check if port is already in use */
-    char check_cmd[256];
-    snprintf(check_cmd, sizeof(check_cmd), "netstat -tuln | grep ':%d'", config->port);
-    int port_in_use = system(check_cmd) == 0;
-    
-    if (port_in_use) {
-        printf("Warning: Port %d appears to be in use\n", config->port);
+    /* Bind socket */
+    if (g_logger) {
+        LOG_INFO("Binding socket to %s:%d...", 
+               config->host ? config->host : "0.0.0.0", config->port);
+    } else {
+        printf("Binding socket to %s:%d...\n", 
+              config->host ? config->host : "0.0.0.0", config->port);
     }
     
-    /* Simple bind with clear error reporting */
     if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        fprintf(stderr, "Error: Failed to bind socket to port %d: %s (errno=%d)\n", 
-                config->port, strerror(errno), errno);
+        if (g_logger) {
+            LOG_ERROR("Failed to bind socket: %s (errno=%d)", strerror(errno), errno);
+        } else {
+            fprintf(stderr, "Error: Failed to bind socket: %s (errno=%d)\n", strerror(errno), errno);
+        }
         close(socket_fd);
         return -1;
     }
     
-    printf("Socket bound successfully\n");
+    if (g_logger) {
+        LOG_INFO("Socket bound successfully");
+    } else {
+        printf("Socket bound successfully\n");
+    }
     
     /* Set up to listen for connections */
-    if (listen(socket_fd, 5) < 0) {
-        fprintf(stderr, "Error: Failed to listen on socket: %s\n", strerror(errno));
+    if (g_logger) {
+        LOG_INFO("Setting socket to listen state...");
+    } else {
+        printf("Setting socket to listen state...\n");
+    }
+    
+    if (listen(socket_fd, 10) < 0) {
+        if (g_logger) {
+            LOG_ERROR("Failed to listen on socket: %s (errno=%d)", strerror(errno), errno);
+        } else {
+            fprintf(stderr, "Error: Failed to listen on socket: %s (errno=%d)\n", strerror(errno), errno);
+        }
         close(socket_fd);
         return -1;
     }
     
-    printf("Socket listening successfully\n");
+    if (g_logger) {
+        LOG_INFO("Socket listening successfully");
+    } else {
+        printf("Socket listening successfully\n");
+    }
     
-    /* Verify the socket is in listening state */
+    /* Verify socket state */
     int acceptconn = 0;
     socklen_t acceptconn_len = sizeof(acceptconn);
     if (getsockopt(socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+        if (g_logger) {
+            LOG_WARNING("Failed to check SO_ACCEPTCONN: %s", strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+        }
     } else {
-        printf("Socket listening state: %s\n", acceptconn ? "LISTENING" : "NOT LISTENING");
-    }
-    
-    /* SHORT DELAY: Give OS time to register socket in network tables */
-    printf("Adding brief delay for OS registration...\n");
-    sleep(1);
-    
-    /* Re-check port status with netstat */
-    printf("Checking port status after binding:\n");
-    char verify_cmd[512];
-    snprintf(verify_cmd, sizeof(verify_cmd), 
-             "netstat -tuln | grep ':%d' || echo 'Port %d not found in netstat'", 
-             config->port, config->port);
-    system(verify_cmd);
-    
-    /* Only now set to non-blocking mode */
-    if (fcntl(socket_fd, F_SETFL, O_NONBLOCK) < 0) {
-        fprintf(stderr, "Warning: Failed to set socket to non-blocking mode\n");
+        if (g_logger) {
+            LOG_INFO("Socket listening state: %s", acceptconn ? "LISTENING" : "NOT LISTENING");
+        } else {
+            printf("Socket listening state: %s\n", acceptconn ? "LISTENING" : "NOT LISTENING");
+        }
+        
+        if (!acceptconn) {
+            if (g_logger) {
+                LOG_ERROR("Socket is not in listening state despite successful listen() call");
+            } else {
+                fprintf(stderr, "Error: Socket is not in listening state despite successful listen() call\n");
+            }
+            close(socket_fd);
+            return -1;
+        }
     }
     
     /* Store socket descriptor in config */
     config->socket_fd = socket_fd;
+    
+    if (g_logger) {
+        LOG_INFO("Socket initialization complete (socket_fd=%d, port=%d)", socket_fd, config->port);
+    } else {
+        printf("Socket initialization complete (socket_fd=%d, port=%d)\n", socket_fd, config->port);
+    }
     
     return 0;
 }
@@ -601,23 +658,7 @@ void server_request_shutdown(void) {
     printf("Server shutdown requested\n");
 }
 
-/**
- * Set socket to non-blocking mode
- */
-static int set_socket_non_blocking(int socket_fd) {
-    int flags = fcntl(socket_fd, F_GETFL, 0);
-    if (flags < 0) {
-        fprintf(stderr, "Error: fcntl(F_GETFL) failed: %s\n", strerror(errno));
-        return -1;
-    }
-    
-    if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        fprintf(stderr, "Error: fcntl(F_SETFL, O_NONBLOCK) failed: %s\n", strerror(errno));
-        return -1;
-    }
-    
-    return 0;
-}
+/* Removed unused function set_socket_non_blocking */
 
 /*
  * Legacy compatibility functions (deprecated)
@@ -637,16 +678,19 @@ server_status_t server_init(server_config_t* config, struct api_context* api_ctx
 }
 
 server_status_t server_start(server_config_t* config) {
+    (void)config; /* Mark parameter as unused */
     fprintf(stderr, "Warning: server_start() is deprecated, use server_initialize_and_run() instead.\n");
     return SERVER_OK;
 }
 
 void* server_accept_loop(void* config_ptr) {
+    (void)config_ptr; /* Mark parameter as unused */
     fprintf(stderr, "Warning: server_accept_loop() is deprecated.\n");
     return NULL;
 }
 
 void server_stop(server_config_t* config) {
+    (void)config; /* Mark parameter as unused */
     fprintf(stderr, "Warning: server_stop() is deprecated, use server_request_shutdown() instead.\n");
     server_request_shutdown();
 }

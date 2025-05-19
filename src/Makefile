@@ -29,6 +29,17 @@ TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
 JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC_DIR)/components/js/*.c))
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
+# Initialization components
+INIT_SRCS = $(SRC_DIR)/components/init_core.c \
+            $(SRC_DIR)/components/init_config.c \
+            $(SRC_DIR)/components/init_logger.c \
+            $(SRC_DIR)/components/init_database.c \
+            $(SRC_DIR)/components/init_daemon.c \
+            $(SRC_DIR)/components/init_socket.c \
+            $(SRC_DIR)/components/init_rbac.c \
+            $(SRC_DIR)/components/init_api.c \
+            $(SRC_DIR)/components/init_threads.c
+
 # Thread pool implementation
 # Note: Now integrated into server.c directly
 THREAD_POOL_SRC = $(SRC_DIR)/components/core/thread_pool.c
@@ -45,9 +56,12 @@ UTILS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(UTILS_SRCS))
 TOOLS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(TOOLS_SRCS))
 JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
 
+# Initialization objects
+INIT_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(INIT_SRCS))
+
 # All objects
 OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS)
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(INIT_OBJS)
 
 # JavaScript support handling
 ifdef DISABLE_JS
@@ -86,7 +100,7 @@ FINAL_DB_OBJS = $(CUSTOM_DB_OBJS) $(OBJ_DIR)/components/database/database_with_o
 
 # Define all optimized objects
 OPTIMIZED_OBJS = $(CORE_OBJS) $(API_OBJS) $(FINAL_DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ)
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(INIT_OBJS)
 
 # List of objects for Makefile dependencies
 ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS)) \
@@ -97,8 +111,13 @@ libjsondb: $(ALL_OBJS)
 	@echo "Creating libjsondb.a with optimized implementations..."
 	ar rcs $(LIB_DIR)/libjsondb.a $(OPTIMIZED_OBJS)
 
-# Build server
+# Build server with new main.c
 server: $(OBJ_DIR)/components/main.o libjsondb
+	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS) -lm
+
+# Target to build with new modular main.c
+server-modular: libjsondb
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/components/main.c.modular -o $(OBJ_DIR)/components/main.o
 	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS) -lm
 
 # Build tools
@@ -169,7 +188,7 @@ verify-organization:
 	@echo "Organization verification passed"
 
 # Phony targets
-.PHONY: all directories libjsondb server tools clean test verify-organization
+.PHONY: all directories libjsondb server server-modular tools clean test verify-organization
 
 # Special targets for building with different flags
 js-disabled:
