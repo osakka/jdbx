@@ -50,9 +50,22 @@ init_status_t run_server(server_config_t* config) {
         return INIT_ERROR;
     }
     
+    /* Verify socket descriptor is valid before proceeding */
+    if (config->socket_fd <= 0) {
+        INIT_LOG_FAILURE("SERVER", "Invalid socket descriptor (%d)", config->socket_fd);
+        return INIT_SOCKET_ERROR;
+    }
+    
+    /* Verify API context is available */
+    if (!config->api_ctx) {
+        INIT_LOG_FAILURE("SERVER", "NULL API context");
+        return INIT_API_ERROR;
+    }
+    
     /* For foreground mode, just run the server directly */
     if (config->verbose_mode) {
         /* Start the server with our thread pool implementation */
+        INIT_LOG_PROGRESS("SERVER", "Running server in foreground with socket %d", config->socket_fd);
         server_status_t server_status = server_initialize_and_run(config, config->api_ctx);
         
         /* Check if the server completed initialization */
@@ -83,6 +96,7 @@ init_status_t run_server(server_config_t* config) {
         }
         
         /* Child process runs the server */
+        INIT_LOG_PROGRESS("SERVER", "Running server in daemon mode with socket %d", config->socket_fd);
         server_status_t server_status = server_initialize_and_run(config, config->api_ctx);
         
         /* This code should only run when server shuts down */

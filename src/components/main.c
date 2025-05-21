@@ -263,7 +263,16 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Initialize RBAC AFTER socket and database are ready */
+    /* Initialize thread pool before other initialization */
+    LOG_DEBUG("Initializing Thread Pool");
+    status = init_threads(config);
+    if (status != INIT_OK) {
+        INIT_LOG_FAILURE("MAIN", "Failed to initialize thread pool");
+        free(config);
+        return 1;
+    }
+    
+    /* Initialize RBAC AFTER thread pool and database are ready, but BEFORE API */
     LOG_DEBUG("Initializing RBAC");
     status = init_rbac(config, database, &rbac, &rbac_ref);
     if (status != INIT_OK) {
@@ -272,7 +281,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Initialize API context AFTER RBAC is ready */
+    /* Initialize API context with properly initialized RBAC */
     LOG_DEBUG("Initializing API");
     status = init_api(config, database, rbac, &api_ctx);
     if (status != INIT_OK) {
@@ -283,15 +292,6 @@ int main(int argc, char** argv) {
     
     /* Store API context in config for sharing with other components */
     config->api_ctx = api_ctx;
-    
-    /* Initialize thread pool */
-    LOG_DEBUG("Initializing Thread Pool");
-    status = init_threads(config);
-    if (status != INIT_OK) {
-        INIT_LOG_FAILURE("MAIN", "Failed to initialize thread pool");
-        free(config);
-        return 1;
-    }
     
     LOG_INFO("All components successfully initialized in the correct sequence");
     

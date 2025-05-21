@@ -108,27 +108,48 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
         }
     }
     
-    /* Initialize socket */
-    if (g_logger) {
-        LOG_INFO("Initializing socket on %s:%d", 
-                config->host ? config->host : "0.0.0.0", config->port);
-    } else {
-        printf("Starting JSONdb server on port %d...\n", config->port);
-    }
-    
-    if (init_socket(config) != INIT_OK) {
+    /* Initialize socket ONLY if not already initialized */
+    if (config->socket_fd <= 0) {
         if (g_logger) {
-            LOG_ERROR("Failed to initialize server socket");
+            LOG_INFO("Initializing socket on %s:%d", 
+                    config->host ? config->host : "0.0.0.0", config->port);
         } else {
-            fprintf(stderr, "Error: Failed to initialize server socket\n");
+            printf("Starting JSONdb server on port %d...\n", config->port);
         }
-        return SERVER_SOCKET_ERROR;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Socket initialized successfully (fd=%d)", config->socket_fd);
+        
+        if (init_socket(config) != INIT_OK) {
+            if (g_logger) {
+                LOG_ERROR("Failed to initialize server socket");
+            } else {
+                fprintf(stderr, "Error: Failed to initialize server socket\n");
+            }
+            return SERVER_SOCKET_ERROR;
+        }
+        
+        if (g_logger) {
+            LOG_INFO("Socket initialized successfully (fd=%d)", config->socket_fd);
+        } else {
+            printf("Socket initialization successful (fd=%d)\n", config->socket_fd);
+        }
     } else {
-        printf("Socket initialization successful (fd=%d)\n", config->socket_fd);
+        /* Socket already initialized */
+        if (g_logger) {
+            LOG_INFO("Using pre-initialized socket (fd=%d)", config->socket_fd);
+        } else {
+            printf("Using pre-initialized socket (fd=%d)\n", config->socket_fd);
+        }
+        
+        /* Verify socket is still valid */
+        int error = 0;
+        socklen_t len = sizeof(error);
+        if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0 || error != 0) {
+            if (g_logger) {
+                LOG_ERROR("Pre-initialized socket is invalid: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Error: Pre-initialized socket is invalid: %s\n", strerror(errno));
+            }
+            return SERVER_SOCKET_ERROR;
+        }
     }
     
     /* Initialize thread pool */

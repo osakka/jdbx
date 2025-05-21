@@ -175,13 +175,13 @@ int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path) {
         }
     }
     
-    /* Try to save RBAC to database */
-    int result = rbac_db_save(db, rbac);
+    /* Try to save RBAC to database using the enhanced fixed implementation */
+    int result = rbac_db_save_fixed(db, rbac);
     
     if (result) {
-        LOG_INFO("Successfully saved RBAC to database");
+        LOG_INFO("Successfully saved RBAC to database using fixed implementation");
     } else {
-        LOG_ERROR("Failed to save RBAC to database");
+        LOG_ERROR("Failed to save RBAC to database using fixed implementation");
     }
     
     /* Reset the flag since we're done */

@@ -145,6 +145,63 @@ init_status_t init_socket(server_config_t* config) {
             return INIT_SOCKET_ERROR;
         }
     }
+    
+    /* Add a short diagnostic test to verify socket is working */
+    int client_temp = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_temp >= 0) {
+        struct sockaddr_in test_addr;
+        memset(&test_addr, 0, sizeof(test_addr));
+        test_addr.sin_family = AF_INET;
+        test_addr.sin_port = htons(config->port);
+        test_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        
+        /* Try to connect non-blocking with timeout */
+        int flags = fcntl(client_temp, F_GETFL, 0);
+        fcntl(client_temp, F_SETFL, flags | O_NONBLOCK);
+        
+        if (connect(client_temp, (struct sockaddr*)&test_addr, sizeof(test_addr)) < 0) {
+            if (errno == EINPROGRESS) {
+                fd_set writefds;
+                struct timeval tv;
+                tv.tv_sec = 1;
+                tv.tv_usec = 0;
+                FD_ZERO(&writefds);
+                FD_SET(client_temp, &writefds);
+                
+                if (select(client_temp + 1, NULL, &writefds, NULL, &tv) > 0) {
+                    int optval;
+                    socklen_t optlen = sizeof(optval);
+                    if (getsockopt(client_temp, SOL_SOCKET, SO_ERROR, &optval, &optlen) == 0) {
+                        if (optval == 0) {
+                            INIT_LOG_SUCCESS("SOCKET", "Socket connect test successful - listener is working");
+                        } else {
+                            if (g_logger) {
+                                LOG_WARNING("[INIT:SOCKET] Socket connect test failed with error: %s", strerror(optval));
+                            } else {
+                                fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test failed with error: %s\n", strerror(optval));
+                            }
+                        }
+                    }
+                } else {
+                    if (g_logger) {
+                        LOG_WARNING("[INIT:SOCKET] Socket connect test timed out - listener might not be working");
+                    } else {
+                        fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test timed out - listener might not be working\n");
+                    }
+                }
+            } else {
+                if (g_logger) {
+                    LOG_WARNING("[INIT:SOCKET] Socket connect test failed immediately: %s", strerror(errno));
+                } else {
+                    fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test failed immediately: %s\n", strerror(errno));
+                }
+            }
+        } else {
+            INIT_LOG_SUCCESS("SOCKET", "Socket connect test successful - listener is working");
+        }
+        
+        close(client_temp);
+    }
 
     /* Store socket descriptor in config */
     config->socket_fd = socket_fd;

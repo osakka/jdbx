@@ -7,9 +7,9 @@
 #include <string.h>
 
 /**
- * Fixed implementation of rbac_db_save that avoids hanging
- * This version doesn't try to clear all existing data first, which was causing
- * a potential deadlock in the database operations.
+ * Enhanced fixed implementation of rbac_db_save that avoids hanging
+ * This version adds extensive debugging and error tracking to identify
+ * exactly where any hang or error might occur.
  * 
  * @param db Database instance
  * @param rbac RBAC system to save
@@ -17,94 +17,206 @@
  */
 int rbac_db_save_fixed(database_t* db, rbac_system_t* rbac) {
     if (!db || !rbac) {
+        LOG_ERROR("NULL database or RBAC system passed to rbac_db_save_fixed");
         return 0;
     }
     
-    LOG_INFO("Starting RBAC save with fixed implementation");
+    LOG_INFO("Starting RBAC save with enhanced fixed implementation");
     
-    /* Initialize RBAC collections if they don't exist */
+    /* STAGE 1: Initialize RBAC collections if they don't exist */
+    LOG_DEBUG("STAGE 1: Initializing RBAC collections");
     rbac_db_status_t status = rbac_db_init_collections(db);
     if (!status.success) {
-        LOG_ERROR("Failed to initialize RBAC collections: %s", status.error_message);
+        LOG_ERROR("Failed to initialize RBAC collections: %s", 
+                 status.error_message ? status.error_message : "Unknown error");
         if (status.error_message) free(status.error_message);
         return 0;
     }
+    LOG_DEBUG("STAGE 1: Successfully initialized RBAC collections");
     
     /* Skip the problematic clearing of existing users and roles */
     LOG_INFO("Skipping deletion of existing RBAC data to avoid hanging");
     
-    /* Save users directly */
-    LOG_INFO("Saving %zu users to database", rbac->users->value.object.size);
+    /* STAGE 2: Create or verify default system roles if needed */
+    LOG_DEBUG("STAGE 2: Creating/verifying default system roles");
+    /* Create admin role if it doesn't exist */
+    json_value_t* admin_role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, "admin");
+    if (!admin_role_doc) {
+        LOG_DEBUG("Creating default admin role");
+        json_value_t* admin_role = json_create_object();
+        json_object_set(admin_role, "id", json_create_string("admin"));
+        json_object_set(admin_role, "name", json_create_string("Administrator"));
+        json_object_set(admin_role, "permissions", json_create_object());
+        json_object_set(admin_role, "users", json_create_array());
+        
+        json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, admin_role);
+        if (!result) {
+            LOG_ERROR("Failed to create default admin role");
+        } else {
+            LOG_DEBUG("Successfully created default admin role");
+            json_free(result);
+        }
+    } else {
+        LOG_DEBUG("Default admin role already exists");
+        json_free(admin_role_doc);
+    }
+    LOG_DEBUG("STAGE 2: Completed creating/verifying default system roles");
+    
+    /* STAGE 3: Save users with detailed step logging */
+    LOG_INFO("STAGE 3: Saving %zu users to database", rbac->users->value.object.size);
+    size_t users_processed = 0;
     for (size_t i = 0; i < rbac->users->value.object.size; i++) {
         const char* user_id = rbac->users->value.object.entries[i].key;
         json_value_t* user = rbac->users->value.object.entries[i].value;
         
-        if (user->type == JSON_OBJECT) {
-            /* Check if user already exists */
-            json_value_t* existing = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
-            
-            if (existing) {
-                /* Update existing user */
-                LOG_DEBUG("Updating existing user %s", user_id);
-                json_value_t* user_copy = json_clone(user);
-                json_value_t* result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_copy);
-                
-                if (!result) {
-                    LOG_ERROR("Failed to update user %s in database", user_id);
-                }
-                
-                if (result) json_free(result);
+        LOG_DEBUG("Processing user %zu/%zu: %s", i+1, rbac->users->value.object.size, user_id);
+        
+        if (user->type != JSON_OBJECT) {
+            LOG_WARNING("User %s is not a JSON object, skipping", user_id);
+            continue;
+        }
+        
+        /* Check if user already exists */
+        LOG_DEBUG("Checking if user %s exists", user_id);
+        json_value_t* existing = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+        
+        if (existing) {
+            /* Update existing user */
+            LOG_DEBUG("Updating existing user %s", user_id);
+            json_value_t* user_copy = json_clone(user);
+            if (!user_copy) {
+                LOG_ERROR("Failed to clone user %s", user_id);
                 json_free(existing);
+                continue;
+            }
+            
+            json_value_t* result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_copy);
+            
+            if (!result) {
+                LOG_ERROR("Failed to update user %s in database", user_id);
             } else {
-                /* Insert new user */
-                LOG_DEBUG("Inserting new user %s", user_id);
-                json_value_t* user_copy = json_clone(user);
-                json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, user_copy);
-                
-                if (!result) {
-                    LOG_ERROR("Failed to insert user %s into database", user_id);
-                }
-                
-                if (result) json_free(result);
+                LOG_DEBUG("Successfully updated user %s", user_id);
+                json_free(result);
+                users_processed++;
+            }
+            
+            json_free(existing);
+        } else {
+            /* Insert new user */
+            LOG_DEBUG("Inserting new user %s", user_id);
+            json_value_t* user_copy = json_clone(user);
+            if (!user_copy) {
+                LOG_ERROR("Failed to clone user %s", user_id);
+                continue;
+            }
+            
+            json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, user_copy);
+            
+            if (!result) {
+                LOG_ERROR("Failed to insert user %s into database", user_id);
+            } else {
+                LOG_DEBUG("Successfully inserted user %s", user_id);
+                json_free(result);
+                users_processed++;
             }
         }
     }
+    LOG_INFO("STAGE 3: Completed processing %zu/%zu users", 
+             users_processed, rbac->users->value.object.size);
     
-    /* Save roles directly */
-    LOG_INFO("Saving %zu roles to database", rbac->roles->value.object.size);
+    /* STAGE 4: Save roles with detailed step logging */
+    LOG_INFO("STAGE 4: Saving %zu roles to database", rbac->roles->value.object.size);
+    size_t roles_processed = 0;
     for (size_t i = 0; i < rbac->roles->value.object.size; i++) {
         const char* role_id = rbac->roles->value.object.entries[i].key;
         json_value_t* role = rbac->roles->value.object.entries[i].value;
         
-        if (role->type == JSON_OBJECT) {
-            /* Check if role already exists */
-            json_value_t* existing = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
-            
-            if (existing) {
-                /* Update existing role */
-                LOG_DEBUG("Updating existing role %s", role_id);
-                json_value_t* role_copy = json_clone(role);
-                json_value_t* result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_copy);
-                
-                if (!result) {
-                    LOG_ERROR("Failed to update role %s in database", role_id);
-                }
-                
-                if (result) json_free(result);
+        LOG_DEBUG("Processing role %zu/%zu: %s", i+1, rbac->roles->value.object.size, role_id);
+        
+        if (role->type != JSON_OBJECT) {
+            LOG_WARNING("Role %s is not a JSON object, skipping", role_id);
+            continue;
+        }
+        
+        /* Check if role already exists */
+        LOG_DEBUG("Checking if role %s exists", role_id);
+        json_value_t* existing = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+        
+        if (existing) {
+            /* Update existing role */
+            LOG_DEBUG("Updating existing role %s", role_id);
+            json_value_t* role_copy = json_clone(role);
+            if (!role_copy) {
+                LOG_ERROR("Failed to clone role %s", role_id);
                 json_free(existing);
+                continue;
+            }
+            
+            json_value_t* result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_copy);
+            
+            if (!result) {
+                LOG_ERROR("Failed to update role %s in database", role_id);
             } else {
-                /* Insert new role */
-                LOG_DEBUG("Inserting new role %s", role_id);
-                json_value_t* role_copy = json_clone(role);
-                json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_copy);
-                
-                if (!result) {
-                    LOG_ERROR("Failed to insert role %s into database", role_id);
-                }
-                
-                if (result) json_free(result);
+                LOG_DEBUG("Successfully updated role %s", role_id);
+                json_free(result);
+                roles_processed++;
+            }
+            
+            json_free(existing);
+        } else {
+            /* Insert new role */
+            LOG_DEBUG("Inserting new role %s", role_id);
+            json_value_t* role_copy = json_clone(role);
+            if (!role_copy) {
+                LOG_ERROR("Failed to clone role %s", role_id);
+                continue;
+            }
+            
+            json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_copy);
+            
+            if (!result) {
+                LOG_ERROR("Failed to insert role %s into database", role_id);
+            } else {
+                LOG_DEBUG("Successfully inserted role %s", role_id);
+                json_free(result);
+                roles_processed++;
             }
         }
+    }
+    LOG_INFO("STAGE 4: Completed processing %zu/%zu roles", 
+             roles_processed, rbac->roles->value.object.size);
+    
+    /* Add special default admin user if none exists */
+    json_value_t* query = json_create_object();
+    json_value_t* users_result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+    json_free(query);
+    
+    if (!users_result || users_result->type != JSON_ARRAY || users_result->value.array.size == 0) {
+        LOG_INFO("No users found - creating default admin user");
+        
+        /* Create default admin user */
+        json_value_t* admin_user = json_create_object();
+        json_object_set(admin_user, "id", json_create_string("admin"));
+        json_object_set(admin_user, "username", json_create_string("admin"));
+        json_object_set(admin_user, "password_hash", json_create_string("$2a$10$RXM7Nq0jCIATCXsHpMdIa.UefPQhOmmEJuA5xn0M9fz.8p9UqrIHe")); /* Default: 'admin' */
+        
+        /* Add admin role to user */
+        json_value_t* roles_array = json_create_array();
+        json_array_append(roles_array, json_create_string("admin"));
+        json_object_set(admin_user, "roles", roles_array);
+        
+        /* Insert admin user */
+        json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, admin_user);
+        if (!result) {
+            LOG_ERROR("Failed to create default admin user");
+        } else {
+            LOG_INFO("Created default admin user");
+            json_free(result);
+        }
+    }
+    
+    if (users_result) {
+        json_free(users_result);
     }
     
     LOG_INFO("RBAC save completed successfully");
