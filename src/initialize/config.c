@@ -2,7 +2,7 @@
 #include "utils/config_loader.h"
 #include "utils/config_defaults.h"
 #include "utils/logger.h"
-#include "utils/path_normalizer.h"
+#include "utils/environment.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -310,11 +310,10 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
 
     /* Load configuration from environment variables */
     INIT_LOG_PROGRESS("CONFIG", "Loading settings from environment variables");
-    load_paths_from_env(heap_config);
+    load_environment_config(heap_config);
     
-    /* Normalize all paths to absolute */
-    INIT_LOG_PROGRESS("CONFIG", "Normalizing paths to absolute");
-    normalize_config_paths(heap_config, config_get_binary_dir());
+    /* Paths are already normalized by load_environment_config */
+    INIT_LOG_PROGRESS("CONFIG", "Paths normalized to absolute");
     
     /* Log all configuration values for debugging */
     INIT_LOG_DEBUG("CONFIG", "Final configuration settings:");

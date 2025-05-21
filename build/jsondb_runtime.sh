@@ -38,7 +38,7 @@ done
 # Set base paths if not already defined
 : ${JSONDB_BASE_DIR:="/opt/jsondb"}
 : ${JSONDB_BUILD_DIR:="${JSONDB_BASE_DIR}/build"}
-: ${JSONDB_VAR_DIR:="${JSONDB_BASE_DIR}/var"}
+: ${JSONDB_VAR_DIR:="${JSONDB_BUILD_DIR}/var"}  # Changed from /opt/jsondb/var to /opt/jsondb/build/var
 : ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
 
 # Ensure absolute paths using base directories

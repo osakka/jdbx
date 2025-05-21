@@ -101,8 +101,8 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
         /* Try to save the new RBAC system to the database */
         LOG_INFO("Saving new RBAC system to database");
         
-        /* Try to save but don't fail the whole operation if it doesn't work */
-        int save_result = rbac_db_save(db, rbac);
+        /* Use fixed implementation to avoid hanging */
+        int save_result = rbac_db_save_fixed(db, rbac);
         
         if (save_result) {
             LOG_INFO("Successfully saved RBAC to database");

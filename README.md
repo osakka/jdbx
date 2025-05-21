@@ -32,6 +32,8 @@ The project has reached a stable state with the following components functioning
 - Database locking improvements with read-write locks for reduced contention
 - Socket binding thread synchronization issues and race conditions
 - Server initialization sequence for proper component dependency handling
+- Working directory handling in daemon mode
+- Configuration system with environment variables and absolute paths
 - CORS implementation for cross-origin requests
 - Web interface collection creation and document management
 - Repository structure cleanup and organization
@@ -226,28 +228,102 @@ The server includes proper CORS support for cross-origin requests:
 
 ## Configuration
 
-The server configuration is stored in configuration files and can be modified via the API or command-line arguments.
+JSONdb now uses environment variables as the primary configuration mechanism, with support for command-line overrides.
+
+### Environment-Based Configuration
+
+The server uses environment variables as the primary configuration mechanism, with support for command-line overrides. 
+This provides flexible deployment options in different environments.
+
+#### Environment Variables
+
+You can configure the server using environment variables in several ways:
+
+1. **Directly in the command line**:
+   ```bash
+   JSONDB_PORT=8080 JSONDB_HOST=127.0.0.1 ./build/jsondb_runtime.sh start
+   ```
+
+2. **Custom environment file**:
+   ```bash
+   ./build/jsondb_runtime.sh start --env-file=/path/to/custom.env
+   ```
+
+3. **Default environment file**:
+   The server will automatically look for a default environment file at `./build/var/jsondb_server.env`
+
+#### Core Environment Variables
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `JSONDB_PORT` | Server port | 5000 |
+| `JSONDB_HOST` | Server bind address | 0.0.0.0 |
+| `JSONDB_DB_DIR` | Database file path | /opt/jsondb/var/jsondb_database.json |
+| `JSONDB_RBAC_FILE` | RBAC file path | /opt/jsondb/var/json_rbac.json |
+| `JSONDB_LOG_FILE` | Log file path | /opt/jsondb/var/jsondb_server.log |
+| `JSONDB_PID_FILE` | PID file path | /opt/jsondb/var/jsondb_server.pid |
+| `JSONDB_LOG_LEVEL` | Log level (error, warning, info, debug, trace) | info |
+| `JSONDB_VERBOSE` | Verbose mode (true/false) | false |
+| `JSONDB_WEB_ROOT` | Web root directory | /opt/jsondb/share/htdocs |
+
+#### Base Directory Configuration
+
+You can customize the base directories:
+
+```bash
+# Set base directory for all relative paths
+JSONDB_BASE_DIR=/custom/path
+```
+
+#### Example Environment File
+
+```ini
+# Core server configuration
+JSONDB_PORT=5000
+JSONDB_HOST=0.0.0.0
+JSONDB_VERBOSE=false
+JSONDB_LOG_LEVEL=info
+
+# Database and files
+JSONDB_DB_DIR=/opt/jsondb/var/jsondb_database.json
+JSONDB_RBAC_FILE=/opt/jsondb/var/json_rbac.json
+JSONDB_LOG_FILE=/opt/jsondb/var/jsondb_server.log
+JSONDB_PID_FILE=/opt/jsondb/var/jsondb_server.pid
+```
+
+For a complete list of all supported environment variables, see the [Configuration README](share/config/README.md).
 
 ### Default Configuration
 
 - Port: 5000
-- SSL: Disabled
-- Database Path: Handled by the server during runtime
-- Log File: Located in build/var/logs
+- Host: 0.0.0.0 (all interfaces)
+- Database Path: /opt/jsondb/var/jsondb_database.json
+- Log File: /opt/jsondb/var/jsondb_server.log
+- Web Root: /opt/jsondb/share/htdocs
 
 ### Command-line Options
 
 ```bash
-Usage: jsondb_server [options]
+Usage: jsondb_runtime.sh {start|stop|restart|status} [options]
 
 Options:
-  --port <number>       Set the server port (default: 5000)
-  --daemon              Run server as a daemon in the background
-  --js_eval <code>      Execute JavaScript code
-  --js_eval_file <path> Execute JavaScript from file
-  --help, -h            Display this help message
-  --version, -v         Display version information
+  --port=PORT                Set server port
+  --host=HOST                Set server bind address
+  --db-dir=PATH              Set database directory/file
+  --rbac-file=FILE           Set RBAC file path
+  --log-file=FILE            Set log file path
+  --pid-file=FILE            Set PID file path
+  --log-level=LEVEL          Set log level (error, warn, info, debug, trace)
+  --web-root=DIR             Set web root directory
+  --validators-dir=DIR       Set validators directory
+  --transforms-dir=DIR       Set transforms directory
+  --metrics-dir=DIR          Set metrics directory
+  --max-connections=NUM      Set maximum connections
+  --debug                    Enable debug mode
+  --env-file=FILE            Use custom environment file
 ```
+
+Command-line options override environment variables, giving you maximum flexibility for different deployment scenarios.
 
 ## Project Structure
 

@@ -53,6 +53,17 @@ rbac_system_t* rbac_db_load(database_t* db);
 int rbac_db_save(database_t* db, rbac_system_t* rbac);
 
 /**
+ * Fixed implementation of RBAC system save that avoids hanging
+ * This version doesn't try to clear all existing data first, which was causing
+ * a potential deadlock in the database operations.
+ * 
+ * @param db Database instance
+ * @param rbac RBAC system to save
+ * @return 1 on success, 0 on failure
+ */
+int rbac_db_save_fixed(database_t* db, rbac_system_t* rbac);
+
+/**
  * Check if RBAC system exists in database
  *
  * @param db Database instance
