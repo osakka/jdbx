@@ -1,30 +1,54 @@
-#\!/bin/bash
+#!/bin/bash
 
-echo "Testing JSONdb socket binding with shorter timeout..."
+echo "Testing JSONdb socket binding..."
 
 # Clean up any existing processes
 pkill -f jsondb_server || true
 sleep 1
 
-# Start the server in the background
-cd /opt/jsondb && ./build/jsondb_runtime.sh --foreground > server_log.txt 2>&1 &
-SERVER_PID=$\!
-
-# Wait a short time for the server to start up (shorter timeout)
-echo "Waiting 1 second for server startup..."
+# Start the server in the background with debug flag
+cd /opt/jsondb
+./build/jsondb_runtime.sh stop 2>/dev/null
 sleep 1
+./build/jsondb_runtime.sh start --debug > server_log.txt 2>&1 &
+SCRIPT_PID=$!
 
-# Test if the server is running
-if \! ps -p $SERVER_PID > /dev/null; then
-  echo "ERROR: Server failed to start\! Check server_log.txt for details."
+# Wait for the server to start up
+echo "Waiting for server startup (up to 10 seconds)..."
+for i in {1..10}; do
+  echo "Checking server status (attempt $i)..."
+  sleep 1
+  
+  # Find the actual server PID
+  SERVER_PID=$(ps aux | grep jsondb_server | grep -v grep | awk '{print $2}')
+  
+  if [ -n "$SERVER_PID" ]; then
+    echo "Server process found with PID: $SERVER_PID"
+    break
+  fi
+done
+
+# Check if the server is running
+if [ -z "$SERVER_PID" ]; then
+  echo "ERROR: Server failed to start! Check server_log.txt for details."
   cat server_log.txt
   exit 1
 fi
 
-# Test if the port is in use
-PORT_USED=$(netstat -tuln  < /dev/null |  grep ":5000 " | wc -l)
+# Test if the port is in use (wait up to 5 seconds)
+echo "Checking if port 5000 is in use..."
+for i in {1..5}; do
+  echo "Port check attempt $i..."
+  PORT_USED=$(netstat -tuln < /dev/null | grep ":5000 " | wc -l)
+  if [ $PORT_USED -gt 0 ]; then
+    echo "SUCCESS: Port 5000 is in use!"
+    break
+  fi
+  sleep 1
+done
+
 if [ $PORT_USED -eq 0 ]; then
-  echo "ERROR: Port 5000 is not in use! Server may not be binding correctly."
+  echo "ERROR: Port 5000 is not in use after 5 seconds! Server may not be binding correctly."
   cat server_log.txt
   kill -9 $SERVER_PID 2>/dev/null || true
   exit 1

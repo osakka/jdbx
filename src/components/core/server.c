@@ -197,10 +197,10 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
 }
 
 /**
- * Initialize server socket - CLEAN IMPLEMENTATION based on proven approach
+ * Initialize server socket - IMPROVED IMPLEMENTATION using getaddrinfo
  * 
- * This implementation is based on our successful socket_binding_fix_final.c approach:
- * 1. Simplified, direct socket creation and binding
+ * This implementation is based on our successful socket_binding_test.c approach:
+ * 1. Uses getaddrinfo() for robust address handling
  * 2. Improved error handling and logging
  * 3. Proper hostname resolution
  * 4. Socket state verification without external commands
@@ -223,99 +223,129 @@ static int initialize_socket(server_config_t* config) {
         printf("Socket initialization started in PID %d\n", daemon_pid);
     }
     
-    /* Create socket in blocking mode */
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0) {
-        if (g_logger) {
-            LOG_ERROR("Failed to create socket: %s (errno=%d)", strerror(errno), errno);
-        } else {
-            fprintf(stderr, "Error: Failed to create socket: %s (errno=%d)\n", strerror(errno), errno);
-        }
-        return -1;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Socket created successfully (fd=%d)", socket_fd);
-    } else {
-        printf("Socket created successfully (fd=%d)\n", socket_fd);
-    }
-    
-    /* Set socket options */
-    int reuse = 1;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        if (g_logger) {
-            LOG_WARNING("Failed to set SO_REUSEADDR: %s", strerror(errno));
-        } else {
-            fprintf(stderr, "Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
-        }
-        /* Continue anyway, this is not fatal */
-    } else {
-        if (g_logger) {
-            LOG_INFO("Socket option SO_REUSEADDR set successfully");
-        } else {
-            printf("Socket option SO_REUSEADDR set successfully\n");
-        }
-    }
-    
-    /* Prepare address structure */
-    struct sockaddr_in address;
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(config->port);
-    
-    /* Handle host address - improved approach with proper error handling */
-    if (!config->host || strlen(config->host) == 0 || strcmp(config->host, "0.0.0.0") == 0) {
-        /* Bind to any address */
-        address.sin_addr.s_addr = INADDR_ANY;
+    /* Prepare for getaddrinfo */
+    struct addrinfo hints, *res, *p;
+    char port_str[6];
+    int rv;
+    int yes = 1;
+    int socket_fd = -1;
+
+    /* Convert port to string */
+    snprintf(port_str, sizeof(port_str), "%d", config->port);
+
+    /* Clear hints structure */
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;       /* Use IPv4 */
+    hints.ai_socktype = SOCK_STREAM; /* TCP */
+    hints.ai_flags = AI_PASSIVE;     /* Fill in IP for me */
+
+    /* Use default host if not specified */
+    const char *host = config->host;
+    if (!host || strlen(host) == 0 || strcmp(host, "0.0.0.0") == 0) {
+        host = NULL; /* NULL = INADDR_ANY for getaddrinfo with AI_PASSIVE */
         if (g_logger) {
             LOG_INFO("Using INADDR_ANY (0.0.0.0) for binding");
         } else {
             printf("Using INADDR_ANY (0.0.0.0) for binding\n");
         }
-    } else if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
-        /* Bind to localhost */
-        address.sin_addr.s_addr = inet_addr("127.0.0.1");
-        if (g_logger) {
-            LOG_INFO("Using localhost (127.0.0.1) for binding");
-        } else {
-            printf("Using localhost (127.0.0.1) for binding\n");
-        }
-    } else if (inet_addr(config->host) != INADDR_NONE) {
-        /* It's a valid IP address */
-        address.sin_addr.s_addr = inet_addr(config->host);
-        if (g_logger) {
-            LOG_INFO("Using IP address %s for binding", config->host);
-        } else {
-            printf("Using IP address %s for binding\n", config->host);
-        }
+    } else if (g_logger) {
+        LOG_INFO("Using host '%s' for binding", host);
     } else {
-        /* It's a hostname that needs to be resolved - this might be problematic */
-        if (g_logger) {
-            LOG_WARNING("Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding", config->host);
-        } else {
-            fprintf(stderr, "Warning: Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding\n", config->host);
-        }
-        address.sin_addr.s_addr = INADDR_ANY;
+        printf("Using host '%s' for binding\n", host);
     }
-    
-    /* Bind socket */
-    if (g_logger) {
-        LOG_INFO("Binding socket to %s:%d...", 
-               config->host ? config->host : "0.0.0.0", config->port);
-    } else {
-        printf("Binding socket to %s:%d...\n", 
-              config->host ? config->host : "0.0.0.0", config->port);
-    }
-    
-    if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+
+    /* Get address info for the host */
+    if ((rv = getaddrinfo(host, port_str, &hints, &res)) != 0) {
         if (g_logger) {
-            LOG_ERROR("Failed to bind socket: %s (errno=%d)", strerror(errno), errno);
+            LOG_ERROR("getaddrinfo failed: %s", gai_strerror(rv));
         } else {
-            fprintf(stderr, "Error: Failed to bind socket: %s (errno=%d)\n", strerror(errno), errno);
+            fprintf(stderr, "Error: getaddrinfo failed: %s\n", gai_strerror(rv));
         }
-        close(socket_fd);
         return -1;
     }
+
+    /* Loop through results and bind to first available */
+    for (p = res; p != NULL; p = p->ai_next) {
+        /* Create socket */
+        socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (socket_fd == -1) {
+            if (g_logger) {
+                LOG_WARNING("socket() failed for this addrinfo: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Warning: socket() failed for this addrinfo: %s\n", strerror(errno));
+            }
+            continue;
+        }
+
+        /* Set socket options (SO_REUSEADDR) */
+        if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+            if (g_logger) {
+                LOG_WARNING("Failed to set SO_REUSEADDR: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
+            }
+            /* Continue anyway, this is not fatal */
+        } else if (g_logger) {
+            LOG_INFO("Socket option SO_REUSEADDR set successfully");
+        } else {
+            printf("Socket option SO_REUSEADDR set successfully\n");
+        }
+
+        /* Bind socket */
+        if (g_logger) {
+            LOG_INFO("Attempting to bind socket to %s:%s", 
+                   host ? host : "0.0.0.0", port_str);
+        } else {
+            printf("Attempting to bind socket to %s:%s\n", 
+                  host ? host : "0.0.0.0", port_str);
+        }
+
+        if (bind(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
+            if (g_logger) {
+                LOG_WARNING("bind() failed for this addrinfo: %s", strerror(errno));
+            } else {
+                fprintf(stderr, "Warning: bind() failed for this addrinfo: %s\n", strerror(errno));
+            }
+            close(socket_fd);
+            continue;
+        }
+
+        /* If we got here, we successfully bound */
+        break;
+    }
+
+    /* No address worked */
+    if (p == NULL) {
+        if (g_logger) {
+            LOG_ERROR("Failed to bind to any address");
+        } else {
+            fprintf(stderr, "Error: Failed to bind to any address\n");
+        }
+        freeaddrinfo(res);
+        return -1;
+    }
+
+    /* Store the successful binding information */
+    char ipstr[INET6_ADDRSTRLEN];
+    void *addr;
+    
+    if (p->ai_family == AF_INET) { /* IPv4 */
+        struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+        addr = &(ipv4->sin_addr);
+    } else { /* IPv6 */
+        struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
+        addr = &(ipv6->sin6_addr);
+    }
+    
+    /* Convert IP to string */
+    inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr));
+    if (g_logger) {
+        LOG_INFO("Successfully bound to %s:%s", ipstr, port_str);
+    } else {
+        printf("Successfully bound to %s:%s\n", ipstr, port_str);
+    }
+
+    freeaddrinfo(res);
     
     if (g_logger) {
         LOG_INFO("Socket bound successfully");
