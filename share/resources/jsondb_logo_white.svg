@@ -14,5 +14,5 @@
   
   <!-- JS Badge -->
   <rect x="370" y="50" width="45" height="35" rx="5" ry="5" fill="#F7DF1E" stroke="#00539C" stroke-width="1"/>
-  <text x="387" y="75" font-family="Arial, sans-serif" font-size="22" font-weight="bold" text-anchor="middle" fill="#000000">QJS</text>
+  <text x="392" y="75" font-family="Arial, sans-serif" font-size="22" font-weight="bold" text-anchor="middle" fill="#000000">QJS</text>
 </svg>
