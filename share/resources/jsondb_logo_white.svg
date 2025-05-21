@@ -12,7 +12,6 @@
   <!-- Right JSON Brace -->
   <text x="440" y="100" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="#F7DF1E">}</text>
   
-  <!-- JS Badge -->
-  <rect x="370" y="50" width="45" height="35" rx="5" ry="5" fill="#F7DF1E" stroke="#00539C" stroke-width="1"/>
-  <text x="392" y="75" font-family="Arial, sans-serif" font-size="22" font-weight="bold" text-anchor="middle" fill="#000000">QJS</text>
+  <!-- QJS text in italic, no border, smaller font -->
+  <text x="370" y="70" font-family="Georgia, serif" font-size="16" font-style="italic" text-anchor="middle" fill="#CCCCCC">qjs</text>
 </svg>
