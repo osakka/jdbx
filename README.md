@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="share/resources/jsondb_logo.svg" alt="JSONdb Logo" width="200">
-  <h1>JSONdb</h1>
+  <img src="share/resources/jsondb_logo_alt.svg" alt="JSONdb Logo" width="400">
   <p><strong>A high-performance JSON document database with JavaScript integration</strong></p>
   <p>
     <a href="#features">Features</a> •
