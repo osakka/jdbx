@@ -201,7 +201,27 @@ int main(int argc, char** argv) {
      * 3. Finally initialize thread pool and run server
      */
     
-    /* Initialize daemon process if in daemon mode */
+    /* TEMPORARY FIX: Force verbose mode to disable daemonization */
+    printf("[DEBUG] IMPORTANT: Daemonization temporarily disabled for debugging\n");
+    config->verbose_mode = 1; /* Force verbose mode */
+    
+    /* Write PID file even if not daemonizing */
+    if (config->pid_file) {
+        FILE* pid_fp = fopen(config->pid_file, "w");
+        if (pid_fp) {
+            fprintf(pid_fp, "%d\n", getpid());
+            fclose(pid_fp);
+            printf("[DEBUG] PID file written: %s (PID: %d)\n", config->pid_file, getpid());
+        } else {
+            fprintf(stderr, "[DEBUG] Failed to write PID file '%s': %s\n", 
+                 config->pid_file, strerror(errno));
+        }
+    }
+    
+    /* Initialize daemon process if in daemon mode - DISABLED
+    
+    DISABLED TEMPORARILY FOR DEBUGGING:
+    
     if (!config->verbose_mode) {
         status = init_daemon(config);
         if (status == INIT_DAEMON_ERROR) {
@@ -209,16 +229,18 @@ int main(int argc, char** argv) {
             free(config);
             return 1;
         } else if (status == INIT_DAEMON_PARENT_EXIT) {
-            /* Parent process should exit without cleanup */
+            // Parent process should exit without cleanup
             INIT_LOG_PROGRESS("MAIN", "Daemon started, parent process exiting");
-            /* Free config before exit to avoid memory leak */
+            // Free config before exit to avoid memory leak
             free(config);
             return 0;
         }
         
-        /* Child process continues here */
+        // Child process continues here
         INIT_LOG_PROGRESS("MAIN", "Daemon process initialized, continuing with child process");
     }
+    
+    END OF DISABLED CODE */
     
     /* Initialize socket - AFTER daemon process is fully established */
     status = init_socket(config);

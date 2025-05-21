@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "utils/daemonize.h"
 #include "utils/logger.h"
+#include "init.h"  /* For init_socket and INIT_OK */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,11 +25,13 @@ static volatile int g_shutdown_requested = 0;
 static int g_signal_pipe[2] = {-1, -1};
 
 /* Forward declarations */
-static int initialize_socket(server_config_t* config);
 static int initialize_thread_pool(server_config_t* config);
 static void* accept_thread_func(void* arg);
 static void handle_signals(void);
 static void signal_handler(int sig);
+
+/* External functions */
+extern init_status_t init_socket(server_config_t* config);
 
 /* Adapter function for thread pool compatibility */
 static void handle_client_adapter(void* client_data) {
@@ -113,7 +116,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
         printf("Starting JSONdb server on port %d...\n", config->port);
     }
     
-    if (initialize_socket(config) != 0) {
+    if (init_socket(config) != INIT_OK) {
         if (g_logger) {
             LOG_ERROR("Failed to initialize server socket");
         } else {
@@ -197,223 +200,10 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
 }
 
 /**
- * Initialize server socket - IMPROVED IMPLEMENTATION using getaddrinfo
+ * REMOVED: This socket initialization function has been replaced with init_socket() from initialize/socket.c
  * 
- * This implementation is based on our successful socket_binding_test.c approach:
- * 1. Uses getaddrinfo() for robust address handling
- * 2. Improved error handling and logging
- * 3. Proper hostname resolution
- * 4. Socket state verification without external commands
- * 5. No reliance on netstat or other external commands
+ * Use init_socket() instead of this function for socket initialization.
  */
-static int initialize_socket(server_config_t* config) {
-    if (!config) {
-        fprintf(stderr, "Error: NULL server configuration\n");
-        if (g_logger) {
-            LOG_ERROR("NULL server configuration in initialize_socket");
-        }
-        return -1;
-    }
-    
-    /* Log current process context */
-    pid_t daemon_pid = getpid();
-    if (g_logger) {
-        LOG_DEBUG("Socket initialization started in PID %d", daemon_pid);
-    } else {
-        printf("Socket initialization started in PID %d\n", daemon_pid);
-    }
-    
-    /* Prepare for getaddrinfo */
-    struct addrinfo hints, *res, *p;
-    char port_str[6];
-    int rv;
-    int yes = 1;
-    int socket_fd = -1;
-
-    /* Convert port to string */
-    snprintf(port_str, sizeof(port_str), "%d", config->port);
-
-    /* Clear hints structure */
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;       /* Use IPv4 */
-    hints.ai_socktype = SOCK_STREAM; /* TCP */
-    hints.ai_flags = AI_PASSIVE;     /* Fill in IP for me */
-
-    /* Use default host if not specified */
-    const char *host = config->host;
-    if (!host || strlen(host) == 0 || strcmp(host, "0.0.0.0") == 0) {
-        host = NULL; /* NULL = INADDR_ANY for getaddrinfo with AI_PASSIVE */
-        if (g_logger) {
-            LOG_INFO("Using INADDR_ANY (0.0.0.0) for binding");
-        } else {
-            printf("Using INADDR_ANY (0.0.0.0) for binding\n");
-        }
-    } else if (g_logger) {
-        LOG_INFO("Using host '%s' for binding", host);
-    } else {
-        printf("Using host '%s' for binding\n", host);
-    }
-
-    /* Get address info for the host */
-    if ((rv = getaddrinfo(host, port_str, &hints, &res)) != 0) {
-        if (g_logger) {
-            LOG_ERROR("getaddrinfo failed: %s", gai_strerror(rv));
-        } else {
-            fprintf(stderr, "Error: getaddrinfo failed: %s\n", gai_strerror(rv));
-        }
-        return -1;
-    }
-
-    /* Loop through results and bind to first available */
-    for (p = res; p != NULL; p = p->ai_next) {
-        /* Create socket */
-        socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (socket_fd == -1) {
-            if (g_logger) {
-                LOG_WARNING("socket() failed for this addrinfo: %s", strerror(errno));
-            } else {
-                fprintf(stderr, "Warning: socket() failed for this addrinfo: %s\n", strerror(errno));
-            }
-            continue;
-        }
-
-        /* Set socket options (SO_REUSEADDR) */
-        if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-            if (g_logger) {
-                LOG_WARNING("Failed to set SO_REUSEADDR: %s", strerror(errno));
-            } else {
-                fprintf(stderr, "Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
-            }
-            /* Continue anyway, this is not fatal */
-        } else if (g_logger) {
-            LOG_INFO("Socket option SO_REUSEADDR set successfully");
-        } else {
-            printf("Socket option SO_REUSEADDR set successfully\n");
-        }
-
-        /* Bind socket */
-        if (g_logger) {
-            LOG_INFO("Attempting to bind socket to %s:%s", 
-                   host ? host : "0.0.0.0", port_str);
-        } else {
-            printf("Attempting to bind socket to %s:%s\n", 
-                  host ? host : "0.0.0.0", port_str);
-        }
-
-        if (bind(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
-            if (g_logger) {
-                LOG_WARNING("bind() failed for this addrinfo: %s", strerror(errno));
-            } else {
-                fprintf(stderr, "Warning: bind() failed for this addrinfo: %s\n", strerror(errno));
-            }
-            close(socket_fd);
-            continue;
-        }
-
-        /* If we got here, we successfully bound */
-        break;
-    }
-
-    /* No address worked */
-    if (p == NULL) {
-        if (g_logger) {
-            LOG_ERROR("Failed to bind to any address");
-        } else {
-            fprintf(stderr, "Error: Failed to bind to any address\n");
-        }
-        freeaddrinfo(res);
-        return -1;
-    }
-
-    /* Store the successful binding information */
-    char ipstr[INET6_ADDRSTRLEN];
-    void *addr;
-    
-    if (p->ai_family == AF_INET) { /* IPv4 */
-        struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
-        addr = &(ipv4->sin_addr);
-    } else { /* IPv6 */
-        struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
-        addr = &(ipv6->sin6_addr);
-    }
-    
-    /* Convert IP to string */
-    inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr));
-    if (g_logger) {
-        LOG_INFO("Successfully bound to %s:%s", ipstr, port_str);
-    } else {
-        printf("Successfully bound to %s:%s\n", ipstr, port_str);
-    }
-
-    freeaddrinfo(res);
-    
-    if (g_logger) {
-        LOG_INFO("Socket bound successfully");
-    } else {
-        printf("Socket bound successfully\n");
-    }
-    
-    /* Set up to listen for connections */
-    if (g_logger) {
-        LOG_INFO("Setting socket to listen state...");
-    } else {
-        printf("Setting socket to listen state...\n");
-    }
-    
-    if (listen(socket_fd, 10) < 0) {
-        if (g_logger) {
-            LOG_ERROR("Failed to listen on socket: %s (errno=%d)", strerror(errno), errno);
-        } else {
-            fprintf(stderr, "Error: Failed to listen on socket: %s (errno=%d)\n", strerror(errno), errno);
-        }
-        close(socket_fd);
-        return -1;
-    }
-    
-    if (g_logger) {
-        LOG_INFO("Socket listening successfully");
-    } else {
-        printf("Socket listening successfully\n");
-    }
-    
-    /* Verify socket state */
-    int acceptconn = 0;
-    socklen_t acceptconn_len = sizeof(acceptconn);
-    if (getsockopt(socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-        if (g_logger) {
-            LOG_WARNING("Failed to check SO_ACCEPTCONN: %s", strerror(errno));
-        } else {
-            fprintf(stderr, "Warning: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
-        }
-    } else {
-        if (g_logger) {
-            LOG_INFO("Socket listening state: %s", acceptconn ? "LISTENING" : "NOT LISTENING");
-        } else {
-            printf("Socket listening state: %s\n", acceptconn ? "LISTENING" : "NOT LISTENING");
-        }
-        
-        if (!acceptconn) {
-            if (g_logger) {
-                LOG_ERROR("Socket is not in listening state despite successful listen() call");
-            } else {
-                fprintf(stderr, "Error: Socket is not in listening state despite successful listen() call\n");
-            }
-            close(socket_fd);
-            return -1;
-        }
-    }
-    
-    /* Store socket descriptor in config */
-    config->socket_fd = socket_fd;
-    
-    if (g_logger) {
-        LOG_INFO("Socket initialization complete (socket_fd=%d, port=%d)", socket_fd, config->port);
-    } else {
-        printf("Socket initialization complete (socket_fd=%d, port=%d)\n", socket_fd, config->port);
-    }
-    
-    return 0;
-}
 
 /**
  * Initialize thread pool

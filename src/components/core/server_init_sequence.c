@@ -3,6 +3,7 @@
 #include "utils/daemonize.h"
 #include "utils/logger.h"
 #include "core/thread_pool.h"
+#include "init.h"  /* For init_socket and INIT_OK */
 
 /* Define function type for thread pool tasks */
 typedef void (*thread_task_func_t)(void*);
@@ -40,13 +41,16 @@ static server_state_t g_server_state = SERVER_STATE_UNINITIALIZED;
 static int g_shutdown_requested = 0;
 
 /* Server initialization steps prototypes */
-static int initialize_socket(server_config_t *config);
-static int setup_listening_socket(server_config_t *config);
+/* REMOVED: static int initialize_socket(server_config_t *config); */
+/* REMOVED: static int setup_listening_socket(server_config_t *config); */
 static int verify_socket_binding(server_config_t *config);
 static int create_thread_pool(server_config_t *config);
 static void set_server_state(server_state_t new_state, const char *message);
 static void* accept_loop(void *arg);
 static void simple_handle_client(int client_fd, struct api_context *api_ctx);
+
+/* External functions */
+extern init_status_t init_socket(server_config_t* config);
 
 /* External handle_client definition from server.h */
 extern void* handle_client(void* client_data);
@@ -87,16 +91,13 @@ server_status_t server_improved_init_and_run(server_config_t *config, struct api
     signal(SIGTERM, SIG_IGN); /* Ignore SIGTERM during initialization */
     
     /* STEP 3: Create socket */
-    if (initialize_socket(config) != 0) {
+    if (init_socket(config) != INIT_OK) {
         set_server_state(SERVER_STATE_ERROR, "Failed to initialize socket");
         return SERVER_SOCKET_ERROR;
     }
     
-    /* STEP 4: Setup listening */
-    if (setup_listening_socket(config) != 0) {
-        set_server_state(SERVER_STATE_ERROR, "Failed to set socket to listen state");
-        return SERVER_LISTEN_ERROR;
-    }
+    /* STEP 4: Socket is already set to listen state by init_socket() */
+    /* Skip setup_listening_socket - already handled by init_socket */
     
     /* STEP 5: Verify binding */
     if (verify_socket_binding(config) != 0) {
@@ -131,164 +132,11 @@ server_status_t server_improved_init_and_run(server_config_t *config, struct api
 }
 
 /**
- * Socket initialization step 
+ * REMOVED: Socket initialization and setup listening functions have been replaced 
+ * with init_socket() from initialize/socket.c
+ * 
+ * These functions are now obsolete and have been removed. Use init_socket() instead.
  */
-static int initialize_socket(server_config_t *config) {
-    if (!config) {
-        return -1;
-    }
-    
-    printf("STEP 3: Creating socket (PID: %d)\n", getpid());
-    if (g_logger) {
-        LOG_INFO("STEP 3: Creating socket (PID: %d)", getpid());
-    }
-    
-    /* Create socket in blocking mode */
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0) {
-        fprintf(stderr, "Error: Failed to create socket: %s (errno=%d)\n", 
-                strerror(errno), errno);
-        if (g_logger) {
-            LOG_ERROR("Failed to create socket: %s (errno=%d)", 
-                     strerror(errno), errno);
-        }
-        return -1;
-    }
-    
-    printf("Socket created successfully (fd=%d)\n", socket_fd);
-    if (g_logger) {
-        LOG_INFO("Socket created successfully (fd=%d)", socket_fd);
-    }
-    
-    /* Set socket options */
-    int reuse = 1;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        fprintf(stderr, "Warning: Failed to set SO_REUSEADDR: %s\n", strerror(errno));
-        if (g_logger) {
-            LOG_WARNING("Failed to set SO_REUSEADDR: %s", strerror(errno));
-        }
-    }
-    
-    /* Prepare address structure */
-    struct sockaddr_in address;
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(config->port);
-    
-    /* Resolve hostname */
-    if (config->host && strcmp(config->host, "0.0.0.0") != 0) {
-        if (strcmp(config->host, "127.0.0.1") == 0 || strcmp(config->host, "localhost") == 0) {
-            address.sin_addr.s_addr = inet_addr("127.0.0.1");
-            printf("Using localhost (127.0.0.1) for binding\n");
-            if (g_logger) {
-                LOG_INFO("Using localhost (127.0.0.1) for binding");
-            }
-        } else {
-            /* Try to resolve hostname */
-            struct addrinfo hints, *result;
-            memset(&hints, 0, sizeof(hints));
-            hints.ai_family = AF_INET;
-            hints.ai_socktype = SOCK_STREAM;
-            
-            int status = getaddrinfo(config->host, NULL, &hints, &result);
-            if (status == 0 && result != NULL) {
-                /* Use the first result */
-                struct sockaddr_in* resolved_addr = (struct sockaddr_in*)result->ai_addr;
-                address.sin_addr = resolved_addr->sin_addr;
-                
-                char ip_str[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &(address.sin_addr), ip_str, INET_ADDRSTRLEN);
-                printf("Resolved %s to %s\n", config->host, ip_str);
-                if (g_logger) {
-                    LOG_INFO("Resolved %s to %s", config->host, ip_str);
-                }
-                
-                freeaddrinfo(result);
-            } else {
-                /* Fallback to INADDR_ANY */
-                address.sin_addr.s_addr = INADDR_ANY;
-                printf("Failed to resolve %s, falling back to INADDR_ANY\n", config->host);
-                if (g_logger) {
-                    LOG_WARNING("Failed to resolve %s, falling back to INADDR_ANY", 
-                              config->host);
-                }
-            }
-        }
-    } else {
-        address.sin_addr.s_addr = INADDR_ANY;
-        printf("Using INADDR_ANY (0.0.0.0) for binding\n");
-        if (g_logger) {
-            LOG_INFO("Using INADDR_ANY (0.0.0.0) for binding");
-        }
-    }
-    
-    /* Bind socket */
-    printf("Binding socket to port %d\n", config->port);
-    if (g_logger) {
-        LOG_INFO("Binding socket to port %d", config->port);
-    }
-    
-    if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        fprintf(stderr, "Error: Failed to bind socket: %s (errno=%d)\n", 
-                strerror(errno), errno);
-        if (g_logger) {
-            LOG_ERROR("Failed to bind socket: %s (errno=%d)", 
-                     strerror(errno), errno);
-        }
-        close(socket_fd);
-        return -1;
-    }
-    
-    printf("Socket bound successfully to port %d\n", config->port);
-    if (g_logger) {
-        LOG_INFO("Socket bound successfully to port %d", config->port);
-    }
-    
-    /* Store socket descriptor in config */
-    config->socket_fd = socket_fd;
-    
-    /* Update server state */
-    set_server_state(SERVER_STATE_SOCKET_BOUND, "Socket bound successfully");
-    
-    return 0;
-}
-
-/**
- * Setup listening socket
- */
-static int setup_listening_socket(server_config_t *config) {
-    if (!config || config->socket_fd <= 0) {
-        return -1;
-    }
-    
-    printf("STEP 4: Setting socket to listen state\n");
-    if (g_logger) {
-        LOG_INFO("STEP 4: Setting socket to listen state");
-    }
-    
-    /* Set up listening */
-    if (listen(config->socket_fd, 10) < 0) {
-        fprintf(stderr, "Error: Failed to listen on socket: %s (errno=%d)\n", 
-                strerror(errno), errno);
-        if (g_logger) {
-            LOG_ERROR("Failed to listen on socket: %s (errno=%d)", 
-                     strerror(errno), errno);
-        }
-        close(config->socket_fd);
-        config->socket_fd = 0;
-        return -1;
-    }
-    
-    printf("Socket is now listening\n");
-    if (g_logger) {
-        LOG_INFO("Socket is now listening");
-    }
-    
-    /* Update server state */
-    set_server_state(SERVER_STATE_LISTENING, "Socket is listening");
-    
-    return 0;
-}
 
 /**
  * Verify socket binding
