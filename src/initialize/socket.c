@@ -104,6 +104,23 @@ init_status_t init_socket(server_config_t* config) {
     /* Verify socket state */
     int acceptconn = 0;
     socklen_t acceptconn_len = sizeof(acceptconn);
+    
+    /* Print detailed debugging info */
+    fprintf(stderr, "[INIT:SOCKET] DEBUG: Before check - socket_fd=%d, PID=%d\n", socket_fd, getpid());
+    fprintf(stderr, "[INIT:SOCKET] DEBUG: Host=%s, Port=%d\n", 
+           config->host ? config->host : "0.0.0.0", config->port);
+           
+    /* Check if socket is actually bound correctly */
+    struct sockaddr_in actual_addr;
+    socklen_t actual_len = sizeof(actual_addr);
+    if (getsockname(socket_fd, (struct sockaddr*)&actual_addr, &actual_len) < 0) {
+        fprintf(stderr, "[INIT:SOCKET] DEBUG: Failed to get socket name: %s (errno=%d)\n", 
+               strerror(errno), errno);
+    } else {
+        fprintf(stderr, "[INIT:SOCKET] DEBUG: Socket is bound to %s:%d\n", 
+               inet_ntoa(actual_addr.sin_addr), ntohs(actual_addr.sin_port));
+    }
+    
     if (getsockopt(socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
         if (g_logger) {
             LOG_WARNING("[INIT:SOCKET] Failed to check SO_ACCEPTCONN: %s", strerror(errno));
@@ -118,6 +135,9 @@ init_status_t init_socket(server_config_t* config) {
             printf("[INIT:SOCKET] Socket listening state: %s\n", 
                   acceptconn ? "LISTENING" : "NOT LISTENING");
         }
+        
+        fprintf(stderr, "[INIT:SOCKET] DEBUG: Socket listening state: %s\n", 
+               acceptconn ? "LISTENING" : "NOT LISTENING");
         
         if (!acceptconn) {
             INIT_LOG_FAILURE("SOCKET", "Socket is not in listening state despite successful listen() call");

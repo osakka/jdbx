@@ -164,7 +164,98 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Initialize database */
+    /* Special handling for JavaScript file execution - removed js_mode/js_file as this is 
+       handled by the general initialization sequence now */
+    
+    /* CHANGED INITIALIZATION SEQUENCE: 
+     * Moving database, RBAC and API initialization AFTER daemon and socket initialization
+     * to ensure everything happens in the final process context
+     */
+    LOG_DEBUG("Using improved initialization sequence");
+    
+    /* Database, RBAC, and API will be initialized after socket setup */
+    database = NULL;
+    rbac = NULL;
+    rbac_ref = NULL;
+    api_ctx = NULL;
+    
+    /*
+     * CRITICAL SEQUENCE FOR SOCKET BINDING ISSUE:
+     * 1. First daemonize (if in daemon mode)
+     * 2. Then create and bind socket in the FINAL daemon process
+     * 3. Finally initialize thread pool and run server
+     */
+    
+    LOG_DEBUG("Initializing Writing PID if FG mode");
+    /* Write PID file if in foreground mode */
+    if (config->verbose_mode && config->pid_file) {
+        /* Debug logging in verbose mode */
+        if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+            LOG_DEBUG("[DAEMON] Verbose mode enabled, PID: %d", getpid());
+            
+            char cwd[PATH_MAX];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                LOG_DEBUG("[DAEMON] Working directory: %s", cwd);
+            }
+        }
+        
+        FILE* pid_fp = fopen(config->pid_file, "w");
+        if (pid_fp) {
+            fprintf(pid_fp, "%d\n", getpid());
+            fclose(pid_fp);
+            
+            if (g_logger) {
+                LOG_INFO("[DAEMON] PID file written: %s (PID: %d)", config->pid_file, getpid());
+            } else {
+                printf("[DEBUG] PID file written: %s (PID: %d)\n", config->pid_file, getpid());
+            }
+        } else {
+            if (g_logger) {
+                LOG_ERROR("[DAEMON] Failed to write PID file '%s': %s (errno=%d)", 
+                        config->pid_file, strerror(errno), errno);
+            } else {
+                fprintf(stderr, "[DEBUG] Failed to write PID file '%s': %s\n", 
+                     config->pid_file, strerror(errno));
+            }
+        }
+    }
+    
+    /* Initialize daemon process if in daemon mode */
+    LOG_DEBUG("Initializing Daemonization");
+    if (!config->verbose_mode) {
+        /* Using our enhanced daemon initialization with proper logging */
+        if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+            LOG_DEBUG("[DAEMON] Starting daemon mode initialization");
+        }
+        
+        status = init_daemon(config);
+        if (status == INIT_DAEMON_ERROR) {
+            INIT_LOG_FAILURE("DAEMON", "Failed to initialize daemon process");
+            free(config);
+            return 1;
+        } else if (status == INIT_DAEMON_PARENT_EXIT) {
+            /* Parent process should exit without cleanup */
+            INIT_LOG_PROGRESS("DAEMON", "Daemon started, parent process exiting");
+            /* Free config before exit to avoid memory leak */
+            free(config);
+            return 0;
+        }
+        
+        /* Child process continues here */
+        INIT_LOG_SUCCESS("DAEMON", "Daemon process initialized successfully, continuing with child process");
+    }
+    
+    /* Initialize socket - AFTER daemon process is fully established */
+    LOG_DEBUG("Initializing Socket");
+    status = init_socket(config);
+    if (status != INIT_OK) {
+        INIT_LOG_FAILURE("MAIN", "Failed to initialize socket");
+        free(config);
+        return 1;
+    }
+    
+    /* Now that we have a socket and proper daemon context, initialize the database */
+    LOG_DEBUG("Initializing Database");
     status = init_database(config, &database);
     if (status != INIT_OK) {
         INIT_LOG_FAILURE("MAIN", "Failed to initialize database");
@@ -172,10 +263,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Special handling for JavaScript file execution - removed js_mode/js_file as this is 
-       handled by the general initialization sequence now */
-    
-    /* Initialize RBAC system */
+    /* Initialize RBAC AFTER socket and database are ready */
+    LOG_DEBUG("Initializing RBAC");
     status = init_rbac(config, database, &rbac, &rbac_ref);
     if (status != INIT_OK) {
         INIT_LOG_FAILURE("MAIN", "Failed to initialize RBAC system");
@@ -183,7 +272,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    /* Initialize API context */
+    /* Initialize API context AFTER RBAC is ready */
+    LOG_DEBUG("Initializing API");
     status = init_api(config, database, rbac, &api_ctx);
     if (status != INIT_OK) {
         INIT_LOG_FAILURE("MAIN", "Failed to initialize API context");
@@ -194,69 +284,16 @@ int main(int argc, char** argv) {
     /* Store API context in config for sharing with other components */
     config->api_ctx = api_ctx;
     
-    /*
-     * CRITICAL SEQUENCE FOR SOCKET BINDING ISSUE:
-     * 1. First daemonize (if in daemon mode)
-     * 2. Then create and bind socket in the FINAL daemon process
-     * 3. Finally initialize thread pool and run server
-     */
-    
-    /* TEMPORARY FIX: Force verbose mode to disable daemonization */
-    printf("[DEBUG] IMPORTANT: Daemonization temporarily disabled for debugging\n");
-    config->verbose_mode = 1; /* Force verbose mode */
-    
-    /* Write PID file even if not daemonizing */
-    if (config->pid_file) {
-        FILE* pid_fp = fopen(config->pid_file, "w");
-        if (pid_fp) {
-            fprintf(pid_fp, "%d\n", getpid());
-            fclose(pid_fp);
-            printf("[DEBUG] PID file written: %s (PID: %d)\n", config->pid_file, getpid());
-        } else {
-            fprintf(stderr, "[DEBUG] Failed to write PID file '%s': %s\n", 
-                 config->pid_file, strerror(errno));
-        }
-    }
-    
-    /* Initialize daemon process if in daemon mode - DISABLED
-    
-    DISABLED TEMPORARILY FOR DEBUGGING:
-    
-    if (!config->verbose_mode) {
-        status = init_daemon(config);
-        if (status == INIT_DAEMON_ERROR) {
-            INIT_LOG_FAILURE("MAIN", "Failed to initialize daemon process");
-            free(config);
-            return 1;
-        } else if (status == INIT_DAEMON_PARENT_EXIT) {
-            // Parent process should exit without cleanup
-            INIT_LOG_PROGRESS("MAIN", "Daemon started, parent process exiting");
-            // Free config before exit to avoid memory leak
-            free(config);
-            return 0;
-        }
-        
-        // Child process continues here
-        INIT_LOG_PROGRESS("MAIN", "Daemon process initialized, continuing with child process");
-    }
-    
-    END OF DISABLED CODE */
-    
-    /* Initialize socket - AFTER daemon process is fully established */
-    status = init_socket(config);
-    if (status != INIT_OK) {
-        INIT_LOG_FAILURE("MAIN", "Failed to initialize socket");
-        free(config);
-        return 1;
-    }
-    
     /* Initialize thread pool */
+    LOG_DEBUG("Initializing Thread Pool");
     status = init_threads(config);
     if (status != INIT_OK) {
         INIT_LOG_FAILURE("MAIN", "Failed to initialize thread pool");
         free(config);
         return 1;
     }
+    
+    LOG_INFO("All components successfully initialized in the correct sequence");
     
     /* Run server main loop */
     INIT_LOG_PROGRESS("MAIN", "All components initialized, starting server main loop");

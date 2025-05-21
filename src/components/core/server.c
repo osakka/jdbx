@@ -301,6 +301,29 @@ static void* accept_thread_func(void* arg) {
     int client_fd;
     int connection_count = 0;
     
+    /* Debug: Print socket details */
+    printf("DEBUG: Starting accept thread with socket_fd=%d, PID=%d\n", config->socket_fd, getpid());
+    
+    /* Verify socket is still in listen state */
+    int acceptconn = 0;
+    socklen_t acceptconn_len = sizeof(acceptconn);
+    if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
+        printf("WARNING: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+    } else {
+        printf("DEBUG: Socket listening state in accept thread: %s\n", 
+              acceptconn ? "LISTENING" : "NOT LISTENING");
+    }
+    
+    /* Check actual bound address */
+    struct sockaddr_in actual_addr;
+    socklen_t actual_len = sizeof(actual_addr);
+    if (getsockname(config->socket_fd, (struct sockaddr*)&actual_addr, &actual_len) < 0) {
+        printf("DEBUG: Failed to get socket name: %s\n", strerror(errno));
+    } else {
+        printf("DEBUG: Socket is bound to %s:%d in accept thread\n", 
+               inet_ntoa(actual_addr.sin_addr), ntohs(actual_addr.sin_port));
+    }
+    
     /* Set up file descriptor set for select */
     fd_set read_fds;
     int max_fd = config->socket_fd;
@@ -356,16 +379,30 @@ static void* accept_thread_func(void* arg) {
         
         /* Check for socket activity */
         if (FD_ISSET(config->socket_fd, &read_fds)) {
+            /* Debug: print that we're about to accept a connection */
+            printf("DEBUG: Detected activity on socket %d, calling accept()...\n", config->socket_fd);
+            
             /* Accept connection */
             client_fd = accept(config->socket_fd, (struct sockaddr*)&client_addr, &client_len);
             
             if (client_fd < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     /* Non-blocking socket with no connections ready */
+                    printf("DEBUG: accept() returned EAGAIN/EWOULDBLOCK, no connection ready\n");
                     continue;
                 }
                 
-                fprintf(stderr, "Error: accept() failed: %s\n", strerror(errno));
+                fprintf(stderr, "Error: accept() failed: %s (errno=%d)\n", strerror(errno), errno);
+                
+                /* Check if the server socket is still valid */
+                int error = 0;
+                socklen_t len = sizeof(error);
+                if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+                    fprintf(stderr, "DEBUG: Socket error check failed: %s\n", strerror(errno));
+                } else if (error != 0) {
+                    fprintf(stderr, "DEBUG: Socket has error condition: %s\n", strerror(error));
+                }
+                
                 continue;
             }
             

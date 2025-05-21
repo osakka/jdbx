@@ -20,6 +20,15 @@ init_status_t init_daemon(server_config_t* config) {
     if (config->verbose_mode) {
         INIT_LOG_PROGRESS("DAEMON", "Running in foreground mode, daemon not initialized");
         
+        /* Add detailed logs in debug mode */
+        if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+            char cwd[PATH_MAX];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                LOG_DEBUG("[DAEMON] Verbose mode enabled, PID: %d, working directory: %s", 
+                        getpid(), cwd);
+            }
+        }
+        
         /* Write PID file for foreground mode */
         if (config->pid_file) {
             INIT_LOG_PROGRESS("DAEMON", "Writing PID file for foreground mode: %s", config->pid_file);
@@ -29,8 +38,8 @@ init_status_t init_daemon(server_config_t* config) {
                 fclose(pid_fp);
                 INIT_LOG_SUCCESS("DAEMON", "PID file written: %s (PID: %d)", config->pid_file, getpid());
             } else {
-                INIT_LOG_FAILURE("DAEMON", "Failed to write PID file '%s': %s", 
-                             config->pid_file, strerror(errno));
+                INIT_LOG_FAILURE("DAEMON", "Failed to write PID file '%s': %s (errno=%d)", 
+                             config->pid_file, strerror(errno), errno);
                 /* Non-fatal error, continue */
             }
         }
@@ -41,11 +50,22 @@ init_status_t init_daemon(server_config_t* config) {
     /* Running in daemon mode */
     INIT_LOG_PROGRESS("DAEMON", "Starting in daemon mode");
     
+    /* Add detailed logs in debug mode */
+    if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            LOG_DEBUG("[DAEMON] Pre-daemonize state: PID=%d, working directory: %s", getpid(), cwd);
+        }
+        LOG_DEBUG("[DAEMON] PID file path: %s", config->pid_file ? config->pid_file : "(none)");
+        LOG_DEBUG("[DAEMON] Logger file path: %s", config->log_file ? config->log_file : "(none)");
+    }
+    
     /* Use daemonize_process function - our proven approach from testing */
     int daemonize_result = daemonize_process(config->pid_file);
     
     if (daemonize_result < 0) {
-        INIT_LOG_FAILURE("DAEMON", "Failed to daemonize process: %s", strerror(errno));
+        INIT_LOG_FAILURE("DAEMON", "Failed to daemonize process: %s (errno=%d)", 
+                       strerror(errno), errno);
         return INIT_DAEMON_ERROR;
     }
     
@@ -58,17 +78,30 @@ init_status_t init_daemon(server_config_t* config) {
     }
     
     /* This is the child (daemon) process */
+    if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            LOG_DEBUG("[DAEMON] After daemonization: PID=%d, working directory: %s", getpid(), cwd);
+        }
+    }
     
     /* Reinitialize logger if file logging was specified, otherwise stdio is closed */
     if (config->log_file && !config->verbose_mode) {
         /* Close and reopen the logger to work properly in daemon context */
         if (g_logger) {
+            if (g_logger->log_level >= LOG_LEVEL_DEBUG) {
+                LOG_DEBUG("[DAEMON] Reinitializing logger to work in daemon context");
+            }
             logger_close();
         }
         
         if (!logger_init(config->log_file, config->log_level)) {
             /* Can't log in this case - but also won't reach main process anymore */
             return INIT_LOGGER_ERROR;
+        }
+        
+        if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
+            LOG_DEBUG("[DAEMON] Logger reinitialized successfully with file: %s", config->log_file);
         }
     }
     

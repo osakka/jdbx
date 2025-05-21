@@ -167,17 +167,17 @@ start_server() {
 
     ./bin/jsondb_server \
       ${DAEMON_MODE} \
-      --log-level=${LOGLEVEL} \
-      --db-dir=${DBPATH} \
-      --rbac-file=${RBACFILE} \
-      --log-file=${LOGFILE} \
-      --pid-file=${PIDFILE} \
-      --web-root=${WEBROOT} \
-      --port=${PORT} \
-      --host=${HOST} \
-      --validators-dir=${VALIDATORS_DIR} \
-      --transforms-dir=${TRANSFORMS_DIR} \
-      --metrics-dir=${METRICS_DIR}
+      -l ${LOGLEVEL} \
+      -b ${DBPATH} \
+      -r ${RBACFILE} \
+      -o ${LOGFILE} \
+      -i ${PIDFILE} \
+      -w ${WEBROOT} \
+      -p ${PORT} \
+      -H ${HOST} \
+      -Q ${VALIDATORS_DIR} \
+      -T ${TRANSFORMS_DIR} \
+      -M ${METRICS_DIR}
     
     # Improved check for server startup with longer timeout and better resilience
     local timeout=30  # Increase timeout to 30 seconds
@@ -295,24 +295,98 @@ start_server() {
     fi
 }
 
-# Stop the server
+# Stop the server - Enhanced version with improved process detection
 stop_server() {
+    SERVER_STOPPED=0
+    
+    # First approach: Try using PID file
     if [ -f "$PIDFILE" ]; then
         PID=$(cat "$PIDFILE")
         if ps -p "$PID" > /dev/null 2>&1; then
-            echo "Stopping JSONdb server (PID: $PID)..."
-            ./bin/jsondb_server --terminate --pid-file=${PIDFILE}
+            echo "Stopping JSONdb server (PID: $PID) using PID file..."
+            
+            # First try graceful termination via signal
+            kill -TERM $PID 2>/dev/null
+            
+            # Check if process ended
             sleep 2
-            if ps -p "$PID" > /dev/null 2>&1; then
-                echo "Forcing termination of JSONdb server..."
-                kill -9 $PID
+            if ! ps -p "$PID" > /dev/null 2>&1; then
+                echo "Server successfully stopped via SIGTERM."
+                SERVER_STOPPED=1
+            else
+                # Try forced termination
+                echo "Forcing termination of JSONdb server (PID: $PID)..."
+                kill -9 $PID 2>/dev/null
+                
+                # Check if process ended
+                sleep 1
+                if ! ps -p "$PID" > /dev/null 2>&1; then
+                    echo "Server successfully terminated via SIGKILL."
+                    SERVER_STOPPED=1
+                else
+                    echo "Failed to terminate server via PID file method."
+                fi
             fi
         else
-            echo "No running server found (stale PID file)"
+            echo "No running server found with PID $PID (stale PID file)"
         fi
         rm -f "$PIDFILE"
     else
-        echo "JSONdb server is not running (no PID file)"
+        echo "No PID file found at $PIDFILE"
+    fi
+    
+    # Second approach: Find server processes by command line pattern
+    if [ $SERVER_STOPPED -eq 0 ]; then
+        echo "Searching for jsondb_server processes..."
+        SERVER_PIDS=$(ps -ef | grep "/bin/jsondb_server" | grep -v "grep" | awk '{print $2}')
+        
+        if [ -z "$SERVER_PIDS" ]; then
+            echo "No jsondb_server processes found."
+        else
+            # Found server processes
+            echo "Found jsondb_server processes: $SERVER_PIDS"
+            for SERVER_PID in $SERVER_PIDS; do
+                echo "Stopping JSONdb server process (PID: $SERVER_PID)..."
+                
+                # First try graceful termination
+                kill -TERM $SERVER_PID 2>/dev/null
+                
+                # Check if process ended
+                sleep 2
+                if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
+                    echo "Process $SERVER_PID successfully stopped via SIGTERM."
+                else
+                    # Try forced termination
+                    echo "Forcing termination of process $SERVER_PID..."
+                    kill -9 $SERVER_PID 2>/dev/null
+                    
+                    # Check if process ended
+                    sleep 1
+                    if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
+                        echo "Process $SERVER_PID successfully terminated via SIGKILL."
+                    else
+                        echo "WARNING: Failed to terminate process $SERVER_PID"
+                    fi
+                fi
+            done
+            SERVER_STOPPED=1
+        fi
+    fi
+    
+    # Cleanup - double check for any leftover PID files
+    rm -f "$PIDFILE" 2>/dev/null
+    
+    # Check for port usage
+    if is_port_in_use $PORT; then
+        echo "WARNING: Port $PORT is still in use after stopping server."
+        if command -v lsof >/dev/null 2>&1; then
+            echo "Processes using port $PORT:"
+            lsof -i :$PORT
+        fi
+    else
+        if [ $SERVER_STOPPED -eq 1 ]; then
+            echo "Server successfully stopped and port $PORT is now available."
+        fi
     fi
 }
 
