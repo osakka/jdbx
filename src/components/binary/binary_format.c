@@ -1,0 +1,899 @@
+#include "binary/binary_format.h"
+#include "database/database.h"
+#include "utils/logger.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+
+/* CRC32 table for fast checksum calculation */
+static uint32_t crc32_table[256];
+static int crc32_table_initialized = 0;
+
+/* Initialize CRC32 table */
+static void init_crc32_table() {
+    if (crc32_table_initialized) return;
+    
+    uint32_t polynomial = 0xEDB88320;
+    
+    for (uint32_t i = 0; i < 256; i++) {
+        uint32_t c = i;
+        for (size_t j = 0; j < 8; j++) {
+            if (c & 1) {
+                c = polynomial ^ (c >> 1);
+            } else {
+                c >>= 1;
+            }
+        }
+        crc32_table[i] = c;
+    }
+    
+    crc32_table_initialized = 1;
+}
+
+/* Calculate CRC32 checksum */
+uint32_t binary_calculate_checksum(const void* data, size_t size) {
+    if (!data || size == 0) return 0;
+    
+    /* Initialize CRC32 table if needed */
+    if (!crc32_table_initialized) {
+        init_crc32_table();
+    }
+    
+    /* Calculate CRC32 */
+    uint32_t crc = 0xFFFFFFFF;
+    const unsigned char* buf = (const unsigned char*)data;
+    
+    for (size_t i = 0; i < size; i++) {
+        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ buf[i]];
+    }
+    
+    return ~crc;
+}
+
+/* Verify binary format header */
+int binary_verify_header(const binary_header_t* header) {
+    if (!header) return 0;
+    
+    /* Check magic number */
+    if (header->magic != BINARY_FORMAT_MAGIC) {
+        LOG_ERROR("Invalid binary format magic number: 0x%08X", header->magic);
+        return 0;
+    }
+    
+    /* Check version */
+    if (header->version != BINARY_FORMAT_VERSION) {
+        LOG_ERROR("Unsupported binary format version: %d", header->version);
+        return 0;
+    }
+    
+    /* More validations can be added here */
+    
+    return 1;
+}
+
+/* Memory allocation with error checking */
+void* binary_malloc(size_t size) {
+    void* ptr = malloc(size);
+    if (!ptr) {
+        LOG_ERROR("Failed to allocate %zu bytes", size);
+    }
+    return ptr;
+}
+
+/* Free memory */
+void binary_free(void* ptr) {
+    if (ptr) {
+        free(ptr);
+    }
+}
+
+/* Resize buffer with error checking */
+int binary_resize_buffer(void** buffer, size_t current_size, size_t new_size) {
+    if (!buffer) return 0;
+    
+    void* new_buffer = realloc(*buffer, new_size);
+    if (!new_buffer) {
+        LOG_ERROR("Failed to resize buffer from %zu to %zu bytes", current_size, new_size);
+        return 0;
+    }
+    
+    *buffer = new_buffer;
+    return 1;
+}
+
+/* Get the size required to serialize a JSON value */
+static size_t get_json_binary_size(json_value_t* json) {
+    if (!json) return sizeof(binary_value_header_t);
+    
+    size_t size = sizeof(binary_value_header_t);
+    
+    switch (json->type) {
+        case JSON_NULL:
+            /* No additional data */
+            break;
+            
+        case JSON_BOOLEAN:
+            size += sizeof(uint8_t);
+            break;
+            
+        case JSON_NUMBER:
+        case JSON_INTEGER:
+            size += sizeof(double);
+            break;
+            
+        case JSON_STRING: {
+            const char* str = json_get_string(json);
+            size += sizeof(uint32_t) + (str ? strlen(str) : 0);
+            break;
+        }
+            
+        case JSON_ARRAY:
+            size += sizeof(uint32_t); /* Array length */
+            for (size_t i = 0; i < json_array_size(json); i++) {
+                size += get_json_binary_size(json_array_get(json, i));
+            }
+            break;
+            
+        case JSON_OBJECT: {
+            size += sizeof(uint32_t); /* Object size */
+            size_t obj_size = json_object_size(json);
+            
+            /* Iterate through object entries manually */
+            for (size_t i = 0; i < obj_size; i++) {
+                json_object_entry_t* entry = &json->value.object.entries[i];
+                size += sizeof(uint32_t) + strlen(entry->key); /* Key length + key */
+                size += get_json_binary_size(entry->value);
+            }
+            break;
+        }
+            
+        default:
+            LOG_ERROR("Unknown JSON type: %d", json->type);
+            break;
+    }
+    
+    return size;
+}
+
+/* Serialize a JSON value to binary format */
+static size_t serialize_json_value(json_value_t* json, void* buffer, size_t offset) {
+    if (!buffer) return offset;
+    
+    binary_value_header_t* header = (binary_value_header_t*)((uint8_t*)buffer + offset);
+    offset += sizeof(binary_value_header_t);
+    
+    if (!json) {
+        header->type = BIN_TYPE_NULL;
+        header->size = 0;
+        return offset;
+    }
+    
+    switch (json->type) {
+        case JSON_NULL:
+            header->type = BIN_TYPE_NULL;
+            header->size = 0;
+            break;
+            
+        case JSON_BOOLEAN:
+            header->type = BIN_TYPE_BOOLEAN;
+            header->size = sizeof(uint8_t);
+            *((uint8_t*)buffer + offset) = json_get_boolean(json) ? 1 : 0;
+            offset += sizeof(uint8_t);
+            break;
+            
+        case JSON_NUMBER:
+            header->type = BIN_TYPE_DOUBLE;
+            header->size = sizeof(double);
+            *((double*)((uint8_t*)buffer + offset)) = json_get_number(json);
+            offset += sizeof(double);
+            break;
+            
+        case JSON_INTEGER:
+            header->type = BIN_TYPE_INTEGER;
+            header->size = sizeof(int64_t);
+            *((int64_t*)((uint8_t*)buffer + offset)) = json_get_integer(json);
+            offset += sizeof(int64_t);
+            break;
+            
+        case JSON_STRING: {
+            header->type = BIN_TYPE_STRING;
+            const char* str = json_get_string(json);
+            uint32_t str_len = str ? (uint32_t)strlen(str) : 0;
+            header->size = sizeof(uint32_t) + str_len;
+            
+            /* Write string length */
+            *((uint32_t*)((uint8_t*)buffer + offset)) = str_len;
+            offset += sizeof(uint32_t);
+            
+            /* Write string data */
+            if (str && str_len > 0) {
+                memcpy((uint8_t*)buffer + offset, str, str_len);
+                offset += str_len;
+            }
+            break;
+        }
+            
+        case JSON_ARRAY: {
+            header->type = BIN_TYPE_ARRAY;
+            size_t array_size = json_array_size(json);
+            size_t header_size_offset = offset;
+            
+            /* Skip size field for now */
+            offset += sizeof(uint32_t);
+            
+            /* Write array length */
+            *((uint32_t*)((uint8_t*)buffer + offset)) = (uint32_t)array_size;
+            offset += sizeof(uint32_t);
+            
+            /* Write array elements */
+            for (size_t i = 0; i < array_size; i++) {
+                offset = serialize_json_value(json_array_get(json, i), buffer, offset);
+            }
+            
+            /* Update header size */
+            header->size = (uint32_t)(offset - header_size_offset);
+            break;
+        }
+            
+        case JSON_OBJECT: {
+            header->type = BIN_TYPE_OBJECT;
+            size_t object_size = json_object_size(json);
+            size_t header_size_offset = offset;
+            
+            /* Skip size field for now */
+            offset += sizeof(uint32_t);
+            
+            /* Write object size */
+            *((uint32_t*)((uint8_t*)buffer + offset)) = (uint32_t)object_size;
+            offset += sizeof(uint32_t);
+            
+            /* Iterate through object entries manually */
+            for (size_t i = 0; i < object_size; i++) {
+                json_object_entry_t* entry = &json->value.object.entries[i];
+                
+                /* Write key length */
+                uint32_t key_len = (uint32_t)strlen(entry->key);
+                *((uint32_t*)((uint8_t*)buffer + offset)) = key_len;
+                offset += sizeof(uint32_t);
+                
+                /* Write key string */
+                memcpy((uint8_t*)buffer + offset, entry->key, key_len);
+                offset += key_len;
+                
+                /* Write value */
+                offset = serialize_json_value(entry->value, buffer, offset);
+            }
+            
+            /* Update header size */
+            header->size = (uint32_t)(offset - header_size_offset);
+            break;
+        }
+            
+        default:
+            LOG_ERROR("Unknown JSON type: %d", json->type);
+            header->type = BIN_TYPE_NULL;
+            header->size = 0;
+            break;
+    }
+    
+    return offset;
+}
+
+/* Deserialize a binary value to JSON */
+static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* offset) {
+    if (!buffer || *offset >= size) return NULL;
+    
+    binary_value_header_t* header = (binary_value_header_t*)((uint8_t*)buffer + *offset);
+    *offset += sizeof(binary_value_header_t);
+    
+    if (*offset > size) {
+        LOG_ERROR("Buffer overrun during deserialization");
+        return NULL;
+    }
+    
+    switch (header->type) {
+        case BIN_TYPE_NULL:
+            return json_create_null();
+            
+        case BIN_TYPE_BOOLEAN: {
+            if (*offset + sizeof(uint8_t) > size) {
+                LOG_ERROR("Buffer overrun during boolean deserialization");
+                return NULL;
+            }
+            uint8_t value = *((uint8_t*)buffer + *offset);
+            *offset += sizeof(uint8_t);
+            return json_create_boolean(value != 0);
+        }
+            
+        case BIN_TYPE_INTEGER: {
+            if (*offset + sizeof(int64_t) > size) {
+                LOG_ERROR("Buffer overrun during integer deserialization");
+                return NULL;
+            }
+            int64_t value = *((int64_t*)((uint8_t*)buffer + *offset));
+            *offset += sizeof(int64_t);
+            return json_create_integer(value);
+        }
+            
+        case BIN_TYPE_DOUBLE: {
+            if (*offset + sizeof(double) > size) {
+                LOG_ERROR("Buffer overrun during double deserialization");
+                return NULL;
+            }
+            double value = *((double*)((uint8_t*)buffer + *offset));
+            *offset += sizeof(double);
+            return json_create_number(value);
+        }
+            
+        case BIN_TYPE_STRING: {
+            if (*offset + sizeof(uint32_t) > size) {
+                LOG_ERROR("Buffer overrun during string length deserialization");
+                return NULL;
+            }
+            
+            uint32_t str_len = *((uint32_t*)((uint8_t*)buffer + *offset));
+            *offset += sizeof(uint32_t);
+            
+            if (*offset + str_len > size) {
+                LOG_ERROR("Buffer overrun during string data deserialization");
+                return NULL;
+            }
+            
+            /* Copy string data */
+            char* str = (char*)malloc(str_len + 1);
+            if (!str) {
+                LOG_ERROR("Failed to allocate string memory");
+                return NULL;
+            }
+            
+            memcpy(str, (uint8_t*)buffer + *offset, str_len);
+            str[str_len] = '\0';
+            *offset += str_len;
+            
+            json_value_t* result = json_create_string(str);
+            free(str);
+            return result;
+        }
+            
+        case BIN_TYPE_ARRAY: {
+            if (*offset + sizeof(uint32_t) > size) {
+                LOG_ERROR("Buffer overrun during array size deserialization");
+                return NULL;
+            }
+            
+            /* Skip data size */
+            *offset += sizeof(uint32_t);
+            
+            if (*offset + sizeof(uint32_t) > size) {
+                LOG_ERROR("Buffer overrun during array length deserialization");
+                return NULL;
+            }
+            
+            uint32_t array_size = *((uint32_t*)((uint8_t*)buffer + *offset));
+            *offset += sizeof(uint32_t);
+            
+            json_value_t* array = json_create_array();
+            if (!array) {
+                LOG_ERROR("Failed to create JSON array");
+                return NULL;
+            }
+            
+            /* Read array elements */
+            for (uint32_t i = 0; i < array_size; i++) {
+                json_value_t* element = deserialize_json_value(buffer, size, offset);
+                if (!element) {
+                    LOG_ERROR("Failed to deserialize array element %u", i);
+                    json_free(array);
+                    return NULL;
+                }
+                
+                json_array_append(array, element);
+            }
+            
+            return array;
+        }
+            
+        case BIN_TYPE_OBJECT: {
+            if (*offset + sizeof(uint32_t) > size) {
+                LOG_ERROR("Buffer overrun during object size deserialization");
+                return NULL;
+            }
+            
+            /* Skip data size */
+            *offset += sizeof(uint32_t);
+            
+            if (*offset + sizeof(uint32_t) > size) {
+                LOG_ERROR("Buffer overrun during object field count deserialization");
+                return NULL;
+            }
+            
+            uint32_t object_size = *((uint32_t*)((uint8_t*)buffer + *offset));
+            *offset += sizeof(uint32_t);
+            
+            json_value_t* object = json_create_object();
+            if (!object) {
+                LOG_ERROR("Failed to create JSON object");
+                return NULL;
+            }
+            
+            /* Read object fields */
+            for (uint32_t i = 0; i < object_size; i++) {
+                if (*offset + sizeof(uint32_t) > size) {
+                    LOG_ERROR("Buffer overrun during object key length deserialization");
+                    json_free(object);
+                    return NULL;
+                }
+                
+                uint32_t key_len = *((uint32_t*)((uint8_t*)buffer + *offset));
+                *offset += sizeof(uint32_t);
+                
+                if (*offset + key_len > size) {
+                    LOG_ERROR("Buffer overrun during object key deserialization");
+                    json_free(object);
+                    return NULL;
+                }
+                
+                /* Copy key string */
+                char* key = (char*)malloc(key_len + 1);
+                if (!key) {
+                    LOG_ERROR("Failed to allocate key memory");
+                    json_free(object);
+                    return NULL;
+                }
+                
+                memcpy(key, (uint8_t*)buffer + *offset, key_len);
+                key[key_len] = '\0';
+                *offset += key_len;
+                
+                /* Read value */
+                json_value_t* value = deserialize_json_value(buffer, size, offset);
+                if (!value) {
+                    LOG_ERROR("Failed to deserialize object value for key '%s'", key);
+                    free(key);
+                    json_free(object);
+                    return NULL;
+                }
+                
+                /* Set object field */
+                json_object_set(object, key, value);
+                
+                free(key);
+            }
+            
+            return object;
+        }
+            
+        default:
+            LOG_ERROR("Unknown binary type: %d", header->type);
+            return NULL;
+    }
+}
+
+/* Serialize database to binary format */
+int binary_serialize_database(const char* path, void* db) {
+    if (!path || !db) {
+        LOG_ERROR("Invalid parameters for binary serialization");
+        return 0;
+    }
+    
+    database_t* database = (database_t*)db;
+    size_t db_size = 0;
+    
+    /* Lock database for serialization */
+    pthread_mutex_lock(&database->lock);
+    
+    /* Calculate total size needed */
+    db_size += sizeof(binary_header_t);
+    
+    /* Temporary buffer for collection data */
+    void* temp_buffer = NULL;
+    size_t temp_size = 0;
+    
+    /* Create file */
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        LOG_ERROR("Failed to create binary database file: %s (error: %s)",
+                 path, strerror(errno));
+        pthread_mutex_unlock(&database->lock);
+        return 0;
+    }
+    
+    /* Write header placeholder (will update later) */
+    binary_header_t header;
+    memset(&header, 0, sizeof(header));
+    header.magic = BINARY_FORMAT_MAGIC;
+    header.version = BINARY_FORMAT_VERSION;
+    header.timestamp = (uint64_t)time(NULL);
+    
+    if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+        LOG_ERROR("Failed to write binary header: %s", strerror(errno));
+        close(fd);
+        pthread_mutex_unlock(&database->lock);
+        return 0;
+    }
+    
+    /* Collect collection metadata */
+    uint32_t collection_count = 0;
+    size_t current_offset = sizeof(binary_header_t);
+    
+    /* Iterate through collections manually */
+    size_t coll_count = json_object_size(database->collections);
+    
+    for (size_t i = 0; i < coll_count; i++) {
+        json_object_entry_t* entry = &database->collections->value.object.entries[i];
+        const char* collection_name = entry->key;
+        json_value_t* collection_data = entry->value;
+        
+        collection_count++;
+        
+        /* Write collection header placeholder */
+        binary_collection_header_t coll_header;
+        memset(&coll_header, 0, sizeof(coll_header));
+        
+        coll_header.name_length = (uint32_t)strlen(collection_name);
+        coll_header.document_count = (uint32_t)json_array_size(collection_data);
+        coll_header.data_offset = current_offset + sizeof(binary_collection_header_t) + coll_header.name_length;
+        
+        /* Write collection header */
+        if (write(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
+            LOG_ERROR("Failed to write collection header: %s", strerror(errno));
+            close(fd);
+            pthread_mutex_unlock(&database->lock);
+            return 0;
+        }
+        
+        current_offset += sizeof(binary_collection_header_t);
+        
+        /* Write collection name */
+        if (write(fd, collection_name, coll_header.name_length) != coll_header.name_length) {
+            LOG_ERROR("Failed to write collection name: %s", strerror(errno));
+            close(fd);
+            pthread_mutex_unlock(&database->lock);
+            return 0;
+        }
+        
+        current_offset += coll_header.name_length;
+        
+        /* Write documents */
+        for (size_t j = 0; j < json_array_size(collection_data); j++) {
+            json_value_t* document = json_array_get(collection_data, j);
+            
+            /* Calculate document size */
+            size_t doc_size = get_json_binary_size(document);
+            
+            /* Ensure temp buffer is large enough */
+            if (doc_size > temp_size) {
+                void* new_buffer = realloc(temp_buffer, doc_size);
+                if (!new_buffer) {
+                    LOG_ERROR("Failed to allocate document serialization buffer");
+                    free(temp_buffer);
+                    close(fd);
+                    pthread_mutex_unlock(&database->lock);
+                    return 0;
+                }
+                temp_buffer = new_buffer;
+                temp_size = doc_size;
+            }
+            
+            /* Serialize document */
+            serialize_json_value(document, temp_buffer, 0);
+            
+            /* Write document */
+            if (write(fd, temp_buffer, doc_size) != (ssize_t)doc_size) {
+                LOG_ERROR("Failed to write document: %s", strerror(errno));
+                free(temp_buffer);
+                close(fd);
+                pthread_mutex_unlock(&database->lock);
+                return 0;
+            }
+            
+            current_offset += doc_size;
+        }
+    }
+    
+    /* Free temp buffer */
+    if (temp_buffer) {
+        free(temp_buffer);
+    }
+    
+    /* Update header */
+    header.db_size = current_offset;
+    header.collection_count = collection_count;
+    header.checksum = binary_calculate_checksum(&header, sizeof(header) - sizeof(uint32_t));
+    
+    /* Write updated header */
+    lseek(fd, 0, SEEK_SET);
+    if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+        LOG_ERROR("Failed to update binary header: %s", strerror(errno));
+        close(fd);
+        pthread_mutex_unlock(&database->lock);
+        return 0;
+    }
+    
+    /* Close file */
+    close(fd);
+    
+    /* Reset modified flag */
+    database->is_modified = 0;
+    
+    pthread_mutex_unlock(&database->lock);
+    
+    LOG_INFO("Database serialized to binary format: %s (size: %llu bytes)",
+             path, (unsigned long long)header.db_size);
+    
+    return 1;
+}
+
+/* Deserialize database from binary format */
+void* binary_deserialize_database(const char* path) {
+    if (!path) {
+        LOG_ERROR("Invalid path for binary deserialization");
+        return NULL;
+    }
+    
+    /* Open file */
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        LOG_ERROR("Failed to open binary database file: %s (error: %s)",
+                 path, strerror(errno));
+        return NULL;
+    }
+    
+    /* Read header */
+    binary_header_t header;
+    if (read(fd, &header, sizeof(header)) != sizeof(header)) {
+        LOG_ERROR("Failed to read binary header: %s", strerror(errno));
+        close(fd);
+        return NULL;
+    }
+    
+    /* Verify header */
+    if (!binary_verify_header(&header)) {
+        LOG_ERROR("Invalid binary header in file: %s", path);
+        close(fd);
+        return NULL;
+    }
+    
+    /* Allocate database */
+    database_t* db = (database_t*)malloc(sizeof(database_t));
+    if (!db) {
+        LOG_ERROR("Failed to allocate database structure");
+        close(fd);
+        return NULL;
+    }
+    
+    /* Initialize database */
+    db->path = strdup(path);
+    db->collections = json_create_object();
+    pthread_mutex_init(&db->lock, NULL);
+    db->is_modified = 0;
+    db->cache = NULL;
+    db->cache_enabled = 0;
+    
+    /* Read collections */
+    for (uint32_t i = 0; i < header.collection_count; i++) {
+        /* Read collection header */
+        binary_collection_header_t coll_header;
+        if (read(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
+            LOG_ERROR("Failed to read collection header: %s", strerror(errno));
+            db_close(db);
+            close(fd);
+            return NULL;
+        }
+        
+        /* Read collection name */
+        char* collection_name = (char*)malloc(coll_header.name_length + 1);
+        if (!collection_name) {
+            LOG_ERROR("Failed to allocate collection name");
+            db_close(db);
+            close(fd);
+            return NULL;
+        }
+        
+        if (read(fd, collection_name, coll_header.name_length) != coll_header.name_length) {
+            LOG_ERROR("Failed to read collection name: %s", strerror(errno));
+            free(collection_name);
+            db_close(db);
+            close(fd);
+            return NULL;
+        }
+        
+        collection_name[coll_header.name_length] = '\0';
+        
+        /* Create collection */
+        json_value_t* collection = json_create_array();
+        if (!collection) {
+            LOG_ERROR("Failed to create collection");
+            free(collection_name);
+            db_close(db);
+            close(fd);
+            return NULL;
+        }
+        
+        /* Read documents */
+        for (uint32_t j = 0; j < coll_header.document_count; j++) {
+            /* Read document header */
+            binary_value_header_t doc_header;
+            if (read(fd, &doc_header, sizeof(doc_header)) != sizeof(doc_header)) {
+                LOG_ERROR("Failed to read document header: %s", strerror(errno));
+                free(collection_name);
+                db_close(db);
+                close(fd);
+                return NULL;
+            }
+            
+            /* Skip to next document if this is not a JSON value */
+            if (doc_header.type != BIN_TYPE_OBJECT) {
+                LOG_ERROR("Invalid document type: %d", doc_header.type);
+                lseek(fd, doc_header.size, SEEK_CUR);
+                continue;
+            }
+            
+            /* Allocate buffer for document */
+            void* doc_buffer = malloc(sizeof(doc_header) + doc_header.size);
+            if (!doc_buffer) {
+                LOG_ERROR("Failed to allocate document buffer");
+                free(collection_name);
+                db_close(db);
+                close(fd);
+                return NULL;
+            }
+            
+            /* Copy header to buffer */
+            memcpy(doc_buffer, &doc_header, sizeof(doc_header));
+            
+            /* Read document data */
+            if (read(fd, (uint8_t*)doc_buffer + sizeof(doc_header), doc_header.size) != doc_header.size) {
+                LOG_ERROR("Failed to read document data: %s", strerror(errno));
+                free(doc_buffer);
+                free(collection_name);
+                db_close(db);
+                close(fd);
+                return NULL;
+            }
+            
+            /* Deserialize document */
+            size_t offset = 0;
+            json_value_t* document = deserialize_json_value(doc_buffer, sizeof(doc_header) + doc_header.size, &offset);
+            free(doc_buffer);
+            
+            if (!document) {
+                LOG_ERROR("Failed to deserialize document");
+                continue;
+            }
+            
+            /* Add document to collection */
+            json_array_append(collection, document);
+        }
+        
+        /* Add collection to database */
+        json_object_set(db->collections, collection_name, collection);
+        free(collection_name);
+    }
+    
+    /* Close file */
+    close(fd);
+    
+    LOG_INFO("Database deserialized from binary format: %s (collections: %u)",
+             path, header.collection_count);
+    
+    return db;
+}
+
+/**
+ * Placeholder for binary_serialize_collection 
+ * This should be implemented based on the actual collection structure
+ */
+int binary_serialize_collection(void* collection, void* buffer, size_t* size) {
+    /* This function would serialize a collection to a binary buffer */
+    /* Implementation depends on the collection structure */
+    (void)collection; /* Suppress unused parameter warning */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_serialize_collection not fully implemented");
+    return 0;
+}
+
+/**
+ * Placeholder for binary_deserialize_collection
+ * This should be implemented based on the actual collection structure
+ */
+void* binary_deserialize_collection(void* buffer, size_t size) {
+    /* This function would deserialize a collection from a binary buffer */
+    /* Implementation depends on the collection structure */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_deserialize_collection not fully implemented");
+    return NULL;
+}
+
+/**
+ * Placeholder for binary_serialize_document
+ * This should be implemented based on the actual document structure
+ */
+int binary_serialize_document(void* document, void* buffer, size_t* size) {
+    /* This function would serialize a document to a binary buffer */
+    /* Implementation depends on the document structure */
+    (void)document;   /* Suppress unused parameter warning */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_serialize_document not fully implemented");
+    return 0;
+}
+
+/**
+ * Placeholder for binary_deserialize_document
+ * This should be implemented based on the actual document structure
+ */
+void* binary_deserialize_document(void* buffer, size_t size) {
+    /* This function would deserialize a document from a binary buffer */
+    /* Implementation depends on the document structure */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_deserialize_document not fully implemented");
+    return NULL;
+}
+
+/**
+ * Placeholder for binary_serialize_index
+ * This should be implemented based on the actual index structure
+ */
+int binary_serialize_index(void* index, void* buffer, size_t* size) {
+    /* This function would serialize an index to a binary buffer */
+    /* Implementation depends on the index structure */
+    (void)index;      /* Suppress unused parameter warning */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_serialize_index not fully implemented");
+    return 0;
+}
+
+/**
+ * Placeholder for binary_deserialize_index
+ * This should be implemented based on the actual index structure
+ */
+void* binary_deserialize_index(void* buffer, size_t size) {
+    /* This function would deserialize an index from a binary buffer */
+    /* Implementation depends on the index structure */
+    (void)buffer;     /* Suppress unused parameter warning */
+    (void)size;       /* Suppress unused parameter warning */
+    LOG_WARNING("binary_deserialize_index not fully implemented");
+    return NULL;
+}
+
+/**
+ * Convert a JSON value to binary format
+ */
+int binary_value_from_json(void* json, void* buffer, size_t* size) {
+    if (!json || !size) return 0;
+    
+    json_value_t* json_value = (json_value_t*)json;
+    size_t required_size = get_json_binary_size(json_value);
+    
+    /* Check if buffer is large enough */
+    if (!buffer || *size < required_size) {
+        *size = required_size;
+        return 0;
+    }
+    
+    /* Serialize JSON value */
+    size_t end_offset = serialize_json_value(json_value, buffer, 0);
+    *size = end_offset;
+    
+    return 1;
+}
+
+/**
+ * Convert a binary value to JSON format
+ */
+void* binary_value_to_json(void* buffer, size_t size) {
+    if (!buffer || size < sizeof(binary_value_header_t)) return NULL;
+    
+    size_t offset = 0;
+    return deserialize_json_value(buffer, size, &offset);
+}

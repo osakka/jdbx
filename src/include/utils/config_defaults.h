@@ -33,7 +33,7 @@
  *============================================================================*/
 
 /** Default database file path */
-#define DEFAULT_DB_PATH "var/data/jsondb/db.json"
+#define DEFAULT_DB_PATH "var/data/jsondb/db.jdb"
 
 /** Default RBAC config file path */
 #define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"

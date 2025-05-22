@@ -21,6 +21,7 @@ QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
 CORE_SRCS = $(wildcard $(SRC_DIR)/components/core/*.c)
 API_SRCS = $(wildcard $(SRC_DIR)/components/api/*.c)
 DB_SRCS = $(wildcard $(SRC_DIR)/components/database/*.c)
+BINARY_SRCS = $(wildcard $(SRC_DIR)/components/binary/*.c)
 QUERY_SRCS = $(wildcard $(SRC_DIR)/components/query/*.c)
 TRANS_SRCS = $(wildcard $(SRC_DIR)/components/transaction/*.c)
 RBAC_SRCS = $(wildcard $(SRC_DIR)/components/rbac/*.c)
@@ -41,6 +42,7 @@ THREAD_POOL_OBJ = $(OBJ_DIR)/components/core/thread_pool.o
 CORE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 API_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(API_SRCS))
 DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
+BINARY_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(BINARY_SRCS))
 QUERY_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(QUERY_SRCS))
 TRANS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(TRANS_SRCS))
 RBAC_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(RBAC_SRCS))
@@ -52,7 +54,7 @@ JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
 INIT_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(INIT_SRCS))
 
 # All objects
-OBJS = $(CORE_OBJS) $(API_OBJS) $(DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o ../build/obj/components/core/login_redirect.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(INIT_OBJS)
 
 # JavaScript support handling
@@ -74,6 +76,7 @@ directories:
 	@mkdir -p $(OBJ_DIR)/components/core
 	@mkdir -p $(OBJ_DIR)/components/api
 	@mkdir -p $(OBJ_DIR)/components/database
+	@mkdir -p $(OBJ_DIR)/components/binary
 	@mkdir -p $(OBJ_DIR)/components/query
 	@mkdir -p $(OBJ_DIR)/components/transaction
 	@mkdir -p $(OBJ_DIR)/components/rbac
@@ -85,14 +88,15 @@ directories:
 	@mkdir -p $(LIB_DIR)
 
 # Define custom database objects using only the implementations we want
-CUSTOM_DB_SRCS = $(filter-out $(SRC_DIR)/components/database/database_operations.c, $(filter-out $(SRC_DIR)/components/database/database.c, $(DB_SRCS)))
+# Filter out both old database implementations and use only binary format
+CUSTOM_DB_SRCS = $(filter-out $(SRC_DIR)/components/database/database_operations.c, $(filter-out $(SRC_DIR)/components/database/database.c, $(filter-out $(SRC_DIR)/components/database/database_with_optimizations.c, $(DB_SRCS))))
 CUSTOM_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CUSTOM_DB_SRCS))
 
-# Add back just database_with_optimizations.c
-FINAL_DB_OBJS = $(CUSTOM_DB_OBJS) $(OBJ_DIR)/components/database/database_with_optimizations.o
+# Use only the binary format implementation
+FINAL_DB_OBJS = $(CUSTOM_DB_OBJS)
 
 # Define all optimized objects
-OPTIMIZED_OBJS = $(CORE_OBJS) $(API_OBJS) $(FINAL_DB_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o ../build/obj/components/core/login_redirect.o $(API_OBJS) $(FINAL_DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(INIT_OBJS)
 
 # List of objects for Makefile dependencies

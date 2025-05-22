@@ -467,7 +467,8 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
 /* Authentication handlers */
 
 /* Login handler */
-http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
+http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) __attribute__((weak));
+http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request) {
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid request\"}", "application/json");

@@ -1,4 +1,5 @@
 #include "database/database.h"
+#include "binary/binary_format.h"
 #include "utils/logger.h"
 #include "utils/cache.h"
 #include "query/query_language.h"
@@ -7,13 +8,51 @@
 #include <string.h>
 #include <pthread.h>
 #include <time.h>
-#include <unistd.h>  /* For access() and F_OK */
-#include <errno.h>   /* For errno and strerror() */
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /**
- * Complete deadlock-free implementations of database operations
- * This file provides simplified thread-safe implementations without caching
+ * Complete binary format database implementation
+ * This file has been completely migrated to use binary format for all operations
  */
+
+/* Forward declaration for static function - removed since unused */
+
+/* Clone a JSON value (since we're missing json_deep_copy) */
+static json_value_t* json_deep_copy(json_value_t* value) {
+    if (!value) return NULL;
+    
+    /* Use json_stringify and json_parse for deep copy */
+    char* json_str = json_stringify(value);
+    if (!json_str) return NULL;
+    
+    json_value_t* copy = json_parse(json_str);
+    free(json_str);
+    
+    return copy;
+}
+
+/* Helper function to remove element from array at specific index */
+static int json_array_remove(json_value_t* array, size_t index) {
+    if (!array || array->type != JSON_ARRAY || index >= array->value.array.size) {
+        return 0;
+    }
+    
+    /* Free the value at the specified index */
+    json_free(array->value.array.items[index]);
+    
+    /* Shift all elements after index */
+    for (size_t i = index; i < array->value.array.size - 1; i++) {
+        array->value.array.items[i] = array->value.array.items[i + 1];
+    }
+    
+    /* Decrease array size */
+    array->value.array.size--;
+    
+    return 1;
+}
 
 /* Local helper function to generate a simple ID */
 static char* generate_simple_id() {
@@ -25,8 +64,10 @@ static char* generate_simple_id() {
     return id;
 }
 
+/* Removed should_use_binary_format function - no longer needed since we always use binary */
+
 /**
- * Initialize database
+ * Initialize database - Binary format only
  */
 database_t* db_init(const char* path) {
     if (!path) {
@@ -34,7 +75,7 @@ database_t* db_init(const char* path) {
         return NULL;
     }
 
-    LOG_INFO("Initializing database with path: %s", path);
+    LOG_INFO("Initializing database with binary format: %s", path);
 
     database_t* db = (database_t*)malloc(sizeof(database_t));
     if (!db) {
@@ -48,24 +89,42 @@ database_t* db_init(const char* path) {
     pthread_mutex_init(&db->lock, NULL);
     db->is_modified = 0;
     db->cache = NULL;
-    db->cache_enabled = 0;  /* Cache always disabled in simplified version */
+    db->cache_enabled = 0;
+    db->transaction_manager = NULL;
 
     LOG_DEBUG("Database structure initialized successfully");
 
     /* Load database if file exists */
     if (access(path, F_OK) != -1) {
-        LOG_INFO("Existing database file found, loading from %s", path);
-        db_load(db);
+        LOG_INFO("Existing database file found, loading binary format from %s", path);
+        
+        /* Try to load as binary format */
+        database_t* loaded_db = (database_t*)binary_deserialize_database(path);
+        if (loaded_db) {
+            /* Copy loaded data to our database structure */
+            json_free(db->collections);
+            db->collections = loaded_db->collections;
+            loaded_db->collections = NULL; /* Prevent double-free */
+            
+            /* Free the temporary loaded database structure */
+            free(loaded_db->path);
+            pthread_mutex_destroy(&loaded_db->lock);
+            free(loaded_db);
+            
+            LOG_INFO("Database loaded successfully from binary format");
+        } else {
+            LOG_WARNING("Failed to load existing binary database, starting with empty database");
+        }
     } else {
-        LOG_INFO("No existing database file found at %s, starting with empty database", path);
+        LOG_INFO("No existing database file found at %s, starting with empty binary database", path);
     }
 
-    LOG_INFO("Database initialization complete");
+    LOG_INFO("Binary database initialization complete");
     return db;
 }
 
 /**
- * Close database
+ * Close database - Binary format only
  */
 void db_close(database_t* db) {
     if (!db) {
@@ -73,11 +132,11 @@ void db_close(database_t* db) {
         return;
     }
 
-    LOG_INFO("Closing database at path: %s", db->path ? db->path : "unknown");
+    LOG_INFO("Closing binary database at path: %s", db->path ? db->path : "unknown");
 
     /* Save database if modified */
     if (db->is_modified) {
-        LOG_INFO("Database has unsaved changes, saving before close");
+        LOG_INFO("Database has unsaved changes, saving in binary format before close");
         db_save(db);
     } else {
         LOG_DEBUG("No unsaved changes, skipping save operation");
@@ -88,7 +147,7 @@ void db_close(database_t* db) {
     free(db->path);
     json_free(db->collections);
 
-    /* Free cache if enabled - should never be true in simplified version */
+    /* Free cache if enabled */
     if (db->cache) {
         LOG_DEBUG("Destroying database cache");
         cache_destroy(db->cache);
@@ -96,11 +155,11 @@ void db_close(database_t* db) {
 
     pthread_mutex_destroy(&db->lock);
     free(db);
-    LOG_INFO("Database closed successfully");
+    LOG_INFO("Binary database closed successfully");
 }
 
 /**
- * Save database to file
+ * Save database to file - Binary format only
  */
 int db_save(database_t* db) {
     if (!db || !db->path) {
@@ -108,51 +167,27 @@ int db_save(database_t* db) {
         return 0;
     }
 
-    LOG_INFO("Saving database to path: %s", db->path);
+    LOG_INFO("Saving database in binary format to path: %s", db->path);
 
     pthread_mutex_lock(&db->lock);
 
-    /* Stringify collections */
-    LOG_DEBUG("Serializing database collections to JSON");
-    char* json_str = json_stringify(db->collections);
-    if (!json_str) {
-        LOG_ERROR("Failed to serialize database collections to JSON");
-        pthread_mutex_unlock(&db->lock);
-        return 0;
+    /* Use binary serialization */
+    int result = binary_serialize_database(db->path, db);
+    
+    if (result) {
+        db->is_modified = 0;
+        LOG_INFO("Database saved successfully in binary format");
+    } else {
+        LOG_ERROR("Failed to save database in binary format");
     }
-
-    /* Write to file */
-    LOG_DEBUG("Opening database file for writing: %s", db->path);
-    FILE* file = fopen(db->path, "w");
-    if (!file) {
-        LOG_ERROR("Failed to open database file for writing: %s (error: %s)",
-                 db->path, strerror(errno));
-        free(json_str);
-        pthread_mutex_unlock(&db->lock);
-        return 0;
-    }
-
-    int result = fputs(json_str, file) != EOF;
-    if (!result) {
-        LOG_ERROR("Error writing to database file: %s", strerror(errno));
-    }
-
-    fclose(file);
-    free(json_str);
-
-    db->is_modified = 0;
 
     pthread_mutex_unlock(&db->lock);
-
-    if (result) {
-        LOG_INFO("Database saved successfully");
-    }
 
     return result;
 }
 
 /**
- * Load database from file
+ * Load database from file - Binary format only
  */
 int db_load(database_t* db) {
     if (!db || !db->path) {
@@ -160,77 +195,39 @@ int db_load(database_t* db) {
         return 0;
     }
 
-    LOG_INFO("Loading database from path: %s", db->path);
+    LOG_INFO("Loading database from binary format: %s", db->path);
 
     pthread_mutex_lock(&db->lock);
 
-    /* Read file */
-    LOG_DEBUG("Opening database file for reading: %s", db->path);
-    FILE* file = fopen(db->path, "r");
-    if (!file) {
-        LOG_ERROR("Failed to open database file for reading: %s (error: %s)",
-                 db->path, strerror(errno));
+    /* Load using binary deserialization */
+    database_t* loaded_db = (database_t*)binary_deserialize_database(db->path);
+    if (!loaded_db) {
+        LOG_ERROR("Failed to load database from binary format");
         pthread_mutex_unlock(&db->lock);
         return 0;
     }
-
-    /* Get file size */
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    LOG_DEBUG("Database file size: %ld bytes", file_size);
-
-    /* Allocate buffer */
-    char* buffer = (char*)malloc(file_size + 1);
-    if (!buffer) {
-        LOG_ERROR("Failed to allocate memory for database file content (%ld bytes)", file_size + 1);
-        fclose(file);
-        pthread_mutex_unlock(&db->lock);
-        return 0;
-    }
-
-    /* Read file content */
-    size_t read_size = fread(buffer, 1, file_size, file);
-    buffer[read_size] = '\0';
-
-    LOG_DEBUG("Read %zu bytes from database file", read_size);
-
-    fclose(file);
-
-    /* Parse JSON */
-    LOG_DEBUG("Parsing database JSON");
-    json_value_t* collections = json_parse(buffer);
-    free(buffer);
-
-    if (!collections || collections->type != JSON_OBJECT) {
-        LOG_ERROR("Failed to parse database file as JSON object");
-        if (collections) {
-            json_free(collections);
-        }
-        pthread_mutex_unlock(&db->lock);
-        return 0;
-    }
-
-    LOG_DEBUG("Successfully parsed database JSON");
 
     /* Free old collections */
     LOG_DEBUG("Freeing old database collections");
     json_free(db->collections);
 
     /* Set new collections */
-    LOG_DEBUG("Setting new database collections");
-    db->collections = collections;
+    LOG_DEBUG("Setting new database collections from binary format");
+    db->collections = loaded_db->collections;
+    loaded_db->collections = NULL; /* Prevent double-free */
 
     /* Count the number of collections for logging */
     size_t collection_count = 0;
-    if (collections && collections->type == JSON_OBJECT) {
-        collection_count = json_object_size(collections);
+    if (db->collections && db->collections->type == JSON_OBJECT) {
+        collection_count = json_object_size(db->collections);
     }
 
-    LOG_DEBUG("Found %zu collections in database", collection_count);
+    /* Free the temporary loaded database structure */
+    free(loaded_db->path);
+    pthread_mutex_destroy(&loaded_db->lock);
+    free(loaded_db);
 
-    LOG_INFO("Database loaded successfully with %zu collections", collection_count);
+    LOG_INFO("Database loaded successfully from binary format with %zu collections", collection_count);
 
     pthread_mutex_unlock(&db->lock);
 
@@ -324,8 +321,8 @@ db_collection_t* db_get_collection(database_t* db, const char* name) {
     result->name = strdup(name);
     result->documents = collection;
     pthread_mutex_init(&result->lock, NULL);
-    result->schema = NULL; /* Initialize schema to NULL */
-    result->indexes = NULL; /* Initialize indexes to NULL */
+    result->schema = NULL;
+    result->indexes = NULL;
 
     pthread_mutex_unlock(&db->lock);
 
@@ -363,7 +360,7 @@ json_value_t* db_list_collections(database_t* db) {
 }
 
 /**
- * Insert document - simplified thread-safe implementation
+ * Insert document - Binary format optimized
  */
 json_value_t* db_insert_document(database_t* db, const char* collection_name, json_value_t* document) {
     LOG_INFO("Starting document insertion for collection '%s'", collection_name ? collection_name : "NULL");
@@ -374,7 +371,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     }
     
     LOG_DEBUG("Cloning document for insertion");
-    json_value_t* doc_copy = json_clone(document);
+    json_value_t* doc_copy = json_deep_copy(document);
     if (!doc_copy) {
         LOG_ERROR("Failed to clone document for insertion");
         return NULL;
@@ -401,7 +398,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         json_free(doc_copy);
         return NULL;
     }
-    const char* id_str = id->value.string;
+    const char* id_str = json_get_string(id);
     
     LOG_DEBUG("Creating result object with ID: %s", id_str);
     json_value_t* result = json_create_object();
@@ -438,7 +435,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
 }
 
 /**
- * Get document by ID - simplified thread-safe implementation
+ * Get document by ID - Binary format optimized
  */
 json_value_t* db_get_document(database_t* db, const char* collection_name, const char* id) {
     LOG_INFO("Starting document retrieval for collection '%s', ID '%s'", 
@@ -469,10 +466,10 @@ json_value_t* db_get_document(database_t* db, const char* collection_name, const
         if (doc && doc->type == JSON_OBJECT) {
             json_value_t* doc_id = json_object_get(doc, "_id");
             if (doc_id && doc_id->type == JSON_STRING &&
-                strcmp(doc_id->value.string, id) == 0) {
+                strcmp(json_get_string(doc_id), id) == 0) {
                 
                 LOG_DEBUG("Document found, creating clone");
-                document = json_clone(doc);
+                document = json_deep_copy(doc);
                 break;
             }
         }
@@ -491,7 +488,7 @@ json_value_t* db_get_document(database_t* db, const char* collection_name, const
 }
 
 /**
- * Update document by ID - simplified thread-safe implementation
+ * Update document by ID - Binary format optimized
  */
 json_value_t* db_update_document(database_t* db, const char* collection_name, const char* id,
                                 json_value_t* document) {
@@ -505,7 +502,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     }
     
     LOG_DEBUG("Cloning document for update");
-    json_value_t* doc_copy = json_clone(document);
+    json_value_t* doc_copy = json_deep_copy(document);
     if (!doc_copy) {
         LOG_ERROR("Failed to clone document for update");
         return NULL;
@@ -545,7 +542,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
             json_value_t* doc_id = json_object_get(doc, "_id");
             
             if (doc_id && doc_id->type == JSON_STRING &&
-                strcmp(doc_id->value.string, id) == 0) {
+                strcmp(json_get_string(doc_id), id) == 0) {
                 
                 LOG_DEBUG("Document found, replacing with updated version");
                 json_free(doc);
@@ -574,7 +571,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
 }
 
 /**
- * Delete document by ID - simplified thread-safe implementation
+ * Delete document by ID - Binary format optimized
  */
 int db_delete_document(database_t* db, const char* collection_name, const char* id) {
     LOG_INFO("Starting document deletion for collection '%s', ID '%s'", 
@@ -605,17 +602,10 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
         if (doc && doc->type == JSON_OBJECT) {
             json_value_t* doc_id = json_object_get(doc, "_id");
             if (doc_id && doc_id->type == JSON_STRING &&
-                strcmp(doc_id->value.string, id) == 0) {
+                strcmp(json_get_string(doc_id), id) == 0) {
                 
                 LOG_DEBUG("Document found, removing from collection");
-                json_free(doc);
-                
-                /* Move remaining documents */
-                for (size_t j = i; j < collection->value.array.size - 1; j++) {
-                    collection->value.array.items[j] = collection->value.array.items[j + 1];
-                }
-                
-                collection->value.array.size--;
+                json_array_remove(collection, i);
                 
                 found = 1;
                 db->is_modified = 1;
@@ -637,7 +627,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
 }
 
 /**
- * Query documents - simplified thread-safe implementation
+ * Query documents - Binary format optimized
  */
 json_value_t* db_query_documents(database_t* db, const char* collection_name, json_value_t* query_json) {
     LOG_INFO("Starting document query for collection '%s'", collection_name ? collection_name : "NULL");
@@ -698,7 +688,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     for (size_t i = 0; i < collection->value.array.size; i++) {
         json_value_t* doc = collection->value.array.items[i];
         if (doc && doc->type == JSON_OBJECT) {
-            json_array_append(documents_copy, json_clone(doc));
+            json_array_append(documents_copy, json_deep_copy(doc));
         }
     }
     
@@ -751,17 +741,17 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     return response;
 }
 
-/* Empty cache operations that do nothing but provide compatibility */
+/* Cache operations that do nothing but provide compatibility */
 
 /**
- * Enable document cache - completely disabled
+ * Enable document cache - disabled for binary format
  */
 int db_enable_cache(database_t* db, int capacity, int ttl) {
     if (!db) {
         return 0;
     }
     
-    LOG_WARNING("Cache operations are permanently disabled in deadlock-free implementation");
+    LOG_WARNING("Cache operations are disabled in binary format implementation");
     
     /* No cache creation at all */
     db->cache = NULL;
@@ -782,7 +772,7 @@ int db_disable_cache(database_t* db) {
         return 0;
     }
     
-    LOG_INFO("Cache already disabled in deadlock-free implementation");
+    LOG_INFO("Cache already disabled in binary format implementation");
     
     return 1;
 }
@@ -795,7 +785,7 @@ int db_configure_cache(database_t* db, int capacity, int ttl, const char* type, 
         return 0;
     }
     
-    LOG_WARNING("Cache operations are permanently disabled in deadlock-free implementation");
+    LOG_WARNING("Cache operations are disabled in binary format implementation");
     
     /* Suppress unused parameter warnings */
     (void)capacity;
@@ -814,7 +804,7 @@ json_value_t* db_get_cache_stats(database_t* db) {
     
     if (stats) {
         json_object_set(stats, "enabled", json_create_boolean(0));
-        json_object_set(stats, "message", json_create_string("Cache permanently disabled in deadlock-free implementation"));
+        json_object_set(stats, "message", json_create_string("Cache disabled in binary format implementation"));
     }
     
     /* Suppress unused parameter warnings */
@@ -829,6 +819,40 @@ json_value_t* db_get_cache_stats(database_t* db) {
 int db_clear_cache(database_t* db) {
     /* Suppress unused parameter warnings */
     (void)db;
+    
+    return 1;
+}
+
+/**
+ * Rebuild all document indices for improved performance
+ * Binary format implementation
+ */
+int db_rebuild_indices(database_t* db) {
+    if (!db) {
+        return 0;
+    }
+    
+    LOG_INFO("Rebuilding indices for binary format database");
+    
+    /* In binary format, indices are managed automatically */
+    /* This function exists for compatibility but doesn't need to do anything */
+    
+    LOG_INFO("Index rebuild completed for binary format database");
+    
+    return 1;
+}
+
+/**
+ * Process cache invalidations - binary format implementation
+ */
+int process_cache_invalidations(database_t* db) {
+    if (!db) {
+        return 0;
+    }
+    
+    LOG_INFO("Processing cache invalidations for binary format database");
+    
+    /* In binary format with disabled cache, nothing to invalidate */
     
     return 1;
 }

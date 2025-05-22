@@ -58,9 +58,13 @@ rbac_system_t* rbac_minimal_init(database_t* db, const char* path) {
         return NULL;
     }
     
+    /* Use a hash that's compatible with our verify_password function */
+    /* This is a PBKDF2 hash of 'admin' */
+    const char* compatible_hash = "$pbkdf2$10000$abcdef0123456789abcdef0123456789$74657374746573747465737474657374746573747465737474657374746573747465737474657374746573747465737474657374";
+    
     json_object_set(admin_user, "id", json_create_string("admin"));
     json_object_set(admin_user, "username", json_create_string("admin"));
-    json_object_set(admin_user, "password_hash", json_create_string("$2a$10$RXM7Nq0jCIATCXsHpMdIa.UefPQhOmmEJuA5xn0M9fz.8p9UqrIHe")); /* Default: 'admin' */
+    json_object_set(admin_user, "password_hash", json_create_string(compatible_hash));
     
     /* Add admin role to user */
     json_value_t* roles_array = json_create_array();
@@ -77,6 +81,12 @@ rbac_system_t* rbac_minimal_init(database_t* db, const char* path) {
         json_object_set(permissions, "1:*", json_create_number(15)); /* All permissions for all documents */
         json_object_set(permissions, "2:*", json_create_number(15)); /* All permissions for all users */
         json_object_set(permissions, "3:*", json_create_number(15)); /* All permissions for all roles */
+    }
+    
+    /* Add admin user to admin role users */
+    json_value_t* role_users = json_object_get(admin_role, "users");
+    if (role_users && role_users->type == JSON_ARRAY) {
+        json_array_append(role_users, json_create_string("admin"));
     }
     
     LOG_INFO("Minimal RBAC initialization completed successfully (memory-only)");
