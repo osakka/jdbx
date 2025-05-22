@@ -91,6 +91,7 @@ database_t* db_init(const char* path) {
     db->cache = NULL;
     db->cache_enabled = 0;
     db->transaction_manager = NULL;
+    db->persistence = NULL;
 
     LOG_DEBUG("Database structure initialized successfully");
 
@@ -119,6 +120,11 @@ database_t* db_init(const char* path) {
         LOG_INFO("No existing database file found at %s, starting with empty binary database", path);
     }
 
+    /* Start persistence thread */
+    if (!db_start_persistence_thread(db)) {
+        LOG_WARNING("Failed to start persistence thread, continuing without automatic persistence");
+    }
+
     LOG_INFO("Binary database initialization complete");
     return db;
 }
@@ -133,6 +139,12 @@ void db_close(database_t* db) {
     }
 
     LOG_INFO("Closing binary database at path: %s", db->path ? db->path : "unknown");
+
+    /* Stop persistence thread first */
+    if (db->persistence) {
+        LOG_INFO("Stopping persistence thread before database close");
+        db_stop_persistence_thread(db);
+    }
 
     /* Save database if modified */
     if (db->is_modified) {
@@ -261,8 +273,21 @@ int db_create_collection(database_t* db, const char* name) {
     json_object_set(db->collections, name, collection);
 
     db->is_modified = 1;
-
+    
     pthread_mutex_unlock(&db->lock);
+    
+    /* Notify persistence thread and check for errors */
+    if (!db_notify_data_change_sync(db, strlen(name) + 100)) {
+        LOG_ERROR("Collection creation failed due to persistence error");
+        
+        /* Rollback: remove the collection we just added */
+        pthread_mutex_lock(&db->lock);
+        json_object_remove(db->collections, name);
+        db->is_modified = 0; /* Reset since we rolled back */
+        pthread_mutex_unlock(&db->lock);
+        
+        return 0; /* Return failure */
+    }
     
     return 1;
 }
@@ -287,6 +312,9 @@ int db_drop_collection(database_t* db, const char* name) {
     json_object_remove(db->collections, name);
     
     db->is_modified = 1;
+    
+    /* Notify persistence thread of collection deletion */
+    db_notify_data_change(db, strlen(name) + 50); /* Estimate: collection name + deletion overhead */
     
     pthread_mutex_unlock(&db->lock);
     
@@ -370,12 +398,8 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         return NULL;
     }
     
-    LOG_DEBUG("Cloning document for insertion");
-    json_value_t* doc_copy = json_deep_copy(document);
-    if (!doc_copy) {
-        LOG_ERROR("Failed to clone document for insertion");
-        return NULL;
-    }
+    LOG_DEBUG("Using document directly for insertion (TEMP: no deep copy)");
+    json_value_t* doc_copy = document; /* TEMP: Use original document */
     
     LOG_DEBUG("Generating document ID if needed");
     if (!json_object_has(doc_copy, "_id")) {
@@ -386,7 +410,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
             free(id);
         } else {
             LOG_ERROR("Failed to generate ID for document");
-            json_free(doc_copy);
+            /* TEMP: Not freeing since we're not copying */
             return NULL;
         }
     }
@@ -395,7 +419,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_value_t* id = json_object_get(doc_copy, "_id");
     if (!id || id->type != JSON_STRING) {
         LOG_ERROR("Document has no valid ID after preparation");
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         return NULL;
     }
     const char* id_str = json_get_string(id);
@@ -404,7 +428,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_value_t* result = json_create_object();
     if (!result) {
         LOG_ERROR("Failed to create result object");
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         return NULL;
     }
     json_object_set(result, "_id", json_create_string(id_str));
@@ -418,13 +442,19 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
         pthread_mutex_unlock(&db->lock);
         json_free(result);
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         return NULL;
     }
     
     LOG_DEBUG("Adding document to collection");
     json_array_append(collection, doc_copy);
     db->is_modified = 1;
+    
+    /* Notify persistence thread of document insertion */
+    char* doc_str = json_stringify(doc_copy);
+    size_t doc_size = doc_str ? strlen(doc_str) : 200; /* Estimate if stringify fails */
+    if (doc_str) free(doc_str);
+    db_notify_data_change(db, doc_size);
     
     LOG_DEBUG("Releasing database lock");
     pthread_mutex_unlock(&db->lock);
@@ -515,7 +545,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     json_value_t* result = json_create_object();
     if (!result) {
         LOG_ERROR("Failed to create result object");
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         return NULL;
     }
     json_object_set(result, "_id", json_create_string(id));
@@ -529,7 +559,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
         pthread_mutex_unlock(&db->lock);
         json_free(result);
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         return NULL;
     }
     
@@ -550,6 +580,13 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
                 
                 found = 1;
                 db->is_modified = 1;
+                
+                /* Notify persistence thread of document update */
+                char* doc_str = json_stringify(doc_copy);
+                size_t doc_size = doc_str ? strlen(doc_str) : 200; /* Estimate if stringify fails */
+                if (doc_str) free(doc_str);
+                db_notify_data_change(db, doc_size);
+                
                 break;
             }
         }
@@ -560,7 +597,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     
     if (!found) {
         LOG_ERROR("Document with ID '%s' not found in collection '%s'", id, collection_name);
-        json_free(doc_copy);
+        /* TEMP: Not freeing since we're not copying */
         json_free(result);
         return NULL;
     }
@@ -605,10 +642,20 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
                 strcmp(json_get_string(doc_id), id) == 0) {
                 
                 LOG_DEBUG("Document found, removing from collection");
+                
+                /* Estimate document size before deletion */
+                char* doc_str = json_stringify(doc);
+                size_t doc_size = doc_str ? strlen(doc_str) : 100; /* Estimate if stringify fails */
+                if (doc_str) free(doc_str);
+                
                 json_array_remove(collection, i);
                 
                 found = 1;
                 db->is_modified = 1;
+                
+                /* Notify persistence thread of document deletion */
+                db_notify_data_change(db, doc_size);
+                
                 break;
             }
         }

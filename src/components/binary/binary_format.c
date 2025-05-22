@@ -484,8 +484,7 @@ int binary_serialize_database(const char* path, void* db) {
     database_t* database = (database_t*)db;
     size_t db_size = 0;
     
-    /* Lock database for serialization */
-    pthread_mutex_lock(&database->lock);
+    /* Note: Database lock should already be held by caller */
     
     /* Calculate total size needed */
     db_size += sizeof(binary_header_t);
@@ -499,7 +498,6 @@ int binary_serialize_database(const char* path, void* db) {
     if (fd < 0) {
         LOG_ERROR("Failed to create binary database file: %s (error: %s)",
                  path, strerror(errno));
-        pthread_mutex_unlock(&database->lock);
         return 0;
     }
     
@@ -513,7 +511,6 @@ int binary_serialize_database(const char* path, void* db) {
     if (write(fd, &header, sizeof(header)) != sizeof(header)) {
         LOG_ERROR("Failed to write binary header: %s", strerror(errno));
         close(fd);
-        pthread_mutex_unlock(&database->lock);
         return 0;
     }
     
@@ -543,7 +540,6 @@ int binary_serialize_database(const char* path, void* db) {
         if (write(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
             LOG_ERROR("Failed to write collection header: %s", strerror(errno));
             close(fd);
-            pthread_mutex_unlock(&database->lock);
             return 0;
         }
         
@@ -553,7 +549,6 @@ int binary_serialize_database(const char* path, void* db) {
         if (write(fd, collection_name, coll_header.name_length) != coll_header.name_length) {
             LOG_ERROR("Failed to write collection name: %s", strerror(errno));
             close(fd);
-            pthread_mutex_unlock(&database->lock);
             return 0;
         }
         
@@ -573,7 +568,6 @@ int binary_serialize_database(const char* path, void* db) {
                     LOG_ERROR("Failed to allocate document serialization buffer");
                     free(temp_buffer);
                     close(fd);
-                    pthread_mutex_unlock(&database->lock);
                     return 0;
                 }
                 temp_buffer = new_buffer;
@@ -588,7 +582,6 @@ int binary_serialize_database(const char* path, void* db) {
                 LOG_ERROR("Failed to write document: %s", strerror(errno));
                 free(temp_buffer);
                 close(fd);
-                pthread_mutex_unlock(&database->lock);
                 return 0;
             }
             
@@ -611,7 +604,6 @@ int binary_serialize_database(const char* path, void* db) {
     if (write(fd, &header, sizeof(header)) != sizeof(header)) {
         LOG_ERROR("Failed to update binary header: %s", strerror(errno));
         close(fd);
-        pthread_mutex_unlock(&database->lock);
         return 0;
     }
     
@@ -620,8 +612,6 @@ int binary_serialize_database(const char* path, void* db) {
     
     /* Reset modified flag */
     database->is_modified = 0;
-    
-    pthread_mutex_unlock(&database->lock);
     
     LOG_INFO("Database serialized to binary format: %s (size: %llu bytes)",
              path, (unsigned long long)header.db_size);

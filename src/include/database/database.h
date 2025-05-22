@@ -7,6 +7,12 @@
 #include <string.h>
 #include <pthread.h>
 #include <regex.h>
+#include <time.h>
+
+/* Persistence configuration constants */
+#define PERSISTENCE_BUFFER_OPS_THRESHOLD 50      /* Save after 50 operations */
+#define PERSISTENCE_BUFFER_SIZE_THRESHOLD (1024 * 1024)  /* Save after 1MB of changes */
+#define PERSISTENCE_PERIODIC_SAVE_INTERVAL 30    /* Save every 30 seconds */
 
 /* Schema validation rule types */
 typedef enum {
@@ -97,6 +103,21 @@ typedef struct cache cache_t;
 /* Forward declaration for transaction_manager */
 typedef struct transaction_manager transaction_manager_t;
 
+/* Persistence thread structure */
+typedef struct {
+    pthread_t thread;              /* Persistence thread handle */
+    pthread_mutex_t mutex;         /* Mutex for thread synchronization */
+    pthread_cond_t condition;      /* Condition variable for notifications */
+    int shutdown;                  /* Shutdown flag */
+    int operations_count;          /* Buffer: number of pending operations */
+    size_t data_size_estimate;     /* Buffer: estimated data size in bytes */
+    time_t last_save_time;         /* Timestamp of last save operation */
+    int save_in_progress;          /* Flag indicating save is in progress */
+    int last_save_failed;          /* Flag indicating if last save failed */
+    char last_error_message[256];  /* Last error message */
+    time_t last_error_time;        /* Timestamp of last error */
+} persistence_thread_t;
+
 /* Database structure */
 typedef struct {
     char* path;                    /* Path to database file */
@@ -106,12 +127,21 @@ typedef struct {
     cache_t* cache;                /* Document cache */
     int cache_enabled;             /* Flag indicating if caching is enabled */
     transaction_manager_t* transaction_manager; /* Transaction manager */
+    persistence_thread_t* persistence; /* Persistence thread management */
 } database_t;
 
 /* Database function prototypes */
 database_t* db_init(const char* path);
 void db_close(database_t* db);
 int db_save(database_t* db);
+
+/* Persistence thread management */
+int db_start_persistence_thread(database_t* db);
+void db_stop_persistence_thread(database_t* db);
+void db_notify_data_change(database_t* db, size_t estimated_size);
+int db_notify_data_change_sync(database_t* db, size_t estimated_size);
+int db_force_save(database_t* db);
+int db_check_persistence_errors(database_t* db, char* error_buffer, size_t buffer_size);
 int db_load(database_t* db);
 
 /* Cache management */

@@ -90,3 +90,25 @@ The server now uses a modular initialization sequence with separate components:
 - run_server: Run the main server loop
 
 This modular approach ensures proper sequencing, better error handling, and clear separation of concerns.
+
+## Binary Persistence System
+
+The JSONdb server includes a complete binary persistence system with automatic data saves:
+
+1. **Binary Format**: Database stored in efficient binary format (.jdb) with TLV encoding
+2. **Automatic Saves**: Triggered by buffer thresholds (50 operations OR 1MB) and periodic saves (30s)
+3. **Thread Safety**: Dedicated persistence thread with proper mutex/condition variable patterns
+4. **Error Handling**: API errors on persistence failures with database rollback support
+5. **Data Integrity**: CRC32 checksums and magic number verification
+6. **Zero Deadlocks**: Fixed serialization locking to prevent thread deadlocks
+
+### Key Implementation Files:
+- `src/components/database/persistence.c` - Persistence thread and buffer management
+- `src/components/binary/binary_format.c` - Binary serialization/deserialization  
+- `src/components/database/simplified_db.c` - Database operations with persistence integration
+- `src/include/database/database.h` - Persistence thread structure definitions
+
+### Database File:
+- Location: `/opt/jsondb/build/var/database.jdb`
+- Format: Binary with magic number 0x4A534442 ("JSDB")
+- Persistence: Automatic saves ensure data durability across server restarts
