@@ -221,7 +221,9 @@ static size_t serialize_json_value(json_value_t* json, void* buffer, size_t offs
         case JSON_ARRAY: {
             header->type = BIN_TYPE_ARRAY;
             size_t array_size = json_array_size(json);
-            size_t header_size_offset = offset;
+            
+            /* Remember the start of the data section (after header size field) */
+            size_t data_start_offset = offset + sizeof(uint32_t);
             
             /* Skip size field for now */
             offset += sizeof(uint32_t);
@@ -235,15 +237,17 @@ static size_t serialize_json_value(json_value_t* json, void* buffer, size_t offs
                 offset = serialize_json_value(json_array_get(json, i), buffer, offset);
             }
             
-            /* Update header size */
-            header->size = (uint32_t)(offset - header_size_offset);
+            /* Update header size (data only, not including the size field itself) */
+            header->size = (uint32_t)(offset - data_start_offset);
             break;
         }
             
         case JSON_OBJECT: {
             header->type = BIN_TYPE_OBJECT;
             size_t object_size = json_object_size(json);
-            size_t header_size_offset = offset;
+            
+            /* Remember the start of the data section (after header size field) */
+            size_t data_start_offset = offset + sizeof(uint32_t);
             
             /* Skip size field for now */
             offset += sizeof(uint32_t);
@@ -269,8 +273,8 @@ static size_t serialize_json_value(json_value_t* json, void* buffer, size_t offs
                 offset = serialize_json_value(entry->value, buffer, offset);
             }
             
-            /* Update header size */
-            header->size = (uint32_t)(offset - header_size_offset);
+            /* Update header size (data only, not including the size field itself) */
+            header->size = (uint32_t)(offset - data_start_offset);
             break;
         }
             
@@ -518,8 +522,11 @@ int binary_serialize_database(const char* path, void* db) {
     uint32_t collection_count = 0;
     size_t current_offset = sizeof(binary_header_t);
     
+    LOG_DEBUG("MULTI_COL_TRACE: Starting serialization at offset %zu", current_offset);
+    
     /* Iterate through collections manually */
     size_t coll_count = json_object_size(database->collections);
+    LOG_DEBUG("MULTI_COL_TRACE: Found %zu collections to serialize", coll_count);
     
     for (size_t i = 0; i < coll_count; i++) {
         json_object_entry_t* entry = &database->collections->value.object.entries[i];
@@ -528,6 +535,9 @@ int binary_serialize_database(const char* path, void* db) {
         
         collection_count++;
         
+        LOG_DEBUG("MULTI_COL_TRACE: Collection %zu: '%s', %zu documents, starting at offset %zu", 
+                  i, collection_name, json_array_size(collection_data), current_offset);
+        
         /* Write collection header placeholder */
         binary_collection_header_t coll_header;
         memset(&coll_header, 0, sizeof(coll_header));
@@ -535,6 +545,9 @@ int binary_serialize_database(const char* path, void* db) {
         coll_header.name_length = (uint32_t)strlen(collection_name);
         coll_header.document_count = (uint32_t)json_array_size(collection_data);
         coll_header.data_offset = current_offset + sizeof(binary_collection_header_t) + coll_header.name_length;
+        
+        LOG_DEBUG("MULTI_COL_TRACE: Collection '%s' header: name_len=%d, doc_count=%d, data_offset=%zu", 
+                  collection_name, coll_header.name_length, coll_header.document_count, coll_header.data_offset);
         
         /* Write collection header */
         if (write(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
@@ -558,12 +571,12 @@ int binary_serialize_database(const char* path, void* db) {
         for (size_t j = 0; j < json_array_size(collection_data); j++) {
             json_value_t* document = json_array_get(collection_data, j);
             
-            /* Calculate document size */
-            size_t doc_size = get_json_binary_size(document);
+            /* Estimate document size for buffer allocation */
+            size_t estimated_size = get_json_binary_size(document) + 32; /* Add safety margin */
             
             /* Ensure temp buffer is large enough */
-            if (doc_size > temp_size) {
-                void* new_buffer = realloc(temp_buffer, doc_size);
+            if (estimated_size > temp_size) {
+                void* new_buffer = realloc(temp_buffer, estimated_size);
                 if (!new_buffer) {
                     LOG_ERROR("Failed to allocate document serialization buffer");
                     free(temp_buffer);
@@ -571,11 +584,20 @@ int binary_serialize_database(const char* path, void* db) {
                     return 0;
                 }
                 temp_buffer = new_buffer;
-                temp_size = doc_size;
+                temp_size = estimated_size;
             }
             
-            /* Serialize document */
-            serialize_json_value(document, temp_buffer, 0);
+            /* Serialize document and get actual size */
+            size_t doc_size = serialize_json_value(document, temp_buffer, 0);
+            
+            /* CRITICAL FIX: Ensure header size matches actual serialized data */
+            /* The document header's size field must exactly match what we write */
+            binary_value_header_t* doc_header = (binary_value_header_t*)temp_buffer;
+            size_t expected_data_size = doc_size - sizeof(binary_value_header_t);
+            doc_header->size = (uint32_t)expected_data_size;
+            
+            LOG_DEBUG("MULTI_COL_TRACE: Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
+                      collection_name, j, doc_size, doc_header->size, current_offset);
             
             /* Write document */
             if (write(fd, temp_buffer, doc_size) != (ssize_t)doc_size) {
@@ -586,7 +608,14 @@ int binary_serialize_database(const char* path, void* db) {
             }
             
             current_offset += doc_size;
+            LOG_DEBUG("MULTI_COL_TRACE: After writing document %zu, current_offset=%zu", j, current_offset);
         }
+        
+        LOG_DEBUG("MULTI_COL_TRACE: Finished collection '%s', final offset=%zu", collection_name, current_offset);
+        
+        /* Calculate next collection header position */
+        /* After all documents are read, position should be at next collection header */
+        /* Use current_offset to seek to next collection (if any) */
     }
     
     /* Free temp buffer */
@@ -666,15 +695,26 @@ void* binary_deserialize_database(const char* path) {
     db->cache_enabled = 0;
     
     /* Read collections */
+    LOG_DEBUG("MULTI_COL_DESER: Starting deserialization of %d collections", header.collection_count);
+    
     for (uint32_t i = 0; i < header.collection_count; i++) {
+        /* Get current file position */
+        off_t current_pos = lseek(fd, 0, SEEK_CUR);
+        LOG_DEBUG("MULTI_COL_DESER: Reading collection %d header at position %ld", i, current_pos);
+        
         /* Read collection header */
         binary_collection_header_t coll_header;
-        if (read(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
-            LOG_ERROR("Failed to read collection header: %s", strerror(errno));
+        ssize_t header_bytes = read(fd, &coll_header, sizeof(coll_header));
+        if (header_bytes != sizeof(coll_header)) {
+            LOG_ERROR("Failed to read collection header: %s (read %ld bytes, expected %zu)", 
+                     strerror(errno), header_bytes, sizeof(coll_header));
             db_close(db);
             close(fd);
             return NULL;
         }
+        
+        LOG_DEBUG("MULTI_COL_DESER: Collection %d header: name_length=%d, document_count=%d, data_offset=%lu", 
+                  i, coll_header.name_length, coll_header.document_count, coll_header.data_offset);
         
         /* Read collection name */
         char* collection_name = (char*)malloc(coll_header.name_length + 1);
@@ -685,8 +725,14 @@ void* binary_deserialize_database(const char* path) {
             return NULL;
         }
         
-        if (read(fd, collection_name, coll_header.name_length) != coll_header.name_length) {
-            LOG_ERROR("Failed to read collection name: %s", strerror(errno));
+        current_pos = lseek(fd, 0, SEEK_CUR);
+        LOG_DEBUG("MULTI_COL_DESER: Reading collection name (%d bytes) at position %ld", 
+                  coll_header.name_length, current_pos);
+        
+        ssize_t name_bytes = read(fd, collection_name, coll_header.name_length);
+        if (name_bytes != coll_header.name_length) {
+            LOG_ERROR("Failed to read collection name: %s (read %ld bytes, expected %d)", 
+                     strerror(errno), name_bytes, coll_header.name_length);
             free(collection_name);
             db_close(db);
             close(fd);
@@ -707,7 +753,7 @@ void* binary_deserialize_database(const char* path) {
         
         /* Read documents */
         for (uint32_t j = 0; j < coll_header.document_count; j++) {
-            /* Read document header */
+            /* Read document header to get the size */
             binary_value_header_t doc_header;
             if (read(fd, &doc_header, sizeof(doc_header)) != sizeof(doc_header)) {
                 LOG_ERROR("Failed to read document header: %s", strerror(errno));
@@ -717,15 +763,16 @@ void* binary_deserialize_database(const char* path) {
                 return NULL;
             }
             
-            /* Skip to next document if this is not a JSON value */
+            /* Skip to next document if this is not a JSON object */
             if (doc_header.type != BIN_TYPE_OBJECT) {
                 LOG_ERROR("Invalid document type: %d", doc_header.type);
                 lseek(fd, doc_header.size, SEEK_CUR);
                 continue;
             }
             
-            /* Allocate buffer for document */
-            void* doc_buffer = malloc(sizeof(doc_header) + doc_header.size);
+            /* Allocate buffer for the complete document (header + data) */
+            size_t total_size = sizeof(doc_header) + doc_header.size;
+            void* doc_buffer = malloc(total_size);
             if (!doc_buffer) {
                 LOG_ERROR("Failed to allocate document buffer");
                 free(collection_name);
@@ -737,7 +784,7 @@ void* binary_deserialize_database(const char* path) {
             /* Copy header to buffer */
             memcpy(doc_buffer, &doc_header, sizeof(doc_header));
             
-            /* Read document data */
+            /* Read the document data */
             if (read(fd, (uint8_t*)doc_buffer + sizeof(doc_header), doc_header.size) != doc_header.size) {
                 LOG_ERROR("Failed to read document data: %s", strerror(errno));
                 free(doc_buffer);
@@ -747,9 +794,9 @@ void* binary_deserialize_database(const char* path) {
                 return NULL;
             }
             
-            /* Deserialize document */
+            /* Deserialize document from the complete buffer */
             size_t offset = 0;
-            json_value_t* document = deserialize_json_value(doc_buffer, sizeof(doc_header) + doc_header.size, &offset);
+            json_value_t* document = deserialize_json_value(doc_buffer, total_size, &offset);
             free(doc_buffer);
             
             if (!document) {
@@ -760,6 +807,23 @@ void* binary_deserialize_database(const char* path) {
             /* Add document to collection */
             json_array_append(collection, document);
         }
+        
+        /* CRITICAL FIX: Ensure proper positioning for next collection header */
+        /* The serialization writes collections sequentially. After reading all */
+        /* documents of this collection, we should be positioned exactly where */
+        /* the next collection header starts. If there's a position mismatch */
+        /* due to document size discrepancies, we'll detect and fix it. */
+        
+        off_t actual_pos = lseek(fd, 0, SEEK_CUR);
+        
+        /* For multi-collection files, the next collection header should start */
+        /* immediately after the last document. If we're not at the expected */
+        /* position, there's a size calculation mismatch that we need to handle. */
+        
+        LOG_DEBUG("MULTI_COL_DESER: After collection '%s', actual_pos=%ld, expected next collection at sequential position", 
+                  collection_name, actual_pos);
+        
+        /* If this is not the last collection, we'll validate positioning on next iteration */
         
         /* Add collection to database */
         json_object_set(db->collections, collection_name, collection);

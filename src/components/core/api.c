@@ -829,13 +829,15 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
                                   "{\"error\":\"Failed to query documents\"}", "application/json");
     }
     
-    /* Create response */
-    json_value_t* response = json_create_object();
-    json_object_set(response, "documents", documents);
-    
-    char* response_str = json_stringify(response);
-    json_free(response);
+    /* db_query_documents returns a complete response object, use it directly */
+    char* response_str = json_stringify(documents);
+    json_free(documents);
     free(collection_name);
+    
+    if (!response_str) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                  "{\"error\":\"Failed to serialize response\"}", "application/json");
+    }
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }

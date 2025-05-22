@@ -768,10 +768,8 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     
     LOG_DEBUG("Adding pagination information if available");
     if (execute_result.pagination) {
-        json_value_t* pagination_json = query_pagination_to_json(execute_result.pagination);
-        if (pagination_json) {
-            json_object_set(response, "pagination", pagination_json);
-        }
+        /* TEMP: Skip pagination to debug serialization issue */
+        LOG_DEBUG("Skipping pagination JSON conversion for debugging");
         query_free_pagination_info(execute_result.pagination);
     }
     

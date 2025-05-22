@@ -118,6 +118,12 @@ static void* persistence_thread_main(void* arg) {
         int should_save_buffer = should_save_now(persistence, 0);
         int should_save_periodic = should_save_now(persistence, 1);
         
+        /* TEMP: Debug persistence condition */
+        if (should_save_buffer || should_save_periodic) {
+            if (g_logger) LOG_DEBUG("PERSIST_DEBUG: should_save=true, db->is_modified=%d, save_in_progress=%d, ops=%d", 
+                                   db->is_modified, persistence->save_in_progress, persistence->operations_count);
+        }
+        
         if ((should_save_buffer || should_save_periodic) && db->is_modified && !persistence->save_in_progress) {
             persistence->save_in_progress = 1;
             
@@ -238,6 +244,7 @@ int db_notify_data_change_sync(database_t* db, size_t estimated_size) {
     
     /* Check if immediate save is needed */
     if (should_save_now(persistence, 0)) {
+        if (g_logger) LOG_DEBUG("PERSIST_DEBUG: Signaling persistence thread for immediate save");
         pthread_cond_signal(&persistence->condition);
         
         /* Wait for save to complete if needed */

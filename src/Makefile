@@ -54,7 +54,7 @@ JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
 INIT_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(INIT_SRCS))
 
 # All objects
-OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o ../build/obj/components/core/login_redirect.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(INIT_OBJS)
 
 # JavaScript support handling
@@ -96,7 +96,7 @@ CUSTOM_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CUSTOM_DB_SRCS))
 FINAL_DB_OBJS = $(CUSTOM_DB_OBJS)
 
 # Define all optimized objects
-OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o ../build/obj/components/core/login_redirect.o $(API_OBJS) $(FINAL_DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/api_login_fix.o $(API_OBJS) $(FINAL_DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(INIT_OBJS)
 
 # List of objects for Makefile dependencies
