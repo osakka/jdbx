@@ -1,93 +1,73 @@
 #!/bin/bash
-# Enhanced run script for JSONdb server with environment variable support
+# JSONdb Server Runtime Script
+# Simplified version for the v2.0.0 binary persistence release
 
-# Go to the build directory first
+# Go to the script's directory
 cd "$(dirname "$0")"
 
-# Source environment configuration if exists
-ENV_FILE="./var/jsondb_server.env"
-if [ -f "$ENV_FILE" ]; then
-    echo "Loading configuration from $ENV_FILE"
-    source "$ENV_FILE"
-else
-    echo "Warning: Environment file $ENV_FILE not found, using defaults"
-fi
+# Default environment file paths (in order of preference)
+ENV_FILES=(
+    "./var/jsondb_server.env"
+    "../var/jsondb_server.env" 
+    "../share/config/jsondb_server.env"
+)
 
-# Allow for custom environment file from command line (--env-file parameter)
-for arg in "$@"; do
-    if [[ "$arg" == --env-file=* ]]; then
-        CUSTOM_ENV_FILE="${arg#*=}"
-        if [ -f "$CUSTOM_ENV_FILE" ]; then
-            echo "Loading custom environment file: $CUSTOM_ENV_FILE"
-            source "$CUSTOM_ENV_FILE"
-            ENV_FILE="$CUSTOM_ENV_FILE"
-        else
-            echo "Error: Custom environment file not found: $CUSTOM_ENV_FILE"
-            exit 1
-        fi
+# Load environment configuration
+ENV_FILE=""
+for file in "${ENV_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        ENV_FILE="$file"
+        echo "Loading configuration from $ENV_FILE"
+        source "$ENV_FILE"
         break
     fi
 done
 
-# Set default values if not in environment
+# Set default values if not defined in environment
 : ${JSONDB_PORT:=5000}
 : ${JSONDB_HOST:="0.0.0.0"}
-: ${JSONDB_VERBOSE:="false"}
-: ${JSONDB_LOG_LEVEL:="debug"}
+: ${JSONDB_LOG_LEVEL:="info"}
 
-# Set base paths if not already defined
+# Use v2.0.0 binary format with .jdb extension
 : ${JSONDB_BASE_DIR:="/opt/jsondb"}
 : ${JSONDB_BUILD_DIR:="${JSONDB_BASE_DIR}/build"}
-: ${JSONDB_VAR_DIR:="${JSONDB_BUILD_DIR}/var"}  # Changed from /opt/jsondb/var to /opt/jsondb/build/var
+: ${JSONDB_VAR_DIR:="${JSONDB_BUILD_DIR}/var"}
 : ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
 
-# Ensure absolute paths using base directories
-: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/jsondb_database.json"}
-: ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/json_rbac.json"} 
-: ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb_server.log"}
-: ${JSONDB_PID_FILE:="${JSONDB_VAR_DIR}/jsondb_server.pid"}
+# Updated paths for v2.0.0 binary persistence
+: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/database.jdb"}
+: ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/rbac.json"}
+: ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb.log"}
+: ${JSONDB_PID_FILE:="${JSONDB_VAR_DIR}/jsondb.pid"}
 : ${JSONDB_WEB_ROOT:="${JSONDB_SHARE_DIR}/htdocs"}
 : ${JSONDB_VALIDATORS_DIR:="${JSONDB_VAR_DIR}/validators"}
 : ${JSONDB_TRANSFORMS_DIR:="${JSONDB_VAR_DIR}/transforms"}
 : ${JSONDB_METRICS_DIR:="${JSONDB_VAR_DIR}/metrics"}
 
-# Set configuration from environment to variables used in script
-DBPATH="$JSONDB_DB_DIR"
-RBACFILE="$JSONDB_RBAC_FILE"
-LOGFILE="$JSONDB_LOG_FILE"
-PIDFILE="$JSONDB_PID_FILE"
-WEBROOT="$JSONDB_WEB_ROOT"
-LOGLEVEL="$JSONDB_LOG_LEVEL"
-PORT=$JSONDB_PORT
-HOST="$JSONDB_HOST"
-VALIDATORS_DIR="$JSONDB_VALIDATORS_DIR"
-TRANSFORMS_DIR="$JSONDB_TRANSFORMS_DIR"
-METRICS_DIR="$JSONDB_METRICS_DIR"
-
-# Display configuration for debugging
+# Display current configuration
 echo "Using configuration:"
-echo "  Database path: $DBPATH"
-echo "  RBAC file: $RBACFILE"
-echo "  Log file: $LOGFILE"
-echo "  PID file: $PIDFILE"
-echo "  Host: $HOST"
-echo "  Port: $PORT"
+echo "  Database path: $JSONDB_DB_DIR"
+echo "  RBAC file: $JSONDB_RBAC_FILE"
+echo "  Log file: $JSONDB_LOG_FILE"
+echo "  PID file: $JSONDB_PID_FILE"
+echo "  Host: $JSONDB_HOST"
+echo "  Port: $JSONDB_PORT"
 
-# Add QuickJS library directory to library path if needed
+# QuickJS library path
 if [ -d "/opt/qjs/lib/quickjs" ]; then
     export LD_LIBRARY_PATH="/opt/qjs/lib/quickjs:$LD_LIBRARY_PATH"
 fi
 
-# Simple check if server is running (via PID file)
+# Simple server status check
 check_status() {
-    if [ -f "$PIDFILE" ]; then
-        PID=$(cat "$PIDFILE")
+    if [ -f "$JSONDB_PID_FILE" ]; then
+        PID=$(cat "$JSONDB_PID_FILE")
         if ps -p "$PID" > /dev/null 2>&1; then
             echo "JSONdb server is running (PID: $PID)"
             return 0
         else
-            echo "JSONdb server is not running (stale PID file exists)"
-            rm -f "$PIDFILE"
+            echo "No running server found with PID $PID (stale PID file)"
+            rm -f "$JSONDB_PID_FILE"
             return 1
         fi
     else
@@ -96,377 +76,188 @@ check_status() {
     fi
 }
 
-# Check if a port is in use
+# Check if port is in use
 is_port_in_use() {
     local port=$1
-    # The return value is inverted - we want to return 0 (true) if port is in use
-    if command -v lsof >/dev/null 2>&1; then
-        if lsof -i :$port >/dev/null 2>&1; then
-            return 0  # Port is in use
-        else
-            return 1  # Port is not in use
-        fi
+    if command -v ss >/dev/null 2>&1; then
+        ss -tuln | grep ":$port " >/dev/null 2>&1
     elif command -v netstat >/dev/null 2>&1; then
-        if netstat -tuln | grep ":$port " >/dev/null 2>&1; then
-            return 0  # Port is in use
-        else
-            return 1  # Port is not in use
-        fi
+        netstat -tuln | grep ":$port " >/dev/null 2>&1
     else
-        # Fall back to a direct connection test
-        if (echo > /dev/tcp/localhost/$port) >/dev/null 2>&1; then
-            return 0  # Port is in use
-        else
-            return 1  # Port is not in use
-        fi
+        (echo > /dev/tcp/localhost/$port) >/dev/null 2>&1
     fi
 }
 
 # Start the server
 start_server() {
-    if [ -f "$PIDFILE" ]; then
-        PID=$(cat "$PIDFILE")
-        if ps -p "$PID" > /dev/null 2>&1; then
-            echo "JSONdb server is already running"
-            return 0
-        fi
-        rm -f "$PIDFILE"
+    # Check if already running
+    if check_status; then
+        echo "JSONdb server is already running"
+        return 0
     fi
 
-    # Check if port is already in use
-    if is_port_in_use $PORT; then
-        echo "Error: Port $PORT is already in use. Please use a different port."
+    # Check port availability
+    if is_port_in_use $JSONDB_PORT; then
+        echo "Error: Port $JSONDB_PORT is already in use"
         return 1
     fi
 
     # Create necessary directories
-    mkdir -p $(dirname "$LOGFILE") $(dirname "$PIDFILE") $(dirname "$DBPATH")
+    mkdir -p "$(dirname "$JSONDB_LOG_FILE")" "$(dirname "$JSONDB_PID_FILE")" "$(dirname "$JSONDB_DB_DIR")"
     
-    echo "Starting JSONdb server on ${HOST}:${PORT}..."
-    # Ensure LD_LIBRARY_PATH is set for QuickJS
-    if [ -d "/opt/qjs/lib/quickjs" ]; then
-        export LD_LIBRARY_PATH="/opt/qjs/lib/quickjs:$LD_LIBRARY_PATH"
-    fi
+    echo "Starting JSONdb server on $JSONDB_HOST:$JSONDB_PORT..."
 
-    # Use --verbose instead of --daemon for better debugging if needed
-    DAEMON_MODE="--daemon"
-    if [ "${DEBUG_MODE}" = "1" ]; then
-        DAEMON_MODE="--verbose"
-        echo "Running in debug mode (foreground with verbose output)"
-    fi
-    
-    # Force clean any existing processes
+    # Check for existing jsondb_server processes
     echo "Checking for existing jsondb_server processes..."
-    ps -ef | grep jsondb_server | grep -v grep | awk '{print $2}' | xargs -r kill -9
-    sleep 1
-    echo "Checking for processes using port ${PORT}..."
+    pkill -f "jsondb_server" 2>/dev/null || true
+    
+    # Check for processes using the port
+    echo "Checking for processes using port $JSONDB_PORT..."
     if command -v lsof >/dev/null 2>&1; then
-        lsof -i :${PORT} | tail -n +2 | awk '{print $2}' | xargs -r kill -9
+        lsof -ti:$JSONDB_PORT | xargs -r kill 2>/dev/null || true
     fi
-    sleep 1
 
+    # Start the server
     ./bin/jsondb_server \
-      ${DAEMON_MODE} \
-      -l ${LOGLEVEL} \
-      -b ${DBPATH} \
-      -r ${RBACFILE} \
-      -o ${LOGFILE} \
-      -i ${PIDFILE} \
-      -w ${WEBROOT} \
-      -p ${PORT} \
-      -H ${HOST} \
-      -Q ${VALIDATORS_DIR} \
-      -T ${TRANSFORMS_DIR} \
-      -M ${METRICS_DIR}
-    
-    # Improved check for server startup with longer timeout and better resilience
-    local timeout=30  # Increase timeout to 30 seconds
-    local elapsed=0
-    local interval=2
-    
-    echo "Waiting up to ${timeout} seconds for server to start..."
-    
-    while [ $elapsed -lt $timeout ]; do
-        # Check if PID file exists
-        if [ -f "$PIDFILE" ]; then
-            PID=$(cat "$PIDFILE")
+        --daemon \
+        --log-level="$JSONDB_LOG_LEVEL" \
+        --db-dir="$JSONDB_DB_DIR" \
+        --rbac-file="$JSONDB_RBAC_FILE" \
+        --log-file="$JSONDB_LOG_FILE" \
+        --pid-file="$JSONDB_PID_FILE" \
+        --web-root="$JSONDB_WEB_ROOT" \
+        --port="$JSONDB_PORT" \
+        --host="$JSONDB_HOST" \
+        --validators-dir="$JSONDB_VALIDATORS_DIR" \
+        --transforms-dir="$JSONDB_TRANSFORMS_DIR" \
+        --metrics-dir="$JSONDB_METRICS_DIR"
+
+    # Wait for server to start (simplified)
+    echo "Waiting up to 30 seconds for server to start..."
+    for i in {1..30}; do
+        if [ -f "$JSONDB_PID_FILE" ]; then
+            PID=$(cat "$JSONDB_PID_FILE")
             if ps -p "$PID" > /dev/null 2>&1; then
-                echo "JSONdb server started successfully on ${HOST}:${PORT} (PID: $PID)"
-                # Check if port is actually in use - wait up to 10 seconds for port activation
-                local port_check_timeout=10
-                local port_check_elapsed=0
-                local port_check_interval=1
-                
-                while [ $port_check_elapsed -lt $port_check_timeout ]; do
-                    if is_port_in_use $PORT; then
-                        echo "Confirmed port $PORT is active"
-                        return 0
-                    else
-                        echo "Waiting for port $PORT to become active... (${port_check_elapsed}/${port_check_timeout}s)"
-                        sleep $port_check_interval
-                        port_check_elapsed=$((port_check_elapsed + port_check_interval))
-                    fi
-                done
-                
-                echo "Warning: Process is running but port $PORT did not become active within timeout"
-                # Consider this a success anyway since the process is running
+                if is_port_in_use $JSONDB_PORT; then
+                    echo "JSONdb server is running and port $JSONDB_PORT is active"
+                    return 0
+                fi
+            fi
+        fi
+        
+        # Check for process directly
+        if pgrep -f "jsondb_server" > /dev/null; then
+            echo "Found server process with PID: $(pgrep -f jsondb_server)"
+            if is_port_in_use $JSONDB_PORT; then
+                echo "JSONdb server is running and port $JSONDB_PORT is active"
                 return 0
             fi
         fi
         
-        # Check for running process directly
-        SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep -v "sudo" | head -1 | awk '{print $2}')
-        if [ -n "$SERVER_PID" ]; then
-            echo "Found server process with PID: $SERVER_PID"
-            # Create the PID file if it doesn't exist
-            if [ ! -f "$PIDFILE" ]; then
-                echo "$SERVER_PID" > "$PIDFILE"
-                echo "Created PID file: $PIDFILE"
-            fi
-            
-            # Check if port is active - wait up to 10 seconds for port activation
-            local port_check_timeout=10
-            local port_check_elapsed=0
-            local port_check_interval=1
-            
-            while [ $port_check_elapsed -lt $port_check_timeout ]; do
-                if is_port_in_use $PORT; then
-                    echo "JSONdb server is running and port $PORT is active"
-                    return 0
-                else
-                    echo "Waiting for port $PORT to become active... (${port_check_elapsed}/${port_check_timeout}s)"
-                    sleep $port_check_interval
-                    port_check_elapsed=$((port_check_elapsed + port_check_interval))
-                fi
-            done
-            
-            echo "Warning: Process is running but port $PORT did not become active within timeout"
-            # Consider this a success anyway since the process is running
-            return 0
-        fi
-        
-        # If the server is still starting up, check the log file
-        if [ -f "$LOGFILE" ]; then
-            # Check for positive indicators in log
-            if grep -q "Socket listening successfully" "$LOGFILE"; then
-                echo "Server appears to be starting based on logs (socket listening)"
-            elif grep -q "Socket bound successfully" "$LOGFILE"; then
-                echo "Server appears to be starting based on logs (socket bound)"
-            elif grep -q "Socket created successfully" "$LOGFILE"; then
-                echo "Server appears to be starting based on logs (socket created)"
-            fi
-        fi
-        
-        sleep $interval
-        elapsed=$((elapsed + interval))
-        echo "Still waiting for server to start... (${elapsed}/${timeout} seconds)"
+        echo "Still waiting for server to start... ($i/30 seconds)"
+        sleep 1
     done
-    
-    # PID file doesn't exist or contains invalid PID
-    # Let's check for running process directly one more time
-    SERVER_PID=$(ps -ef | grep jsondb_server | grep -v grep | grep -v "sudo" | head -1 | awk '{print $2}')
-    
-    if [ -n "$SERVER_PID" ]; then
-        echo "JSONdb server started successfully on ${HOST}:${PORT} (PID: $SERVER_PID)"
-        
-        # Create the PID file
-        echo "$SERVER_PID" > "$PIDFILE"
-        echo "Created PID file: $PIDFILE"
-        return 0
-    else
-        # Check the log file for any clues
-        if [ -f "$LOGFILE" ]; then
-            echo "Last 10 log lines:"
-            tail -n 10 "$LOGFILE"
-            
-            # Check for specific errors
-            if grep -q "Failed to bind socket" "$LOGFILE"; then
-                echo "ERROR: Server failed to bind to port $PORT"
-                echo "Try using a different port or making sure no other process is using port $PORT"
-            elif grep -q "Failed to create socket" "$LOGFILE"; then
-                echo "ERROR: Server failed to create socket"
-            elif grep -q "Socket bound successfully" "$LOGFILE" && ! grep -q "Socket listening successfully" "$LOGFILE"; then
-                echo "ERROR: Socket was bound but failed to listen"
-            fi
-        fi
-        
-        echo "Failed to start JSONdb server"
-        return 1
-    fi
+
+    echo "Failed to start JSONdb server"
+    return 1
 }
 
-# Stop the server - Enhanced version with improved process detection
+# Stop the server
 stop_server() {
-    SERVER_STOPPED=0
-    
-    # First approach: Try using PID file
-    if [ -f "$PIDFILE" ]; then
-        PID=$(cat "$PIDFILE")
+    # Try PID file first
+    if [ -f "$JSONDB_PID_FILE" ]; then
+        PID=$(cat "$JSONDB_PID_FILE")
         if ps -p "$PID" > /dev/null 2>&1; then
-            echo "Stopping JSONdb server (PID: $PID) using PID file..."
+            echo "Stopping JSONdb server (PID: $PID)..."
+            kill -TERM $PID
             
-            # First try graceful termination via signal
-            kill -TERM $PID 2>/dev/null
-            
-            # Check if process ended
-            sleep 2
-            if ! ps -p "$PID" > /dev/null 2>&1; then
-                echo "Server successfully stopped via SIGTERM."
-                SERVER_STOPPED=1
-            else
-                # Try forced termination
-                echo "Forcing termination of JSONdb server (PID: $PID)..."
-                kill -9 $PID 2>/dev/null
-                
-                # Check if process ended
-                sleep 1
+            # Wait for graceful shutdown
+            for i in {1..5}; do
                 if ! ps -p "$PID" > /dev/null 2>&1; then
-                    echo "Server successfully terminated via SIGKILL."
-                    SERVER_STOPPED=1
-                else
-                    echo "Failed to terminate server via PID file method."
+                    echo "Process $PID successfully stopped via SIGTERM."
+                    break
                 fi
+                sleep 1
+            done
+            
+            # Force kill if still running
+            if ps -p "$PID" > /dev/null 2>&1; then
+                echo "Forcing termination of process $PID..."
+                kill -9 $PID
             fi
         else
             echo "No running server found with PID $PID (stale PID file)"
         fi
-        rm -f "$PIDFILE"
+        rm -f "$JSONDB_PID_FILE"
     else
-        echo "No PID file found at $PIDFILE"
+        echo "No PID file found at $JSONDB_PID_FILE"
     fi
     
-    # Second approach: Find server processes by command line pattern
-    if [ $SERVER_STOPPED -eq 0 ]; then
-        echo "Searching for jsondb_server processes..."
-        SERVER_PIDS=$(ps -ef | grep "/bin/jsondb_server" | grep -v "grep" | awk '{print $2}')
-        
-        if [ -z "$SERVER_PIDS" ]; then
-            echo "No jsondb_server processes found."
-        else
-            # Found server processes
-            echo "Found jsondb_server processes: $SERVER_PIDS"
-            for SERVER_PID in $SERVER_PIDS; do
-                echo "Stopping JSONdb server process (PID: $SERVER_PID)..."
-                
-                # First try graceful termination
-                kill -TERM $SERVER_PID 2>/dev/null
-                
-                # Check if process ended
-                sleep 2
-                if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
-                    echo "Process $SERVER_PID successfully stopped via SIGTERM."
-                else
-                    # Try forced termination
-                    echo "Forcing termination of process $SERVER_PID..."
-                    kill -9 $SERVER_PID 2>/dev/null
-                    
-                    # Check if process ended
-                    sleep 1
-                    if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
-                        echo "Process $SERVER_PID successfully terminated via SIGKILL."
-                    else
-                        echo "WARNING: Failed to terminate process $SERVER_PID"
-                    fi
-                fi
-            done
-            SERVER_STOPPED=1
-        fi
+    # Find and stop any remaining jsondb_server processes
+    echo "Searching for jsondb_server processes..."
+    SERVER_PIDS=$(pgrep -f "jsondb_server" 2>/dev/null)
+    
+    if [ -n "$SERVER_PIDS" ]; then
+        echo "Found jsondb_server processes: $SERVER_PIDS"
+        for pid in $SERVER_PIDS; do
+            echo "Stopping JSONdb server process (PID: $pid)..."
+            kill -TERM $pid 2>/dev/null
+            sleep 2
+            if ps -p "$pid" > /dev/null 2>&1; then
+                kill -9 $pid 2>/dev/null
+            fi
+        done
     fi
-    
-    # Cleanup - double check for any leftover PID files
-    rm -f "$PIDFILE" 2>/dev/null
-    
-    # Check for port usage
-    if is_port_in_use $PORT; then
-        echo "WARNING: Port $PORT is still in use after stopping server."
-        if command -v lsof >/dev/null 2>&1; then
-            echo "Processes using port $PORT:"
-            lsof -i :$PORT
-        fi
+
+    # Check final status
+    if is_port_in_use $JSONDB_PORT; then
+        echo "WARNING: Port $JSONDB_PORT is still in use after stopping server"
     else
-        if [ $SERVER_STOPPED -eq 1 ]; then
-            echo "Server successfully stopped and port $PORT is now available."
-        fi
+        echo "Server successfully stopped and port $JSONDB_PORT is now available."
     fi
 }
 
-# Show usage if no arguments
-if [ $# -eq 0 ]; then
-    echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR] [--debug]"
+# Show usage
+show_usage() {
+    echo "Usage: $0 {start|stop|restart|status} [OPTIONS]"
+    echo ""
+    echo "Commands:"
+    echo "  start     Start the JSONdb server"
+    echo "  stop      Stop the JSONdb server"
+    echo "  restart   Restart the JSONdb server"
+    echo "  status    Show server status"
     echo ""
     echo "Options:"
-    echo "  --port=PORT            Set server port (default: $PORT)"
-    echo "  --host=HOST            Set server host (default: $HOST)" 
-    echo "  --validators-dir=DIR   Set validators directory"
-    echo "  --transforms-dir=DIR   Set transforms directory"
-    echo "  --metrics-dir=DIR      Set metrics directory"
-    echo "  --debug                Run in debug mode (verbose output, foreground)" 
-    echo "" 
-    exit 1
-fi
+    echo "  --port=PORT            Set server port (default: $JSONDB_PORT)"
+    echo "  --host=HOST            Set server host (default: $JSONDB_HOST)"
+    echo "  --log-level=LEVEL      Set log level (error, warn, info, debug, trace)"
+    echo "  --db-dir=PATH          Set database file path"
+    echo "  --env-file=FILE        Use custom environment file"
+    echo ""
+    echo "Environment file locations (in order of preference):"
+    for file in "${ENV_FILES[@]}"; do
+        echo "  $file"
+    done
+}
 
-# Set debug mode flag (default: off)
-DEBUG_MODE=0
-
-# Process command
-COMMAND=$1
-shift
-
-# Parse remaining arguments (these override environment variables)
+# Parse command line arguments
+COMMAND=""
 while [ $# -gt 0 ]; do
     case "$1" in
+        start|stop|restart|status)
+            COMMAND="$1"
+            ;;
         --port=*)
-            PORT="${1#*=}"
-            JSONDB_PORT="$PORT"
+            JSONDB_PORT="${1#*=}"
             ;;
         --host=*)
-            HOST="${1#*=}"
-            JSONDB_HOST="$HOST"
-            ;;
-        --db-dir=*|--db-path=*)
-            DBPATH="${1#*=}"
-            JSONDB_DB_DIR="$DBPATH"
-            ;;
-        --rbac-file=*)
-            RBACFILE="${1#*=}"
-            JSONDB_RBAC_FILE="$RBACFILE"
-            ;;
-        --log-file=*)
-            LOGFILE="${1#*=}"
-            JSONDB_LOG_FILE="$LOGFILE"
-            ;;
-        --pid-file=*)
-            PIDFILE="${1#*=}"
-            JSONDB_PID_FILE="$PIDFILE"
-            ;;
-        --web-root=*)
-            WEBROOT="${1#*=}"
-            JSONDB_WEB_ROOT="$WEBROOT"
+            JSONDB_HOST="${1#*=}"
             ;;
         --log-level=*)
-            LOGLEVEL="${1#*=}"
-            JSONDB_LOG_LEVEL="$LOGLEVEL"
+            JSONDB_LOG_LEVEL="${1#*=}"
             ;;
-        --validators-dir=*)
-            VALIDATORS_DIR="${1#*=}"
-            JSONDB_VALIDATORS_DIR="$VALIDATORS_DIR"
-            ;;
-        --transforms-dir=*)
-            TRANSFORMS_DIR="${1#*=}"
-            JSONDB_TRANSFORMS_DIR="$TRANSFORMS_DIR"
-            ;;
-        --metrics-dir=*)
-            METRICS_DIR="${1#*=}"
-            JSONDB_METRICS_DIR="$METRICS_DIR"
-            ;;
-        --max-connections=*)
-            JSONDB_MAX_CONNECTIONS="${1#*=}"
-            ;;
-        --debug)
-            DEBUG_MODE=1
-            JSONDB_DEBUG_MODE="true"
-            JSONDB_VERBOSE="true"
-            echo "Debug mode enabled"
+        --db-dir=*)
+            JSONDB_DB_DIR="${1#*=}"
             ;;
         --env-file=*)
             ENV_FILE="${1#*=}"
@@ -478,30 +269,20 @@ while [ $# -gt 0 ]; do
                 exit 1
             fi
             ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 {start|stop|restart|status|run} [OPTIONS]"
-            echo "Options:"
-            echo "  --port=PORT                Set server port"
-            echo "  --host=HOST                Set server bind address"
-            echo "  --db-dir=PATH              Set database directory/file"
-            echo "  --rbac-file=FILE           Set RBAC file path"
-            echo "  --log-file=FILE            Set log file path"
-            echo "  --pid-file=FILE            Set PID file path"
-            echo "  --log-level=LEVEL          Set log level (error, warn, info, debug, trace)"
-            echo "  --web-root=DIR             Set web root directory"
-            echo "  --validators-dir=DIR       Set validators directory"
-            echo "  --transforms-dir=DIR       Set transforms directory"
-            echo "  --metrics-dir=DIR          Set metrics directory"
-            echo "  --max-connections=NUM      Set maximum connections"
-            echo "  --debug                    Enable debug mode"
-            echo "  --env-file=FILE            Use custom environment file"
+            show_usage
             exit 1
             ;;
     esac
     shift
 done
 
+# Execute command
 case "$COMMAND" in
     start)
         start_server
@@ -510,17 +291,20 @@ case "$COMMAND" in
         stop_server
         ;;
     restart)
-        stop_server;
-        start_server;
+        stop_server
+        sleep 2
+        start_server
         ;;
     status)
         check_status
         ;;
+    "")
+        show_usage
+        exit 1
+        ;;
     *)
         echo "Unknown command: $COMMAND"
-        echo "Usage: $0 {start|stop|restart|status} [--port=PORT] [--host=HOST] [--validators-dir=DIR] [--transforms-dir=DIR] [--metrics-dir=DIR]"
+        show_usage
         exit 1
         ;;
 esac
-
-exit 0
