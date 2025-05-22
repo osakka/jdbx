@@ -5,11 +5,10 @@
 # Go to the script's directory
 cd "$(dirname "$0")"
 
-# Default environment file paths (in order of preference)
+# Environment file paths (absolute paths, in order of preference)
 ENV_FILES=(
-    "./var/jsondb_server.env"
-    "../var/jsondb_server.env" 
-    "../share/config/jsondb_server.env"
+    "/opt/jsondb/var/jsondb.env"           # Running configuration
+    "/opt/jsondb/share/config/jsondb.env"  # Template defaults (if running config doesn't exist)
 )
 
 # Load environment configuration
@@ -235,9 +234,8 @@ show_usage() {
     echo "  --env-file=FILE        Use custom environment file"
     echo ""
     echo "Environment file locations (in order of preference):"
-    for file in "${ENV_FILES[@]}"; do
-        echo "  $file"
-    done
+    echo "  /opt/jsondb/var/jsondb.env           (running configuration)"
+    echo "  /opt/jsondb/share/config/jsondb.env  (template defaults)"
 }
 
 # Parse command line arguments
