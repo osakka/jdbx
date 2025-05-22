@@ -170,7 +170,7 @@ For complete API documentation, see the [API Reference](docs/api/API.md).
 
 ## Documentation
 
-- [Binary Format Guide](README_BINARY_FORMAT.md) - **NEW!** Performance-optimized binary persistence
+- [Binary Format Guide](docs/BINARY_FORMAT.md) - **NEW!** Performance-optimized binary persistence
 - [API Reference](docs/api/API.md)
 - [JavaScript API](docs/api/JAVASCRIPT_API.md)
 - [RBAC System](docs/api/RBAC_API.md)
@@ -227,7 +227,7 @@ JSONdb is optimized for performance with our advanced binary persistence system:
 - Thread pool for concurrent operations
 - Fine-grained locking for reduced contention
 
-For detailed performance analysis, see [Binary Format Documentation](README_BINARY_FORMAT.md).
+For detailed performance analysis, see [Binary Format Documentation](docs/BINARY_FORMAT.md).
 
 ## Contribution
 

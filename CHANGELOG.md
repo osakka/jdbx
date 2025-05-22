@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 📚 Documentation
 
 #### New Documentation
-- **NEW**: Comprehensive [Binary Format Guide](README_BINARY_FORMAT.md)
+- **NEW**: Comprehensive [Binary Format Guide](docs/BINARY_FORMAT.md)
 - **NEW**: Performance benchmarks and comparison tables
 - **NEW**: Binary format API documentation with code examples
 - **NEW**: Configuration options for binary persistence
@@ -137,8 +137,8 @@ This release was made possible by the comprehensive work on binary persistence i
 
 ### 🔗 Links
 
-- [Binary Format Documentation](README_BINARY_FORMAT.md)
-- [Performance Benchmarks](README_BINARY_FORMAT.md#performance-improvements)
+- [Binary Format Documentation](docs/BINARY_FORMAT.md)
+- [Performance Benchmarks](docs/BINARY_FORMAT.md#performance-improvements)
 - [API Documentation](docs/api/API.md)
 - [GitHub Repository](https://github.com/yourusername/jsondb)
 
