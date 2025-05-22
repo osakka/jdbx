@@ -5,6 +5,20 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2025-05-22
+
+### 🔧 Runtime Script Improvements
+
+- **IMPROVED**: Simplified and cleaned up `jsondb_runtime.sh` script (40% size reduction)
+- **ORGANIZED**: Environment configuration with two-tier system:
+  - Template: `/opt/jsondb/share/config/jsondb.env` (examples and documentation)
+  - Running config: `/opt/jsondb/var/jsondb.env` (user customizations)
+- **SIMPLIFIED**: Removed complex workarounds for resolved socket binding issues
+- **UPDATED**: Accurate server flag mapping to match actual server capabilities
+- **ENHANCED**: Professional configuration management with absolute paths
+
+---
+
 ## [2.0.0] - 2025-05-22 🎉
 
 ### 🚀 Major Features Added
