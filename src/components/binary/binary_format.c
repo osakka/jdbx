@@ -596,6 +596,13 @@ int binary_serialize_database(const char* path, void* db) {
             size_t expected_data_size = doc_size - sizeof(binary_value_header_t);
             doc_header->size = (uint32_t)expected_data_size;
             
+            /* Get document ID for better debugging */
+            json_value_t* id_val = json_object_get(document, "_id");
+            const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
+            
+            LOG_INFO("PERSIST_DEBUG: Serializing document '%s' in collection '%s': size=%zu bytes", 
+                     doc_id, collection_name, doc_size);
+            
             LOG_DEBUG("MULTI_COL_TRACE: Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
                       collection_name, j, doc_size, doc_header->size, current_offset);
             
@@ -803,6 +810,12 @@ void* binary_deserialize_database(const char* path) {
                 LOG_ERROR("Failed to deserialize document");
                 continue;
             }
+            
+            /* Get document ID for debugging */
+            json_value_t* id_val = json_object_get(document, "_id");
+            const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
+            
+            LOG_INFO("PERSIST_DEBUG: Deserialized document '%s' for collection '%s'", doc_id, collection_name);
             
             /* Add document to collection */
             json_array_append(collection, document);

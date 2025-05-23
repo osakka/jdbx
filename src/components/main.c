@@ -293,6 +293,14 @@ int main(int argc, char** argv) {
     /* Store API context in config for sharing with other components */
     config->api_ctx = api_ctx;
     
+    /* Initialize persistence thread AFTER daemonization and all other components */
+    LOG_DEBUG("Initializing Persistence Thread");
+    status = init_persistence_thread(database);
+    if (status != INIT_OK) {
+        LOG_WARNING("Failed to initialize persistence thread - continuing without automatic persistence");
+        /* This is not fatal - we can continue without automatic persistence */
+    }
+    
     LOG_INFO("All components successfully initialized in the correct sequence");
     
     /* Run server main loop */

@@ -5,6 +5,31 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2025-05-23
+
+### 🔧 Critical Fixes
+
+#### Persistence Thread Fix
+- **FIXED**: Persistence thread not surviving daemonization (moved initialization after fork)
+- **NEW**: Modular persistence thread initialization in `init_persistence_thread()`
+- **FIXED**: Automatic persistence now works correctly in daemon mode
+
+#### JSON Serialization Fix
+- **FIXED**: Document query API returning "Failed to serialize response" error
+- **FIXED**: Missing `JSON_INTEGER` case in `json_stringify()` function
+- **IMPROVED**: Document queries now return properly formatted JSON responses
+
+#### Enhanced Debugging
+- **NEW**: Detailed persistence thread lifecycle logging
+- **NEW**: Document serialization/deserialization trace logs
+- **NEW**: Query response structure debugging
+
+### ✅ Verification Results
+- Documents persist correctly across server restarts
+- Query API returns complete response with documents, count, and total_count
+- Binary persistence working with automatic saves
+- All JSON types (string, number, integer, boolean, array, object) serialize correctly
+
 ## [2.0.1] - 2025-05-22
 
 ### 🔧 Runtime Script Improvements

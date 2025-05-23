@@ -820,6 +820,12 @@ static char* stringify_value(json_value_t* value) {
             return stringify_array(value);
         case JSON_OBJECT:
             return stringify_object(value);
+        case JSON_INTEGER:
+            {
+                char buffer[64];
+                sprintf(buffer, "%lld", (long long)value->value.integer);
+                return strdup(buffer);
+            }
         default:
             return NULL;
     }

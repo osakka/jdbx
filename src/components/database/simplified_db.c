@@ -120,10 +120,8 @@ database_t* db_init(const char* path) {
         LOG_INFO("No existing database file found at %s, starting with empty binary database", path);
     }
 
-    /* Start persistence thread */
-    if (!db_start_persistence_thread(db)) {
-        LOG_WARNING("Failed to start persistence thread, continuing without automatic persistence");
-    }
+    /* NOTE: Persistence thread will be started after daemonization to ensure it survives fork() */
+    LOG_INFO("Persistence thread will be started after server initialization");
 
     LOG_INFO("Binary database initialization complete");
     return db;

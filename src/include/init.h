@@ -22,6 +22,7 @@ typedef enum init_status_e {
     INIT_RBAC_ERROR = -60,    /* RBAC initialization error */
     INIT_API_ERROR = -70,     /* API initialization error */
     INIT_THREAD_ERROR = -80,  /* Thread initialization error */
+    INIT_PERSISTENCE_ERROR = -90, /* Persistence thread initialization error */
     
     /* Special status codes for daemon process flow control */
     INIT_DAEMON_PARENT_EXIT = 1,  /* Parent process should exit gracefully */
@@ -52,6 +53,9 @@ init_status_t init_api(server_config_t* config, database_t* database,
 
 /* Initialize thread pool */
 init_status_t init_threads(server_config_t* config);
+
+/* Initialize persistence thread (must be called after daemonization) */
+init_status_t init_persistence_thread(database_t* database);
 
 /* Run server main loop */
 init_status_t run_server(server_config_t* config);
