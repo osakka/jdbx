@@ -30,14 +30,17 @@ static api_route_t routes[] = {
     /* Collection routes - TEMP: auth disabled for persistence testing */
     {"/api/collections", HTTP_GET, api_handle_collections_list, 0},
     {"/api/collections", HTTP_POST, api_handle_collection_create, 0},
-    {"/api/collections/", HTTP_DELETE, api_handle_collection_drop, 0},
     
     /* Document routes - TEMP: auth disabled for persistence testing */
+    /* NOTE: More specific routes must come before general ones for proper matching */
     {"/api/collections/", HTTP_GET, api_handle_documents_query, 0},
     {"/api/collections/", HTTP_POST, api_handle_document_create, 0},
     {"/api/collections/", HTTP_GET, api_handle_document_get, 0},
     {"/api/collections/", HTTP_PUT, api_handle_document_update, 0},
     {"/api/collections/", HTTP_DELETE, api_handle_document_delete, 0},
+    
+    /* Collection drop must come after document routes to avoid matching document paths */
+    {"/api/collections/", HTTP_DELETE, api_handle_collection_drop, 0},
     
     /* RBAC routes */
     {"/api/users", HTTP_GET, api_handle_users_list, 1},
@@ -284,6 +287,63 @@ char* api_extract_token(http_request_t* request) {
     
     /* Skip "Bearer " prefix */
     return strdup(request->authorization + 7);
+}
+
+/* Parse URL query parameters into JSON object */
+static json_value_t* parse_url_query_to_json(const char* query_string) {
+    if (!query_string || !*query_string) {
+        return NULL;
+    }
+    
+    json_value_t* obj = json_create_object();
+    if (!obj) {
+        return NULL;
+    }
+    
+    /* Create a copy of the query string to work with */
+    char* query_copy = strdup(query_string);
+    if (!query_copy) {
+        json_free(obj);
+        return NULL;
+    }
+    
+    /* Parse key=value pairs separated by & */
+    char* pair = strtok(query_copy, "&");
+    while (pair) {
+        char* equals = strchr(pair, '=');
+        if (equals) {
+            *equals = '\0';
+            char* key = pair;
+            char* value = equals + 1;
+            
+            /* URL decode the value */
+            char decoded_value[1024];
+            size_t decoded_len = 0;
+            for (size_t i = 0; value[i] && decoded_len < sizeof(decoded_value) - 1; i++) {
+                if (value[i] == '%' && value[i+1] && value[i+2]) {
+                    /* Decode %XX */
+                    char hex[3] = {value[i+1], value[i+2], '\0'};
+                    decoded_value[decoded_len++] = (char)strtol(hex, NULL, 16);
+                    i += 2;
+                } else if (value[i] == '+') {
+                    decoded_value[decoded_len++] = ' ';
+                } else {
+                    decoded_value[decoded_len++] = value[i];
+                }
+            }
+            decoded_value[decoded_len] = '\0';
+            
+            /* Add to JSON object */
+            json_value_t* str_value = json_create_string(decoded_value);
+            if (str_value) {
+                json_object_set(obj, key, str_value);
+            }
+        }
+        pair = strtok(NULL, "&");
+    }
+    
+    free(query_copy);
+    return obj;
 }
 
 /* Authenticate request */
@@ -769,6 +829,11 @@ http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* 
     const char* path = request->path;
     const char* name = path + strlen("/api/collections/");
     
+    /* Check if this is actually a document operation path */
+    if (strstr(name, "/documents/") != NULL) {
+        return api_handle_document_delete(ctx, request);
+    }
+    
     /* Drop collection */
     if (!db_drop_collection(ctx->db, name)) {
         return create_http_response(HTTP_NOT_FOUND, 
@@ -808,13 +873,18 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
     
     /* Parse query parameter if present */
     json_value_t* query = NULL;
-    if (request->query) {
-        /* Parse query JSON */
-        query = json_parse(request->query);
+    
+    
+    /* Check both query string and body for query parameters */
+    if (request->body && strlen(request->body) > 0) {
+        query = json_parse(request->body);
         if (query && query->type != JSON_OBJECT) {
             json_free(query);
             query = NULL;
         }
+    } else if (request->query) {
+        /* Parse URL query parameters into JSON object */
+        query = parse_url_query_to_json(request->query);
     }
     
     /* Query documents */
@@ -992,24 +1062,31 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
                                   "{\"error\":\"Invalid request\"}", "application/json");
     }
     
+    LOG_INFO("DELETE_TRACE: Handling DELETE request for path: %s", request->path);
+    
     /* Extract collection name and document ID from path */
     const char* path = request->path;
     if (strncmp(path, "/api/collections/", 17) != 0) {
+        LOG_ERROR("DELETE_TRACE: Path doesn't start with /api/collections/");
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid path\"}", "application/json");
     }
     
     path += 17;
+    LOG_INFO("DELETE_TRACE: After prefix removal: %s", path);
     
     /* Split path into collection name and document ID */
     const char* slash = strchr(path, '/');
     if (!slash || strncmp(slash, "/documents/", 11) != 0) {
+        LOG_ERROR("DELETE_TRACE: Invalid path format. Expected /documents/, got: %s", slash ? slash : "NULL");
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid path\"}", "application/json");
     }
     
     char* collection_name = strndup(path, slash - path);
     const char* document_id = slash + 11;
+    
+    LOG_INFO("DELETE_TRACE: Collection: %s, Document ID: %s", collection_name, document_id);
     
     /* Delete document */
     int result = db_delete_document(ctx->db, collection_name, document_id);
