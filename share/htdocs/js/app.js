@@ -852,17 +852,171 @@ function loadMetrics() {
     // Implementation will be added in future
 }
 
-function loadUsers() {
+async function loadUsers() {
     const tableBody = document.getElementById('users-table-body');
-    if (tableBody) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">User management not implemented in this version</td></tr>';
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading users...</td></tr>';
+    
+    try {
+        // Load users from _users collection
+        const response = await fetch(`${API_BASE_URL}/api/collections/_users/documents`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load users');
+        }
+        
+        const data = await response.json();
+        const users = data.documents || [];
+        
+        tableBody.innerHTML = '';
+        
+        if (users.length > 0) {
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.username || 'N/A'}</td>
+                    <td>${user.email || 'N/A'}</td>
+                    <td>${(user.roles && Array.isArray(user.roles) ? user.roles.join(', ') : 'None')}</td>
+                    <td>${formatDateTime(user.created_at || user._created)}</td>
+                    <td class="actions-column">
+                        <button class="btn btn-sm btn-outline-primary edit-user-btn" data-id="${user._id}" data-username="${user.username}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-user-btn" data-id="${user._id}" data-username="${user.username}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+                
+                // Add event listeners
+                row.querySelector('.edit-user-btn').addEventListener('click', function() {
+                    showToast('User editing coming soon', 'info');
+                });
+                
+                row.querySelector('.delete-user-btn').addEventListener('click', function() {
+                    const username = this.dataset.username;
+                    const id = this.dataset.id;
+                    showConfirmationModal(
+                        `Are you sure you want to delete user "${username}"?`,
+                        () => deleteUser(id)
+                    );
+                });
+            });
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No users found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading users</td></tr>';
     }
 }
 
-function loadRoles() {
+async function loadRoles() {
     const tableBody = document.getElementById('roles-table-body');
-    if (tableBody) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Role management not implemented in this version</td></tr>';
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading roles...</td></tr>';
+    
+    try {
+        // Load roles from _roles collection
+        const response = await fetch(`${API_BASE_URL}/api/collections/_roles/documents`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load roles');
+        }
+        
+        const data = await response.json();
+        const roles = data.documents || [];
+        
+        tableBody.innerHTML = '';
+        
+        if (roles.length > 0) {
+            roles.forEach(role => {
+                const row = document.createElement('tr');
+                const userCount = role.users ? (Array.isArray(role.users) ? role.users.length : 0) : 0;
+                const permissions = role.permissions || [];
+                const permissionsList = Array.isArray(permissions) ? permissions : 
+                    (typeof permissions === 'object' ? Object.values(permissions).flat() : []);
+                
+                row.innerHTML = `
+                    <td>${role.name || role.id || 'N/A'}</td>
+                    <td>${role.description || 'No description'}</td>
+                    <td>${permissionsList.join(', ') || 'None'}</td>
+                    <td>${userCount}</td>
+                    <td class="actions-column">
+                        <button class="btn btn-sm btn-outline-primary edit-role-btn" data-id="${role._id}" data-name="${role.name}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-role-btn" data-id="${role._id}" data-name="${role.name}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+                
+                // Add event listeners
+                row.querySelector('.edit-role-btn').addEventListener('click', function() {
+                    showToast('Role editing coming soon', 'info');
+                });
+                
+                row.querySelector('.delete-role-btn').addEventListener('click', function() {
+                    const name = this.dataset.name;
+                    const id = this.dataset.id;
+                    showConfirmationModal(
+                        `Are you sure you want to delete role "${name}"?`,
+                        () => deleteRole(id)
+                    );
+                });
+            });
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No roles found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading roles:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading roles</td></tr>';
+    }
+}
+
+// Helper functions for user/role management
+async function deleteUser(userId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/collections/_users/documents/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            showToast('User deleted successfully');
+            loadUsers(); // Reload users
+        } else {
+            throw new Error('Failed to delete user');
+        }
+    } catch (error) {
+        showToast('Error deleting user: ' + error.message, 'error');
+    }
+}
+
+async function deleteRole(roleId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/collections/_roles/documents/${roleId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            showToast('Role deleted successfully');
+            loadRoles(); // Reload roles
+        } else {
+            throw new Error('Failed to delete role');
+        }
+    } catch (error) {
+        showToast('Error deleting role: ' + error.message, 'error');
     }
 }
 
@@ -1703,25 +1857,66 @@ function refreshCurrentView() {
 }
 
 // Data Loading Functions
-function loadDashboardData() {
-    // Load dashboard statistics
-    fetch(`${API_BASE_URL}/api/metrics`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('collections-count').textContent = data.collections_count || 0;
-        document.getElementById('documents-count').textContent = data.documents_count || 0;
-        document.getElementById('users-count').textContent = data.users_count || 0;
-        document.getElementById('connections-count').textContent = data.active_connections || 0;
+async function loadDashboardData() {
+    try {
+        // Load collections
+        const collectionsResponse = await fetch(`${API_BASE_URL}/api/collections`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const collectionsData = await collectionsResponse.json();
+        const collections = collectionsData.collections || [];
         
-        // Update charts
-        updateHealthChart(data);
+        document.getElementById('collections-count').textContent = collections.length;
         
-        // Also use the metrics data for activity since it's all in one endpoint
-        loadActivityData(data);
-    })
-    .catch(error => console.error('Error loading dashboard data:', error));
+        // Count total documents
+        let totalDocuments = 0;
+        let totalUsers = 0;
+        
+        for (const collection of collections) {
+            try {
+                const docResponse = await fetch(`${API_BASE_URL}/api/collections/${collection}/documents`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (docResponse.ok) {
+                    const docData = await docResponse.json();
+                    const docs = docData.documents || [];
+                    totalDocuments += docs.length;
+                    
+                    // Count users from _users collection
+                    if (collection === '_users') {
+                        totalUsers = docs.length;
+                    }
+                }
+            } catch (error) {
+                console.error(`Error loading documents for ${collection}:`, error);
+            }
+        }
+        
+        document.getElementById('documents-count').textContent = totalDocuments;
+        document.getElementById('users-count').textContent = totalUsers;
+        
+        // Load health data for connections
+        const healthResponse = await fetch(`${API_BASE_URL}/health`);
+        const healthData = await healthResponse.json();
+        
+        // For now, just show 1 active connection (current)
+        document.getElementById('connections-count').textContent = healthData.status === 'ok' ? 1 : 0;
+        
+        // Update health chart with real data
+        updateHealthChart(healthData);
+        
+        // Load recent activity (simplified for now)
+        loadActivityData({});
+        
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        // Set defaults on error
+        document.getElementById('collections-count').textContent = '0';
+        document.getElementById('documents-count').textContent = '0';
+        document.getElementById('users-count').textContent = '0';
+        document.getElementById('connections-count').textContent = '0';
+    }
 }
 
 // Function to load activity data from the metrics response
@@ -1813,24 +2008,62 @@ function loadCollections() {
 }
 
 // Display collections in the table
-function displayCollections(data) {
+async function displayCollections(data) {
     const tableBody = document.getElementById('collections-table-body');
     tableBody.innerHTML = '';
     
     debugLog('Collections to display:', data);
     
     if (data.collections && data.collections.length > 0) {
-        data.collections.forEach(collection => {
-            // Handle both string-only and object collection formats
+        // Show loading message while fetching counts
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading collection details...</td></tr>';
+        
+        const rows = [];
+        
+        // Fetch document count for each collection
+        for (const collection of data.collections) {
             const collName = typeof collection === 'string' ? collection : collection.name;
             
-            // Parse the collection object for display
+            // Initialize display data
             const displayData = {
                 name: collName,
-                documents_count: typeof collection === 'object' ? collection.documents_count || 0 : 0,
-                size_bytes: typeof collection === 'object' ? collection.size_bytes || 0 : 0,
-                last_modified: typeof collection === 'object' ? collection.last_modified || '' : ''
+                documents_count: 0,
+                size_bytes: 0,
+                last_modified: ''
             };
+            
+            // Try to fetch document count
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/collections/${collName}/documents`, {
+                    headers: { 
+                        'Authorization': CONFIG.SKIP_AUTHENTICATION ? {} : `Bearer ${authToken}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const docData = await response.json();
+                    const documents = docData.documents || [];
+                    displayData.documents_count = documents.length;
+                    
+                    // Calculate total size and find last modified
+                    if (documents.length > 0) {
+                        displayData.size_bytes = documents.reduce((sum, doc) => 
+                            sum + JSON.stringify(doc).length, 0);
+                        
+                        // Find most recent modification
+                        const dates = documents.map(doc => 
+                            new Date(doc._updated || doc._created || 0).getTime())
+                            .filter(d => d > 0);
+                        
+                        if (dates.length > 0) {
+                            displayData.last_modified = new Date(Math.max(...dates)).toISOString();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching documents for ${collName}:`, error);
+            }
             
             const row = document.createElement('tr');
             row.innerHTML = `
@@ -1847,7 +2080,6 @@ function displayCollections(data) {
                     </button>
                 </td>
             `;
-            tableBody.appendChild(row);
             
             // Add event listeners
             row.querySelector('.view-documents-btn').addEventListener('click', function() {
@@ -1863,7 +2095,14 @@ function displayCollections(data) {
                     () => deleteCollection(this.dataset.collection)
                 );
             });
-        });
+            
+            rows.push(row);
+        }
+        
+        // Clear loading message and add all rows
+        tableBody.innerHTML = '';
+        rows.forEach(row => tableBody.appendChild(row));
+        
     } else {
         tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No collections found</td></tr>';
     }

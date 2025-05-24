@@ -41,7 +41,7 @@ rbac_system_t* rbac_minimal_init(database_t* db, const char* path) {
     }
     
     json_object_set(admin_role, "id", json_create_string("admin"));
-    json_object_set(admin_role, "name", json_create_string("Administrator"));
+    json_object_set(admin_role, "name", json_create_string("admin"));
     json_object_set(admin_role, "permissions", json_create_object());
     json_object_set(admin_role, "users", json_create_array());
     

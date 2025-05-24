@@ -14,6 +14,11 @@
 #include <errno.h> /* For errno and error codes */
 #include <unistd.h> /* For getcwd */
 
+#ifdef USE_QUICKJS
+/* Include QuickJS directly to ensure we have all definitions */
+#include "quickjs/quickjs.h"
+#endif
+
 /* This file contains the JavaScript engine implementation using QuickJS.
  * When USE_QUICKJS is defined, we provide the full implementation.
  * When USE_QUICKJS is not defined, we provide stub implementations that return appropriate error codes.
@@ -176,8 +181,47 @@ js_engine_t* js_engine_init(database_t *db) {
         return NULL;
     }
     
+    LOG_DEBUG("Skipping QuickJS standard library to debug initialization issue");
+    
+    /* Create a simple console object without using std library */
+    LOG_DEBUG("Creating minimal console object");
+    const char *console_code = 
+        "globalThis.console = {\n"
+        "  log: function() { return 'console.log called'; }\n"
+        "};\n";
+    
+    JSValue console_ret = JS_Eval(engine->ctx, console_code, strlen(console_code), "<console>", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(console_ret)) {
+        LOG_ERROR("Failed to create console object");
+        JSValue exception = JS_GetException(engine->ctx);
+        const char *str = JS_ToCString(engine->ctx, exception);
+        LOG_ERROR("Console error: %s", str ? str : "unknown");
+        JS_FreeCString(engine->ctx, str);
+        JS_FreeValue(engine->ctx, exception);
+    } else {
+        LOG_DEBUG("Console object created successfully");
+    }
+    JS_FreeValue(engine->ctx, console_ret);
+    
     /* Register database functions */
-    js_register_db_functions(engine);
+    LOG_DEBUG("Skipping database function registration for debugging");
+    // js_register_db_functions(engine);
+    // LOG_DEBUG("Database functions registered");
+    
+    /* Test the context with a simple eval */
+    LOG_DEBUG("Testing JS context with simple eval");
+    JSValue test = JS_Eval(engine->ctx, "123", 3, "<test>", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(test)) {
+        LOG_ERROR("JS context test failed - context may be corrupted");
+        JSValue exception = JS_GetException(engine->ctx);
+        const char *str = JS_ToCString(engine->ctx, exception);
+        LOG_ERROR("Test error: %s", str ? str : "unknown");
+        JS_FreeCString(engine->ctx, str);
+        JS_FreeValue(engine->ctx, exception);
+    } else {
+        LOG_DEBUG("JS context test passed");
+    }
+    JS_FreeValue(engine->ctx, test);
     
     return engine;
 }
@@ -228,19 +272,50 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     }
     
     LOG_DEBUG("Evaluating JavaScript: %s", script);
+    LOG_DEBUG("Script length: %zu", strlen(script));
+    LOG_DEBUG("Context pointer: %p", engine->ctx);
+    LOG_DEBUG("Runtime pointer: %p", engine->rt);
     
     JSValue val = JS_Eval(engine->ctx, script, strlen(script), "<input>", JS_EVAL_TYPE_GLOBAL);
     
+    LOG_DEBUG("JS_Eval returned, checking result");
+    
+    /* Check if the evaluation failed */
     if (JS_IsException(val)) {
+        LOG_DEBUG("Exception detected");
+        
+        /* Try to get the exception */
         JSValue exception = JS_GetException(engine->ctx);
-        const char *str = JS_ToCString(engine->ctx, exception);
-        js_set_error(engine, str);
-        LOG_ERROR("JavaScript evaluation error: %s", str);
-        JS_FreeCString(engine->ctx, str);
+        
+        /* Try multiple approaches to get error details */
+        const char *error_msg = NULL;
+        
+        /* First, try to convert directly to string */
+        if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
+            error_msg = JS_ToCString(engine->ctx, exception);
+        }
+        
+        /* If that failed, try to stringify the value itself */
+        if (!error_msg) {
+            error_msg = JS_ToCString(engine->ctx, val);
+        }
+        
+        /* Set the error message */
+        if (error_msg) {
+            js_set_error(engine, error_msg);
+            LOG_ERROR("JavaScript evaluation error: %s", error_msg);
+            JS_FreeCString(engine->ctx, error_msg);
+        } else {
+            LOG_ERROR("JavaScript evaluation failed but could not get error details");
+            js_set_error(engine, "JavaScript evaluation failed");
+        }
+        
         JS_FreeValue(engine->ctx, exception);
         JS_FreeValue(engine->ctx, val);
         return 0;
     }
+    
+    LOG_DEBUG("No exception, eval successful");
     
     if (result) {
         if (JS_IsNull(val) || JS_IsUndefined(val)) {

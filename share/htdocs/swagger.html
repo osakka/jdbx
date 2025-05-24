@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JSONdb API Documentation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .topbar {
+            display: none !important;
+        }
+        .swagger-ui .info {
+            margin: 20px 0;
+        }
+        .swagger-ui .info .title {
+            font-size: 36px;
+            color: #667eea;
+        }
+        /* Light theme customization */
+        .swagger-ui {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .swagger-ui .opblock.opblock-post {
+            border-color: #49cc90;
+            background: rgba(73,204,144,.05);
+        }
+        .swagger-ui .opblock.opblock-post .opblock-summary {
+            border-color: #49cc90;
+        }
+        .swagger-ui .opblock.opblock-get {
+            border-color: #61affe;
+            background: rgba(97,175,254,.05);
+        }
+        .swagger-ui .opblock.opblock-get .opblock-summary {
+            border-color: #61affe;
+        }
+        .swagger-ui .opblock.opblock-put {
+            border-color: #fca130;
+            background: rgba(252,161,48,.05);
+        }
+        .swagger-ui .opblock.opblock-put .opblock-summary {
+            border-color: #fca130;
+        }
+        .swagger-ui .opblock.opblock-delete {
+            border-color: #f93e3e;
+            background: rgba(249,62,62,.05);
+        }
+        .swagger-ui .opblock.opblock-delete .opblock-summary {
+            border-color: #f93e3e;
+        }
+        /* Navigation */
+        .nav-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+            display: flex;
+            align-items: center;
+        }
+        .nav-header h1 i {
+            color: #667eea;
+            margin-right: 10px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        .nav-links a {
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 16px;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        .nav-links a.active {
+            color: #667eea;
+            font-weight: 500;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <div class="nav-header">
+        <h1><i class="bi bi-book"></i> JSONdb API Documentation</h1>
+        <div class="nav-links">
+            <a href="/admin.html"><i class="bi bi-speedometer2"></i> Admin</a>
+            <a href="/swagger.html" class="active"><i class="bi bi-book"></i> API Docs</a>
+            <a href="/demo.html"><i class="bi bi-cart3"></i> Demo</a>
+        </div>
+    </div>
+    
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+    <script>
+        // Initialize Swagger UI
+        window.onload = function() {
+            // Get the API specification
+            fetch('/api/openapi.json')
+                .then(response => response.json())
+                .then(spec => {
+                    window.ui = SwaggerUIBundle({
+                        spec: spec,
+                        dom_id: '#swagger-ui',
+                        deepLinking: true,
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIStandalonePreset
+                        ],
+                        plugins: [
+                            SwaggerUIBundle.plugins.DownloadUrl
+                        ],
+                        layout: "StandaloneLayout",
+                        defaultModelsExpandDepth: 0,
+                        defaultModelExpandDepth: 1,
+                        tryItOutEnabled: true,
+                        supportedSubmitMethods: ['get', 'post', 'put', 'delete'],
+                        onComplete: function() {
+                            // Add auth token if available
+                            const token = localStorage.getItem('jsondb_auth_token');
+                            if (token) {
+                                ui.preauthorizeApiKey('bearerAuth', token);
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading API spec:', error);
+                    document.getElementById('swagger-ui').innerHTML = `
+                        <div style="padding: 40px; text-align: center;">
+                            <h2>Error Loading API Documentation</h2>
+                            <p>Could not load the OpenAPI specification.</p>
+                            <p style="color: #666;">Make sure the server is running and the /api/openapi.json endpoint is available.</p>
+                        </div>
+                    `;
+                });
+        };
+    </script>
+</body>
+</html>

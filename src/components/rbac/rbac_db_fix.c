@@ -45,7 +45,7 @@ int rbac_db_save_fixed(database_t* db, rbac_system_t* rbac) {
         LOG_DEBUG("Creating default admin role");
         json_value_t* admin_role = json_create_object();
         json_object_set(admin_role, "id", json_create_string("admin"));
-        json_object_set(admin_role, "name", json_create_string("Administrator"));
+        json_object_set(admin_role, "name", json_create_string("admin"));
         json_object_set(admin_role, "permissions", json_create_object());
         json_object_set(admin_role, "users", json_create_array());
         

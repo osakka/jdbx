@@ -24,7 +24,7 @@ logger_config_t* g_logger = NULL;
 http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request);
 
 /* API routes */
-static api_route_t routes[] = {
+api_route_t routes[] = {
     /* Authentication routes */
     {"/api/auth/login", HTTP_POST, original_api_handle_login, 0},
     {"/api/auth/register", HTTP_POST, api_handle_register, 0},
@@ -69,6 +69,9 @@ static api_route_t routes[] = {
     
     /* System info routes */
     {"/api/system/info", HTTP_GET, api_handle_system_info, 1},
+    
+    /* OpenAPI specification route */
+    {"/api/openapi.json", HTTP_GET, api_handle_openapi_spec, 0},
     
     /* Data visualization routes */
     {"/api/visualization/collection-stats", HTTP_GET, api_handle_visualization_collection_stats, 1},
@@ -419,8 +422,13 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
                               decoded->payload->exp);
                     
                     /* Check for token expiration */
-                    if (decoded->payload->exp > 0 && time(NULL) > decoded->payload->exp) {
-                        LOG_ERROR("Token has expired");
+                    time_t current_time = time(NULL);
+                    if (decoded->payload->exp > 0 && current_time > decoded->payload->exp) {
+                        LOG_ERROR("Token has expired: current_time=%ld, exp=%ld, diff=%ld", 
+                                  current_time, decoded->payload->exp, current_time - decoded->payload->exp);
+                    } else {
+                        LOG_DEBUG("Token is valid: current_time=%ld, exp=%ld, remaining=%ld seconds",
+                                  current_time, decoded->payload->exp, decoded->payload->exp - current_time);
                     }
                 }
                 

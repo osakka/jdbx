@@ -488,15 +488,15 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
     }
     
     if (token->payload->exp > 0) {
-        json_object_set(payload_json, "exp", json_create_number(token->payload->exp));
+        json_object_set(payload_json, "exp", json_create_integer(token->payload->exp));
     }
     
     if (token->payload->nbf > 0) {
-        json_object_set(payload_json, "nbf", json_create_number(token->payload->nbf));
+        json_object_set(payload_json, "nbf", json_create_integer(token->payload->nbf));
     }
     
     if (token->payload->iat > 0) {
-        json_object_set(payload_json, "iat", json_create_number(token->payload->iat));
+        json_object_set(payload_json, "iat", json_create_integer(token->payload->iat));
     }
     
     if (token->payload->jti) {

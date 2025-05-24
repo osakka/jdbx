@@ -84,6 +84,9 @@ http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* r
 /* System information handlers */
 http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* request);
 
+/* OpenAPI specification handler */
+http_response_t* api_handle_openapi_spec(api_context_t* ctx, http_request_t* request);
+
 /* Data visualization handlers */
 http_response_t* api_handle_visualization_collection_stats(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_visualization_document_types(api_context_t* ctx, http_request_t* request);

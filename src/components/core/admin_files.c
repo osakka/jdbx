@@ -7,6 +7,11 @@
 
 /* Check if path is an admin route */
 int is_admin_route(const char* path) {
+    /* API routes are NOT admin routes */
+    if (strncmp(path, "/api/", 5) == 0) {
+        return 0;
+    }
+    
     /* Root path redirects to admin */
     if (strcmp(path, "/") == 0) {
         return 1;
@@ -18,9 +23,19 @@ int is_admin_route(const char* path) {
     }
     
     /* Check for admin paths */
-    return (strncmp(path, "/admin", 6) == 0) || 
-           (strncmp(path, "/css/", 5) == 0) || 
-           (strncmp(path, "/js/", 4) == 0);
+    if ((strncmp(path, "/admin", 6) == 0) || 
+        (strncmp(path, "/css/", 5) == 0) || 
+        (strncmp(path, "/js/", 4) == 0)) {
+        return 1;
+    }
+    
+    /* Also allow any file with an extension (static files) */
+    const char* ext = strrchr(path, '.');
+    if (ext && ext != path) {
+        return 1;
+    }
+    
+    return 0;
 }
 
 /* Get file extension from path */
