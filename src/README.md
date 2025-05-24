@@ -10,7 +10,7 @@ This directory contains the source code for the JSONdb project.
   - `database/`: Database operations and storage
   - `js/`: JavaScript engine integration
   - `query/`: Query language implementation
-  - `rbac/`: Role-based access control
+  - `rbac/`: Role-based access control with database-backed storage and UUID support
   - `transaction/`: Transaction management
   - `utils/`: Utility functions and helpers
 
