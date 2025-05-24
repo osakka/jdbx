@@ -36,43 +36,90 @@ static http_response_t* create_error_response(const char* message, int status_co
     return response;
 }
 
-/* Helper function to extract a parameter from the URL path */
+/* Helper function to extract a parameter from the URL path by name */
 static char* extract_path_parameter(const char* path, const char* param_name) {
     if (!path || !param_name) {
         return NULL;
     }
     
-    /* For now, we'll use a simple approach for role/user IDs
-     * Path pattern: /api/rbac/roles/:id or /api/rbac/users/:id
-     * We'll extract the last segment after the last '/'
-     */
+    /* Handle different parameter extraction patterns */
     
-    /* Find the last '/' in the path */
-    const char* last_slash = strrchr(path, '/');
-    if (!last_slash || *(last_slash + 1) == '\0') {
+    /* Pattern: /api/rbac/roles/:id/users/:user_id */
+    if (strstr(path, "/users/") && strcmp(param_name, "user_id") == 0) {
+        /* Extract user_id: everything after "/users/" */
+        const char* users_pos = strstr(path, "/users/");
+        if (users_pos) {
+            const char* user_id_start = users_pos + 7; /* length of "/users/" */
+            size_t user_id_len = strlen(user_id_start);
+            
+            /* Check for additional path segments */
+            const char* next_slash = strchr(user_id_start, '/');
+            if (next_slash) {
+                user_id_len = next_slash - user_id_start;
+            }
+            
+            if (user_id_len > 0) {
+                char* user_id = (char*)malloc(user_id_len + 1);
+                if (user_id) {
+                    strncpy(user_id, user_id_start, user_id_len);
+                    user_id[user_id_len] = '\0';
+                    return user_id;
+                }
+            }
+        }
         return NULL;
     }
     
-    /* Extract everything after the last slash */
-    const char* id_start = last_slash + 1;
-    size_t id_len = strlen(id_start);
-    
-    /* Check if there's another path segment (shouldn't be for :id parameter) */
-    const char* next_slash = strchr(id_start, '/');
-    if (next_slash) {
-        id_len = next_slash - id_start;
+    /* Pattern: /api/rbac/roles/:id (role ID) or /api/rbac/users/:id (user ID) */
+    if (strcmp(param_name, "id") == 0) {
+        /* For role ID in /api/rbac/roles/:id/users/:user_id pattern */
+        if (strstr(path, "/users/")) {
+            /* Extract role ID: between "/roles/" and "/users/" */
+            const char* roles_pos = strstr(path, "/roles/");
+            const char* users_pos = strstr(path, "/users/");
+            
+            if (roles_pos && users_pos && users_pos > roles_pos) {
+                const char* role_id_start = roles_pos + 7; /* length of "/roles/" */
+                size_t role_id_len = users_pos - role_id_start;
+                
+                if (role_id_len > 0) {
+                    char* role_id = (char*)malloc(role_id_len + 1);
+                    if (role_id) {
+                        strncpy(role_id, role_id_start, role_id_len);
+                        role_id[role_id_len] = '\0';
+                        return role_id;
+                    }
+                }
+            }
+            return NULL;
+        }
+        
+        /* For simple patterns: extract the last segment */
+        const char* last_slash = strrchr(path, '/');
+        if (!last_slash || *(last_slash + 1) == '\0') {
+            return NULL;
+        }
+        
+        const char* id_start = last_slash + 1;
+        size_t id_len = strlen(id_start);
+        
+        /* Check for additional path segments */
+        const char* next_slash = strchr(id_start, '/');
+        if (next_slash) {
+            id_len = next_slash - id_start;
+        }
+        
+        if (id_len > 0) {
+            char* id = (char*)malloc(id_len + 1);
+            if (id) {
+                strncpy(id, id_start, id_len);
+                id[id_len] = '\0';
+                return id;
+            }
+        }
     }
     
-    /* Allocate and copy the ID */
-    char* id = (char*)malloc(id_len + 1);
-    if (!id) {
-        return NULL;
-    }
-    
-    strncpy(id, id_start, id_len);
-    id[id_len] = '\0';
-    
-    return id;
+    return NULL;
 }
 
 

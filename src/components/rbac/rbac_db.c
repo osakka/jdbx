@@ -1110,6 +1110,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     if (!user_roles || user_roles->type != JSON_ARRAY) {
         json_free(user_doc);
         json_free(role_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
@@ -1118,6 +1120,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     if (!role_users || role_users->type != JSON_ARRAY) {
         json_free(user_doc);
         json_free(role_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
@@ -1126,7 +1130,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     json_value_t* updated_roles = json_create_array();
     for (size_t i = 0; i < user_roles->value.array.size; i++) {
         json_value_t* id = user_roles->value.array.items[i];
-        if (id->type == JSON_STRING && strcmp(id->value.string, role_id) != 0) {
+        if (id->type == JSON_STRING && strcmp(id->value.string, actual_role_id) != 0) {
             json_array_append(updated_roles, json_create_string(id->value.string));
         } else {
             user_role_found = 1;
@@ -1136,7 +1140,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     /* Update user document if role was found */
     if (user_role_found) {
         json_object_set(user_doc, "roles", updated_roles);
-        json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_doc);
+        json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, actual_user_id, user_doc);
         if (update_result) {
             json_free(update_result);
         } else {
@@ -1154,7 +1158,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     json_value_t* updated_users = json_create_array();
     for (size_t i = 0; i < role_users->value.array.size; i++) {
         json_value_t* id = role_users->value.array.items[i];
-        if (id->type == JSON_STRING && strcmp(id->value.string, user_id) != 0) {
+        if (id->type == JSON_STRING && strcmp(id->value.string, actual_user_id) != 0) {
             json_array_append(updated_users, json_create_string(id->value.string));
         } else {
             role_user_found = 1;
@@ -1164,7 +1168,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     /* Update role document if user was found */
     if (role_user_found) {
         json_object_set(role_doc, "users", updated_users);
-        json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
+        json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_role_id, role_doc);
         if (update_result) {
             json_free(update_result);
         } else {
@@ -1179,6 +1183,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     
     json_free(user_doc);
     json_free(role_doc);
+    free(actual_user_id);
+    free(actual_role_id);
     
     return user_role_found || role_user_found;
 }
