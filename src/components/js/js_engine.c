@@ -216,8 +216,18 @@ void js_engine_free(js_engine_t *engine) {
 /* Evaluate JavaScript code */
 int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     if (!engine || !script) {
+        if (engine) {
+            js_set_error(engine, "Invalid script parameter");
+        }
         return 0;
     }
+    
+    if (!engine->ctx) {
+        js_set_error(engine, "JavaScript context not initialized");
+        return 0;
+    }
+    
+    LOG_DEBUG("Evaluating JavaScript: %s", script);
     
     JSValue val = JS_Eval(engine->ctx, script, strlen(script), "<input>", JS_EVAL_TYPE_GLOBAL);
     
@@ -225,6 +235,7 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
         JSValue exception = JS_GetException(engine->ctx);
         const char *str = JS_ToCString(engine->ctx, exception);
         js_set_error(engine, str);
+        LOG_ERROR("JavaScript evaluation error: %s", str);
         JS_FreeCString(engine->ctx, str);
         JS_FreeValue(engine->ctx, exception);
         JS_FreeValue(engine->ctx, val);

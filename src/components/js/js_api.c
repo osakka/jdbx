@@ -63,8 +63,10 @@ void js_api_init(database_t *db) {
 
     if (g_js_engine == NULL) {
         fprintf(stderr, "Warning: Failed to initialize JavaScript engine\n");
+        LOG_ERROR("Failed to initialize JavaScript engine");
     } else {
-        printf("JavaScript engine initialized\n");
+        printf("JavaScript engine initialized successfully\n");
+        LOG_INFO("JavaScript engine initialized successfully");
     }
 #else /* JavaScript functionality disabled */
     fprintf(stderr, "JavaScript support is not available (disabled in this build)\n");
@@ -486,6 +488,13 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
     }
 
     const char* code = code_val->value.string;
+
+    /* Check if JS engine is initialized */
+    if (!g_js_engine) {
+        json_free(body);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                                  "{\"error\":\"JavaScript engine not initialized\"}", "application/json");
+    }
 
     /* Evaluate JavaScript code */
     char* result_str = NULL;

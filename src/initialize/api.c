@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "api/rbac_api.h"
 #include "api/health_api.h"
+#include "js/js_api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,10 @@ init_status_t init_api(server_config_t* config, database_t* database,
         INIT_LOG_FAILURE("API", "Failed to create API context");
         return INIT_API_ERROR;
     }
+    
+    /* Initialize JavaScript API */
+    INIT_LOG_PROGRESS("API", "Initializing JavaScript engine");
+    js_api_init(database);
     
     /* Register RBAC API routes */
     INIT_LOG_PROGRESS("API", "Registering RBAC API routes");
