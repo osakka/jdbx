@@ -1,4 +1,5 @@
 #include "rbac/jwt.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -701,18 +702,30 @@ jwt_token_t* jwt_decode(const char* token_str) {
     }
     
     json_value_t* exp = json_object_get(payload, "exp");
-    if (exp && exp->type == JSON_NUMBER) {
-        token->payload->exp = (time_t)exp->value.number;
+    if (exp && (exp->type == JSON_NUMBER || exp->type == JSON_INTEGER)) {
+        if (exp->type == JSON_INTEGER) {
+            token->payload->exp = (time_t)exp->value.integer;
+        } else {
+            token->payload->exp = (time_t)exp->value.number;
+        }
     }
     
     json_value_t* nbf = json_object_get(payload, "nbf");
-    if (nbf && nbf->type == JSON_NUMBER) {
-        token->payload->nbf = (time_t)nbf->value.number;
+    if (nbf && (nbf->type == JSON_NUMBER || nbf->type == JSON_INTEGER)) {
+        if (nbf->type == JSON_INTEGER) {
+            token->payload->nbf = (time_t)nbf->value.integer;
+        } else {
+            token->payload->nbf = (time_t)nbf->value.number;
+        }
     }
     
     json_value_t* iat = json_object_get(payload, "iat");
-    if (iat && iat->type == JSON_NUMBER) {
-        token->payload->iat = (time_t)iat->value.number;
+    if (iat && (iat->type == JSON_NUMBER || iat->type == JSON_INTEGER)) {
+        if (iat->type == JSON_INTEGER) {
+            token->payload->iat = (time_t)iat->value.integer;
+        } else {
+            token->payload->iat = (time_t)iat->value.number;
+        }
     }
     
     json_value_t* jti = json_object_get(payload, "jti");
@@ -768,8 +781,12 @@ int jwt_verify(const char* token_str, const char* secret) {
     /* Decode token */
     jwt_token_t* token = jwt_decode(token_str);
     if (!token) {
+        LOG_ERROR("JWT: Failed to decode token");
         return 0;
     }
+    LOG_TRACE("JWT: Token decoded successfully - sub: %s, exp: %ld", 
+              token->payload->sub ? token->payload->sub : "NULL", 
+              (long)token->payload->exp);
     
     /* Check token validity */
     time_t now = time(NULL);
@@ -819,7 +836,7 @@ int jwt_verify(const char* token_str, const char* secret) {
     
     sprintf(header_payload, "%s.%s", header_b64, payload_b64);
     
-    /* Generate signature */
+    /* Generate expected signature for verification */
     char* signature = jwt_sign(header_payload, secret, token->header->alg);
     if (!signature) {
         jwt_free(token);
@@ -832,7 +849,7 @@ int jwt_verify(const char* token_str, const char* secret) {
     size_t signature_len = strlen(signature);
     size_t signature_b64_len = strlen(signature_b64);
     
-    /* If lengths differ, verification fails */
+    /* Check signature lengths match */
     if (signature_len != signature_b64_len) {
         jwt_free(token);
         free(token_copy);
@@ -846,7 +863,7 @@ int jwt_verify(const char* token_str, const char* secret) {
     for (size_t i = 0; i < signature_len; i++) {
         if (signature[i] != signature_b64[i]) {
             result = 0;
-            /* Don't break early - this would create a timing side-channel */
+            // Don't break early - this would create a timing side-channel
         }
     }
     
@@ -856,6 +873,7 @@ int jwt_verify(const char* token_str, const char* secret) {
     free(header_payload);
     free(signature);
     
+    LOG_TRACE("JWT: Verification result: %d", result);
     return result;
 }
 

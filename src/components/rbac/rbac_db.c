@@ -1,4 +1,5 @@
 #include "rbac/rbac_db.h"
+#include "database/database.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,11 +120,16 @@ int rbac_db_exists(database_t* db) {
 /* Convert user document to rbac_user_t */
 static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
     if (!user_doc || user_doc->type != JSON_OBJECT) {
+        LOG_ERROR("RBAC_DB: Invalid user document");
         return NULL;
     }
     
-    /* Get user fields */
-    json_value_t* id_val = json_object_get(user_doc, "id");
+    /* Get user fields - try both "id" and "_id" */
+    json_value_t* id_val = json_object_get(user_doc, "_id");
+    if (!id_val || id_val->type != JSON_STRING) {
+        id_val = json_object_get(user_doc, "id");
+    }
+    
     json_value_t* username_val = json_object_get(user_doc, "username");
     json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
     json_value_t* roles_val = json_object_get(user_doc, "roles");
@@ -132,12 +138,15 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
         !username_val || username_val->type != JSON_STRING ||
         !password_hash_val || password_hash_val->type != JSON_STRING ||
         !roles_val || roles_val->type != JSON_ARRAY) {
+        LOG_ERROR("RBAC_DB: Missing or invalid user fields - id=%p, username=%p, password_hash=%p, roles=%p",
+                  id_val, username_val, password_hash_val, roles_val);
         return NULL;
     }
     
     /* Create user structure */
     rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
     if (!user) {
+        LOG_ERROR("RBAC_DB: Failed to allocate memory for user");
         return NULL;
     }
     
@@ -154,6 +163,9 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
             json_array_append(user->roles, json_create_string(role_id->value.string));
         }
     }
+    
+    LOG_TRACE("RBAC_DB: Successfully created rbac_user_t - id: %s, username: %s, roles: %zu",
+              user->id, user->username, user->roles->value.array.size);
     
     return user;
 }
@@ -535,7 +547,10 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
 
 /* Get a user from the database by username */
 rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) {
+    LOG_TRACE("RBAC_DB: rbac_db_get_user_by_username called with username: %s", username);
+    
     if (!db || !username) {
+        LOG_ERROR("RBAC_DB: Invalid parameters - db=%p, username=%s", db, username ? username : "NULL");
         return NULL;
     }
     
@@ -547,16 +562,33 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
     json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
     json_free(query);
     
-    if (!result || result->type != JSON_ARRAY || result->value.array.size == 0) {
+    if (!result || result->type != JSON_OBJECT) {
+        LOG_ERROR("RBAC_DB: Query failed or invalid result type");
         if (result) json_free(result);
         return NULL;
     }
     
+    /* Get documents array from result */
+    json_value_t* documents = json_object_get(result, "documents");
+    if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
+        LOG_TRACE("RBAC_DB: No users found matching username: %s", username);
+        json_free(result);
+        return NULL;
+    }
+    
+    LOG_TRACE("RBAC_DB: Found %zu users matching username: %s", documents->value.array.size, username);
+    
     /* Get first matching user */
-    json_value_t* user_doc = result->value.array.items[0];
+    json_value_t* user_doc = documents->value.array.items[0];
     
     /* Convert to rbac_user_t */
     rbac_user_t* user = user_doc_to_rbac_user(user_doc);
+    if (user) {
+        LOG_TRACE("RBAC_DB: Successfully converted user document to rbac_user_t - id: %s", user->id);
+    } else {
+        LOG_ERROR("RBAC_DB: Failed to convert user document to rbac_user_t");
+    }
+    
     json_free(result);
     
     return user;
@@ -647,17 +679,93 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
     return role;
 }
 
+/* Helper function to find role by UUID */
+static json_value_t* find_role_by_uuid(database_t* db, const char* uuid) {
+    if (!db || !uuid) {
+        return NULL;
+    }
+    
+    /* Query for role with matching UUID */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "id", json_create_string(uuid));
+    
+    json_value_t* result = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+    json_free(query);
+    
+    if (!result || result->type != JSON_OBJECT) {
+        if (result) json_free(result);
+        return NULL;
+    }
+    
+    json_value_t* documents = json_object_get(result, "documents");
+    if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
+        json_free(result);
+        return NULL;
+    }
+    
+    /* Clone the first matching document */
+    json_value_t* role_doc = json_clone(documents->value.array.items[0]);
+    json_free(result);
+    
+    return role_doc;
+}
+
+/* Helper function to find user by UUID */
+static json_value_t* find_user_by_uuid(database_t* db, const char* uuid) {
+    if (!db || !uuid) {
+        return NULL;
+    }
+    
+    /* Query for user with matching UUID */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "id", json_create_string(uuid));
+    
+    json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+    json_free(query);
+    
+    if (!result || result->type != JSON_OBJECT) {
+        if (result) json_free(result);
+        return NULL;
+    }
+    
+    json_value_t* documents = json_object_get(result, "documents");
+    if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
+        json_free(result);
+        return NULL;
+    }
+    
+    /* Clone the first matching document */
+    json_value_t* user_doc = json_clone(documents->value.array.items[0]);
+    json_free(result);
+    
+    return user_doc;
+}
+
 /* Delete a role from the database */
 int rbac_db_delete_role(database_t* db, const char* role_id) {
     if (!db || !role_id) {
         return 0;
     }
     
-    /* Get role document */
+    /* Get role document - first try as document ID */
     json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+    char* actual_doc_id = NULL;
+    
+    /* If not found, try as UUID */
     if (!role_doc) {
-        LOG_ERROR("Role %s not found", role_id);
-        return 0;
+        role_doc = find_role_by_uuid(db, role_id);
+        if (!role_doc) {
+            LOG_ERROR("Role %s not found", role_id);
+            return 0;
+        }
+        
+        /* Get the actual document ID */
+        json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+        if (doc_id_val && doc_id_val->type == JSON_STRING) {
+            actual_doc_id = strdup(doc_id_val->value.string);
+        }
+    } else {
+        actual_doc_id = strdup(role_id);
     }
     
     /* Get role users */
@@ -700,8 +808,74 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
     
     json_free(role_doc);
     
-    /* Delete role document */
-    return db_delete_document(db, RBAC_ROLES_COLLECTION, role_id);
+    /* Delete role document using actual document ID */
+    if (!actual_doc_id) {
+        LOG_ERROR("Failed to get document ID for role %s", role_id);
+        return 0;
+    }
+    
+    int result = db_delete_document(db, RBAC_ROLES_COLLECTION, actual_doc_id);
+    free(actual_doc_id);
+    
+    return result;
+}
+
+/* Update a role in the database */
+int rbac_db_update_role(database_t* db, const char* role_id, const char* name, json_value_t* permissions) {
+    if (!db || !role_id) {
+        return 0;
+    }
+    
+    /* Get existing role document - first try as document ID */
+    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+    char* actual_doc_id = NULL;
+    
+    /* If not found, try as UUID */
+    if (!role_doc) {
+        role_doc = find_role_by_uuid(db, role_id);
+        if (!role_doc) {
+            LOG_ERROR("Role %s not found", role_id);
+            return 0;
+        }
+        
+        /* Get the actual document ID */
+        json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+        if (doc_id_val && doc_id_val->type == JSON_STRING) {
+            actual_doc_id = strdup(doc_id_val->value.string);
+        }
+    } else {
+        actual_doc_id = strdup(role_id);
+    }
+    
+    if (!actual_doc_id) {
+        json_free(role_doc);
+        LOG_ERROR("Failed to get document ID for role %s", role_id);
+        return 0;
+    }
+    
+    /* Update name if provided */
+    if (name) {
+        json_object_set(role_doc, "name", json_create_string(name));
+    }
+    
+    /* Update permissions if provided */
+    if (permissions) {
+        json_object_set(role_doc, "permissions", json_clone(permissions));
+    }
+    
+    /* Update the document in database */
+    json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_doc_id, role_doc);
+    
+    json_free(role_doc);
+    free(actual_doc_id);
+    
+    if (!update_result) {
+        LOG_ERROR("Failed to update role document in database");
+        return 0;
+    }
+    
+    json_free(update_result);
+    return 1;
 }
 
 /* Get a role from the database by ID */
@@ -710,10 +884,15 @@ rbac_role_t* rbac_db_get_role(database_t* db, const char* role_id) {
         return NULL;
     }
     
-    /* Get role document */
+    /* First try as document ID */
     json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+    
+    /* If not found, try as UUID */
     if (!role_doc) {
-        return NULL;
+        role_doc = find_role_by_uuid(db, role_id);
+        if (!role_doc) {
+            return NULL;
+        }
     }
     
     /* Convert to rbac_role_t */
@@ -1057,23 +1236,32 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
 /* Check if a user has a permission for a resource in the database */
 int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_type_t resource_type,
                            const char* resource_id, rbac_permission_t permission) {
+    LOG_TRACE("RBAC_DB: check_permission called - user_id=%s, resource_type=%d, resource_id=%s, permission=%d",
+              user_id, resource_type, resource_id, permission);
+              
     if (!db || !user_id || !resource_id) {
+        LOG_ERROR("RBAC_DB: Invalid parameters for permission check");
         return 0;
     }
     
     /* Get user document */
     json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
     if (!user_doc) {
-        LOG_ERROR("User %s not found", user_id);
+        LOG_ERROR("RBAC_DB: User %s not found", user_id);
         return 0;
     }
+    
+    LOG_TRACE("RBAC_DB: User document retrieved for %s", user_id);
     
     /* Get user roles */
     json_value_t* roles = json_object_get(user_doc, "roles");
     if (!roles || roles->type != JSON_ARRAY) {
+        LOG_ERROR("RBAC_DB: User %s has no roles or invalid roles format", user_id);
         json_free(user_doc);
         return 0;
     }
+    
+    LOG_TRACE("RBAC_DB: User %s has %zu roles", user_id, roles->value.array.size);
     
     /* Create resource permission key */
     char* key = get_resource_permission_key(resource_type, resource_id);
@@ -1090,6 +1278,8 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
         return 0;
     }
     
+    LOG_TRACE("RBAC_DB: Looking for permission keys: %s or %s", key, wildcard_key);
+    
     /* Check permission in each role */
     int has_permission = 0;
     for (size_t i = 0; i < roles->value.array.size; i++) {
@@ -1103,21 +1293,39 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
         /* Get role document */
         json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
         if (!role_doc || role_doc->type != JSON_OBJECT) {
+            LOG_TRACE("RBAC_DB: Role %s not found or invalid", role_id);
             continue;
         }
+        
+        LOG_TRACE("RBAC_DB: Checking permissions in role %s", role_id);
         
         /* Get role permissions */
         json_value_t* permissions = json_object_get(role_doc, "permissions");
         if (!permissions || permissions->type != JSON_OBJECT) {
+            LOG_TRACE("RBAC_DB: Role %s has no permissions or invalid format", role_id);
             json_free(role_doc);
             continue;
         }
         
+        /* Log all permission keys in the role */
+        LOG_TRACE("RBAC_DB: Role %s has %zu permission entries", role_id, permissions->value.object.size);
+        for (size_t j = 0; j < permissions->value.object.size; j++) {
+            LOG_TRACE("RBAC_DB: Permission key: %s", permissions->value.object.entries[j].key);
+        }
+        
         /* Check specific resource permission */
         json_value_t* perm_val = json_object_get(permissions, key);
-        if (perm_val && perm_val->type == JSON_NUMBER) {
-            int perm = (int)perm_val->value.number;
+        if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+            int perm;
+            if (perm_val->type == JSON_INTEGER) {
+                perm = (int)perm_val->value.integer;
+                LOG_TRACE("RBAC_DB: Found INTEGER permission for key %s: %d (checking for %d)", key, perm, permission);
+            } else {
+                perm = (int)perm_val->value.number;
+                LOG_TRACE("RBAC_DB: Found NUMBER permission for key %s: %d (checking for %d)", key, perm, permission);
+            }
             if ((perm & permission) == permission) {
+                LOG_TRACE("RBAC_DB: Permission granted!");
                 has_permission = 1;
                 json_free(role_doc);
                 break;
@@ -1126,13 +1334,27 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
         
         /* Check wildcard resource permission */
         perm_val = json_object_get(permissions, wildcard_key);
-        if (perm_val && perm_val->type == JSON_NUMBER) {
-            int perm = (int)perm_val->value.number;
+        LOG_TRACE("RBAC_DB: Looking up wildcard key %s, result: %p", wildcard_key, perm_val);
+        if (perm_val) {
+            LOG_TRACE("RBAC_DB: Wildcard permission value type: %d (JSON_NUMBER=%d)", perm_val->type, JSON_NUMBER);
+        }
+        if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
+            int perm;
+            if (perm_val->type == JSON_INTEGER) {
+                perm = (int)perm_val->value.integer;
+                LOG_TRACE("RBAC_DB: Found INTEGER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+            } else {
+                perm = (int)perm_val->value.number;
+                LOG_TRACE("RBAC_DB: Found NUMBER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+            }
             if ((perm & permission) == permission) {
+                LOG_TRACE("RBAC_DB: Permission granted via wildcard!");
                 has_permission = 1;
                 json_free(role_doc);
                 break;
             }
+        } else {
+            LOG_TRACE("RBAC_DB: No permission found for wildcard key %s", wildcard_key);
         }
         
         json_free(role_doc);

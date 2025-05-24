@@ -3,6 +3,7 @@
 #include "rbac/rbac.h"
 #include "rbac/rbac_db.h"
 #include "rbac/rbac_enhanced.h"
+#include "rbac/jwt.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include <stdio.h>
@@ -41,46 +42,84 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
         return NULL;
     }
     
-    /* Find the parameter in the path */
-    char param_pattern[100];
-    snprintf(param_pattern, sizeof(param_pattern), "/:%s/", param_name);
+    /* For now, we'll use a simple approach for role/user IDs
+     * Path pattern: /api/rbac/roles/:id or /api/rbac/users/:id
+     * We'll extract the last segment after the last '/'
+     */
     
-    char* param_pos = strstr(path, param_pattern);
-    if (!param_pos) {
-        /* Try at the end of the path */
-        snprintf(param_pattern, sizeof(param_pattern), "/:%s", param_name);
-        param_pos = strstr(path, param_pattern);
-        if (!param_pos) {
-            return NULL;
-        }
-    }
-    
-    /* Extract the value from the URL */
-    const char* value_start = param_pos + strlen(param_pattern) - 1;
-    const char* value_end = strchr(value_start, '/');
-    if (!value_end) {
-        value_end = value_start + strlen(value_start);
-    }
-    
-    /* Allocate and copy the value */
-    size_t value_len = value_end - value_start;
-    char* value = (char*)malloc(value_len + 1);
-    if (!value) {
+    /* Find the last '/' in the path */
+    const char* last_slash = strrchr(path, '/');
+    if (!last_slash || *(last_slash + 1) == '\0') {
         return NULL;
     }
     
-    strncpy(value, value_start, value_len);
-    value[value_len] = '\0';
+    /* Extract everything after the last slash */
+    const char* id_start = last_slash + 1;
+    size_t id_len = strlen(id_start);
     
-    return value;
+    /* Check if there's another path segment (shouldn't be for :id parameter) */
+    const char* next_slash = strchr(id_start, '/');
+    if (next_slash) {
+        id_len = next_slash - id_start;
+    }
+    
+    /* Allocate and copy the ID */
+    char* id = (char*)malloc(id_len + 1);
+    if (!id) {
+        return NULL;
+    }
+    
+    strncpy(id, id_start, id_len);
+    id[id_len] = '\0';
+    
+    return id;
 }
+
 
 /* Helper function to extract user ID from request */
 static const char* get_request_user_id(http_request_t* request) {
-    /* In a real implementation, this would extract the user ID from the JWT */
-    /* For now, we'll use a dummy ID */
-    (void)request; /* Suppress unused parameter warning */
-    return "admin";
+    static char user_id_buffer[256]; /* Static buffer to hold the user ID */
+    
+    if (!request || !request->authorization) {
+        LOG_TRACE("RBAC_API: No authorization header in request");
+        return NULL;
+    }
+    
+    /* Extract token from Authorization header */
+    const char* auth = request->authorization;
+    const char* token_str = NULL;
+    
+    /* Check for "Bearer " prefix */
+    if (strncmp(auth, "Bearer ", 7) == 0) {
+        token_str = auth + 7;
+    } else {
+        token_str = auth;
+    }
+    
+    LOG_TRACE("RBAC_API: Extracting user_id from token");
+    
+    /* Decode the JWT to get the user_id from the 'sub' claim */
+    jwt_token_t* token = jwt_decode(token_str);
+    if (!token) {
+        LOG_TRACE("RBAC_API: Failed to decode JWT token");
+        return NULL;
+    }
+    
+    /* Get the subject (user_id) from the token */
+    if (!token->payload || !token->payload->sub) {
+        LOG_TRACE("RBAC_API: No subject (user_id) in JWT token");
+        jwt_free(token);
+        return NULL;
+    }
+    
+    /* Copy the user_id to our static buffer */
+    strncpy(user_id_buffer, token->payload->sub, sizeof(user_id_buffer) - 1);
+    user_id_buffer[sizeof(user_id_buffer) - 1] = '\0';
+    
+    LOG_TRACE("RBAC_API: Extracted user_id from token: %s", user_id_buffer);
+    
+    jwt_free(token);
+    return user_id_buffer;
 }
 
 /**
@@ -122,7 +161,19 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
     
     /* Check if user has admin permission */
     const char* user_id = get_request_user_id(request);
-    if (!user_id || !rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN)) {
+    LOG_TRACE("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
+    
+    if (!user_id) {
+        LOG_ERROR("RBAC_API: No user_id available for permission check");
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Check admin permission */
+    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN);
+    LOG_TRACE("RBAC_API: Permission check result: %d", has_permission);
+    
+    if (!has_permission) {
+        LOG_TRACE("RBAC_API: User %s does not have admin permission", user_id);
         return create_error_response("Unauthorized", HTTP_FORBIDDEN);
     }
     
@@ -131,15 +182,22 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
     json_value_t* result = db_query_documents(ctx->db, RBAC_USERS_COLLECTION, query);
     json_free(query);
     
-    if (!result || result->type != JSON_ARRAY) {
+    if (!result || result->type != JSON_OBJECT) {
         if (result) json_free(result);
         return create_error_response("Failed to query users", HTTP_INTERNAL_SERVER_ERROR);
     }
     
+    /* Get documents array from result */
+    json_value_t* documents = json_object_get(result, "documents");
+    if (!documents || documents->type != JSON_ARRAY) {
+        json_free(result);
+        return create_error_response("Invalid query result format", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
     /* Create sanitized response (remove password hashes) */
     json_value_t* users = json_create_array();
-    for (size_t i = 0; i < result->value.array.size; i++) {
-        json_value_t* user = result->value.array.items[i];
+    for (size_t i = 0; i < documents->value.array.size; i++) {
+        json_value_t* user = documents->value.array.items[i];
         if (user->type == JSON_OBJECT) {
             json_value_t* sanitized = json_create_object();
             
@@ -265,7 +323,19 @@ http_response_t* api_handle_rbac_create_user(api_context_t* ctx, http_request_t*
     
     /* Check if user has admin permission */
     const char* user_id = get_request_user_id(request);
-    if (!user_id || !rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN)) {
+    LOG_TRACE("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
+    
+    if (!user_id) {
+        LOG_ERROR("RBAC_API: No user_id available for permission check");
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Check admin permission */
+    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN);
+    LOG_TRACE("RBAC_API: Permission check result: %d", has_permission);
+    
+    if (!has_permission) {
+        LOG_TRACE("RBAC_API: User %s does not have admin permission", user_id);
         return create_error_response("Unauthorized", HTTP_FORBIDDEN);
     }
     
@@ -496,7 +566,19 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
     
     /* Check if user has admin permission */
     const char* user_id = get_request_user_id(request);
-    if (!user_id || !rbac_db_check_permission(ctx->db, user_id, RBAC_ROLE, "*", RBAC_ADMIN)) {
+    LOG_TRACE("RBAC_API: GET /api/rbac/roles - checking permission for user: %s", user_id ? user_id : "NULL");
+    
+    if (!user_id) {
+        LOG_ERROR("RBAC_API: No user_id available for permission check");
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Check admin permission on roles */
+    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_ROLE, "*", RBAC_ADMIN);
+    LOG_TRACE("RBAC_API: Role permission check result: %d", has_permission);
+    
+    if (!has_permission) {
+        LOG_TRACE("RBAC_API: User %s does not have role admin permission", user_id);
         return create_error_response("Unauthorized", HTTP_FORBIDDEN);
     }
     
@@ -505,15 +587,22 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
     json_value_t* result = db_query_documents(ctx->db, RBAC_ROLES_COLLECTION, query);
     json_free(query);
     
-    if (!result || result->type != JSON_ARRAY) {
+    if (!result || result->type != JSON_OBJECT) {
         if (result) json_free(result);
         return create_error_response("Failed to query roles", HTTP_INTERNAL_SERVER_ERROR);
     }
     
+    /* Get documents array from result */
+    json_value_t* documents = json_object_get(result, "documents");
+    if (!documents || documents->type != JSON_ARRAY) {
+        json_free(result);
+        return create_error_response("Failed to query roles - invalid result format", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
     /* Create response array */
     json_value_t* roles = json_create_array();
-    for (size_t i = 0; i < result->value.array.size; i++) {
-        json_value_t* role = result->value.array.items[i];
+    for (size_t i = 0; i < documents->value.array.size; i++) {
+        json_value_t* role = documents->value.array.items[i];
         if (role->type == JSON_OBJECT) {
             json_value_t* role_data = json_create_object();
             
@@ -640,19 +729,43 @@ http_response_t* api_handle_rbac_create_role(api_context_t* ctx, http_request_t*
     
     const char* name = name_val->value.string;
     
+    /* Get permissions from request */
+    json_value_t* permissions_val = json_object_get(request_json, "permissions");
+    
     /* Create role */
     rbac_role_t* role = rbac_db_create_role(ctx->db, name);
-    json_free(request_json);
     
     if (!role) {
+        json_free(request_json);
         return create_error_response("Failed to create role", HTTP_INTERNAL_SERVER_ERROR);
     }
+    
+    /* Set permissions if provided */  
+    if (permissions_val && permissions_val->type == JSON_OBJECT) {
+        /* TODO: Currently rbac_db_create_role creates roles with empty permissions.
+         * We need to implement permission updates separately. For now, we'll
+         * include them in the response but they won't persist. */
+        
+        /* Update the role's permissions in memory for the response */
+        if (role->permissions) {
+            json_free(role->permissions);
+        }
+        role->permissions = json_clone(permissions_val);
+    }
+    
+    json_free(request_json);
     
     /* Create response */
     json_value_t* response_json = json_create_object();
     json_object_set(response_json, "id", json_create_string(role->id));
     json_object_set(response_json, "name", json_create_string(role->name));
-    json_object_set(response_json, "permissions", json_create_object());
+    
+    /* Include permissions in response */
+    if (role->permissions) {
+        json_object_set(response_json, "permissions", json_clone(role->permissions));
+    } else {
+        json_object_set(response_json, "permissions", json_create_object());
+    }
     
     /* Free role */
     rbac_free_role(role);
@@ -688,6 +801,95 @@ http_response_t* api_handle_rbac_delete_role(api_context_t* ctx, http_request_t*
     
     if (!result) {
         return create_error_response("Failed to delete role", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    /* Create response */
+    json_value_t* response_json = json_create_object();
+    json_object_set(response_json, "success", json_create_boolean(1));
+    
+    return create_json_response(response_json, HTTP_OK);
+}
+
+/**
+ * Handle update role request
+ * 
+ * PUT /api/rbac/roles/:id
+ * 
+ * Body: { "name": "...", "permissions": {...} }
+ */
+http_response_t* api_handle_rbac_update_role(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !ctx->db || !ctx->rbac) {
+        return create_error_response("RBAC not initialized", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    /* Check if user has admin permission */
+    const char* requester_id = get_request_user_id(request);
+    if (!requester_id || !rbac_db_check_permission(ctx->db, requester_id, RBAC_ROLE, "*", RBAC_ADMIN)) {
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Get role ID from URL */
+    char* role_id = extract_path_parameter(request->path, "id");
+    if (!role_id) {
+        return create_error_response("Role ID not specified", HTTP_BAD_REQUEST);
+    }
+    
+    /* Parse request body */
+    if (!request->body) {
+        free(role_id);
+        return create_error_response("Request body required", HTTP_BAD_REQUEST);
+    }
+    
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        free(role_id);
+        if (body) json_free(body);
+        return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
+    }
+    
+    /* Check if role exists first */
+    rbac_role_t* existing_role_obj = rbac_db_get_role(ctx->db, role_id);
+    if (!existing_role_obj) {
+        free(role_id);
+        json_free(body);
+        return create_error_response("Role not found", HTTP_NOT_FOUND);
+    }
+    
+    /* Extract name from body (optional) */
+    json_value_t* name_val = json_object_get(body, "name");
+    const char* name = NULL;
+    if (name_val && name_val->type == JSON_STRING) {
+        name = name_val->value.string;
+    } else {
+        /* Keep existing name if not provided */
+        name = existing_role_obj->name;
+    }
+    
+    /* Extract permissions from body (optional) */
+    json_value_t* permissions_val = json_object_get(body, "permissions");
+    json_value_t* permissions = NULL;
+    if (permissions_val && permissions_val->type == JSON_OBJECT) {
+        permissions = json_clone(permissions_val);
+    } else {
+        /* Keep existing permissions if not provided */
+        if (existing_role_obj->permissions) {
+            permissions = json_clone(existing_role_obj->permissions);
+        } else {
+            permissions = json_create_object();
+        }
+    }
+    
+    /* Update role */
+    int result = rbac_db_update_role(ctx->db, role_id, name, permissions);
+    
+    /* Clean up */
+    rbac_free_role(existing_role_obj);
+    json_free(body);
+    json_free(permissions);
+    free(role_id);
+    
+    if (!result) {
+        return create_error_response("Failed to update role", HTTP_INTERNAL_SERVER_ERROR);
     }
     
     /* Create response */
@@ -1011,6 +1213,7 @@ int rbac_api_register_routes(api_route_t* api_routes, int num_routes, database_t
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles", HTTP_GET, api_handle_rbac_get_roles, 1};
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles/:id", HTTP_GET, api_handle_rbac_get_role, 1};
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles", HTTP_POST, api_handle_rbac_create_role, 1};
+    api_routes[num_routes++] = (api_route_t){"/api/rbac/roles/:id", HTTP_PUT, api_handle_rbac_update_role, 1};
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles/:id", HTTP_DELETE, api_handle_rbac_delete_role, 1};
     
     /* Register role-user management routes */

@@ -20,10 +20,13 @@ metrics_registry_t* g_metrics_registry = NULL;
 logger_config_t* g_logger = NULL;
 #endif
 
+/* Forward declarations */
+http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request);
+
 /* API routes */
 static api_route_t routes[] = {
     /* Authentication routes */
-    {"/api/auth/login", HTTP_POST, api_handle_login, 0},
+    {"/api/auth/login", HTTP_POST, original_api_handle_login, 0},
     {"/api/auth/register", HTTP_POST, api_handle_register, 0},
     {"/api/auth/refresh", HTTP_POST, api_handle_token_refresh, 0},
     
@@ -440,6 +443,37 @@ static int route_matches(const char* route, const char* path) {
         return 1;
     }
     
+    /* Check for parameterized routes (e.g., /api/rbac/roles/:id) */
+    const char* route_ptr = route;
+    const char* path_ptr = path;
+    
+    while (*route_ptr && *path_ptr) {
+        /* Check for parameter placeholder */
+        if (*route_ptr == ':') {
+            /* Skip the parameter name in the route */
+            while (*route_ptr && *route_ptr != '/') {
+                route_ptr++;
+            }
+            
+            /* Skip the actual value in the path */
+            while (*path_ptr && *path_ptr != '/') {
+                path_ptr++;
+            }
+        } else {
+            /* Characters must match exactly */
+            if (*route_ptr != *path_ptr) {
+                break;
+            }
+            route_ptr++;
+            path_ptr++;
+        }
+    }
+    
+    /* Both strings should be at the end for a match */
+    if (*route_ptr == '\0' && *path_ptr == '\0') {
+        return 1;
+    }
+    
     /* Prefix match with trailing '/' */
     size_t route_len = strlen(route);
     if (route[route_len - 1] == '/') {
@@ -472,13 +506,13 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
     printf("API dispatch: Processing request for path '%s'\n", request->path);
     printf("API context: Routes=%p, num_routes=%d\n", (void*)ctx->routes, ctx->num_routes);
     
-    if (g_logger) LOG_DEBUG("Dispatching request: %s %s", 
+    if (g_logger) LOG_DEBUG("Dispatching request: %s %s (searching %d routes)", 
                            request->method == HTTP_GET ? "GET" : 
                            request->method == HTTP_POST ? "POST" : 
                            request->method == HTTP_PUT ? "PUT" : 
                            request->method == HTTP_DELETE ? "DELETE" :
                            request->method == HTTP_OPTIONS ? "OPTIONS" : "UNKNOWN",
-                           request->path);
+                           request->path, ctx->num_routes);
                            
     /* Handle OPTIONS requests (CORS preflight) */
     if (request->method == HTTP_OPTIONS) {
@@ -497,34 +531,45 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
     }
     
     /* Find matching route */
-    for (int i = 0; routes[i].path != NULL; i++) {
-        if (route_matches(routes[i].path, request->path) && routes[i].method == request->method) {
+    for (int i = 0; i < ctx->num_routes; i++) {
+        if (route_matches(ctx->routes[i].path, request->path) && ctx->routes[i].method == request->method) {
             if (g_logger) LOG_DEBUG("Found matching route: %s (requires_auth: %d)", 
-                                routes[i].path, routes[i].requires_auth);
+                                ctx->routes[i].path, ctx->routes[i].requires_auth);
             
             /* Check if route requires authentication */
-            if (routes[i].requires_auth) {
+            if (ctx->routes[i].requires_auth) {
                 if (g_logger) LOG_DEBUG("Route requires authentication, checking token");
                 if (!api_authenticate_request(ctx, request)) {
-                    if (g_logger) LOG_WARNING("Authentication failed for route: %s", routes[i].path);
+                    if (g_logger) LOG_WARNING("Authentication failed for route: %s", ctx->routes[i].path);
                     return create_http_response(HTTP_UNAUTHORIZED, 
                                               "{\"error\":\"Unauthorized\"}", "application/json");
                 }
             }
             
-            if (g_logger) LOG_DEBUG("Calling handler for route: %s", routes[i].path);
-            if (g_logger) LOG_DEBUG("Handler function pointer: %p", (void*)routes[i].handler);
+            if (g_logger) LOG_DEBUG("Calling handler for route: %s", ctx->routes[i].path);
+            if (g_logger) LOG_DEBUG("Handler function pointer: %p", (void*)ctx->routes[i].handler);
             
             /* Call handler */
             if (g_logger) LOG_DEBUG("About to call handler function");
-            http_response_t* result = routes[i].handler(ctx, request);
+            http_response_t* result = ctx->routes[i].handler(ctx, request);
             if (g_logger) LOG_DEBUG("Handler function returned: %p", (void*)result);
             return result;
         }
     }
     
     /* No matching route */
-    if (g_logger) LOG_WARNING("No matching route found for: %s", request->path);
+    if (g_logger) {
+        LOG_WARNING("No matching route found for: %s", request->path);
+        LOG_TRACE("Available routes:");
+        // Show last 20 routes since RBAC routes are added at the end
+        int start = ctx->num_routes > 20 ? ctx->num_routes - 20 : 0;
+        for (int i = start; i < ctx->num_routes; i++) {
+            LOG_TRACE("  Route %d: %s (method: %d)", i, ctx->routes[i].path, ctx->routes[i].method);
+        }
+        if (start > 0) {
+            LOG_TRACE("  ... showing last 20 of %d routes", ctx->num_routes);
+        }
+    }
     return create_http_response(HTTP_NOT_FOUND, 
                               "{\"error\":\"Not found\"}", "application/json");
 }
@@ -695,25 +740,39 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
 
 /* Register handler */
 http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request) {
+    LOG_TRACE("REGISTER_TRACE: Entering api_handle_register");
+    LOG_TRACE("REGISTER_TRACE: ctx=%p, request=%p, request->body=%p", ctx, request, request ? request->body : NULL);
+    
     if (!ctx || !request || !request->body) {
+        LOG_ERROR("REGISTER_TRACE: Invalid parameters - ctx=%p, request=%p, body=%p", 
+                  ctx, request, request ? request->body : NULL);
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid request\"}", "application/json");
     }
     
+    LOG_TRACE("REGISTER_TRACE: Request body: %s", request->body);
+    LOG_TRACE("REGISTER_TRACE: RBAC system pointer: %p", ctx->rbac);
+    
     /* Parse request body */
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
+        LOG_ERROR("REGISTER_TRACE: Failed to parse body or body not object");
         if (body) json_free(body);
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid request body\"}", "application/json");
     }
     
+    LOG_TRACE("REGISTER_TRACE: Body parsed successfully");
+    
     /* Extract username and password */
     json_value_t* username_val = json_object_get(body, "username");
     json_value_t* password_val = json_object_get(body, "password");
     
+    LOG_TRACE("REGISTER_TRACE: username_val=%p, password_val=%p", username_val, password_val);
+    
     if (!username_val || username_val->type != JSON_STRING || 
         !password_val || password_val->type != JSON_STRING) {
+        LOG_ERROR("REGISTER_TRACE: Missing or invalid username/password");
         json_free(body);
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Username and password required\"}", "application/json");
@@ -722,22 +781,35 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
     const char* username = username_val->value.string;
     const char* password = password_val->value.string;
     
+    LOG_TRACE("REGISTER_TRACE: Attempting to register user: %s", username);
+    LOG_TRACE("REGISTER_TRACE: About to call rbac_get_user_by_username");
+    
     /* Check if user already exists */
     if (rbac_get_user_by_username(ctx->rbac, username)) {
+        LOG_TRACE("REGISTER_TRACE: User already exists");
         json_free(body);
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Username already exists\"}", "application/json");
     }
     
+    LOG_TRACE("REGISTER_TRACE: User does not exist, creating new user");
+    LOG_TRACE("REGISTER_TRACE: About to call rbac_create_user");
+    
     /* Create user */
     rbac_user_t* user = rbac_create_user(ctx->rbac, username, password);
+    
+    LOG_TRACE("REGISTER_TRACE: rbac_create_user returned: %p", user);
+    
     if (!user) {
+        LOG_ERROR("REGISTER_TRACE: Failed to create user");
         json_free(body);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Failed to create user\"}", "application/json");
     }
     
     /* Create response */
+    LOG_TRACE("REGISTER_TRACE: Creating response for user: id=%s, username=%s", user->id, user->username);
+    
     json_value_t* response = json_create_object();
     json_object_set(response, "user_id", json_create_string(user->id));
     json_object_set(response, "username", json_create_string(user->username));
@@ -745,6 +817,8 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
     char* response_str = json_stringify(response);
     json_free(response);
     json_free(body);
+    
+    LOG_TRACE("REGISTER_TRACE: Registration successful, returning response");
     
     return create_http_response(HTTP_CREATED, response_str, "application/json");
 }

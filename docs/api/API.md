@@ -14,6 +14,10 @@ http://localhost:8080
 
 The API uses JWT (JSON Web Token) for authentication. Most endpoints require a valid token to be included in the `Authorization` header.
 
+## Role-Based Access Control (RBAC)
+
+The server implements a comprehensive RBAC system for managing users, roles, and permissions. All RBAC endpoints require admin permissions unless otherwise noted.
+
 ### Authentication Endpoints
 
 #### Register a new user
@@ -63,6 +67,121 @@ The API uses JWT (JSON Web Token) for authentication. Most endpoints require a v
   - `400 Bad Request`: Invalid request
   - `401 Unauthorized`: Invalid credentials
   - `500 Internal Server Error`: Server error
+
+### RBAC Endpoints
+
+#### Role Management
+
+##### List All Roles
+
+- **URL**: `/api/rbac/roles`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin)
+- **Success Response**: `200 OK`
+  ```json
+  [
+    {
+      "id": "string",
+      "name": "string",
+      "permissions": {
+        "resource_type:resource_id": permission_value
+      }
+    }
+  ]
+  ```
+
+##### Get Specific Role
+
+- **URL**: `/api/rbac/roles/:id`
+- **Method**: `GET`
+- **Auth Required**: Yes (Admin)
+- **URL Parameters**: `id` - Role ID or UUID
+- **Success Response**: `200 OK`
+  ```json
+  {
+    "id": "string",
+    "name": "string",
+    "permissions": {
+      "resource_type:resource_id": permission_value
+    }
+  }
+  ```
+
+##### Create Role
+
+- **URL**: `/api/rbac/roles`
+- **Method**: `POST`
+- **Auth Required**: Yes (Admin)
+- **Request Body**:
+  ```json
+  {
+    "name": "string"
+  }
+  ```
+- **Success Response**: `201 Created`
+  ```json
+  {
+    "id": "string",
+    "name": "string",
+    "permissions": {}
+  }
+  ```
+
+##### Update Role
+
+- **URL**: `/api/rbac/roles/:id`
+- **Method**: `PUT`
+- **Auth Required**: Yes (Admin)
+- **URL Parameters**: `id` - Role ID or UUID
+- **Request Body**:
+  ```json
+  {
+    "name": "string (optional)",
+    "permissions": {
+      "resource_type:resource_id": permission_value
+    }
+  }
+  ```
+- **Success Response**: `200 OK`
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+##### Delete Role
+
+- **URL**: `/api/rbac/roles/:id`
+- **Method**: `DELETE`
+- **Auth Required**: Yes (Admin)
+- **URL Parameters**: `id` - Role ID or UUID
+- **Success Response**: `200 OK`
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+#### Permission Structure
+
+Permissions are stored as numeric keys with the format `"resource_type:resource_id"`:
+
+- **Resource Types**: 
+  - `0` - Collection
+  - `1` - Document  
+  - `2` - Index
+  - `3` - User
+  - `4` - Role
+  - `5` - System
+
+- **Permission Values** (bitwise):
+  - `1` - Read
+  - `2` - Write
+  - `4` - Delete
+  - `8` - Admin
+  - `15` - All permissions (1+2+4+8)
+
+**Example**: `"3:*": 15` grants all permissions on all users.
 
 ## Collections
 
