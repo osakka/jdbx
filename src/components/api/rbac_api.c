@@ -94,6 +94,28 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
             return NULL;
         }
         
+        /* For role ID in /api/rbac/roles/:id/permissions pattern */
+        if (strstr(path, "/permissions")) {
+            /* Extract role ID: between "/roles/" and "/permissions" */
+            const char* roles_pos = strstr(path, "/roles/");
+            const char* permissions_pos = strstr(path, "/permissions");
+            
+            if (roles_pos && permissions_pos && permissions_pos > roles_pos) {
+                const char* role_id_start = roles_pos + 7; /* length of "/roles/" */
+                size_t role_id_len = permissions_pos - role_id_start;
+                
+                if (role_id_len > 0) {
+                    char* role_id = (char*)malloc(role_id_len + 1);
+                    if (role_id) {
+                        strncpy(role_id, role_id_start, role_id_len);
+                        role_id[role_id_len] = '\0';
+                        return role_id;
+                    }
+                }
+            }
+            return NULL;
+        }
+        
         /* For simple patterns: extract the last segment */
         const char* last_slash = strrchr(path, '/');
         if (!last_slash || *(last_slash + 1) == '\0') {
@@ -1137,10 +1159,23 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
     
     const char* resource_id = resource_id_val->value.string;
     
-    /* Grant permission */
-    int result = rbac_db_grant_permission(ctx->db, role_id, resource_type, resource_id, permission);
+    /* Get role to ensure it exists and get actual document ID */
+    rbac_role_t* role = rbac_db_get_role(ctx->db, role_id);
+    if (!role) {
+        json_free(request_json);
+        free(role_id);
+        return create_error_response("Role not found", HTTP_NOT_FOUND);
+    }
+    
+    /* Store the actual document ID */
+    char* actual_role_id = strdup(role->id);
+    rbac_free_role(role);
+    
+    /* Grant permission using actual document ID */
+    int result = rbac_db_grant_permission(ctx->db, actual_role_id, resource_type, resource_id, permission);
     json_free(request_json);
     free(role_id);
+    free(actual_role_id);
     
     if (!result) {
         return create_error_response("Failed to grant permission", HTTP_INTERNAL_SERVER_ERROR);
@@ -1243,10 +1278,23 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
     
     const char* resource_id = resource_id_val->value.string;
     
-    /* Revoke permission */
-    int result = rbac_db_revoke_permission(ctx->db, role_id, resource_type, resource_id, permission);
+    /* Get role to ensure it exists and get actual document ID */
+    rbac_role_t* role = rbac_db_get_role(ctx->db, role_id);
+    if (!role) {
+        json_free(request_json);
+        free(role_id);
+        return create_error_response("Role not found", HTTP_NOT_FOUND);
+    }
+    
+    /* Store the actual document ID */
+    char* actual_role_id = strdup(role->id);
+    rbac_free_role(role);
+    
+    /* Revoke permission using actual document ID */
+    int result = rbac_db_revoke_permission(ctx->db, actual_role_id, resource_type, resource_id, permission);
     json_free(request_json);
     free(role_id);
+    free(actual_role_id);
     
     if (!result) {
         return create_error_response("Failed to revoke permission", HTTP_INTERNAL_SERVER_ERROR);

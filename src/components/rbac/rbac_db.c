@@ -181,12 +181,12 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
     }
     
     /* Get role fields */
-    json_value_t* id_val = json_object_get(role_doc, "id");
+    json_value_t* doc_id_val = json_object_get(role_doc, "_id");  /* Document ID */
+    json_value_t* id_val = json_object_get(role_doc, "id");       /* UUID */
     json_value_t* name_val = json_object_get(role_doc, "name");
     json_value_t* permissions_val = json_object_get(role_doc, "permissions");
     
-    if (!id_val || id_val->type != JSON_STRING ||
-        !name_val || name_val->type != JSON_STRING ||
+    if (!name_val || name_val->type != JSON_STRING ||
         !permissions_val || permissions_val->type != JSON_OBJECT) {
         return NULL;
     }
@@ -197,8 +197,17 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
         return NULL;
     }
     
-    /* Set role fields */
-    role->id = strdup(id_val->value.string);
+    /* Set role fields - use document ID as primary ID for database operations */
+    if (doc_id_val && doc_id_val->type == JSON_STRING) {
+        role->id = strdup(doc_id_val->value.string);
+    } else if (id_val && id_val->type == JSON_STRING) {
+        /* Fallback to UUID if no document ID */
+        role->id = strdup(id_val->value.string);
+    } else {
+        free(role);
+        return NULL;
+    }
+    
     role->name = strdup(name_val->value.string);
     
     /* Deep copy permissions */
