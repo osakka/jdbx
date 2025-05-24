@@ -223,8 +223,9 @@ rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
     }
     
     /* Clear the pointers in the original RBAC to prevent double-free */
-    rbac->users = NULL;
-    rbac->roles = NULL;
+    /* FIXME: This breaks the API which still uses the original RBAC pointer */
+    /* rbac->users = NULL; */
+    /* rbac->roles = NULL; */
     
     return ref_rbac;
 }

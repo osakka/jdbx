@@ -119,7 +119,7 @@ typedef struct {
 } persistence_thread_t;
 
 /* Database structure */
-typedef struct {
+typedef struct database {
     char* path;                    /* Path to database file */
     json_value_t* collections;     /* JSON object of collections */
     pthread_mutex_t lock;          /* Database lock for thread safety */
@@ -156,6 +156,10 @@ int db_create_collection(database_t* db, const char* name);
 int db_drop_collection(database_t* db, const char* name);
 db_collection_t* db_get_collection(database_t* db, const char* name);
 json_value_t* db_list_collections(database_t* db);
+
+/* Collection operations */
+int db_collection_exists(database_t* db, const char* collection_name);
+int db_create_collection(database_t* db, const char* collection_name);
 
 /* Document operations */
 json_value_t* db_insert_document(database_t* db, const char* collection, json_value_t* document);

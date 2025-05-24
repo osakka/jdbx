@@ -429,13 +429,26 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
         return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
     }
     
-    /* Get user document */
-    json_value_t* user_doc = db_get_document(ctx->db, RBAC_USERS_COLLECTION, user_id);
-    if (!user_doc) {
+    /* Get user - first check if they exist */
+    rbac_user_t* user = rbac_db_get_user(ctx->db, user_id);
+    if (!user) {
         json_free(request_json);
         free(user_id);
         return create_error_response("User not found", HTTP_NOT_FOUND);
     }
+    
+    /* Get the actual user document for updating */
+    json_value_t* user_doc = db_get_document(ctx->db, RBAC_USERS_COLLECTION, user->id);
+    if (!user_doc) {
+        rbac_free_user(user);
+        json_free(request_json);
+        free(user_id);
+        return create_error_response("User document not found", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    /* Store the actual document ID */
+    char* actual_doc_id = strdup(user->id);
+    rbac_free_user(user);
     
     /* Update fields */
     int updated = 0;
@@ -463,16 +476,20 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
     if (!updated) {
         json_free(user_doc);
         free(user_id);
+        free(actual_doc_id);
         return create_error_response("No fields to update", HTTP_BAD_REQUEST);
     }
     
-    /* Update user document */
-    json_value_t* result = db_update_document(ctx->db, RBAC_USERS_COLLECTION, user_id, user_doc);
+    /* Update user document using actual document ID */
+    json_value_t* result = db_update_document(ctx->db, RBAC_USERS_COLLECTION, actual_doc_id, user_doc);
     if (!result) {
         json_free(user_doc);
         free(user_id);
+        free(actual_doc_id);
         return create_error_response("Failed to update user", HTTP_INTERNAL_SERVER_ERROR);
     }
+    
+    free(actual_doc_id);
     
     json_free(result);
     

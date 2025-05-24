@@ -44,9 +44,12 @@ init_status_t init_api(server_config_t* config, database_t* database,
     INIT_LOG_PROGRESS("API", "Registering RBAC API routes");
     
     if (api_ctx && database && rbac) {
+        int routes_before = api_ctx->num_routes;
         api_ctx->num_routes = rbac_api_register_routes(api_ctx->routes, api_ctx->num_routes, 
                                                      database, rbac);
-        INIT_LOG_SUCCESS("API", "RBAC API routes registered successfully");
+        int routes_added = api_ctx->num_routes - routes_before;
+        INIT_LOG_SUCCESS("API", "RBAC API routes registered successfully - added %d routes (total: %d)", 
+                        routes_added, api_ctx->num_routes);
     } else {
         if (g_logger) {
             LOG_WARNING("[INIT:API] Cannot register RBAC API routes - missing context, database or RBAC system");

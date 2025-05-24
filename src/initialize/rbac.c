@@ -1,5 +1,6 @@
 #include "init.h"
 #include "rbac/rbac.h"
+#include "rbac/rbac_database.h"
 #include "rbac/rbac_enhanced.h"
 #include "rbac/rbac_minimal.h"
 #include "rbac/rbac_refcount.h"
@@ -30,17 +31,27 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
         return INIT_RBAC_ERROR;
     }
     
-    /* First try with the minimal approach to ensure server can start */
-    INIT_LOG_PROGRESS("RBAC", "Using minimal RBAC initialization to ensure server can start");
+    /* Use database-backed RBAC implementation */
+    INIT_LOG_PROGRESS("RBAC", "Initializing database-backed RBAC system");
+    LOG_TRACE("RBAC_TRACE: Database pointer: %p", database);
+    LOG_TRACE("RBAC_TRACE: JWT secret: %s", config->jwt_secret ? "***" : "NULL");
     
-    /* Use minimal implementation that skips database operations */
-    rbac_system_t* rbac = rbac_minimal_init(database, config->rbac_path);
+    /* Initialize with database backend */
+    rbac_system_t* rbac = rbac_database_init(database, config->jwt_secret);
     if (!rbac) {
-        INIT_LOG_FAILURE("RBAC", "Failed to initialize minimal RBAC system");
-        return INIT_RBAC_ERROR;
+        /* Fallback to minimal implementation if database init fails */
+        LOG_WARNING("RBAC: Database RBAC init failed, falling back to minimal implementation");
+        rbac = rbac_minimal_init(database, config->rbac_path);
+        if (!rbac) {
+            INIT_LOG_FAILURE("RBAC", "Failed to initialize RBAC system");
+            return INIT_RBAC_ERROR;
+        }
+        INIT_LOG_SUCCESS("RBAC", "Minimal RBAC system initialized as fallback");
+    } else {
+        INIT_LOG_SUCCESS("RBAC", "Database-backed RBAC system initialized successfully");
     }
     
-    INIT_LOG_SUCCESS("RBAC", "Minimal RBAC system initialized successfully");
+    LOG_TRACE("RBAC_TRACE: RBAC system pointer: %p", rbac);
     
     /* Initialize reference counting wrapper */
     rbac_refcount_t* rbac_ref = rbac_to_refcount(rbac);

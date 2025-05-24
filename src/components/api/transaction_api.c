@@ -3,6 +3,7 @@
 #include "utils/json.h"
 #include "utils/json_helpers.h"
 #include "core/server.h"
+#include "rbac/jwt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -162,9 +163,33 @@ http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t
         }
     }
     
-    /* Start a new transaction - user ID can be extracted from auth header or use default */
-    const char* user_id = request->authorization ? request->authorization : "system";
+    /* Extract user ID from JWT token */
+    const char* user_id = "system"; /* Default user ID */
+    char* extracted_user_id = NULL;
+    
+    /* Extract token from authorization header */
+    char* token = api_extract_token(request);
+    if (token) {
+        /* Decode the JWT token to get user information */
+        jwt_token_t* decoded = jwt_decode(token);
+        if (decoded && decoded->payload && decoded->payload->sub) {
+            extracted_user_id = strdup(decoded->payload->sub);
+            if (extracted_user_id) {
+                user_id = extracted_user_id;
+            }
+        }
+        if (decoded) {
+            jwt_free(decoded);
+        }
+        free(token);
+    }
+    
     transaction_t* transaction = transaction_begin(manager, isolation, user_id);
+    
+    /* Clean up extracted user ID */
+    if (extracted_user_id) {
+        free(extracted_user_id);
+    }
     if (!transaction) {
         return http_response_error("Failed to start transaction", 500);
     }

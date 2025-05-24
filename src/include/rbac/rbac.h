@@ -40,10 +40,15 @@ typedef struct {
     json_value_t* roles; /* JSON array of role IDs */
 } rbac_user_t;
 
+/* Forward declaration */
+struct database;
+
 /* RBAC system */
 typedef struct {
-    json_value_t* users; /* JSON object of users */
-    json_value_t* roles; /* JSON object of roles */
+    json_value_t* users; /* JSON object of users (deprecated - use database) */
+    json_value_t* roles; /* JSON object of roles (deprecated - use database) */
+    struct database* db; /* Database for RBAC storage */
+    char* jwt_secret;    /* JWT secret for token generation */
 } rbac_system_t;
 
 /* RBAC function prototypes */

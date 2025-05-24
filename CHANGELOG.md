@@ -5,6 +5,27 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2025-05-23
+
+### 🐛 Bug Fixes
+
+#### Document Deletion API Fix
+- **FIXED**: DELETE requests to `/api/collections/{collection}/documents/{id}` returning "Collection not found"
+- **CAUSE**: Collection drop handler was intercepting document deletion paths
+- **SOLUTION**: Added path detection in collection drop handler to delegate document operations
+
+#### Query Filtering Fix
+- **FIXED**: URL query parameters not being applied to filter results
+- **NEW**: URL query parameter parser converts `?key=value&key2=value2` format to JSON
+- **ENHANCED**: Support for URL-encoded values (`%XX` and `+` encoding)
+- **NOTE**: URL parameters are parsed as strings; use JSON body for exact type matching
+
+### ✅ Verification Results
+- Document deletion works correctly (204 No Content on success, 404 on not found)
+- Query filtering works with both URL parameters (string matching) and JSON body (type matching)
+- Empty queries return all documents as expected
+- All fixes maintain backward compatibility
+
 ## [2.0.2] - 2025-05-23
 
 ### 🔧 Critical Fixes

@@ -246,7 +246,9 @@ int db_load(database_t* db) {
 
 /**
  * Create collection
+ * NOTE: Moved to collection_ops.c to avoid duplicate definition
  */
+#if 0
 int db_create_collection(database_t* db, const char* name) {
     if (!db || !name) {
         return 0;
@@ -289,6 +291,7 @@ int db_create_collection(database_t* db, const char* name) {
     
     return 1;
 }
+#endif
 
 /**
  * Drop collection

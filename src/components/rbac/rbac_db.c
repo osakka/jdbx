@@ -6,6 +6,10 @@
 #include <string.h>
 #include <time.h>
 
+/* Forward declarations for helper functions */
+static json_value_t* find_role_by_uuid(database_t* db, const char* uuid);
+static json_value_t* find_user_by_uuid(database_t* db, const char* uuid);
+
 /* Generate a simple UUID */
 static char* generate_uuid() {
     char* uuid = (char*)malloc(37);  /* 36 chars + null terminator */
@@ -475,11 +479,25 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
         return 0;
     }
     
-    /* Get user document */
+    /* Get user document - first try as document ID */
     json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+    char* actual_doc_id = NULL;
+    
+    /* If not found, try as UUID */
     if (!user_doc) {
-        LOG_ERROR("User %s not found", user_id);
-        return 0;
+        user_doc = find_user_by_uuid(db, user_id);
+        if (!user_doc) {
+            LOG_ERROR("User %s not found", user_id);
+            return 0;
+        }
+        
+        /* Get the actual document ID */
+        json_value_t* doc_id_val = json_object_get(user_doc, "_id");
+        if (doc_id_val && doc_id_val->type == JSON_STRING) {
+            actual_doc_id = strdup(doc_id_val->value.string);
+        }
+    } else {
+        actual_doc_id = strdup(user_id);
     }
     
     /* Get user roles */
@@ -522,8 +540,16 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     
     json_free(user_doc);
     
-    /* Delete user document */
-    return db_delete_document(db, RBAC_USERS_COLLECTION, user_id);
+    /* Delete user document using actual document ID */
+    if (!actual_doc_id) {
+        LOG_ERROR("Failed to get document ID for user %s", user_id);
+        return 0;
+    }
+    
+    int result = db_delete_document(db, RBAC_USERS_COLLECTION, actual_doc_id);
+    free(actual_doc_id);
+    
+    return result;
 }
 
 /* Get a user from the database by ID */
@@ -532,10 +558,15 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
         return NULL;
     }
     
-    /* Get user document */
+    /* First try as document ID */
     json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+    
+    /* If not found, try as UUID */
     if (!user_doc) {
-        return NULL;
+        user_doc = find_user_by_uuid(db, user_id);
+        if (!user_doc) {
+            return NULL;
+        }
     }
     
     /* Convert to rbac_user_t */
@@ -908,18 +939,43 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
         return 0;
     }
     
-    /* Get user document */
-    json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
-    if (!user_doc) {
+    /* Get user - supports both document ID and UUID */
+    rbac_user_t* user = rbac_db_get_user(db, user_id);
+    if (!user) {
         LOG_ERROR("User %s not found", user_id);
         return 0;
     }
+    char* actual_user_id = strdup(user->id);
     
-    /* Get role document */
-    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
-    if (!role_doc) {
+    /* Get role - supports both document ID and UUID */
+    rbac_role_t* role = rbac_db_get_role(db, role_id);
+    if (!role) {
         LOG_ERROR("Role %s not found", role_id);
+        free(actual_user_id);
+        rbac_free_user(user);
+        return 0;
+    }
+    char* actual_role_id = strdup(role->id);
+    
+    rbac_free_user(user);
+    rbac_free_role(role);
+    
+    /* Get user document using actual ID */
+    json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, actual_user_id);
+    if (!user_doc) {
+        LOG_ERROR("User document %s not found", actual_user_id);
+        free(actual_user_id);
+        free(actual_role_id);
+        return 0;
+    }
+    
+    /* Get role document using actual ID */
+    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, actual_role_id);
+    if (!role_doc) {
+        LOG_ERROR("Role document %s not found", actual_role_id);
         json_free(user_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
@@ -928,6 +984,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     if (!user_roles || user_roles->type != JSON_ARRAY) {
         json_free(user_doc);
         json_free(role_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
@@ -936,6 +994,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     if (!role_users || role_users->type != JSON_ARRAY) {
         json_free(user_doc);
         json_free(role_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
@@ -943,7 +1003,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     int user_has_role = 0;
     for (size_t i = 0; i < user_roles->value.array.size; i++) {
         json_value_t* id = user_roles->value.array.items[i];
-        if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
+        if (id->type == JSON_STRING && strcmp(id->value.string, actual_role_id) == 0) {
             user_has_role = 1;
             break;
         }
@@ -953,7 +1013,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     int role_has_user = 0;
     for (size_t i = 0; i < role_users->value.array.size; i++) {
         json_value_t* id = role_users->value.array.items[i];
-        if (id->type == JSON_STRING && strcmp(id->value.string, user_id) == 0) {
+        if (id->type == JSON_STRING && strcmp(id->value.string, actual_user_id) == 0) {
             role_has_user = 1;
             break;
         }
@@ -961,34 +1021,40 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     
     /* Add role to user roles if needed */
     if (!user_has_role) {
-        json_array_append(user_roles, json_create_string(role_id));
-        json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_doc);
+        json_array_append(user_roles, json_create_string(actual_role_id));
+        json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, actual_user_id, user_doc);
         if (update_result) {
             json_free(update_result);
         } else {
             LOG_ERROR("Failed to update user document");
             json_free(user_doc);
             json_free(role_doc);
+            free(actual_user_id);
+            free(actual_role_id);
             return 0;
         }
     }
     
     /* Add user to role users if needed */
     if (!role_has_user) {
-        json_array_append(role_users, json_create_string(user_id));
-        json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
+        json_array_append(role_users, json_create_string(actual_user_id));
+        json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_role_id, role_doc);
         if (update_result) {
             json_free(update_result);
         } else {
             LOG_ERROR("Failed to update role document");
             json_free(user_doc);
             json_free(role_doc);
+            free(actual_user_id);
+            free(actual_role_id);
             return 0;
         }
     }
     
     json_free(user_doc);
     json_free(role_doc);
+    free(actual_user_id);
+    free(actual_role_id);
     
     return 1;
 }
@@ -999,18 +1065,43 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
         return 0;
     }
     
-    /* Get user document */
-    json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
-    if (!user_doc) {
+    /* Get user - supports both document ID and UUID */
+    rbac_user_t* user = rbac_db_get_user(db, user_id);
+    if (!user) {
         LOG_ERROR("User %s not found", user_id);
         return 0;
     }
+    char* actual_user_id = strdup(user->id);
     
-    /* Get role document */
-    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
-    if (!role_doc) {
+    /* Get role - supports both document ID and UUID */
+    rbac_role_t* role = rbac_db_get_role(db, role_id);
+    if (!role) {
         LOG_ERROR("Role %s not found", role_id);
+        free(actual_user_id);
+        rbac_free_user(user);
+        return 0;
+    }
+    char* actual_role_id = strdup(role->id);
+    
+    rbac_free_user(user);
+    rbac_free_role(role);
+    
+    /* Get user document using actual ID */
+    json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, actual_user_id);
+    if (!user_doc) {
+        LOG_ERROR("User document %s not found", actual_user_id);
+        free(actual_user_id);
+        free(actual_role_id);
+        return 0;
+    }
+    
+    /* Get role document using actual ID */
+    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, actual_role_id);
+    if (!role_doc) {
+        LOG_ERROR("Role document %s not found", actual_role_id);
         json_free(user_doc);
+        free(actual_user_id);
+        free(actual_role_id);
         return 0;
     }
     
