@@ -395,9 +395,13 @@ async function loadSystemHealth() {
             const memoryUsagePercent = ((health.memory.used_kb / health.memory.total_kb) * 100).toFixed(1);
             document.getElementById('cpuUsage').textContent = `${(health.load_average || 0).toFixed(1)}%`;
             document.getElementById('memoryUsage').textContent = `${memoryUsagePercent}%`;
-            // Show real API latency if available, otherwise N/A
-            const apiLatency = health.api_latency || health.response_time;
-            document.getElementById('apiLatency').textContent = apiLatency ? `${apiLatency}ms` : 'N/A';
+            
+            // Show real API latency from metrics
+            let apiLatency = 'N/A';
+            if (health.metrics && health.metrics.performance && health.metrics.performance.avg_response_time_ms) {
+                apiLatency = `${health.metrics.performance.avg_response_time_ms.toFixed(2)}ms`;
+            }
+            document.getElementById('apiLatency').textContent = apiLatency;
             document.getElementById('uptime').textContent = health.uptime || 'N/A';
         } else {
             document.getElementById('cpuUsage').textContent = 'N/A';
@@ -922,11 +926,21 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
         }
         
-        // For now, we don't have real operation metrics from the server
-        // So we'll show 0 or N/A until the server provides this data
-        const totalOps = 0;
-        const readOps = 0;
-        const writeOps = 0;
+        // Get real metrics from health endpoint
+        let totalOps = 0;
+        let readOps = 0;
+        let writeOps = 0;
+        let avgResponseTime = null;
+        
+        if (health && health.metrics) {
+            totalOps = health.metrics.operations.total || 0;
+            readOps = health.metrics.operations.read || 0;
+            writeOps = health.metrics.operations.write || 0;
+            
+            if (health.metrics.performance) {
+                avgResponseTime = health.metrics.performance.avg_response_time_ms;
+            }
+        }
         
         // Add visual indicator for updates
         if (isPolling) {
@@ -936,14 +950,13 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
         }
         
-        // Update metrics display - show real values or N/A
-        document.getElementById('totalOps').textContent = totalOps > 0 ? formatNumber(totalOps) : 'N/A';
-        document.getElementById('readOps').textContent = readOps > 0 ? formatNumber(readOps) : 'N/A';
-        document.getElementById('writeOps').textContent = writeOps > 0 ? formatNumber(writeOps) : 'N/A';
+        // Update metrics display with real values
+        document.getElementById('totalOps').textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
+        document.getElementById('readOps').textContent = readOps > 0 ? formatNumber(readOps) : '0';
+        document.getElementById('writeOps').textContent = writeOps > 0 ? formatNumber(writeOps) : '0';
         
-        // Show real response time if available, otherwise N/A
-        const avgResponse = health && health.avg_response_time ? health.avg_response_time : null;
-        document.getElementById('avgResponseTime').textContent = avgResponse ? `${avgResponse}ms` : 'N/A';
+        // Show real response time if available
+        document.getElementById('avgResponseTime').textContent = avgResponseTime !== null ? `${avgResponseTime.toFixed(2)}ms` : 'N/A';
         
         // Update charts with time-based data
         const labels = [];

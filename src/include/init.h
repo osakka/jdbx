@@ -57,11 +57,17 @@ init_status_t init_threads(server_config_t* config);
 /* Initialize persistence thread (must be called after daemonization) */
 init_status_t init_persistence_thread(database_t* database);
 
+/* Initialize metrics system */
+init_status_t init_metrics(server_config_t* config);
+
 /* Run server main loop */
 init_status_t run_server(server_config_t* config);
 
 /* Cleanup resources */
 void init_cleanup(void);
+
+/* Cleanup metrics */
+void cleanup_metrics(void);
 
 /* Registration functions for cleanup system */
 void init_register_database(database_t* database);

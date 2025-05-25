@@ -272,6 +272,15 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    /* Initialize metrics system */
+    LOG_DEBUG("Initializing Metrics");
+    status = init_metrics(config);
+    if (status != INIT_OK) {
+        INIT_LOG_FAILURE("MAIN", "Failed to initialize metrics system");
+        free(config);
+        return 1;
+    }
+    
     /* Initialize RBAC AFTER thread pool and database are ready, but BEFORE API */
     LOG_DEBUG("Initializing RBAC");
     status = init_rbac(config, database, &rbac, &rbac_ref);

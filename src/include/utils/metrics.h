@@ -119,4 +119,19 @@ char* metrics_get_json(metrics_registry_t* registry);
 #define METRIC_CACHE_HITS "cache_hits_total"
 #define METRIC_CACHE_MISSES "cache_misses_total"
 
+/* Global metrics registry */
+extern struct metrics_registry* g_metrics_registry;
+
+/* Metric accessor functions for use across modules */
+metric_t* get_server_requests_metric(void);
+metric_t* get_server_request_duration_metric(void);
+metric_t* get_db_operations_metric(void);
+metric_t* get_db_operation_duration_metric(void);
+metric_t* get_active_connections_metric(void);
+metric_t* get_api_errors_metric(void);
+metric_t* get_cache_hits_metric(void);
+metric_t* get_cache_misses_metric(void);
+metric_t* get_cache_size_metric(void);
+metric_t* get_system_memory_metric(void);
+
 #endif /* METRICS_H */

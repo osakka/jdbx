@@ -133,19 +133,56 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
     json_object_set(health, "memory", memory);
     
     /* Add metrics information if available */
-    metric_t *metrics = (metric_t *)metrics_get_json(NULL);
-    if (metrics) {
+    if (g_metrics_registry) {
         json_value_t *metrics_json = json_create_object();
         
-        /* Add some basic metrics - these functions would need to be properly implemented */
-        json_object_set(metrics_json, "requests", json_create_number(0.0));
-        json_object_set(metrics_json, "avg_response_time_ms", json_create_number(0.0));
-        json_object_set(metrics_json, "db_operations", json_create_number(0.0));
+        /* Get server request metrics */
+        metric_t *request_counter = get_server_requests_metric();
+        metric_t *request_timer = get_server_request_duration_metric();
+        metric_t *db_ops_counter = get_db_operations_metric();
+        metric_t *db_timer = get_db_operation_duration_metric();
+        metric_t *active_conns = get_active_connections_metric();
         
-        /* Add JavaScript operations if not disabled */
-#ifndef DISABLE_JS
-        json_object_set(metrics_json, "js_operations", json_create_number(0.0));
-#endif
+        /* Add operations object */
+        json_value_t *operations = json_create_object();
+        
+        if (request_counter) {
+            json_object_set(operations, "total", json_create_number((double)request_counter->value.counter));
+        }
+        
+        if (db_ops_counter) {
+            json_object_set(operations, "database", json_create_number((double)db_ops_counter->value.counter));
+        }
+        
+        /* TODO: Add read/write breakdown when we track them separately */
+        json_object_set(operations, "read", json_create_number(0.0));
+        json_object_set(operations, "write", json_create_number(0.0));
+        
+        json_object_set(metrics_json, "operations", operations);
+        
+        /* Add performance object */
+        json_value_t *performance = json_create_object();
+        
+        if (request_timer && request_timer->value.timer.count > 0) {
+            double avg_ms = (request_timer->value.timer.sum / request_timer->value.timer.count) * 1000.0;
+            json_object_set(performance, "avg_response_time_ms", json_create_number(avg_ms));
+            json_object_set(performance, "min_response_time_ms", json_create_number(request_timer->value.timer.min * 1000.0));
+            json_object_set(performance, "max_response_time_ms", json_create_number(request_timer->value.timer.max * 1000.0));
+        } else {
+            json_object_set(performance, "avg_response_time_ms", json_create_number(0.0));
+        }
+        
+        if (active_conns) {
+            json_object_set(performance, "active_connections", json_create_number(active_conns->value.gauge));
+        }
+        
+        json_object_set(metrics_json, "performance", performance);
+        
+        /* Add cache object (placeholder for now) */
+        json_value_t *cache = json_create_object();
+        json_object_set(cache, "hit_rate", json_create_number(0.0));
+        json_object_set(cache, "size_mb", json_create_number(0.0));
+        json_object_set(metrics_json, "cache", cache);
         
         json_object_set(health, "metrics", metrics_json);
     }

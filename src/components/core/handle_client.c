@@ -1,5 +1,6 @@
 #include "core/server.h"
 #include "api/api.h"
+#include "utils/metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,19 @@ void* handle_client(void* client_data) {
     /* Get start time for performance tracking */
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+    
+    /* Start request timer for metrics */
+    timer_context_t* request_timer = NULL;
+    metric_t* request_duration_metric = get_server_request_duration_metric();
+    if (request_duration_metric) {
+        request_timer = metrics_timer_start(request_duration_metric);
+    }
+    
+    /* Increment active connections */
+    metric_t* active_connections = get_active_connections_metric();
+    if (active_connections) {
+        metrics_gauge_inc(active_connections, 1.0);
+    }
     
     /* Get thread ID for logging */
     pthread_t tid = pthread_self();
@@ -104,6 +118,12 @@ void* handle_client(void* client_data) {
     /* Parse HTTP request */
     http_request_t* request = parse_http_request(buffer);
     if (!request) {
+        /* Increment error counter */
+        metric_t* api_errors = get_api_errors_metric();
+        if (api_errors) {
+            metrics_counter_inc(api_errors, 1);
+        }
+        
         /* Send 400 Bad Request */
         http_response_t* response = create_http_response(HTTP_BAD_REQUEST,
             "{\"error\":\"Invalid request\"}", "application/json");
@@ -162,6 +182,12 @@ void* handle_client(void* client_data) {
         free_http_request(request);
         close(client_fd);
         return NULL;
+    }
+    
+    /* Increment request counter */
+    metric_t* request_counter = get_server_requests_metric();
+    if (request_counter) {
+        metrics_counter_inc(request_counter, 1);
     }
     
     /* Debug request */
@@ -280,6 +306,16 @@ void* handle_client(void* client_data) {
     } else {
         printf("Thread %lu completed request in %.2f ms\n", 
               (unsigned long)tid, execution_time);
+    }
+    
+    /* Stop request timer */
+    if (request_timer) {
+        metrics_timer_stop(request_timer);
+    }
+    
+    /* Decrement active connections */
+    if (active_connections) {
+        metrics_gauge_dec(active_connections, 1.0);
     }
     
     return NULL;

@@ -98,6 +98,8 @@ typedef struct {
     char* validators_dir;           /* Path to validators directory */
     char* transforms_dir;           /* Path to transforms directory */
     char* metrics_dir;              /* Path to metrics directory */
+    char* metrics_export_path;      /* Path for metrics auto-export */
+    int metrics_export_interval;    /* Metrics export interval in seconds */
 
     /* Runtime settings */
     log_level_t log_level;       /* Logging level */

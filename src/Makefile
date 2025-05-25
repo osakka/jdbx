@@ -119,7 +119,7 @@ server-modular: libjsondb
 
 # Build tools
 tools: libjsondb $(OBJ_DIR)/components/tools/jsondb_tools.o
-	$(CC) $(OBJ_DIR)/components/tools/jsondb_tools.o -o $(BIN_DIR)/jsondb_tools $(LDFLAGS) -L$(LIB_DIR) -ljsondb
+	$(CC) $(OBJ_DIR)/components/tools/jsondb_tools.o -o $(BIN_DIR)/jsondb_tools -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS)
 
 # Compile rule for .c files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c

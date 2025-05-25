@@ -2,6 +2,7 @@
 #include "binary/binary_format.h"
 #include "utils/logger.h"
 #include "utils/cache.h"
+#include "utils/metrics.h"
 #include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -394,8 +395,24 @@ json_value_t* db_list_collections(database_t* db) {
 json_value_t* db_insert_document(database_t* db, const char* collection_name, json_value_t* document) {
     LOG_INFO("Starting document insertion for collection '%s'", collection_name ? collection_name : "NULL");
     
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
     if (!db || !collection_name || !document || document->type != JSON_OBJECT) {
         LOG_ERROR("Invalid parameters for db_insert_document");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -461,6 +478,11 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     pthread_mutex_unlock(&db->lock);
     
     LOG_INFO("Document inserted successfully with ID: %s", id_str);
+    
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
     
     return result;
 }
