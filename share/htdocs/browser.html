@@ -2,225 +2,258 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JSONdb Document Browser</title>
+    <title>JSONdb Browser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="css/unified-theme.css">
+    <link rel="stylesheet" href="css/theme-overrides.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-light">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-dark" disabled>
+    <script src="js/theme.js"></script>
     <style>
+        /* Browser-specific styles only */
         body {
-            background-color: #f8f9fa;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
         }
-        .navbar {
-            background-color: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        
+        /* Main Layout */
+        .browser-container {
+            display: flex;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+            background-color: var(--bg-primary);
         }
-        .navbar-brand {
-            color: #667eea !important;
+        
+        /* Collections Sidebar */
+        .collections-panel {
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .panel-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-secondary);
             font-weight: 600;
-        }
-        .sidebar {
-            background-color: #fff;
-            border-right: 1px solid #dee2e6;
-            height: calc(100vh - 56px);
-            overflow-y: auto;
-        }
-        .collection-item {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .collection-item:hover {
-            background-color: #f8f9fa;
-        }
-        .collection-item.active {
-            background-color: #e7e8ff;
-            border-left: 3px solid #667eea;
-        }
-        .collection-name {
-            font-weight: 500;
-            color: #495057;
-        }
-        .collection-count {
-            font-size: 0.875rem;
-            color: #6c757d;
-        }
-        .document-list {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem;
-            background-color: #fff;
-        }
-        .document-item {
-            padding: 0.5rem 1rem;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .document-item:hover {
-            background-color: #f8f9fa;
-        }
-        .document-item.active {
-            background-color: #e7e8ff;
-        }
-        .document-viewer {
-            background-color: #2d2d2d;
-            border-radius: 0.375rem;
-            padding: 1rem;
-            height: calc(100vh - 280px);
-            overflow: auto;
-        }
-        .search-box {
-            position: relative;
-            margin-bottom: 1rem;
-        }
-        .search-box i {
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d;
-        }
-        .search-box input {
-            padding-left: 2.5rem;
-        }
-        .highlight {
-            background-color: #ffd93d;
-            color: #000;
-            padding: 0 2px;
-            border-radius: 2px;
-        }
-        .filter-tags {
             display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-        .filter-tag {
-            background-color: #e9ecef;
-            border: 1px solid #ced4da;
-            border-radius: 1rem;
-            padding: 0.25rem 0.75rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .filter-tag.active {
-            background-color: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        .filter-tag:hover {
-            background-color: #dee2e6;
-        }
-        .filter-tag.active:hover {
-            background-color: #5a67d8;
-        }
-        .document-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .document-actions button {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-        }
-        .stats-badge {
-            display: inline-block;
-            background-color: #e9ecef;
-            border-radius: 1rem;
-            padding: 0.25rem 0.75rem;
-            font-size: 0.875rem;
-            margin-right: 0.5rem;
-        }
-        pre[class*="language-"] {
-            margin: 0;
-            background: transparent;
-        }
-        .toolbar {
-            background-color: #1e1e1e;
-            border-radius: 0.375rem 0.375rem 0 0;
-            padding: 0.5rem 1rem;
-            margin: -1rem -1rem 1rem -1rem;
-            display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            min-height: 60px;
         }
-        .toolbar-title {
-            color: #fff;
-            font-size: 0.875rem;
-            font-weight: 500;
+        
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem 0.5rem;
+            background-color: var(--bg-secondary);
         }
-        .toolbar-actions {
+        
+        /* Documents Panel */
+        .documents-panel {
+            width: 380px;
+            background-color: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
             display: flex;
-            gap: 0.5rem;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.03);
         }
-        .toolbar-actions button {
-            background: transparent;
-            border: 1px solid #444;
-            color: #aaa;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
+        
+        /* Content Panel */
+        .content-panel {
+            flex: 1;
+            background-color: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Collection Items */
+        .collection-item {
+            padding: 0.875rem 1rem;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            margin: 0 0.5rem 0.375rem 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            background-color: var(--bg-primary);
+        }
+        
+        .collection-item:hover {
+            background-color: rgba(102, 126, 234, 0.08);
+            border-color: rgba(102, 126, 234, 0.15);
+            transform: translateX(2px);
+        }
+        
+        .collection-item.active {
+            background-color: rgba(102, 126, 234, 0.12);
+            border-color: var(--accent);
+            color: var(--text-primary);
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
+        }
+        
+        .collection-item .icon {
+            margin-right: 0.75rem;
+            color: var(--accent);
+            opacity: 0.8;
+        }
+        
+        .collection-item .count {
+            font-size: 0.8125rem;
+            opacity: 0.85;
+            background-color: var(--bg-secondary);
+            padding: 0.25rem 0.625rem;
+            border-radius: 1rem;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+        }
+        
+        /* Document Items */
+        .document-item {
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .document-item:hover {
+            background-color: rgba(0, 0, 0, 0.02);
+            padding-left: 1.5rem;
+        }
+        
+        .document-item.active {
+            background-color: rgba(102, 126, 234, 0.05);
+            border-left: 3px solid var(--accent);
+            padding-left: calc(1.25rem - 3px);
+        }
+        
+        .document-title {
+            font-weight: 500;
+            margin-bottom: 0.375rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.95rem;
+        }
+        
+        .document-preview {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+        
+        .document-meta {
             font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.375rem;
+            opacity: 0.8;
+        }
+        
+        /* Content Viewer */
+        .content-toolbar {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            min-height: 60px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+        
+        .content-viewer {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background-color: var(--bg-primary);
+        }
+        
+        /* Search Box */
+        .search-box {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-secondary);
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
             transition: all 0.2s;
         }
-        .toolbar-actions button:hover {
-            background-color: #444;
-            color: #fff;
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #6c757d;
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .collections-panel {
+                width: 200px;
+            }
+            .documents-panel {
+                width: 300px;
+            }
         }
-        .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
+        
+        @media (max-width: 768px) {
+            .browser-container {
+                flex-direction: column;
+            }
+            .collections-panel,
+            .documents-panel {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
         }
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0 0 0.375rem 0.375rem;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        
+        pre {
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         }
-        .search-result-item {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
-        }
-        .search-result-item:hover {
-            background-color: #f8f9fa;
-        }
-        .search-result-collection {
-            font-size: 0.75rem;
-            color: #6c757d;
-        }
-        .search-result-match {
-            font-size: 0.875rem;
-            color: #495057;
+        
+        pre code {
+            background: none !important;
+            padding: 0 !important;
         }
     </style>
 </head>
-<body>
+<body class="page-browser">
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light">
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="/admin.html">
-                <i class="bi bi-database"></i> JSONdb
+                <img src="/resources/jsondb_logo_white.svg" alt="JSONdb" data-theme-logo style="height: 40px;">
             </a>
             <div class="navbar-nav ms-auto">
                 <a class="nav-link" href="/admin.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                <a class="nav-link active" href="/browser.html"><i class="bi bi-folder-open"></i> Browser</a>
+                <a class="nav-link active" href="/browser.html"><i class="bi bi-folder2-open"></i> Browser</a>
+                <a class="nav-link" href="/metrics.html"><i class="bi bi-graph-up"></i> Metrics</a>
                 <a class="nav-link" href="/rbac.html"><i class="bi bi-shield-lock"></i> RBAC</a>
                 <a class="nav-link" href="/swagger.html"><i class="bi bi-book"></i> API Docs</a>
                 <button class="btn btn-sm btn-outline-danger ms-3" onclick="logout()">
@@ -230,97 +263,82 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar - Collections -->
-            <div class="col-md-3 sidebar p-0">
-                <div class="p-3">
-                    <h5 class="mb-3">Collections</h5>
-                    <div class="search-box">
-                        <i class="bi bi-search"></i>
-                        <input type="text" class="form-control form-control-sm" id="collectionSearch" placeholder="Search collections...">
+    <!-- Browser Container -->
+    <div class="browser-container">
+        <!-- Collections Panel -->
+        <div class="collections-panel">
+            <div class="panel-header">
+                <span><i class="bi bi-collection"></i> Collections</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshCollections()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="collectionSearch" placeholder="Search collections..." onkeyup="filterCollections()">
+            </div>
+            <div class="panel-content" id="collectionsList">
+                <div class="loading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
                     </div>
-                </div>
-                <div id="collectionsList">
-                    <!-- Collections will be loaded here -->
                 </div>
             </div>
+        </div>
 
-            <!-- Main Content -->
-            <div class="col-md-9 p-4">
-                <!-- Search and Filters -->
-                <div class="mb-4">
-                    <div class="search-box position-relative">
-                        <i class="bi bi-search"></i>
-                        <input type="text" class="form-control" id="globalSearch" placeholder="Search across all documents...">
-                        <div class="search-results" id="searchResults"></div>
-                    </div>
-                    
-                    <div class="filter-tags" id="filterTags">
-                        <span class="filter-tag active" data-filter="all">All Types</span>
-                        <span class="filter-tag" data-filter="object">Objects</span>
-                        <span class="filter-tag" data-filter="array">Arrays</span>
-                        <span class="filter-tag" data-filter="string">Strings</span>
-                        <span class="filter-tag" data-filter="number">Numbers</span>
-                        <span class="filter-tag" data-filter="boolean">Booleans</span>
-                    </div>
+        <!-- Documents Panel -->
+        <div class="documents-panel">
+            <div class="panel-header">
+                <span><i class="bi bi-file-text"></i> Documents</span>
+                <span class="badge bg-primary" id="documentCount" style="font-size: 0.75rem; padding: 0.35rem 0.6rem;">0</span>
+            </div>
+            <div class="search-box">
+                <input type="text" id="documentSearch" placeholder="Search documents..." onkeyup="filterDocuments()">
+            </div>
+            <div class="panel-content" id="documentsList">
+                <div class="empty-state">
+                    <i class="bi bi-folder2-open"></i>
+                    <p>Select a collection to view documents</p>
                 </div>
+            </div>
+        </div>
 
-                <!-- Document List -->
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 id="selectedCollection">Select a collection</h5>
-                        <div id="collectionStats"></div>
-                    </div>
-                    <div class="document-list" id="documentList">
-                        <div class="empty-state">
-                            <i class="bi bi-folder2-open"></i>
-                            <p>Select a collection to view documents</p>
-                        </div>
-                    </div>
+        <!-- Content Panel -->
+        <div class="content-panel">
+            <div class="content-toolbar">
+                <div>
+                    <span id="documentTitle" class="fw-bold">No document selected</span>
                 </div>
-
-                <!-- Document Viewer -->
-                <div class="document-viewer">
-                    <div class="toolbar">
-                        <div class="toolbar-title" id="documentTitle">No document selected</div>
-                        <div class="toolbar-actions">
-                            <button onclick="copyDocument()"><i class="bi bi-clipboard"></i> Copy</button>
-                            <button onclick="downloadDocument()"><i class="bi bi-download"></i> Download</button>
-                            <button onclick="editDocument()"><i class="bi bi-pencil"></i> Edit</button>
-                            <button onclick="deleteDocument()"><i class="bi bi-trash"></i> Delete</button>
-                        </div>
-                    </div>
-                    <pre><code class="language-json" id="documentContent">{
-  "message": "Select a document to view its contents"
-}</code></pre>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" id="editBtn" onclick="editDocument()" disabled>
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" id="deleteBtn" onclick="deleteDocument()" disabled>
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard()">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+            </div>
+            <div class="content-viewer" id="contentViewer">
+                <div class="empty-state">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <p>Select a document to view its content</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Edit Document Modal -->
-    <div class="modal fade" id="editModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Document</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <textarea class="form-control font-monospace" id="documentEditor" rows="15"></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveDocument()">Save Changes</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
-    <script src="/js/browser.js"></script>
+    <script src="js/browser.js"></script>
+    <script>
+        function logout() {
+            localStorage.removeItem('jsondb_auth_token');
+            localStorage.removeItem('jsondb_refresh_token');
+            window.location.href = '/login.html';
+        }
+    </script>
 </body>
 </html>

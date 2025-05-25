@@ -5,206 +5,81 @@
     <title>JSONdb Metrics & Analytics</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/unified-theme.css">
+    <link rel="stylesheet" href="css/theme-overrides.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/theme.js"></script>
     <style>
-        body {
-            background-color: #f8f9fa;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .navbar {
-            background-color: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .navbar-brand {
-            color: #667eea !important;
-            font-weight: 600;
-        }
+        /* Metrics-specific styles only */
         .metric-card {
-            background: white;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
             border-radius: 0.5rem;
             padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
         }
         .metric-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         .metric-value {
             font-size: 2.5rem;
             font-weight: 600;
-            color: #667eea;
+            color: var(--accent);
             margin: 0.5rem 0;
         }
         .metric-label {
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 0.875rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         .metric-change {
             font-size: 0.875rem;
-            margin-top: 0.5rem;
+            font-weight: 500;
         }
         .metric-change.positive {
-            color: #28a745;
+            color: var(--success);
         }
         .metric-change.negative {
-            color: #dc3545;
+            color: var(--danger);
         }
         .chart-container {
-            background: white;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-            height: 400px;
-        }
-        .transaction-list {
-            background: white;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .transaction-item {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid #e9ecef;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: background-color 0.2s;
-        }
-        .transaction-item:hover {
-            background-color: #f8f9fa;
-        }
-        .transaction-status {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 0.5rem;
-        }
-        .status-active {
-            background-color: #ffc107;
-        }
-        .status-committed {
-            background-color: #28a745;
-        }
-        .status-rolled-back {
-            background-color: #dc3545;
-        }
-        .refresh-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            background-color: #28a745;
-            border-radius: 50%;
-            margin-left: 0.5rem;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-                transform: scale(1);
-            }
-            50% {
-                opacity: 0.5;
-                transform: scale(0.8);
-            }
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
+            position: relative;
+            height: 350px;
+            padding: 1rem;
         }
         .time-range-selector {
             display: flex;
             gap: 0.5rem;
+            justify-content: flex-end;
             margin-bottom: 1rem;
         }
-        .time-range-btn {
-            padding: 0.375rem 0.75rem;
+        .time-range-selector .btn {
             font-size: 0.875rem;
-            border: 1px solid #dee2e6;
-            background: white;
-            border-radius: 0.25rem;
-            cursor: pointer;
-            transition: all 0.2s;
         }
-        .time-range-btn:hover {
-            background-color: #f8f9fa;
-        }
-        .time-range-btn.active {
-            background-color: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        .performance-grid {
+        .metric-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .performance-metric {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 0.375rem;
-            text-align: center;
-        }
-        .performance-metric .value {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #495057;
-        }
-        .performance-metric .label {
-            font-size: 0.75rem;
-            color: #6c757d;
-            text-transform: uppercase;
-        }
-        .alert-box {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 0.375rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
-        .alert-box.show {
-            display: block;
-        }
-        .operation-badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-            border-radius: 0.25rem;
-            font-weight: 500;
-        }
-        .op-read {
-            background-color: #cfe2ff;
-            color: #084298;
-        }
-        .op-write {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        .op-delete {
-            background-color: #f8d7da;
-            color: #721c24;
         }
     </style>
 </head>
-<body>
+<body class="page-metrics">
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light">
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="/admin.html">
-                <i class="bi bi-database"></i> JSONdb
+                <img src="/resources/jsondb_logo_white.svg" alt="JSONdb" style="height: 40px;" data-theme-logo>
             </a>
             <div class="navbar-nav ms-auto">
                 <a class="nav-link" href="/admin.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                <a class="nav-link" href="/browser.html"><i class="bi bi-folder2-open"></i> Browser</a>
                 <a class="nav-link active" href="/metrics.html"><i class="bi bi-graph-up"></i> Metrics</a>
-                <a class="nav-link" href="/browser.html"><i class="bi bi-folder-open"></i> Browser</a>
                 <a class="nav-link" href="/rbac.html"><i class="bi bi-shield-lock"></i> RBAC</a>
+                <a class="nav-link" href="/swagger.html"><i class="bi bi-book"></i> API Docs</a>
                 <button class="btn btn-sm btn-outline-danger ms-3" onclick="logout()">
                     <i class="bi bi-box-arrow-right"></i> Logout
                 </button>
@@ -212,135 +87,162 @@
         </div>
     </nav>
 
-    <div class="container-fluid p-4">
+    <div class="container-fluid">
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>
-                <i class="bi bi-graph-up text-primary"></i> 
-                Metrics & Analytics
-                <span class="refresh-indicator"></span>
-            </h2>
+        <div class="section-header d-flex justify-content-between align-items-center">
+            <div>
+                <h2>Metrics & Analytics</h2>
+                <p>Monitor your database performance and usage patterns</p>
+            </div>
             <div class="time-range-selector">
-                <button class="time-range-btn active" data-range="1h">1 Hour</button>
-                <button class="time-range-btn" data-range="24h">24 Hours</button>
-                <button class="time-range-btn" data-range="7d">7 Days</button>
-                <button class="time-range-btn" data-range="30d">30 Days</button>
+                <button class="btn btn-sm btn-outline-primary active" onclick="changeTimeRange('1h')">1H</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('24h')">24H</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('7d')">7D</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('30d')">30D</button>
             </div>
         </div>
 
-        <!-- Alert Box -->
-        <div class="alert-box" id="alertBox">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <span id="alertMessage"></span>
+        <!-- Key Metrics Grid -->
+        <div class="metric-grid mb-4">
+            <div class="metric-card">
+                <div class="metric-label">Total Operations</div>
+                <div class="metric-value" id="totalOps">0</div>
+                <div class="metric-change positive">
+                    <i class="bi bi-arrow-up"></i> <span id="totalOpsChange">0%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Read Operations</div>
+                <div class="metric-value" id="readOps">0</div>
+                <div class="metric-change positive">
+                    <i class="bi bi-arrow-up"></i> <span id="readOpsChange">0%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Write Operations</div>
+                <div class="metric-value" id="writeOps">0</div>
+                <div class="metric-change negative">
+                    <i class="bi bi-arrow-down"></i> <span id="writeOpsChange">0%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Average Response Time</div>
+                <div class="metric-value" id="avgResponseTime">0ms</div>
+                <div class="metric-change positive">
+                    <i class="bi bi-arrow-up"></i> <span id="responseTimeChange">0%</span>
+                </div>
+            </div>
         </div>
 
-        <!-- Key Metrics -->
+        <!-- Charts Row -->
         <div class="row">
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Total Requests</div>
-                    <div class="metric-value" id="totalRequests">0</div>
-                    <div class="metric-change positive">
-                        <i class="bi bi-arrow-up"></i> <span id="requestsChange">0%</span>
+            <!-- Operations Over Time -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Operations Over Time</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="operationsChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Average Response Time</div>
-                    <div class="metric-value" id="avgResponseTime">0ms</div>
-                    <div class="metric-change negative">
-                        <i class="bi bi-arrow-down"></i> <span id="responseTimeChange">0%</span>
+
+            <!-- Operation Types -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Operation Types</h5>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Active Connections</div>
-                    <div class="metric-value" id="activeConnections">0</div>
-                    <div class="metric-change positive">
-                        <i class="bi bi-arrow-up"></i> <span id="connectionsChange">0%</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Error Rate</div>
-                    <div class="metric-value" id="errorRate">0%</div>
-                    <div class="metric-change positive">
-                        <i class="bi bi-arrow-down"></i> <span id="errorRateChange">0%</span>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="operationTypesChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Performance Metrics -->
-        <div class="performance-grid">
-            <div class="performance-metric">
-                <div class="value" id="cacheHitRate">0%</div>
-                <div class="label">Cache Hit Rate</div>
-            </div>
-            <div class="performance-metric">
-                <div class="value" id="throughput">0/s</div>
-                <div class="label">Throughput</div>
-            </div>
-            <div class="performance-metric">
-                <div class="value" id="avgQueryTime">0ms</div>
-                <div class="label">Avg Query Time</div>
-            </div>
-            <div class="performance-metric">
-                <div class="value" id="memoryUsage">0MB</div>
-                <div class="label">Memory Usage</div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="row">
+        <!-- Response Times & Collection Access -->
+        <div class="row mt-4">
+            <!-- Response Time Distribution -->
             <div class="col-md-6">
-                <div class="chart-container">
-                    <h5>Request Volume</h5>
-                    <canvas id="requestChart"></canvas>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Response Time Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="responseTimeChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Most Accessed Collections -->
             <div class="col-md-6">
-                <div class="chart-container">
-                    <h5>Response Times</h5>
-                    <canvas id="responseChart"></canvas>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Most Accessed Collections</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="collectionsAccessChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-md-6">
-                <div class="chart-container">
-                    <h5>Operations by Type</h5>
-                    <canvas id="operationsChart"></canvas>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="chart-container">
-                    <h5>Error Distribution</h5>
-                    <canvas id="errorChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Transactions -->
+        <!-- System Metrics -->
         <div class="row mt-4">
             <div class="col-12">
-                <div class="transaction-list">
-                    <div class="p-3 border-bottom">
-                        <h5 class="mb-0">Recent Transactions</h5>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">System Performance</h5>
                     </div>
-                    <div id="transactionsList">
-                        <!-- Transactions will be loaded here -->
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="chart-container">
+                                    <canvas id="cpuMemoryChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container">
+                                    <canvas id="diskIOChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/js/metrics.js"></script>
+    <!-- Scripts -->
+    <script src="js/metrics.js"></script>
+    <script>
+        function logout() {
+            localStorage.removeItem('jsondb_auth_token');
+            localStorage.removeItem('jsondb_refresh_token');
+            window.location.href = '/login.html';
+        }
+
+        function changeTimeRange(range) {
+            // Update active button
+            document.querySelectorAll('.time-range-selector .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Reload metrics for the selected time range
+            if (window.loadMetrics) {
+                window.loadMetrics(range);
+            }
+        }
+    </script>
 </body>
 </html>

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JSONdb Document Browser</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/theme-overrides.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/theme.js"></script>
+    <style>
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding-top: 70px; /* Add padding for fixed navbar */
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .navbar {
+            background-color: var(--navbar-bg);
+            box-shadow: var(--shadow);
+            transition: background-color 0.3s ease;
+        }
+        .navbar-brand {
+            color: var(--accent) !important;
+            font-weight: 600;
+        }
+        .sidebar {
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            height: calc(100vh - 70px);
+            overflow-y: auto;
+            transition: background-color 0.3s ease;
+            position: fixed;
+            top: 70px;
+            bottom: 0;
+            left: 0;
+            width: 25%;
+        }
+        .collection-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .collection-item:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        .collection-item.active {
+            background-color: rgba(102, 126, 234, 0.1);
+            border-left: 3px solid var(--accent);
+        }
+        .collection-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .collection-count {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .document-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            background-color: var(--bg-secondary);
+            transition: background-color 0.3s ease;
+        }
+        .document-item {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .document-item:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        .document-item.active {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        .document-viewer {
+            background-color: var(--code-bg);
+            border: 1px solid var(--code-border);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            height: calc(100vh - 280px);
+            overflow: auto;
+        }
+        .search-box {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        .search-box i {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+        .search-box input {
+            padding-left: 2.5rem;
+        }
+        .highlight {
+            background-color: #ffd93d;
+            color: #000;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+        .filter-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .filter-tag {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-tag.active {
+            background-color: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .filter-tag:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        .filter-tag.active:hover {
+            background-color: var(--accent-hover);
+        }
+        .document-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .document-actions button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .stats-badge {
+            display: inline-block;
+            background-color: var(--bg-primary);
+            border-radius: 1rem;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+            margin-right: 0.5rem;
+        }
+        pre[class*="language-"] {
+            margin: 0;
+            background: transparent;
+        }
+        .toolbar {
+            background-color: var(--bg-secondary);
+            border-radius: 0.375rem 0.375rem 0 0;
+            padding: 0.5rem 1rem;
+            margin: -1rem -1rem 1rem -1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .toolbar-title {
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .toolbar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .toolbar-actions button {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+        .toolbar-actions button:hover {
+            background-color: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 0.375rem 0.375rem;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: var(--shadow-hover);
+        }
+        .search-result-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .search-result-item:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        .search-result-collection {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .search-result-match {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        /* Bootstrap Dark Mode Overrides */
+        .modal-content {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .modal-header {
+            border-bottom-color: var(--border-color);
+        }
+        .modal-footer {
+            border-top-color: var(--border-color);
+        }
+        .form-control {
+            background-color: var(--bg-primary);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .form-control:focus {
+            background-color: var(--bg-primary);
+            border-color: var(--accent);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-close {
+            filter: var(--btn-close-filter, none);
+        }
+        [data-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        pre[class*="language-"] {
+            color: var(--text-primary);
+        }
+        code[class*="language-"] {
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/admin.html" style="display: flex; align-items: center; gap: 0.5rem;">
+                <img src="/resources/jsondb_logo_white.svg" alt="JSONdb" style="height: 40px;" data-theme-logo>
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/admin.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                <a class="nav-link active" href="/browser.html"><i class="bi bi-folder2-open"></i> Browser</a>
+                <a class="nav-link" href="/metrics.html"><i class="bi bi-graph-up"></i> Metrics</a>
+                <a class="nav-link" href="/rbac.html"><i class="bi bi-shield-lock"></i> RBAC</a>
+                <a class="nav-link" href="/swagger.html"><i class="bi bi-book"></i> API Docs</a>
+                <button class="btn btn-sm btn-outline-danger ms-3" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar - Collections -->
+            <div class="col-md-3 sidebar p-0">
+                <div class="p-3">
+                    <h5 class="mb-3">Collections</h5>
+                    <div class="search-box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control form-control-sm" id="collectionSearch" placeholder="Search collections...">
+                    </div>
+                </div>
+                <div id="collectionsList">
+                    <!-- Collections will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 p-4" style="margin-left: 25%;">
+                <!-- Search and Filters -->
+                <div class="mb-4">
+                    <div class="search-box position-relative">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control" id="globalSearch" placeholder="Search across all documents...">
+                        <div class="search-results" id="searchResults"></div>
+                    </div>
+                    
+                    <div class="filter-tags" id="filterTags">
+                        <span class="filter-tag active" data-filter="all">All Types</span>
+                        <span class="filter-tag" data-filter="object">Objects</span>
+                        <span class="filter-tag" data-filter="array">Arrays</span>
+                        <span class="filter-tag" data-filter="string">Strings</span>
+                        <span class="filter-tag" data-filter="number">Numbers</span>
+                        <span class="filter-tag" data-filter="boolean">Booleans</span>
+                    </div>
+                </div>
+
+                <!-- Document List -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 id="selectedCollection">Select a collection</h5>
+                        <div id="collectionStats"></div>
+                    </div>
+                    <div class="document-list" id="documentList">
+                        <div class="empty-state">
+                            <i class="bi bi-folder2-open"></i>
+                            <p>Select a collection to view documents</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Viewer -->
+                <div class="document-viewer">
+                    <div class="toolbar">
+                        <div class="toolbar-title" id="documentTitle">No document selected</div>
+                        <div class="toolbar-actions">
+                            <button onclick="copyDocument()"><i class="bi bi-clipboard"></i> Copy</button>
+                            <button onclick="downloadDocument()"><i class="bi bi-download"></i> Download</button>
+                            <button onclick="editDocument()"><i class="bi bi-pencil"></i> Edit</button>
+                            <button onclick="deleteDocument()"><i class="bi bi-trash"></i> Delete</button>
+                        </div>
+                    </div>
+                    <pre><code class="language-json" id="documentContent">{
+  "message": "Select a document to view its contents"
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Document Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea class="form-control font-monospace" id="documentEditor" rows="15"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveDocument()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="/js/browser.js"></script>
+</body>
+</html>

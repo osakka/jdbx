@@ -150,10 +150,13 @@ http_response_t* serve_admin_file(const char* path) {
         sprintf(filepath, "%s/index.html", web_root);
     } else if (strcmp(path, "/login") == 0) {
         sprintf(filepath, "%s/login.html", web_root);
+    } else if (strcmp(path, "/admin.html") == 0) {
+        /* Serve admin.html directly */
+        sprintf(filepath, "%s/admin.html", web_root);
     } else if (strncmp(path, "/admin", 6) == 0) {
         /* Handle /admin prefix redirects */
         if (strcmp(path, "/admin") == 0 || strcmp(path, "/admin/") == 0) {
-            sprintf(filepath, "%s/index.html", web_root);
+            sprintf(filepath, "%s/admin.html", web_root);
         } else {
             sprintf(filepath, "%s%s", web_root, path + 6);
         }

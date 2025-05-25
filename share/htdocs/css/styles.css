@@ -1,7 +1,104 @@
+/* CSS Variables for Theming */
+:root {
+    /* Light theme colors */
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e9ecef;
+    --bg-sidebar: #212529;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #6c757d;
+    --text-sidebar: rgba(255, 255, 255, .75);
+    --text-sidebar-hover: #fff;
+    --border-color: rgba(0, 0, 0, .125);
+    --border-light: #dee2e6;
+    --shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    --shadow-md: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    --hover-bg: rgba(0, 0, 0, .075);
+    --modal-bg: #f8f9fa;
+    --input-bg: #ffffff;
+    --card-bg: #ffffff;
+    --accent-primary: #667eea;
+    --accent-success: #28a745;
+    --accent-info: #17a2b8;
+    --accent-warning: #ffc107;
+    --accent-danger: #dc3545;
+    --logo-filter: none;
+    
+    /* Additional theme variables */
+    --navbar-bg: #ffffff;
+    --accent: #667eea;
+    --success: #28a745;
+    --info: #17a2b8;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.15);
+    --code-bg: #f8f9fa;
+    --code-border: #dee2e6;
+}
+
+/* Dark theme colors */
+[data-theme="dark"] {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2c3034;
+    --bg-tertiary: #343a40;
+    --bg-sidebar: #0f0f0f;
+    --text-primary: #f8f9fa;
+    --text-secondary: #adb5bd;
+    --text-muted: #8b8b8b;
+    --text-sidebar: rgba(255, 255, 255, .75);
+    --text-sidebar-hover: #fff;
+    --border-color: rgba(255, 255, 255, .125);
+    --border-light: #495057;
+    --shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .3);
+    --shadow-md: 0 .5rem 1rem rgba(0, 0, 0, .4);
+    --hover-bg: rgba(255, 255, 255, .075);
+    --modal-bg: #343a40;
+    --input-bg: #343a40;
+    --card-bg: #2c3034;
+    --accent-primary: #667eea;
+    --accent-success: #28a745;
+    --accent-info: #17a2b8;
+    --accent-warning: #ffc107;
+    --accent-danger: #dc3545;
+    --logo-filter: brightness(0.9);
+    
+    /* Additional theme variables */
+    --navbar-bg: #2c3034;
+    --accent: #667eea;
+    --success: #28a745;
+    --info: #17a2b8;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.4);
+    --code-bg: #2c3034;
+    --code-border: #495057;
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+}
+
+.theme-toggle:hover {
+    background-color: var(--hover-bg);
+}
+
 /* Main Styles */
 body {
     font-size: .875rem;
-    background-color: #f8f9fa;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Sidebar */
@@ -12,15 +109,16 @@ body {
     left: 0;
     z-index: 100;
     padding: 0;
-    box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
-    background-color: #212529;
+    box-shadow: inset -1px 0 0 var(--border-color);
+    background-color: var(--bg-sidebar);
     color: white;
+    transition: background-color 0.3s ease;
 }
 
 .sidebar-header {
     padding: 1rem;
     text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, .1);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-header h3 {
@@ -31,17 +129,18 @@ body {
 
 .sidebar .nav-link {
     font-weight: 500;
-    color: rgba(255, 255, 255, .75);
+    color: var(--text-sidebar);
     padding: .75rem 1rem;
+    transition: color 0.3s ease, background-color 0.3s ease;
 }
 
 .sidebar .nav-link:hover {
-    color: #fff;
+    color: var(--text-sidebar-hover);
 }
 
 .sidebar .nav-link.active {
-    color: #fff;
-    background-color: rgba(255, 255, 255, .1);
+    color: var(--text-sidebar-hover);
+    background-color: var(--hover-bg);
 }
 
 .sidebar-footer {
@@ -63,19 +162,32 @@ body {
 /* Card Styles */
 .card {
     margin-bottom: 1.5rem;
-    box-shadow: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    box-shadow: var(--shadow-sm);
     border: none;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .card-header {
-    background-color: #fff;
-    border-bottom: 1px solid rgba(0, 0, 0, .125);
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
 }
 
 /* Table Styles */
+.table {
+    color: var(--text-primary);
+}
+
 .table th {
     font-weight: 500;
     border-top: none;
+    border-color: var(--border-color);
+}
+
+.table td {
+    border-color: var(--border-color);
 }
 
 .actions-column {
@@ -99,14 +211,19 @@ body {
 }
 
 /* Modal Styles */
+.modal-content {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+}
+
 .modal-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid rgba(0, 0, 0, .125);
+    background-color: var(--modal-bg);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .modal-footer {
-    background-color: #f8f9fa;
-    border-top: 1px solid rgba(0, 0, 0, .125);
+    background-color: var(--modal-bg);
+    border-top: 1px solid var(--border-color);
 }
 
 /* Utility Classes */
@@ -120,7 +237,7 @@ body {
 
 /* Transaction Visualization Styles */
 #transaction-relationships-container {
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: var(--hover-bg);
     border-radius: 4px;
 }
 
@@ -134,7 +251,7 @@ body {
 
 .transaction-stats-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    box-shadow: var(--shadow-md);
 }
 
 /* Responsive Adjustments */
@@ -151,69 +268,83 @@ body {
     }
 }
 
-/* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #212529;
-        color: #f8f9fa;
-    }
-    
-    .card {
-        background-color: #2c3034;
-        color: #f8f9fa;
-    }
-    
-    .card-header {
-        background-color: #2c3034;
-        border-bottom: 1px solid rgba(255, 255, 255, .125);
-    }
-    
-    .modal-content {
-        background-color: #2c3034;
-        color: #f8f9fa;
-    }
-    
-    .modal-header, .modal-footer {
-        background-color: #343a40;
-        border-color: rgba(255, 255, 255, .125);
-    }
-    
-    .form-control, .form-select {
-        background-color: #343a40;
-        color: #f8f9fa;
-        border-color: rgba(255, 255, 255, .125);
-    }
-    
-    .form-control:focus, .form-select:focus {
-        background-color: #343a40;
-        color: #f8f9fa;
-    }
-    
-    .table {
-        color: #f8f9fa;
-    }
-    
-    .table-hover tbody tr:hover {
-        color: #fff;
-        background-color: rgba(255, 255, 255, .075);
-    }
-    
-    .nav-tabs .nav-link.active {
-        background-color: #343a40;
-        color: #f8f9fa;
-        border-color: rgba(255, 255, 255, .125);
-    }
-    
-    .nav-tabs .nav-link {
-        color: rgba(255, 255, 255, .75);
-    }
-    
-    .btn-outline-secondary {
-        color: #adb5bd;
-        border-color: #adb5bd;
-    }
-    
-    .text-muted {
-        color: #adb5bd !important;
-    }
+/* Form Controls */
+.form-control, .form-select {
+    background-color: var(--input-bg);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--input-bg);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* Table Hover */
+.table-hover tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Nav Tabs */
+.nav-tabs .nav-link {
+    color: var(--text-secondary);
+    border-color: transparent;
+    transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: var(--border-color);
+}
+
+.nav-tabs .nav-link.active {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color) var(--border-color) var(--card-bg);
+}
+
+/* Buttons */
+.btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-light);
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--text-secondary);
+    border-color: var(--text-secondary);
+}
+
+/* Text Utilities */
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
+}
+
+/* Navbar Specific (for pages with navbar) */
+.navbar {
+    background-color: var(--bg-secondary) !important;
+    box-shadow: 0 1px 3px var(--shadow-sm);
+    transition: background-color 0.3s ease;
+}
+
+.navbar-light .navbar-brand {
+    color: var(--accent-primary) !important;
+}
+
+.navbar-light .navbar-nav .nav-link {
+    color: var(--text-primary);
+    transition: color 0.3s ease;
+}
+
+.navbar-light .navbar-nav .nav-link:hover {
+    color: var(--accent-primary);
+}
+
+.navbar-light .navbar-nav .nav-link.active {
+    color: var(--accent-primary);
 }

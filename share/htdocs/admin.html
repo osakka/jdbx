@@ -2,868 +2,256 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSONdb Admin - Simple & Focused</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <title>JSONdb Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.css">
+    <link rel="stylesheet" href="css/unified-theme.css">
+    <link rel="stylesheet" href="css/theme-overrides.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/theme.js"></script>
     <style>
-        body {
-            background-color: #f8f9fa;
+        /* Dashboard-specific styles only */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
         }
-        .sidebar {
-            position: fixed;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            z-index: 100;
-            padding: 48px 0 0;
-            box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+        .quick-action-btn {
+            padding: 1.5rem;
+            text-align: center;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
         }
-        .sidebar-sticky {
-            position: sticky;
-            top: 48px;
-            height: calc(100vh - 48px);
-            padding-top: .5rem;
-            overflow-x: hidden;
-            overflow-y: auto;
+        .quick-action-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.2);
         }
-        .navbar-brand {
-            padding-top: .75rem;
-            padding-bottom: .75rem;
+        .quick-action-btn i {
+            font-size: 1.25rem;
         }
-        main {
-            margin-left: 240px;
+        .system-health {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
         }
-        .stat-card {
-            transition: transform .2s;
+        .health-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-radius: 0.375rem;
         }
-        .stat-card:hover {
-            transform: translateY(-5px);
+        .health-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
         }
-        .log-viewer {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
-            padding: 15px;
-            border-radius: 5px;
-            height: 400px;
-            overflow-y: auto;
+        .health-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
         }
-        .log-entry {
-            margin-bottom: 2px;
-            white-space: pre-wrap;
+        .metric-chart {
+            position: relative;
+            height: 300px;
         }
-        .log-debug { color: #808080; }
-        .log-info { color: #3794ff; }
-        .log-warning { color: #ff9800; }
-        .log-error { color: #f44336; }
-        #json-editor {
-            height: 400px;
+        /* Chart.js theme support */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            padding: 1rem;
+        }
+        /* Stat card color variants */
+        .stat-card.primary {
+            border-left: 4px solid var(--accent);
+        }
+        .stat-card.success {
+            border-left: 4px solid var(--success);
+        }
+        .stat-card.info {
+            border-left: 4px solid var(--info);
+        }
+        .stat-card.warning {
+            border-left: 4px solid var(--warning);
         }
     </style>
 </head>
-<body>
-    <!-- Top Navigation -->
-    <nav class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6" href="#">
-            <i class="bi bi-database-fill me-2"></i>JSONdb Admin
-        </a>
-        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="navbar-nav">
-            <div class="nav-item text-nowrap">
-                <a class="nav-link px-3" href="#" id="logout-link">Sign out</a>
+<body class="page-dashboard">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/admin.html">
+                <img src="/resources/jsondb_logo_white.svg" alt="JSONdb" style="height: 40px;" data-theme-logo>
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link active" href="/admin.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                <a class="nav-link" href="/browser.html"><i class="bi bi-folder2-open"></i> Browser</a>
+                <a class="nav-link" href="/metrics.html"><i class="bi bi-graph-up"></i> Metrics</a>
+                <a class="nav-link" href="/rbac.html"><i class="bi bi-shield-lock"></i> RBAC</a>
+                <a class="nav-link" href="/swagger.html"><i class="bi bi-book"></i> API Docs</a>
+                <button class="btn btn-sm btn-outline-danger ms-3" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
             </div>
         </div>
     </nav>
 
     <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-                <div class="position-sticky pt-3 sidebar-sticky">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="#" data-view="dashboard">
-                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" data-view="collections">
-                                <i class="bi bi-collection me-2"></i>Collections
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" data-view="logs">
-                                <i class="bi bi-file-text me-2"></i>Server Logs
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" data-view="users">
-                                <i class="bi bi-people me-2"></i>Users & Roles
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" data-view="health">
-                                <i class="bi bi-heart-pulse me-2"></i>System Health
-                            </a>
-                        </li>
-                    </ul>
-                    
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                        <span>Quick Links</span>
-                    </h6>
-                    <ul class="nav flex-column mb-2">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/browser.html">
-                                <i class="bi bi-folder-open me-2"></i>Document Browser
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/metrics.html">
-                                <i class="bi bi-graph-up me-2"></i>Metrics & Analytics
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/rbac.html">
-                                <i class="bi bi-shield-lock me-2"></i>RBAC Management
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/swagger.html">
-                                <i class="bi bi-book me-2"></i>API Documentation
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/demo.html" target="_blank">
-                                <i class="bi bi-box-arrow-up-right me-2"></i>Product Demo
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/metrics_demo.html" target="_blank">
-                                <i class="bi bi-box-arrow-up-right me-2"></i>Metrics Demo
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
-
-            <!-- Main content -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <!-- Dashboard View -->
-                <div id="dashboard-view" class="view-content active">
-                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                        <h1 class="h2">Dashboard</h1>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshView()">
-                            <i class="bi bi-arrow-clockwise"></i> Refresh
-                        </button>
-                    </div>
-                    
-                    <!-- Stats Cards -->
-                    <div class="row mb-4">
-                        <div class="col-xl-3 col-md-6 mb-4">
-                            <div class="card stat-card border-left-primary shadow h-100 py-2">
-                                <div class="card-body">
-                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Collections</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-collections">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-xl-3 col-md-6 mb-4">
-                            <div class="card stat-card border-left-success shadow h-100 py-2">
-                                <div class="card-body">
-                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Documents</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-documents">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-xl-3 col-md-6 mb-4">
-                            <div class="card stat-card border-left-info shadow h-100 py-2">
-                                <div class="card-body">
-                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Database Size</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-size">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-xl-3 col-md-6 mb-4">
-                            <div class="card stat-card border-left-warning shadow h-100 py-2">
-                                <div class="card-body">
-                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Uptime</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-uptime">-</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Quick Actions -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Quick Actions</h5>
-                                </div>
-                                <div class="card-body">
-                                    <button class="btn btn-primary mb-2" onclick="showCreateCollection()">
-                                        <i class="bi bi-plus-circle me-2"></i>Create Collection
-                                    </button>
-                                    <button class="btn btn-secondary mb-2" onclick="loadView('logs')">
-                                        <i class="bi bi-file-text me-2"></i>View Logs
-                                    </button>
-                                    <button class="btn btn-info mb-2" onclick="exportDatabase()">
-                                        <i class="bi bi-download me-2"></i>Export Database
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">System Info</h5>
-                                </div>
-                                <div class="card-body">
-                                    <p><strong>Server:</strong> JSONdb v1.0.7</p>
-                                    <p><strong>API Endpoint:</strong> <code id="api-endpoint">-</code></p>
-                                    <p><strong>Status:</strong> <span class="badge bg-success" id="server-status">Online</span></p>
-                                    <p><strong>Last Check:</strong> <span id="last-check">-</span></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Collections View -->
-                <div id="collections-view" class="view-content" style="display: none;">
-                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                        <h1 class="h2">Collections</h1>
-                        <button class="btn btn-primary" onclick="showCreateCollection()">
-                            <i class="bi bi-plus-circle me-2"></i>New Collection
-                        </button>
-                    </div>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Documents</th>
-                                    <th>Size</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="collections-tbody">
-                                <tr><td colspan="4" class="text-center">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Logs View -->
-                <div id="logs-view" class="view-content" style="display: none;">
-                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                        <h1 class="h2">Server Logs</h1>
-                        <div>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadLogs()">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="clearLogs()">
-                                <i class="bi bi-trash"></i> Clear
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="log-viewer" id="log-viewer">
-                        <div class="text-center text-muted">Loading logs...</div>
-                    </div>
-                </div>
-
-                <!-- Users & Roles View -->
-                <div id="users-view" class="view-content" style="display: none;">
-                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                        <h1 class="h2">Users & Roles</h1>
-                    </div>
-                    
-                    <ul class="nav nav-tabs mb-3">
-                        <li class="nav-item">
-                            <a class="nav-link active" data-bs-toggle="tab" href="#users-tab">Users</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" data-bs-toggle="tab" href="#roles-tab">Roles</a>
-                        </li>
-                    </ul>
-                    
-                    <div class="tab-content">
-                        <div class="tab-pane fade show active" id="users-tab">
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Username</th>
-                                            <th>Email</th>
-                                            <th>Roles</th>
-                                            <th>Created</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="users-tbody">
-                                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div class="tab-pane fade" id="roles-tab">
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Role</th>
-                                            <th>Description</th>
-                                            <th>Permissions</th>
-                                            <th>Users</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="roles-tbody">
-                                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Health View -->
-                <div id="health-view" class="view-content" style="display: none;">
-                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                        <h1 class="h2">System Health</h1>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="loadHealth()">
-                            <i class="bi bi-arrow-clockwise"></i> Refresh
-                        </button>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Server Health</h5>
-                                </div>
-                                <div class="card-body" id="health-info">
-                                    Loading...
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Memory Usage</h5>
-                                </div>
-                                <div class="card-body" id="memory-info">
-                                    Loading...
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
+        <!-- Header -->
+        <div class="section-header">
+            <h2>Dashboard</h2>
+            <p>Welcome to JSONdb Admin Panel</p>
         </div>
-    </div>
 
-    <!-- Document Editor Modal -->
-    <div class="modal fade" id="documentModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="documentModalTitle">Document Editor</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <!-- Stats Grid -->
+        <div class="row" id="statsGrid">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card primary">
+                    <div class="stat-icon">
+                        <i class="bi bi-collection"></i>
+                    </div>
+                    <div class="stat-value" id="totalCollections">0</div>
+                    <div class="stat-label">Collections</div>
                 </div>
-                <div class="modal-body">
-                    <div id="json-editor"></div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card success">
+                    <div class="stat-icon">
+                        <i class="bi bi-file-text"></i>
+                    </div>
+                    <div class="stat-value" id="totalDocuments">0</div>
+                    <div class="stat-label">Documents</div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveDocument()">Save</button>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card info">
+                    <div class="stat-icon">
+                        <i class="bi bi-hdd"></i>
+                    </div>
+                    <div class="stat-value" id="databaseSize">0 KB</div>
+                    <div class="stat-label">Database Size</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card warning">
+                    <div class="stat-icon">
+                        <i class="bi bi-activity"></i>
+                    </div>
+                    <div class="stat-value" id="systemStatus">Active</div>
+                    <div class="stat-label">System Status</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Row -->
+        <div class="row mt-4">
+            <!-- Collections Overview -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Collections Overview</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="collectionsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Health -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">System Health</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="system-health" id="systemHealth">
+                            <div class="health-item">
+                                <div class="health-value" id="cpuUsage">0%</div>
+                                <div class="health-label">CPU Usage</div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-value" id="memoryUsage">0%</div>
+                                <div class="health-label">Memory</div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-value" id="apiLatency">0ms</div>
+                                <div class="health-label">API Latency</div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-value" id="uptime">0h</div>
+                                <div class="health-label">Uptime</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="quick-actions">
+                            <a href="/browser.html" class="quick-action-btn">
+                                <i class="bi bi-folder2-open mb-2"></i>
+                                <div>Browse Collections</div>
+                            </a>
+                            <a href="#" class="quick-action-btn" onclick="createCollection()">
+                                <i class="bi bi-plus-circle mb-2"></i>
+                                <div>Create Collection</div>
+                            </a>
+                            <a href="/rbac.html" class="quick-action-btn">
+                                <i class="bi bi-shield-lock mb-2"></i>
+                                <div>Manage Roles</div>
+                            </a>
+                            <a href="/metrics.html" class="quick-action-btn">
+                                <i class="bi bi-graph-up mb-2"></i>
+                                <div>View Metrics</div>
+                            </a>
+                            <a href="#" class="quick-action-btn" onclick="backupDatabase()">
+                                <i class="bi bi-download mb-2"></i>
+                                <div>Backup Database</div>
+                            </a>
+                            <a href="/swagger.html" class="quick-action-btn">
+                                <i class="bi bi-book mb-2"></i>
+                                <div>API Documentation</div>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Simple Create Collection Modal -->
-    <div class="modal fade" id="createCollectionModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Collection</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="collection-name" class="form-label">Collection Name</label>
-                        <input type="text" class="form-control" id="collection-name" placeholder="my_collection">
-                        <div class="form-text">Use letters, numbers, and underscores only</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="createCollection()">Create</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.js"></script>
+    <!-- Scripts -->
+    <script src="js/admin.js"></script>
     <script>
-        // Configuration
-        const API_BASE_URL = window.location.origin;
-        let authToken = localStorage.getItem('jsondb_auth_token');
-        let currentView = 'dashboard';
-        let jsonEditor = null;
-        let currentCollection = null;
-        let currentDocumentId = null;
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check authentication
-            if (!authToken) {
-                window.location.href = '/login.html';
-                return;
-            }
-            
-            // Set up navigation
-            document.querySelectorAll('[data-view]').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    loadView(link.dataset.view);
-                });
-            });
-            
-            // Set up logout
-            document.getElementById('logout-link').addEventListener('click', (e) => {
-                e.preventDefault();
-                logout();
-            });
-            
-            // Initialize JSON editor
-            const container = document.getElementById('json-editor');
-            jsonEditor = new JSONEditor(container, {
-                mode: 'tree',
-                modes: ['tree', 'code', 'form', 'view']
-            });
-            
-            // Set API endpoint display
-            document.getElementById('api-endpoint').textContent = API_BASE_URL;
-            
-            // Load initial view
-            loadView('dashboard');
-            
-            // Auto-refresh dashboard every 30 seconds
-            setInterval(() => {
-                if (currentView === 'dashboard') {
-                    loadDashboard();
-                }
-            }, 30000);
-        });
-
-        // View Management
-        function loadView(view) {
-            currentView = view;
-            
-            // Hide all views
-            document.querySelectorAll('.view-content').forEach(v => {
-                v.style.display = 'none';
-            });
-            
-            // Show selected view
-            document.getElementById(`${view}-view`).style.display = 'block';
-            
-            // Update nav
-            document.querySelectorAll('[data-view]').forEach(link => {
-                link.classList.toggle('active', link.dataset.view === view);
-            });
-            
-            // Load view data
-            switch(view) {
-                case 'dashboard':
-                    loadDashboard();
-                    break;
-                case 'collections':
-                    loadCollections();
-                    break;
-                case 'logs':
-                    loadLogs();
-                    break;
-                case 'users':
-                    loadUsers();
-                    loadRoles();
-                    break;
-                case 'health':
-                    loadHealth();
-                    break;
-            }
-        }
-
-        function refreshView() {
-            loadView(currentView);
-        }
-
-        // Dashboard
-        async function loadDashboard() {
-            try {
-                // Get collections
-                const collectionsRes = await fetch(`${API_BASE_URL}/api/collections`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const collections = await collectionsRes.json();
-                
-                // Count documents and calculate size
-                let totalDocs = 0;
-                let totalSize = 0;
-                
-                for (const collection of collections.collections || []) {
-                    try {
-                        const docsRes = await fetch(`${API_BASE_URL}/api/collections/${collection}/documents`, {
-                            headers: { 'Authorization': `Bearer ${authToken}` }
-                        });
-                        const docsData = await docsRes.json();
-                        const docs = docsData.documents || [];
-                        totalDocs += docs.length;
-                        totalSize += docs.reduce((sum, doc) => sum + JSON.stringify(doc).length, 0);
-                    } catch (e) {
-                        console.error(`Error loading ${collection}:`, e);
-                    }
-                }
-                
-                // Get health data
-                const healthRes = await fetch(`${API_BASE_URL}/health`);
-                const health = await healthRes.json();
-                
-                // Update stats
-                document.getElementById('stat-collections').textContent = collections.collections.length;
-                document.getElementById('stat-documents').textContent = totalDocs;
-                document.getElementById('stat-size').textContent = formatBytes(totalSize);
-                document.getElementById('stat-uptime').textContent = health.uptime || 'N/A';
-                document.getElementById('last-check').textContent = new Date().toLocaleTimeString();
-                
-            } catch (error) {
-                console.error('Dashboard error:', error);
-            }
-        }
-
-        // Collections
-        async function loadCollections() {
-            const tbody = document.getElementById('collections-tbody');
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await res.json();
-                
-                tbody.innerHTML = '';
-                
-                for (const collection of data.collections || []) {
-                    const row = document.createElement('tr');
-                    
-                    // Get document count
-                    let docCount = 0;
-                    let size = 0;
-                    try {
-                        const docsRes = await fetch(`${API_BASE_URL}/api/collections/${collection}/documents`, {
-                            headers: { 'Authorization': `Bearer ${authToken}` }
-                        });
-                        const docsData = await docsRes.json();
-                        const docs = docsData.documents || [];
-                        docCount = docs.length;
-                        size = docs.reduce((sum, doc) => sum + JSON.stringify(doc).length, 0);
-                    } catch (e) {
-                        console.error(`Error loading ${collection}:`, e);
-                    }
-                    
-                    row.innerHTML = `
-                        <td>${collection}</td>
-                        <td>${docCount}</td>
-                        <td>${formatBytes(size)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewCollection('${collection}')">
-                                <i class="bi bi-eye"></i> View
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteCollection('${collection}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                }
-                
-                if (data.collections.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No collections found</td></tr>';
-                }
-                
-            } catch (error) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading collections</td></tr>';
-                console.error('Collections error:', error);
-            }
-        }
-
-        // Logs (simplified - would need server endpoint)
-        function loadLogs() {
-            const viewer = document.getElementById('log-viewer');
-            viewer.innerHTML = `
-                <div class="log-entry log-info">[INFO] JSONdb server started</div>
-                <div class="log-entry log-debug">[DEBUG] Loading configuration...</div>
-                <div class="log-entry log-info">[INFO] Database initialized</div>
-                <div class="log-entry log-warning">[WARNING] No SSL certificate configured</div>
-                <div class="log-entry log-info">[INFO] Server listening on port 5000</div>
-                <div class="log-entry">Note: Real-time logs require server endpoint</div>
-            `;
-        }
-
-        // Users & Roles
-        async function loadUsers() {
-            const tbody = document.getElementById('users-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections/_users/documents`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await res.json();
-                const users = data.documents || [];
-                
-                tbody.innerHTML = '';
-                users.forEach(user => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${user.username || 'N/A'}</td>
-                        <td>${user.email || 'N/A'}</td>
-                        <td>${(user.roles || []).join(', ') || 'None'}</td>
-                        <td>${formatDate(user.created_at)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" onclick="deleteUser('${user._id}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                
-                if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No users found</td></tr>';
-                }
-                
-            } catch (error) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading users</td></tr>';
-            }
-        }
-
-        async function loadRoles() {
-            const tbody = document.getElementById('roles-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections/_roles/documents`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await res.json();
-                const roles = data.documents || [];
-                
-                tbody.innerHTML = '';
-                roles.forEach(role => {
-                    const row = document.createElement('tr');
-                    const permissions = role.permissions || [];
-                    const permList = Array.isArray(permissions) ? permissions : 
-                        (typeof permissions === 'object' ? Object.values(permissions).flat() : []);
-                    
-                    row.innerHTML = `
-                        <td>${role.name || role.id || 'N/A'}</td>
-                        <td>${role.description || '-'}</td>
-                        <td>${permList.slice(0, 3).join(', ') || 'None'}${permList.length > 3 ? '...' : ''}</td>
-                        <td>${(role.users || []).length}</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" onclick="deleteRole('${role._id}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                
-                if (roles.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No roles found</td></tr>';
-                }
-                
-            } catch (error) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading roles</td></tr>';
-            }
-        }
-
-        // Health
-        async function loadHealth() {
-            try {
-                const res = await fetch(`${API_BASE_URL}/health`);
-                const health = await res.json();
-                
-                document.getElementById('health-info').innerHTML = `
-                    <p><strong>Status:</strong> <span class="badge bg-success">${health.status}</span></p>
-                    <p><strong>Uptime:</strong> ${health.uptime}</p>
-                    <p><strong>Load Average:</strong> ${health.load_average.toFixed(2)}</p>
-                    <p><strong>Timestamp:</strong> ${formatDate(health.timestamp * 1000)}</p>
-                `;
-                
-                const memory = health.memory;
-                const usedPercent = ((memory.used_kb / memory.total_kb) * 100).toFixed(1);
-                
-                document.getElementById('memory-info').innerHTML = `
-                    <p><strong>Total:</strong> ${formatBytes(memory.total_kb * 1024)}</p>
-                    <p><strong>Used:</strong> ${formatBytes(memory.used_kb * 1024)} (${usedPercent}%)</p>
-                    <p><strong>Free:</strong> ${formatBytes(memory.free_kb * 1024)}</p>
-                    <p><strong>Process:</strong> ${formatBytes(memory.process_kb * 1024)}</p>
-                    <div class="progress mt-3">
-                        <div class="progress-bar" style="width: ${usedPercent}%">${usedPercent}%</div>
-                    </div>
-                `;
-                
-            } catch (error) {
-                document.getElementById('health-info').innerHTML = '<p class="text-danger">Error loading health data</p>';
-                document.getElementById('memory-info').innerHTML = '<p class="text-danger">Error loading memory data</p>';
-            }
-        }
-
-        // Collection Management
-        function showCreateCollection() {
-            new bootstrap.Modal(document.getElementById('createCollectionModal')).show();
-        }
-
-        async function createCollection() {
-            const name = document.getElementById('collection-name').value.trim();
-            if (!name || !/^[a-zA-Z0-9_]+$/.test(name)) {
-                alert('Invalid collection name');
-                return;
-            }
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ name })
-                });
-                
-                if (res.ok) {
-                    bootstrap.Modal.getInstance(document.getElementById('createCollectionModal')).hide();
-                    document.getElementById('collection-name').value = '';
-                    loadCollections();
-                    showToast('Collection created successfully');
-                } else {
-                    throw new Error('Failed to create collection');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function deleteCollection(name) {
-            if (!confirm(`Delete collection "${name}"?`)) return;
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections/${name}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (res.ok) {
-                    loadCollections();
-                    showToast('Collection deleted');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        function viewCollection(name) {
-            window.location.href = `/index.html#documents?collection=${name}`;
-        }
-
-        // User/Role Management
-        async function deleteUser(id) {
-            if (!confirm('Delete this user?')) return;
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections/_users/documents/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (res.ok) {
-                    loadUsers();
-                    showToast('User deleted');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function deleteRole(id) {
-            if (!confirm('Delete this role?')) return;
-            
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/collections/_roles/documents/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (res.ok) {
-                    loadRoles();
-                    showToast('Role deleted');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        // Utilities
         function logout() {
             localStorage.removeItem('jsondb_auth_token');
+            localStorage.removeItem('jsondb_refresh_token');
             window.location.href = '/login.html';
         }
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        function createCollection() {
+            // Implement create collection modal
+            alert('Create collection feature coming soon!');
         }
 
-        function formatDate(date) {
-            if (!date) return 'N/A';
-            return new Date(date).toLocaleString();
-        }
-
-        function showToast(message, type = 'success') {
-            // Simple alert for now
-            alert(message);
-        }
-
-        function exportDatabase() {
-            alert('Database export would be available through server endpoint');
-        }
-
-        function clearLogs() {
-            if (confirm('Clear all logs?')) {
-                document.getElementById('log-viewer').innerHTML = '<div class="text-center text-muted">Logs cleared</div>';
-            }
+        function backupDatabase() {
+            // Implement backup functionality
+            alert('Database backup feature coming soon!');
         }
     </script>
 </body>
