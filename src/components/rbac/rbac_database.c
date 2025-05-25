@@ -318,6 +318,14 @@ int create_default_admin_role(struct database* db) {
     json_array_append(system_perms, json_create_string("*"));
     json_object_set(permissions, "system", system_perms);
     
+    /* Add RBAC permissions - admin has all permissions on all RBAC resources */
+    json_object_set(permissions, "0:*", json_create_number(15)); /* All permissions for database */
+    json_object_set(permissions, "1:*", json_create_number(15)); /* All permissions for collections */
+    json_object_set(permissions, "2:*", json_create_number(15)); /* All permissions for documents */
+    json_object_set(permissions, "3:*", json_create_number(15)); /* All permissions for roles */
+    json_object_set(permissions, "4:*", json_create_number(15)); /* All permissions for users */
+    json_object_set(permissions, "5:*", json_create_number(15)); /* All permissions for permissions */
+    
     json_object_set(admin_role, "permissions", permissions);
     
     /* Add timestamps */
