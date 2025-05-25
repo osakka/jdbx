@@ -19,6 +19,65 @@
 /* Permission cache TTL in seconds (5 minutes) */
 #define PERMISSION_CACHE_TTL 300
 
+/* Clean up duplicate admin users and roles */
+static void cleanup_rbac_duplicates(struct database* db) {
+    LOG_INFO("RBAC_DB: Cleaning up duplicate admin users and roles");
+    
+    /* Clean up duplicate admin users */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "username", json_create_string("admin"));
+    json_value_t* results = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+    json_free(query);
+    
+    if (results) {
+        json_value_t* documents = json_object_get(results, "documents");
+        if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 1) {
+            LOG_INFO("RBAC_DB: Found %zu admin users, keeping only user_admin", json_array_size(documents));
+            
+            /* Delete all admin users except the one with _id "user_admin" */
+            for (size_t i = 0; i < json_array_size(documents); i++) {
+                json_value_t* doc = json_array_get(documents, i);
+                json_value_t* id_val = json_object_get(doc, "_id");
+                if (id_val && id_val->type == JSON_STRING) {
+                    const char* doc_id = id_val->value.string;
+                    if (strcmp(doc_id, "user_admin") != 0) {
+                        LOG_DEBUG("RBAC_DB: Deleting duplicate admin user: %s", doc_id);
+                        db_delete_document(db, RBAC_USERS_COLLECTION, doc_id);
+                    }
+                }
+            }
+        }
+        json_free(results);
+    }
+    
+    /* Clean up duplicate admin roles */
+    query = json_create_object();
+    json_object_set(query, "name", json_create_string("admin"));
+    results = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+    json_free(query);
+    
+    if (results) {
+        json_value_t* documents = json_object_get(results, "documents");
+        if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 1) {
+            LOG_INFO("RBAC_DB: Found %zu admin roles, keeping only role_admin", json_array_size(documents));
+            
+            /* Delete all admin roles except the one with _id "role_admin" */
+            for (size_t i = 0; i < json_array_size(documents); i++) {
+                json_value_t* doc = json_array_get(documents, i);
+                json_value_t* id_val = json_object_get(doc, "_id");
+                if (id_val && id_val->type == JSON_STRING) {
+                    const char* doc_id = id_val->value.string;
+                    if (strcmp(doc_id, "role_admin") != 0) {
+                        LOG_DEBUG("RBAC_DB: Deleting duplicate admin role: %s", doc_id);
+                        db_delete_document(db, RBAC_ROLES_COLLECTION, doc_id);
+                    }
+                }
+            }
+        }
+        json_free(results);
+    }
+}
+
 /* Initialize RBAC database collections */
 static int init_rbac_collections(struct database* db) {
     LOG_TRACE("RBAC_DB: Initializing RBAC collections");
@@ -49,6 +108,7 @@ static int init_rbac_collections(struct database* db) {
 }
 
 /* Forward declarations */
+static void cleanup_rbac_duplicates(struct database* db);
 static int create_default_admin_role(struct database* db);
 static int create_default_admin_user(struct database* db);
 
@@ -68,6 +128,9 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
         LOG_ERROR("RBAC_DB: Failed to initialize RBAC collections");
         return NULL;
     }
+    
+    /* Clean up any duplicate admin users/roles */
+    cleanup_rbac_duplicates(db);
     
     /* Create RBAC system structure */
     rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
@@ -117,23 +180,33 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
 int create_default_admin_role(struct database* db) {
     LOG_TRACE("RBAC_DB: Creating default admin role");
     
-    /* Check if admin role already exists */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "name", json_create_string("admin"));
-    
-    json_value_t* existing = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
-    json_free(query);
-    
-    if (existing && json_object_get(existing, "count") && 
-        json_object_get(existing, "count")->value.number > 0) {
-        LOG_TRACE("RBAC_DB: Admin role already exists");
+    /* Check if admin role already exists by _id */
+    json_value_t* existing = db_get_document(db, RBAC_ROLES_COLLECTION, "role_admin");
+    if (existing) {
+        LOG_TRACE("RBAC_DB: Admin role already exists by _id");
         json_free(existing);
         return 1;
     }
-    if (existing) json_free(existing);
     
-    /* Create admin role document */
+    /* Also check if any role with name "admin" exists to prevent duplicates */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "name", json_create_string("admin"));
+    json_value_t* results = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+    json_free(query);
+    
+    if (results) {
+        json_value_t* documents = json_object_get(results, "documents");
+        if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+            LOG_TRACE("RBAC_DB: Admin role already exists by name");
+            json_free(results);
+            return 1;
+        }
+        json_free(results);
+    }
+    
+    /* Create admin role document with explicit _id */
     json_value_t* admin_role = json_create_object();
+    json_object_set(admin_role, "_id", json_create_string("role_admin"));
     json_object_set(admin_role, "name", json_create_string("admin"));
     json_object_set(admin_role, "description", json_create_string("System administrator with full access"));
     
@@ -184,53 +257,36 @@ int create_default_admin_role(struct database* db) {
 int create_default_admin_user(struct database* db) {
     LOG_TRACE("RBAC_DB: Creating default admin user");
     
-    /* Check if admin user already exists */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "username", json_create_string("admin"));
-    
-    json_value_t* existing = db_query_documents(db, RBAC_USERS_COLLECTION, query);
-    json_free(query);
-    
-    if (existing && json_object_get(existing, "count") && 
-        json_object_get(existing, "count")->value.number > 0) {
-        LOG_TRACE("RBAC_DB: Admin user already exists");
+    /* Check if admin user already exists by _id */
+    json_value_t* existing = db_get_document(db, RBAC_USERS_COLLECTION, "user_admin");
+    if (existing) {
+        LOG_TRACE("RBAC_DB: Admin user already exists by _id");
         json_free(existing);
         return 1;
     }
-    if (existing) json_free(existing);
     
-    /* Get admin role ID */
-    query = json_create_object();
-    json_object_set(query, "name", json_create_string("admin"));
-    
-    json_value_t* roles = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+    /* Also check if any user with username "admin" exists to prevent duplicates */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "username", json_create_string("admin"));
+    json_value_t* results = db_query_documents(db, RBAC_USERS_COLLECTION, query);
     json_free(query);
     
-    if (!roles || !json_object_get(roles, "documents")) {
-        LOG_ERROR("RBAC_DB: Admin role not found");
-        if (roles) json_free(roles);
-        return 0;
+    if (results) {
+        json_value_t* documents = json_object_get(results, "documents");
+        if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+            LOG_TRACE("RBAC_DB: Admin user already exists by username");
+            json_free(results);
+            return 1;
+        }
+        json_free(results);
     }
     
-    json_value_t* docs = json_object_get(roles, "documents");
-    if (docs->value.array.size == 0) {
-        LOG_ERROR("RBAC_DB: Admin role not found in results");
-        json_free(roles);
-        return 0;
-    }
+    /* Use the known admin role ID */
+    const char* admin_role_id = "role_admin";
     
-    json_value_t* admin_role = docs->value.array.items[0];
-    json_value_t* role_id_val = json_object_get(admin_role, "_id");
-    if (!role_id_val) {
-        LOG_ERROR("RBAC_DB: Admin role missing _id");
-        json_free(roles);
-        return 0;
-    }
-    
-    const char* admin_role_id = role_id_val->value.string;
-    
-    /* Create admin user document */
+    /* Create admin user document with explicit _id */
     json_value_t* admin_user = json_create_object();
+    json_object_set(admin_user, "_id", json_create_string("user_admin"));
     json_object_set(admin_user, "username", json_create_string("admin"));
     json_object_set(admin_user, "email", json_create_string("admin@localhost"));
     
@@ -239,7 +295,6 @@ int create_default_admin_user(struct database* db) {
     if (!password_hash) {
         LOG_ERROR("RBAC_DB: Failed to hash password");
         json_free(admin_user);
-        json_free(roles);
         return 0;
     }
     
@@ -263,7 +318,6 @@ int create_default_admin_user(struct database* db) {
     /* Insert user */
     json_value_t* user_result = db_insert_document(db, RBAC_USERS_COLLECTION, admin_user);
     json_free(admin_user);
-    json_free(roles);
     
     if (!user_result) {
         LOG_ERROR("RBAC_DB: Failed to create admin user");

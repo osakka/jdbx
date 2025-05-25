@@ -37,30 +37,8 @@ int rbac_db_save_fixed(database_t* db, rbac_system_t* rbac) {
     /* Skip the problematic clearing of existing users and roles */
     LOG_INFO("Skipping deletion of existing RBAC data to avoid hanging");
     
-    /* STAGE 2: Create or verify default system roles if needed */
-    LOG_DEBUG("STAGE 2: Creating/verifying default system roles");
-    /* Create admin role if it doesn't exist */
-    json_value_t* admin_role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, "admin");
-    if (!admin_role_doc) {
-        LOG_DEBUG("Creating default admin role");
-        json_value_t* admin_role = json_create_object();
-        json_object_set(admin_role, "id", json_create_string("admin"));
-        json_object_set(admin_role, "name", json_create_string("admin"));
-        json_object_set(admin_role, "permissions", json_create_object());
-        json_object_set(admin_role, "users", json_create_array());
-        
-        json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, admin_role);
-        if (!result) {
-            LOG_ERROR("Failed to create default admin role");
-        } else {
-            LOG_DEBUG("Successfully created default admin role");
-            json_free(result);
-        }
-    } else {
-        LOG_DEBUG("Default admin role already exists");
-        json_free(admin_role_doc);
-    }
-    LOG_DEBUG("STAGE 2: Completed creating/verifying default system roles");
+    /* STAGE 2: Skip creating default roles - this is handled by rbac_database_init */
+    LOG_DEBUG("STAGE 2: Skipping default role creation (handled by rbac_database_init)");
     
     /* STAGE 3: Save users with detailed step logging */
     LOG_INFO("STAGE 3: Saving %zu users to database", rbac->users->value.object.size);
