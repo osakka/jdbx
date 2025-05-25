@@ -45,6 +45,15 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
 rbac_user_t* rbac_database_create_user(struct database* db, const char* username, const char* password);
 
 /**
+ * Create new role in database
+ * @param db Database instance
+ * @param rolename Role name
+ * @param description Role description (optional)
+ * @return Role structure or NULL on failure
+ */
+rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename, const char* description);
+
+/**
  * Check if user has permission on a resource
  * @param db Database instance
  * @param user_id User ID
