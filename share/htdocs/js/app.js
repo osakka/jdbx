@@ -395,13 +395,15 @@ async function loadSystemHealth() {
             const memoryUsagePercent = ((health.memory.used_kb / health.memory.total_kb) * 100).toFixed(1);
             document.getElementById('cpuUsage').textContent = `${(health.load_average || 0).toFixed(1)}%`;
             document.getElementById('memoryUsage').textContent = `${memoryUsagePercent}%`;
-            document.getElementById('apiLatency').textContent = `${Math.floor(Math.random() * 50 + 10)}ms`;
+            // Show real API latency if available, otherwise N/A
+            const apiLatency = health.api_latency || health.response_time;
+            document.getElementById('apiLatency').textContent = apiLatency ? `${apiLatency}ms` : 'N/A';
             document.getElementById('uptime').textContent = health.uptime || 'N/A';
         } else {
-            document.getElementById('cpuUsage').textContent = '12%';
-            document.getElementById('memoryUsage').textContent = '45%';
-            document.getElementById('apiLatency').textContent = '25ms';
-            document.getElementById('uptime').textContent = '1d 5h';
+            document.getElementById('cpuUsage').textContent = 'N/A';
+            document.getElementById('memoryUsage').textContent = 'N/A';
+            document.getElementById('apiLatency').textContent = 'N/A';
+            document.getElementById('uptime').textContent = 'N/A';
         }
     } catch (error) {
         console.error('Error loading system health:', error);
@@ -907,28 +909,24 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             apiRequest('/api/collections').catch(() => ({ collections: [] }))
         ]);
         
-        // Calculate real metrics
-        let totalOps = 0;
-        let readOps = 0; 
-        let writeOps = 0;
+        // Get real document counts from collections
         let totalDocs = 0;
-        
-        // Get document counts from collections
         const collectionList = Array.isArray(collections) ? collections : (collections.collections || []);
         for (const collection of collectionList) {
             try {
                 const docs = await apiRequest(`/api/collections/${collection}`);
                 const docCount = Array.isArray(docs) ? docs.length : (docs.documents ? docs.documents.length : 0);
                 totalDocs += docCount;
-                // Simulate operations based on doc count (temporary until we have real metrics)
-                readOps += docCount * 10;
-                writeOps += docCount * 3;
             } catch (e) {
                 console.error(`Error loading collection ${collection}:`, e);
             }
         }
         
-        totalOps = readOps + writeOps;
+        // For now, we don't have real operation metrics from the server
+        // So we'll show 0 or N/A until the server provides this data
+        const totalOps = 0;
+        const readOps = 0;
+        const writeOps = 0;
         
         // Add visual indicator for updates
         if (isPolling) {
@@ -938,14 +936,14 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
         }
         
-        // Update metrics display
-        document.getElementById('totalOps').textContent = formatNumber(totalOps);
-        document.getElementById('readOps').textContent = formatNumber(readOps);
-        document.getElementById('writeOps').textContent = formatNumber(writeOps);
+        // Update metrics display - show real values or N/A
+        document.getElementById('totalOps').textContent = totalOps > 0 ? formatNumber(totalOps) : 'N/A';
+        document.getElementById('readOps').textContent = readOps > 0 ? formatNumber(readOps) : 'N/A';
+        document.getElementById('writeOps').textContent = writeOps > 0 ? formatNumber(writeOps) : 'N/A';
         
-        // Calculate average response time from health data
-        const avgResponse = health ? Math.floor(Math.random() * 30 + 10) : 25;
-        document.getElementById('avgResponseTime').textContent = `${avgResponse}ms`;
+        // Show real response time if available, otherwise N/A
+        const avgResponse = health && health.avg_response_time ? health.avg_response_time : null;
+        document.getElementById('avgResponseTime').textContent = avgResponse ? `${avgResponse}ms` : 'N/A';
         
         // Update charts with time-based data
         const labels = [];
@@ -970,36 +968,25 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         if (operationsChart) {
             operationsChart.data.labels = labels;
-            // Generate realistic looking data based on actual metrics
-            const baseRead = readOps / dataPoints;
-            const baseWrite = writeOps / dataPoints;
-            operationsChart.data.datasets[0].data = Array(dataPoints).fill(0).map(() => 
-                Math.max(0, baseRead + (Math.random() - 0.5) * baseRead * 0.4)
-            );
-            operationsChart.data.datasets[1].data = Array(dataPoints).fill(0).map(() => 
-                Math.max(0, baseWrite + (Math.random() - 0.5) * baseWrite * 0.4)
-            );
+            // Show flat lines at 0 since we don't have historical data yet
+            operationsChart.data.datasets[0].data = Array(dataPoints).fill(0);
+            operationsChart.data.datasets[1].data = Array(dataPoints).fill(0);
             operationsChart.update();
         }
         
-        // Update operation types chart with real data
+        // Update operation types chart - all zeros until we have real data
         if (operationTypesChart) {
-            operationTypesChart.data.datasets[0].data = [
-                readOps,
-                writeOps,
-                Math.floor(writeOps * 0.1), // Estimate deletes as 10% of writes
-                readOps * 0.8 // Estimate queries as 80% of reads
-            ];
+            operationTypesChart.data.datasets[0].data = [0, 0, 0, 0];
             operationTypesChart.update();
         }
         
     } catch (error) {
         console.error('Error loading metrics:', error);
-        // Fallback to demo data if error
-        document.getElementById('totalOps').textContent = '0';
-        document.getElementById('readOps').textContent = '0';
-        document.getElementById('writeOps').textContent = '0';
-        document.getElementById('avgResponseTime').textContent = '0ms';
+        // Show N/A on error
+        document.getElementById('totalOps').textContent = 'N/A';
+        document.getElementById('readOps').textContent = 'N/A';
+        document.getElementById('writeOps').textContent = 'N/A';
+        document.getElementById('avgResponseTime').textContent = 'N/A';
     }
 }
 
