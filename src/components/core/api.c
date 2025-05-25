@@ -1070,8 +1070,35 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
                                   "{\"error\":\"Invalid document\"}", "application/json");
     }
     
-    /* Insert document */
-    json_value_t* result = db_insert_document(ctx->db, collection_name, document);
+    /* Check if document has _id field for update vs insert */
+    json_value_t* id_field = json_object_get(document, "_id");
+    json_value_t* result = NULL;
+    
+    if (id_field && id_field->type == JSON_STRING) {
+        /* Document has _id, check if it exists and update */
+        const char* doc_id = id_field->value.string;
+        
+        /* Try to get existing document */
+        json_value_t* existing = db_get_document(ctx->db, collection_name, doc_id);
+        if (existing) {
+            /* Document exists, update it */
+            json_free(existing);
+            result = db_update_document(ctx->db, collection_name, doc_id, document);
+            
+            if (!result) {
+                free(collection_name);
+                return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                          "{\"error\":\"Failed to update document\"}", "application/json");
+            }
+        } else {
+            /* Document doesn't exist, insert it */
+            result = db_insert_document(ctx->db, collection_name, document);
+        }
+    } else {
+        /* No _id field, just insert */
+        result = db_insert_document(ctx->db, collection_name, document);
+    }
+    
     free(collection_name);
     
     if (!result) {

@@ -8,6 +8,8 @@
     --text-primary: #212529;
     --text-secondary: #6c757d;
     --accent: #667eea;
+    --accent-light: rgba(102, 126, 234, 0.1);
+    --accent-dark: #5567d8;
     --border-color: #dee2e6;
     --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     --navbar-bg: #ffffff;
@@ -17,7 +19,7 @@
     --success: #28a745;
     --danger: #dc3545;
     --warning: #ffc107;
-    --info: #17a2b8;
+    --info: #667eea;
 }
 
 [data-theme="dark"] {
@@ -27,6 +29,8 @@
     --text-primary: #e1e1e1;
     --text-secondary: #a0a0a0;
     --accent: #667eea;
+    --accent-light: rgba(102, 126, 234, 0.2);
+    --accent-dark: #7a8ff5;
     --border-color: #404040;
     --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
     --navbar-bg: #2d2d2d;
@@ -36,7 +40,7 @@
     --success: #28a745;
     --danger: #dc3545;
     --warning: #ffc107;
-    --info: #17a2b8;
+    --info: #667eea;
 }
 
 /* Base Styles */
@@ -173,6 +177,59 @@ body {
     border-color: var(--accent);
 }
 
+/* Color all Bootstrap button variants with JSONdb blue accents */
+.btn-info {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    opacity: 0.9;
+}
+
+.btn-info:hover {
+    background-color: var(--accent-dark);
+    border-color: var(--accent-dark);
+    opacity: 1;
+}
+
+.btn-success {
+    background-color: var(--success);
+    border-color: var(--success);
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Make warning and danger buttons have JSONdb blue undertones */
+.btn-warning {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    border-color: var(--danger);
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
+}
+
+/* Update all icon colors that should be JSONdb blue */
+.bi-speedometer2, .bi-folder2-open, .bi-graph-up, 
+.bi-shield-lock, .bi-gear-fill, .bi-book {
+    color: var(--accent);
+}
+
 .btn-outline-danger {
     color: var(--danger);
     border-color: var(--danger);
@@ -241,6 +298,24 @@ body {
     background-color: var(--text-secondary) !important;
 }
 
+.badge.bg-info {
+    background-color: var(--accent) !important;
+    opacity: 0.8;
+}
+
+/* Update text colors to use JSONdb blue */
+.text-primary {
+    color: var(--accent) !important;
+}
+
+.bg-primary {
+    background-color: var(--accent) !important;
+}
+
+.text-info {
+    color: var(--accent) !important;
+}
+
 /* Unified Alert Styles */
 .alert {
     border-radius: 0.5rem;
@@ -297,6 +372,12 @@ body {
 
 .spinner-border {
     width: 2rem;
+    height: 2rem;
+    color: var(--accent);
+}
+
+.spinner-border.text-primary {
+    color: var(--accent) !important;
     height: 2rem;
     border-width: 0.2rem;
 }
@@ -366,6 +447,48 @@ body {
     opacity: 0.8;
 }
 
+/* Stat card variations with JSONdb blue accents */
+.stat-card.primary {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.05) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.stat-card.success {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(40, 167, 69, 0.05) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.stat-card.info {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(23, 162, 184, 0.05) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.stat-card.warning {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(255, 193, 7, 0.05) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+/* Dark mode stat cards */
+[data-theme="dark"] .stat-card.primary {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(102, 126, 234, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="dark"] .stat-card.success {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(40, 167, 69, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.25);
+}
+
+[data-theme="dark"] .stat-card.info {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(23, 162, 184, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="dark"] .stat-card.warning {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(255, 193, 7, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.25);
+}
+
 .stat-card .stat-value {
     font-size: 2rem;
     font-weight: 600;
@@ -414,6 +537,112 @@ body {
     height: 1.1rem !important;
     line-height: 1 !important;
     vertical-align: middle !important;
+}
+
+/* Health metrics styling */
+.system-health {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.health-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--accent-light);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    transition: all 0.3s ease;
+}
+
+.health-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.15);
+}
+
+.health-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.health-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Chart container styling */
+.chart-container {
+    position: relative;
+    height: 300px;
+    padding: 1rem;
+}
+
+/* Section headers */
+.section-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--accent-light);
+}
+
+.section-header h2 {
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.section-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Metric cards for metrics page */
+.metric-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.metric-change {
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.metric-change.positive {
+    color: var(--success);
+}
+
+.metric-change.negative {
+    color: var(--danger);
 }
 
 /* Page-specific adjustments */
