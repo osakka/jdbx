@@ -40,9 +40,14 @@ static schema_t* create_users_schema() {
     json_value_t* properties = json_create_object();
     
     /* _id property */
+    json_value_t* _id_prop = json_create_object();
+    json_object_set(_id_prop, "type", json_create_string("string"));
+    json_object_set(properties, "_id", _id_prop);
+    
+    /* id property (used by RBAC) */
     json_value_t* id_prop = json_create_object();
     json_object_set(id_prop, "type", json_create_string("string"));
-    json_object_set(properties, "_id", id_prop);
+    json_object_set(properties, "id", id_prop);
     
     /* username property */
     json_value_t* username_prop = json_create_object();
@@ -52,11 +57,11 @@ static schema_t* create_users_schema() {
     json_object_set(username_prop, "pattern", json_create_string("^[a-zA-Z0-9_-]+$"));
     json_object_set(properties, "username", username_prop);
     
-    /* password property */
+    /* password_hash property */
     json_value_t* password_prop = json_create_object();
     json_object_set(password_prop, "type", json_create_string("string"));
     json_object_set(password_prop, "minLength", json_create_number(8));
-    json_object_set(properties, "password", password_prop);
+    json_object_set(properties, "password_hash", password_prop);
     
     /* email property */
     json_value_t* email_prop = json_create_object();
@@ -87,7 +92,7 @@ static schema_t* create_users_schema() {
     /* Required fields */
     json_value_t* required = json_create_array();
     json_array_append(required, json_create_string("username"));
-    json_array_append(required, json_create_string("password"));
+    json_array_append(required, json_create_string("password_hash"));
     json_object_set(schema_json, "required", required);
     
     /* No additional properties */

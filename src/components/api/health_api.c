@@ -154,9 +154,17 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
             json_object_set(operations, "database", json_create_number((double)db_ops_counter->value.counter));
         }
         
-        /* TODO: Add read/write breakdown when we track them separately */
-        json_object_set(operations, "read", json_create_number(0.0));
-        json_object_set(operations, "write", json_create_number(0.0));
+        /* Add read/write operation breakdown */
+        metric_t* db_read_ops = get_db_read_operations_metric();
+        metric_t* db_write_ops = get_db_write_operations_metric();
+        
+        if (db_read_ops) {
+            json_object_set(operations, "read", json_create_number((double)db_read_ops->value.counter));
+        }
+        
+        if (db_write_ops) {
+            json_object_set(operations, "write", json_create_number((double)db_write_ops->value.counter));
+        }
         
         json_object_set(metrics_json, "operations", operations);
         
@@ -178,10 +186,27 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
         
         json_object_set(metrics_json, "performance", performance);
         
-        /* Add cache object (placeholder for now) */
+        /* Add cache metrics */
         json_value_t *cache = json_create_object();
-        json_object_set(cache, "hit_rate", json_create_number(0.0));
-        json_object_set(cache, "size_mb", json_create_number(0.0));
+        
+        /* Get cache metrics */
+        metric_t* cache_hits = get_cache_hits_metric();
+        metric_t* cache_misses = get_cache_misses_metric();
+        metric_t* cache_evictions = get_cache_evictions_metric();
+        metric_t* cache_size = get_cache_size_metric();
+        
+        double hits = cache_hits ? cache_hits->value.counter : 0.0;
+        double misses = cache_misses ? cache_misses->value.counter : 0.0;
+        double total_requests = hits + misses;
+        double hit_rate = (total_requests > 0) ? (hits / total_requests) * 100.0 : 0.0;
+        
+        json_object_set(cache, "hit_rate", json_create_number(hit_rate));
+        json_object_set(cache, "hits", json_create_number(hits));
+        json_object_set(cache, "misses", json_create_number(misses));
+        json_object_set(cache, "evictions", json_create_number(cache_evictions ? cache_evictions->value.counter : 0.0));
+        json_object_set(cache, "size_bytes", json_create_number(cache_size ? cache_size->value.gauge : 0.0));
+        json_object_set(cache, "size_mb", json_create_number(cache_size ? cache_size->value.gauge / (1024.0 * 1024.0) : 0.0));
+        
         json_object_set(metrics_json, "cache", cache);
         
         json_object_set(health, "metrics", metrics_json);

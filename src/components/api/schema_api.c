@@ -17,85 +17,49 @@ http_response_t* api_handle_schema_get(api_context_t* ctx, http_request_t* reque
     char* collection_name = NULL;
     
     if (strcmp(path, "/api/schemas") == 0) {
-        /* List all schemas */
-        json_value_t* collections = db_list_collections(ctx->db);
-        if (!collections) {
+        /* List all JSON schemas */
+        json_value_t* schemas_list = db_list_json_schemas(ctx->db);
+        if (!schemas_list) {
             return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                      "{\"error\":\"Failed to list collections\"}", "application/json");
-        }
-        
-        /* Create schemas array */
-        json_value_t* schemas = json_create_array();
-        if (!schemas) {
-            json_free(collections);
-            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                      "{\"error\":\"Failed to create schemas array\"}", "application/json");
-        }
-        
-        /* Iterate through collections and get their schemas */
-        for (size_t i = 0; i < json_array_size(collections); i++) {
-            json_value_t* coll_name_val = json_array_get(collections, i);
-            if (!coll_name_val || coll_name_val->type != JSON_STRING) {
-                continue;
-            }
-            
-            /* Get schema for collection */
-            schema_t* schema = db_get_schema(ctx->db, coll_name_val->value.string);
-            if (schema) {
-                /* Convert schema to JSON */
-                json_value_t* schema_json = db_schema_to_json(schema);
-                if (schema_json) {
-                    /* Add collection name */
-                    json_object_set(schema_json, "collection", json_create_string(coll_name_val->value.string));
-                    /* Add schema to array */
-                    json_array_append(schemas, schema_json);
-                }
-            }
+                                      "{\"error\":\"Failed to list schemas\"}", "application/json");
         }
         
         /* Create response */
         json_value_t* response = json_create_object();
-        json_object_set(response, "schemas", schemas);
+        json_object_set(response, "schemas", schemas_list);
         
         /* Serialize response */
         char* response_str = json_stringify(response);
         
         /* Free resources */
         json_free(response);
-        json_free(collections);
         
         return create_http_response(HTTP_OK, response_str, "application/json");
     } else if (strncmp(path, "/api/schemas/", 13) == 0) {
         /* Get schema for specific collection */
         collection_name = strdup(path + 13);
         
-        /* Get schema for collection */
-        schema_t* schema = db_get_schema(ctx->db, collection_name);
+        /* Get JSON schema for collection */
+        json_value_t* schema = db_get_json_schema(ctx->db, collection_name);
         if (!schema) {
             free(collection_name);
             return create_http_response(HTTP_NOT_FOUND, 
                                       "{\"error\":\"Schema not found\"}", "application/json");
         }
         
-        /* Convert schema to JSON */
-        json_value_t* schema_json = db_schema_to_json(schema);
-        if (!schema_json) {
-            free(collection_name);
-            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                      "{\"error\":\"Failed to convert schema to JSON\"}", "application/json");
-        }
+        /* Create response object */
+        json_value_t* response = json_create_object();
+        json_object_set(response, "collection", json_create_string(collection_name));
+        json_object_set(response, "schema", schema);
         
-        /* Add collection name */
-        json_object_set(schema_json, "collection", json_create_string(collection_name));
-        
-        /* Serialize schema */
-        char* schema_str = json_stringify(schema_json);
+        /* Serialize response */
+        char* response_str = json_stringify(response);
         
         /* Free resources */
-        json_free(schema_json);
+        json_free(response);
         free(collection_name);
         
-        return create_http_response(HTTP_OK, schema_str, "application/json");
+        return create_http_response(HTTP_OK, response_str, "application/json");
     } else {
         return create_http_response(HTTP_BAD_REQUEST, 
                                   "{\"error\":\"Invalid path\"}", "application/json");
@@ -135,20 +99,19 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
                                   "{\"error\":\"Collection not found\"}", "application/json");
     }
     
-    /* Create schema from request body */
-    schema_t* schema = db_schema_from_json(body);
-    if (!schema) {
+    /* Extract schema from request body */
+    json_value_t* schema_val = json_object_get(body, "schema");
+    if (!schema_val || schema_val->type != JSON_OBJECT) {
         json_free(body);
         return create_http_response(HTTP_BAD_REQUEST, 
-                                  "{\"error\":\"Invalid schema definition\"}", "application/json");
+                                  "{\"error\":\"Schema definition is required\"}", "application/json");
     }
     
-    /* Attach schema to collection */
-    if (!db_attach_schema(ctx->db, collection_name, schema)) {
-        db_free_schema(schema);
+    /* Store JSON schema */
+    if (!db_store_json_schema(ctx->db, collection_name, schema_val)) {
         json_free(body);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                                  "{\"error\":\"Failed to attach schema to collection\"}", "application/json");
+                                  "{\"error\":\"Failed to store schema\"}", "application/json");
     }
     
     /* Create response */
@@ -199,18 +162,17 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
                                   "{\"error\":\"Invalid request body\"}", "application/json");
     }
     
-    /* Create schema from request body */
-    schema_t* schema = db_schema_from_json(body);
-    if (!schema) {
+    /* Extract schema from request body */
+    json_value_t* schema_val = json_object_get(body, "schema");
+    if (!schema_val || schema_val->type != JSON_OBJECT) {
         json_free(body);
         free(collection_name);
         return create_http_response(HTTP_BAD_REQUEST, 
-                                  "{\"error\":\"Invalid schema definition\"}", "application/json");
+                                  "{\"error\":\"Schema definition is required\"}", "application/json");
     }
     
-    /* Attach schema to collection (this will replace the existing schema) */
-    if (!db_attach_schema(ctx->db, collection_name, schema)) {
-        db_free_schema(schema);
+    /* Update JSON schema */
+    if (!db_store_json_schema(ctx->db, collection_name, schema_val)) {
         json_free(body);
         free(collection_name);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -257,8 +219,8 @@ http_response_t* api_handle_schema_delete(api_context_t* ctx, http_request_t* re
                                   "{\"error\":\"Collection not found\"}", "application/json");
     }
     
-    /* Detach schema from collection */
-    if (!db_detach_schema(ctx->db, collection_name)) {
+    /* Delete JSON schema */
+    if (!db_delete_json_schema(ctx->db, collection_name)) {
         free(collection_name);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Failed to delete schema\"}", "application/json");
@@ -312,24 +274,24 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
                                   "{\"error\":\"Document to validate is required\"}", "application/json");
     }
     
-    /* Get schema for collection */
-    schema_t* schema = db_get_schema(ctx->db, collection_name);
+    /* Get JSON schema for collection */
+    json_value_t* schema = db_get_json_schema(ctx->db, collection_name);
     if (!schema) {
         json_free(body);
         return create_http_response(HTTP_NOT_FOUND, 
                                   "{\"error\":\"Schema not found for collection\"}", "application/json");
     }
     
-    /* Validate document against schema */
-    schema_validation_result_t result = db_validate_document(schema, document_val);
+    /* Validate document against JSON schema */
+    char* error_msg = NULL;
+    int is_valid = db_validate_json_schema(schema, document_val, &error_msg);
     
     /* Create response */
     json_value_t* response = json_create_object();
-    json_object_set(response, "valid", json_create_boolean(result.is_valid));
+    json_object_set(response, "valid", json_create_boolean(is_valid));
     
-    if (!result.is_valid) {
-        json_object_set(response, "error_field", json_create_string(result.error_field ? result.error_field : "unknown"));
-        json_object_set(response, "error_message", json_create_string(result.error_message ? result.error_message : "Unknown validation error"));
+    if (!is_valid && error_msg) {
+        json_object_set(response, "error", json_create_string(error_msg));
     }
     
     /* Serialize response */
@@ -338,9 +300,9 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
     /* Free resources */
     json_free(response);
     json_free(body);
+    json_free(schema);
     
-    if (result.error_field) free(result.error_field);
-    if (result.error_message) free(result.error_message);
+    if (error_msg) free(error_msg);
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }

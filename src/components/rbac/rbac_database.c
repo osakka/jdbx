@@ -173,11 +173,10 @@ int create_default_admin_role(struct database* db) {
         return 0;
     }
     
-    char* role_id = json_get_string(json_object_get(result, "id"));
+    const char* role_id = json_get_string(json_object_get(result, "_id"));
     json_free(result);
     
-    LOG_TRACE("RBAC_DB: Admin role created with ID: %s", role_id);
-    free(role_id);
+    LOG_TRACE("RBAC_DB: Admin role created with ID: %s", role_id ? role_id : "(null)");
     return 1;
 }
 
@@ -271,9 +270,8 @@ int create_default_admin_user(struct database* db) {
         return 0;
     }
     
-    char* user_id = json_get_string(json_object_get(user_result, "id"));
-    LOG_TRACE("RBAC_DB: Admin user created with ID: %s", user_id);
-    free(user_id);
+    const char* user_id = json_get_string(json_object_get(user_result, "_id"));
+    LOG_TRACE("RBAC_DB: Admin user created with ID: %s", user_id ? user_id : "(null)");
     json_free(user_result);
     return 1;
 }
@@ -390,7 +388,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
     }
     
     /* Extract user ID from result */
-    char* user_id = json_get_string(json_object_get(insert_result, "id"));
+    const char* user_id = json_get_string(json_object_get(insert_result, "_id"));
     json_free(insert_result);
     
     /* Create rbac_user_t structure */

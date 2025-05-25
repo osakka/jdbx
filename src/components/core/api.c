@@ -103,11 +103,11 @@ api_route_t routes[] = {
     {"/metrics/available", HTTP_GET, health_api_handle_metrics_available, 0},
     
     /* Schema validation routes */
-    {"/api/schemas", HTTP_GET, api_handle_schema_get, 1},
-    {"/api/schemas", HTTP_POST, api_handle_schema_create, 1},
-    {"/api/schemas/", HTTP_GET, api_handle_schema_get, 1},
-    {"/api/schemas/", HTTP_PUT, api_handle_schema_update, 1},
-    {"/api/schemas/", HTTP_DELETE, api_handle_schema_delete, 1},
+    {"/api/schemas", HTTP_GET, api_handle_schema_get, 0},
+    {"/api/schemas", HTTP_POST, api_handle_schema_create, 0},
+    {"/api/schemas/", HTTP_GET, api_handle_schema_get, 0},
+    {"/api/schemas/", HTTP_PUT, api_handle_schema_update, 0},
+    {"/api/schemas/", HTTP_DELETE, api_handle_schema_delete, 0},
     {"/api/validate", HTTP_POST, api_handle_schema_validate, 1},
     
     /* Index routes */

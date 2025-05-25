@@ -461,7 +461,13 @@ async function loadBrowserCollections() {
         }
         
         // Store schemas for reference
-        schemas = schemasResponse || [];
+        if (schemasResponse && schemasResponse.schemas) {
+            schemas = schemasResponse.schemas;
+        } else if (Array.isArray(schemasResponse)) {
+            schemas = schemasResponse;
+        } else {
+            schemas = [];
+        }
         
         await renderCollections();
     } catch (error) {
@@ -718,6 +724,226 @@ function selectDocument(index) {
     // Update buttons
     updateEditButton();
     document.getElementById('deleteBtn').disabled = false;
+}
+
+// ===== QUERY BUILDER FUNCTIONALITY =====
+let queryBuilderVisible = false;
+
+function toggleQueryBuilder() {
+    queryBuilderVisible = !queryBuilderVisible;
+    const queryBuilder = document.getElementById('queryBuilder');
+    const searchBox = document.getElementById('documentsSearchBox');
+    const panelTitle = document.getElementById('panelTitle');
+    
+    if (queryBuilderVisible) {
+        queryBuilder.style.display = 'block';
+        searchBox.style.display = 'none';
+        panelTitle.textContent = 'Query Builder';
+        updateQueryPreview();
+    } else {
+        queryBuilder.style.display = 'none';
+        searchBox.style.display = 'block';
+        panelTitle.textContent = 'Documents';
+    }
+}
+
+function updateQueryBuilder() {
+    const queryType = document.getElementById('queryType').value;
+    
+    // Hide all sections
+    document.querySelectorAll('.query-section').forEach(section => {
+        section.style.display = 'none';
+    });
+    
+    // Show selected section
+    document.getElementById(queryType + 'Query').style.display = 'block';
+    
+    // Update preview
+    updateQueryPreview();
+}
+
+function updateQueryPreview() {
+    const queryType = document.getElementById('queryType').value;
+    let query = {};
+    
+    switch (queryType) {
+        case 'simple':
+            const field = document.getElementById('simpleField').value;
+            const value = document.getElementById('simpleValue').value;
+            if (field) {
+                query[field] = value;
+            }
+            break;
+            
+        case 'comparison':
+            const compField = document.getElementById('compField').value;
+            const compOp = document.getElementById('compOperator').value;
+            const compValue = document.getElementById('compValue').value;
+            if (compField) {
+                query[compField] = { [compOp]: compValue };
+            }
+            break;
+            
+        case 'logical':
+            const logOp = document.getElementById('logicalOperator').value;
+            const conditions = [];
+            document.querySelectorAll('#logicalConditions .condition').forEach(cond => {
+                const inputs = cond.querySelectorAll('input');
+                if (inputs[0].value) {
+                    conditions.push({ [inputs[0].value]: inputs[1].value });
+                }
+            });
+            if (conditions.length > 0) {
+                query[logOp] = conditions;
+            }
+            break;
+            
+        case 'custom':
+            try {
+                const customJSON = document.getElementById('customJSON').value;
+                if (customJSON) {
+                    query = JSON.parse(customJSON);
+                }
+            } catch (e) {
+                query = { error: 'Invalid JSON' };
+            }
+            break;
+    }
+    
+    document.getElementById('queryPreview').textContent = JSON.stringify(query, null, 2);
+}
+
+function addCondition() {
+    const container = document.getElementById('logicalConditions');
+    const newCondition = document.createElement('div');
+    newCondition.className = 'condition mb-2';
+    newCondition.innerHTML = `
+        <div class="input-group input-group-sm">
+            <input type="text" class="form-control" placeholder="Field" onkeyup="updateQueryPreview()">
+            <input type="text" class="form-control" placeholder="Value" onkeyup="updateQueryPreview()">
+            <button class="btn btn-outline-danger" type="button" onclick="removeCondition(this)">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(newCondition);
+    updateQueryPreview();
+}
+
+function removeCondition(button) {
+    button.closest('.condition').remove();
+    updateQueryPreview();
+}
+
+async function executeQuery() {
+    if (!currentCollection) {
+        showNotification('Please select a collection first', 'warning');
+        return;
+    }
+    
+    const queryType = document.getElementById('queryType').value;
+    let query = {};
+    
+    // Build query based on type (same as updateQueryPreview)
+    switch (queryType) {
+        case 'simple':
+            const field = document.getElementById('simpleField').value;
+            const value = document.getElementById('simpleValue').value;
+            if (field) {
+                query[field] = value;
+            }
+            break;
+            
+        case 'comparison':
+            const compField = document.getElementById('compField').value;
+            const compOp = document.getElementById('compOperator').value;
+            const compValue = document.getElementById('compValue').value;
+            if (compField) {
+                query[compField] = { [compOp]: compValue };
+            }
+            break;
+            
+        case 'logical':
+            const logOp = document.getElementById('logicalOperator').value;
+            const conditions = [];
+            document.querySelectorAll('#logicalConditions .condition').forEach(cond => {
+                const inputs = cond.querySelectorAll('input');
+                if (inputs[0].value) {
+                    conditions.push({ [inputs[0].value]: inputs[1].value });
+                }
+            });
+            if (conditions.length > 0) {
+                query[logOp] = conditions;
+            }
+            break;
+            
+        case 'custom':
+            try {
+                const customJSON = document.getElementById('customJSON').value;
+                if (customJSON) {
+                    query = JSON.parse(customJSON);
+                }
+            } catch (e) {
+                showNotification('Invalid JSON query', 'error');
+                return;
+            }
+            break;
+    }
+    
+    try {
+        // Use the query endpoint with the query parameter
+        const response = await apiRequest(`/api/collections/${currentCollection}/query`, {
+            method: 'POST',
+            body: JSON.stringify({ query: query })
+        });
+        
+        // Update documents with query results
+        if (response.documents) {
+            documents = response.documents;
+        } else if (Array.isArray(response)) {
+            documents = response;
+        } else {
+            documents = [];
+        }
+        
+        // Update UI
+        document.getElementById('documentCount').textContent = documents.length;
+        renderDocuments();
+        
+        showNotification(`Found ${documents.length} documents`, 'success');
+        
+        // Optionally close query builder after execution
+        // toggleQueryBuilder();
+    } catch (error) {
+        console.error('Query error:', error);
+        showNotification('Query failed: ' + (error.message || 'Unknown error'), 'error');
+    }
+}
+
+function clearQuery() {
+    // Clear all inputs
+    document.getElementById('simpleField').value = '';
+    document.getElementById('simpleValue').value = '';
+    document.getElementById('compField').value = '';
+    document.getElementById('compValue').value = '';
+    document.getElementById('customJSON').value = '';
+    
+    // Reset logical conditions
+    const container = document.getElementById('logicalConditions');
+    container.innerHTML = `
+        <div class="condition mb-2">
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control" placeholder="Field" onkeyup="updateQueryPreview()">
+                <input type="text" class="form-control" placeholder="Value" onkeyup="updateQueryPreview()">
+                <button class="btn btn-outline-danger" type="button" onclick="removeCondition(this)">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Update preview
+    updateQueryPreview();
 }
 
 function handleDocumentEdit() {
@@ -1231,7 +1457,8 @@ async function loadRBACData(isPolling = false) {
             loadUsers(),
             loadRoles(),
             loadPermissionMatrix(),
-            loadAuditLog()
+            loadAuditLog(),
+            loadSessions()
         ]);
         
         if (isPolling) {
@@ -1470,6 +1697,126 @@ function loadAuditLog() {
                 </td>
             </tr>
         `;
+    }
+}
+
+// Sessions management functions
+async function loadSessions() {
+    try {
+        const response = await apiRequest('/api/collections/_sessions');
+        const sessions = response.documents || [];
+        renderSessions(sessions);
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        renderSessionsError();
+    }
+}
+
+function renderSessions(sessions) {
+    const tbody = document.getElementById('sessionsTableBody');
+    if (!tbody) return;
+    
+    if (sessions.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="bi bi-clock-history" style="font-size: 2rem;"></i>
+                    <p>No active sessions</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = sessions.map(session => {
+        const createdAt = new Date(session.created_at || Date.now());
+        const lastActivity = new Date(session.last_activity || Date.now());
+        const expiresAt = new Date(session.expires_at || Date.now() + 86400000);
+        const isExpired = expiresAt < new Date();
+        const status = isExpired ? 'Expired' : 'Active';
+        
+        return `
+            <tr>
+                <td class="font-monospace small">${session._id || session.id || 'N/A'}</td>
+                <td>${session.username || session.user || 'Unknown'}</td>
+                <td>${formatDate(createdAt)}</td>
+                <td>${formatDate(lastActivity)}</td>
+                <td>${formatDate(expiresAt)}</td>
+                <td>
+                    <span class="badge ${isExpired ? 'bg-danger' : 'bg-success'}">
+                        ${status}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger" onclick="revokeSession('${session._id || session.id}')">
+                        <i class="bi bi-x-circle"></i> Revoke
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderSessionsError() {
+    const tbody = document.getElementById('sessionsTableBody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                    <p>Failed to load sessions</p>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+async function refreshSessions() {
+    showNotification('Refreshing sessions...', 'info');
+    await loadSessions();
+    showNotification('Sessions refreshed', 'success');
+}
+
+async function clearAllSessions() {
+    if (!confirm('Are you sure you want to clear all sessions? This will log out all users.')) {
+        return;
+    }
+    
+    try {
+        // Get all sessions
+        const response = await apiRequest('/api/collections/_sessions');
+        const sessions = response.documents || [];
+        
+        // Delete each session
+        await Promise.all(sessions.map(session => 
+            apiRequest(`/api/collections/_sessions/documents/${session._id}`, {
+                method: 'DELETE'
+            })
+        ));
+        
+        showNotification('All sessions cleared', 'success');
+        await loadSessions();
+    } catch (error) {
+        console.error('Error clearing sessions:', error);
+        showNotification('Failed to clear sessions', 'error');
+    }
+}
+
+async function revokeSession(sessionId) {
+    if (!confirm('Are you sure you want to revoke this session?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/api/collections/_sessions/documents/${sessionId}`, {
+            method: 'DELETE'
+        });
+        
+        showNotification('Session revoked', 'success');
+        await loadSessions();
+    } catch (error) {
+        console.error('Error revoking session:', error);
+        showNotification('Failed to revoke session', 'error');
     }
 }
 
@@ -1990,7 +2337,6 @@ async function exportToCSV() {
 }
 
 // ===== SCHEMA MANAGEMENT FUNCTIONALITY =====
-let schemas = [];
 let currentSchema = null;
 
 // Show schema manager modal

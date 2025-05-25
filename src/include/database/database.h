@@ -183,6 +183,13 @@ schema_t* db_schema_from_json(json_value_t* json);
 schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* document);
 int db_validate_collection(database_t* db, const char* collection);
 
+/* JSON Schema management */
+int db_store_json_schema(database_t* db, const char* collection_name, json_value_t* schema);
+json_value_t* db_get_json_schema(database_t* db, const char* collection_name);
+int db_delete_json_schema(database_t* db, const char* collection_name);
+json_value_t* db_list_json_schemas(database_t* db);
+int db_validate_json_schema(json_value_t* schema, json_value_t* document, char** error_msg);
+
 /* Index operations */
 index_t* db_create_index(database_t* db, const char* collection, const char* name, 
                         const char* field_path, index_type_t type);

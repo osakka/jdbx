@@ -534,6 +534,9 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_array_append(collection, doc_copy);
     db->is_modified = 1;
     
+    /* Debug: Log collection size after append */
+    LOG_DEBUG("Collection '%s' now contains %zu documents", collection_name, collection->value.array.size);
+    
     /* Notify persistence thread of document insertion */
     char* doc_str = json_stringify(doc_copy);
     size_t doc_size = doc_str ? strlen(doc_str) : 200; /* Estimate if stringify fails */
@@ -942,6 +945,15 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     json_value_t* collection = json_object_get(db->collections, collection_name);
     if (!collection || collection->type != JSON_ARRAY) {
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
+        
+        /* Debug: List all collections */
+        LOG_DEBUG("Available collections in database:");
+        const char* key;
+        json_value_t* value;
+        json_object_foreach(db->collections, key, value) {
+            LOG_DEBUG("  - %s (type: %d)", key, value ? value->type : -1);
+        }
+        
         pthread_mutex_unlock(&db->lock);
         query_free_parse_result(&query_result);
         if (empty_query) {
