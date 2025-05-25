@@ -128,6 +128,7 @@ typedef struct database {
     int cache_enabled;             /* Flag indicating if caching is enabled */
     transaction_manager_t* transaction_manager; /* Transaction manager */
     persistence_thread_t* persistence; /* Persistence thread management */
+    int is_bootstrap_mode;         /* Flag for bootstrap initialization mode */
 } database_t;
 
 /* Database function prototypes */
@@ -206,5 +207,8 @@ json_value_t* db_index_stats(database_t* db, const char* collection, const char*
  * @return 1 on success, 0 on failure
  */
 int db_rebuild_indices(database_t* db);
+
+/* JSON Schema validation */
+int json_schema_validate(json_value_t* schema, json_value_t* value, char** error_msg);
 
 #endif /* DATABASE_H */

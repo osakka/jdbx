@@ -101,6 +101,14 @@ void init_register_config(server_config_t* config);
         printf("[INIT:%s] " message "\n", component, ##__VA_ARGS__); \
     }
 
+/* Standard log message for initialization warnings */
+#define INIT_LOG_WARNING(component, message, ...) \
+    if (g_logger) { \
+        LOG_WARNING("[INIT:%s] WARNING: " message, component, ##__VA_ARGS__); \
+    } else { \
+        fprintf(stderr, "[INIT:%s] WARNING: " message "\n", component, ##__VA_ARGS__); \
+    }
+
 /* Standard log message for initialization debug information */
 #define INIT_LOG_DEBUG(component, message, ...) \
     if (g_logger) { \

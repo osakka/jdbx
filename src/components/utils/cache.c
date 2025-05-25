@@ -1,5 +1,6 @@
 #include "utils/cache.h"
 #include "utils/logger.h"
+#include "utils/metrics.h"
 #include <math.h>
 
 /* Estimate memory size of a string */
@@ -185,6 +186,18 @@ static void evict_entry(cache_t* cache) {
         cache->size--;
         cache->byte_size -= to_evict->size;
         cache->evictions++;
+        
+        /* Update cache size metric */
+        metric_t* cache_size_metric = get_cache_size_metric();
+        if (cache_size_metric) {
+            metrics_gauge_set(cache_size_metric, (double)cache->byte_size);
+        }
+        
+        /* Update evictions metric */
+        metric_t* cache_evictions_metric = get_cache_evictions_metric();
+        if (cache_evictions_metric) {
+            metrics_counter_inc(cache_evictions_metric, 1);
+        }
         
         /* Free entry */
         free_entry(to_evict);
@@ -500,6 +513,12 @@ int cache_put(cache_t* cache, const char* key, json_value_t* value, time_t ttl) 
         /* Update stats */
         cache->size++;
         cache->byte_size += entry->size;
+        
+        /* Update cache size metric */
+        metric_t* cache_size_metric = get_cache_size_metric();
+        if (cache_size_metric) {
+            metrics_gauge_set(cache_size_metric, (double)cache->byte_size);
+        }
 
         LOG_DEBUG("New cache entry added: key='%s', size=%zu bytes, expires=%s",
                  key, entry->size,
@@ -547,6 +566,12 @@ json_value_t* cache_get(cache_t* cache, const char* key) {
             cache->size--;
             cache->byte_size -= entry->size;
             cache->misses++;
+            
+            /* Update metrics for miss due to expiration */
+            metric_t* cache_misses_metric = get_cache_misses_metric();
+            if (cache_misses_metric) {
+                metrics_counter_inc(cache_misses_metric, 1);
+            }
 
             LOG_TRACE("Removing expired entry: key='%s', miss_count=%zu", key, cache->misses);
 
@@ -580,6 +605,12 @@ json_value_t* cache_get(cache_t* cache, const char* key) {
 
         /* Update stats */
         cache->hits++;
+        
+        /* Update metrics */
+        metric_t* cache_hits_metric = get_cache_hits_metric();
+        if (cache_hits_metric) {
+            metrics_counter_inc(cache_hits_metric, 1);
+        }
 
         LOG_DEBUG("Cache hit successful: key='%s', hit_count=%zu, hit_ratio=%.2f%%",
                  key, cache->hits,
@@ -590,6 +621,13 @@ json_value_t* cache_get(cache_t* cache, const char* key) {
     } else {
         /* Entry not found */
         cache->misses++;
+        
+        /* Update metrics */
+        metric_t* cache_misses_metric = get_cache_misses_metric();
+        if (cache_misses_metric) {
+            metrics_counter_inc(cache_misses_metric, 1);
+        }
+        
         LOG_DEBUG("Cache miss: key='%s', miss_count=%zu", key, cache->misses);
         pthread_mutex_unlock(&cache->lock);
         return NULL;
@@ -617,6 +655,12 @@ int cache_remove(cache_t* cache, const char* key) {
         /* Update stats */
         cache->size--;
         cache->byte_size -= entry->size;
+        
+        /* Update cache size metric */
+        metric_t* cache_size_metric = get_cache_size_metric();
+        if (cache_size_metric) {
+            metrics_gauge_set(cache_size_metric, (double)cache->byte_size);
+        }
         
         /* Free entry */
         free_entry(entry);
@@ -749,6 +793,7 @@ json_value_t* cache_get_stats_json(cache_t* cache) {
     json_object_set(json, "misses", json_create_integer(stats.misses));
     json_object_set(json, "evictions", json_create_integer(stats.evictions));
     json_object_set(json, "hit_ratio", json_create_number(stats.hit_ratio));
+    json_object_set(json, "hit_rate_percent", json_create_number(stats.hit_ratio * 100.0));
     json_object_set(json, "memory_bytes", json_create_number(stats.byte_size));
     json_object_set(json, "memory_mb", json_create_number(stats.byte_size / (1024.0 * 1024.0)));
     

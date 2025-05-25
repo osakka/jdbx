@@ -546,9 +546,14 @@
                 <div class="collections-sidebar">
                     <div class="panel-header">
                         <span><i class="bi bi-collection"></i> Collections</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="refreshCollections()">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showSchemaManager()" title="Manage Schemas">
+                                <i class="bi bi-file-code"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="refreshCollections()" title="Refresh">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="search-box">
                         <input type="text" id="collectionSearch" placeholder="Search collections..." onkeyup="filterCollections()">
@@ -655,6 +660,20 @@
                         <small>No historical data</small>
                     </div>
                 </div>
+                <div class="metric-card">
+                    <div class="metric-label">Cache Hit Rate</div>
+                    <div class="metric-value" id="cacheHitRate">0%</div>
+                    <div class="metric-change text-muted">
+                        <small id="cacheStats">0 hits / 0 misses</small>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Cache Size</div>
+                    <div class="metric-value" id="cacheSize">0</div>
+                    <div class="metric-change text-muted">
+                        <small id="cacheMemory">0 MB</small>
+                    </div>
+                </div>
             </div>
 
             <!-- Metrics Charts -->
@@ -663,7 +682,7 @@
                     <div class="card">
                         <div class="card-header">
                             <h5 class="mb-0">Operations Over Time</h5>
-                            <small class="text-muted">Metrics collection not yet implemented</small>
+                            <small class="text-muted">Real-time data from metrics system</small>
                         </div>
                         <div class="card-body">
                             <div class="chart-container">
@@ -676,11 +695,28 @@
                     <div class="card">
                         <div class="card-header">
                             <h5 class="mb-0">Operation Types</h5>
-                            <small class="text-muted">Metrics collection not yet implemented</small>
+                            <small class="text-muted">Current distribution</small>
                         </div>
                         <div class="card-body">
                             <div class="chart-container">
                                 <canvas id="operationTypesChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cache Performance Chart -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Cache Hit Rate Over Time</h5>
+                            <small class="text-muted">Cache performance metrics</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="cacheHitRateChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -1018,6 +1054,87 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="createUser()">Create User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schema Manager Modal -->
+    <div class="modal fade" id="schemaManagerModal" tabindex="-1" aria-labelledby="schemaManagerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="schemaManagerModalLabel">Schema Manager</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Schema List -->
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6>Collection Schemas</h6>
+                                <button class="btn btn-sm btn-primary" onclick="createNewSchema()">
+                                    <i class="bi bi-plus"></i> New
+                                </button>
+                            </div>
+                            <div class="list-group" id="schemaList">
+                                <div class="text-muted text-center p-3">Loading schemas...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Schema Editor -->
+                        <div class="col-md-8">
+                            <div id="schemaEditorContainer" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 id="schemaEditorTitle">Edit Schema</h6>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-success" onclick="saveSchema()">
+                                            <i class="bi bi-save"></i> Save
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteSchema()">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <form id="schemaForm">
+                                    <div class="mb-3">
+                                        <label for="schemaCollection" class="form-label">Collection</label>
+                                        <select class="form-control" id="schemaCollection" required>
+                                            <option value="">Select a collection...</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="schemaDescription" class="form-label">Description</label>
+                                        <input type="text" class="form-control" id="schemaDescription" 
+                                               placeholder="Brief description of the schema">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Schema Definition (JSON Schema)</label>
+                                        <div class="border rounded p-2">
+                                            <textarea class="form-control font-monospace" id="schemaDefinition" 
+                                                      rows="15" placeholder='{"type": "object", "properties": {...}}'></textarea>
+                                        </div>
+                                        <small class="text-muted">Define your JSON Schema here. It will be used to validate documents in this collection.</small>
+                                    </div>
+                                    
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="schemaStrict">
+                                        <label class="form-check-label" for="schemaStrict">
+                                            Strict validation (reject documents with extra properties)
+                                        </label>
+                                    </div>
+                                </form>
+                            </div>
+                            
+                            <div id="schemaWelcome" class="text-center p-5">
+                                <i class="bi bi-file-code" style="font-size: 3rem; color: #dee2e6;"></i>
+                                <p class="text-muted mt-3">Select a schema from the list or create a new one</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

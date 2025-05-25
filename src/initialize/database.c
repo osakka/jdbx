@@ -1,5 +1,6 @@
 #include "init.h"
 #include "database/database.h"
+#include "database/system_schemas.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,20 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
     if (!db) {
         INIT_LOG_FAILURE("DATABASE", "Failed to open database from '%s', creating new database", config->db_path);
         return INIT_DATABASE_ERROR;
+    }
+    
+    /* Check if database needs bootstrap */
+    if (db_needs_bootstrap(db)) {
+        INIT_LOG_PROGRESS("DATABASE", "Database needs bootstrap initialization");
+        db->is_bootstrap_mode = 1;
+        
+        /* Initialize system schemas */
+        if (!db_init_system_schemas(db)) {
+            INIT_LOG_FAILURE("DATABASE", "Failed to initialize system schemas");
+            db_close(db);
+            return INIT_DATABASE_ERROR;
+        }
+        INIT_LOG_SUCCESS("DATABASE", "System schemas initialized for bootstrap");
     }
     
     /* Build indices for faster lookups */

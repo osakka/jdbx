@@ -66,6 +66,8 @@ api_route_t routes[] = {
     {"/api/metrics/stats", HTTP_GET, health_api_handle_metrics, 1},
     {"/api/metrics/activity", HTTP_GET, health_api_handle_metrics, 1},
     {"/api/metrics/export", HTTP_POST, health_api_handle_metrics_export, 1},
+    {"/api/metrics/history", HTTP_GET, api_handle_metrics_history, 1},
+    {"/api/metrics/aggregate", HTTP_GET, api_handle_metrics_aggregate, 1},
     
     /* System info routes */
     {"/api/system/info", HTTP_GET, api_handle_system_info, 1},

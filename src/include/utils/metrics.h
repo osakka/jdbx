@@ -110,6 +110,8 @@ char* metrics_get_json(metrics_registry_t* registry);
 #define METRIC_SERVER_REQUEST_DURATION "server_request_duration_seconds"
 #define METRIC_DB_OPERATIONS "db_operations_total"
 #define METRIC_DB_OPERATION_DURATION "db_operation_duration_seconds"
+#define METRIC_DB_READ_OPERATIONS "db_read_operations_total"
+#define METRIC_DB_WRITE_OPERATIONS "db_write_operations_total"
 #define METRIC_ACTIVE_CONNECTIONS "active_connections"
 #define METRIC_COLLECTION_SIZE "collection_documents_total"
 #define METRIC_DOCUMENT_SIZE "document_size_bytes"
@@ -118,6 +120,7 @@ char* metrics_get_json(metrics_registry_t* registry);
 #define METRIC_CACHE_SIZE "cache_size_bytes"
 #define METRIC_CACHE_HITS "cache_hits_total"
 #define METRIC_CACHE_MISSES "cache_misses_total"
+#define METRIC_CACHE_EVICTIONS "cache_evictions_total"
 
 /* Global metrics registry */
 extern struct metrics_registry* g_metrics_registry;
@@ -127,10 +130,13 @@ metric_t* get_server_requests_metric(void);
 metric_t* get_server_request_duration_metric(void);
 metric_t* get_db_operations_metric(void);
 metric_t* get_db_operation_duration_metric(void);
+metric_t* get_db_read_operations_metric(void);
+metric_t* get_db_write_operations_metric(void);
 metric_t* get_active_connections_metric(void);
 metric_t* get_api_errors_metric(void);
 metric_t* get_cache_hits_metric(void);
 metric_t* get_cache_misses_metric(void);
+metric_t* get_cache_evictions_metric(void);
 metric_t* get_cache_size_metric(void);
 metric_t* get_system_memory_metric(void);
 

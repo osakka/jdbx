@@ -5,6 +5,7 @@
 #include "rbac/rbac_minimal.h"
 #include "rbac/rbac_refcount.h"
 #include "database/database.h"
+#include "database/system_schemas.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +70,13 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
     
     /* Register with cleanup system */
     init_register_rbac(rbac, rbac_ref);
+    
+    /* Complete bootstrap if we were in bootstrap mode */
+    if (database->is_bootstrap_mode) {
+        INIT_LOG_PROGRESS("RBAC", "Completing bootstrap mode");
+        db_complete_bootstrap(database);
+        INIT_LOG_SUCCESS("RBAC", "Bootstrap mode completed - normal operation enabled");
+    }
     
     /* 
      * Try to load the enhanced RBAC system in a background thread

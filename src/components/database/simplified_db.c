@@ -93,6 +93,7 @@ database_t* db_init(const char* path) {
     db->cache_enabled = 0;
     db->transaction_manager = NULL;
     db->persistence = NULL;
+    db->is_bootstrap_mode = 0;
 
     LOG_DEBUG("Database structure initialized successfully");
 
@@ -363,7 +364,29 @@ db_collection_t* db_get_collection(database_t* db, const char* name) {
  * List collections
  */
 json_value_t* db_list_collections(database_t* db) {
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment read operation counter */
+    metric_t* db_read_ops = get_db_read_operations_metric();
+    if (db_read_ops) {
+        metrics_counter_inc(db_read_ops, 1);
+    }
+    
     if (!db) {
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -373,6 +396,9 @@ json_value_t* db_list_collections(database_t* db) {
     json_value_t* result = json_create_array();
     if (!result) {
         pthread_mutex_unlock(&db->lock);
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -385,6 +411,11 @@ json_value_t* db_list_collections(database_t* db) {
     }
     
     pthread_mutex_unlock(&db->lock);
+    
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
     
     return result;
 }
@@ -406,6 +437,12 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     metric_t* db_ops = get_db_operations_metric();
     if (db_ops) {
         metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment write operation counter */
+    metric_t* db_write_ops = get_db_write_operations_metric();
+    if (db_write_ops) {
+        metrics_counter_inc(db_write_ops, 1);
     }
     
     if (!db || !collection_name || !document || document->type != JSON_OBJECT) {
@@ -451,6 +488,35 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     }
     json_object_set(result, "_id", json_create_string(id_str));
     
+    /* Check if collection has a schema and validate document */
+    if (!db->is_bootstrap_mode) {
+        db_collection_t* coll = db_get_collection(db, collection_name);
+        if (coll && coll->schema) {
+            LOG_DEBUG("Validating document against collection schema");
+            schema_validation_result_t validation = db_validate_document(coll->schema, doc_copy);
+            
+            if (!validation.is_valid) {
+                LOG_ERROR("Document validation failed: %s (field: %s)", 
+                         validation.error_message ? validation.error_message : "unknown error",
+                         validation.error_field ? validation.error_field : "unknown");
+                
+                /* Clean up validation result */
+                if (validation.error_field) free(validation.error_field);
+                if (validation.error_message) free(validation.error_message);
+                
+                /* Clean up and return error */
+                json_free(result);
+                if (op_timer) {
+                    metrics_timer_stop(op_timer);
+                }
+                return NULL;
+            }
+            LOG_DEBUG("Document validation passed");
+        }
+    } else {
+        LOG_DEBUG("Skipping schema validation - database in bootstrap mode");
+    }
+    
     LOG_DEBUG("Acquiring database lock");
     pthread_mutex_lock(&db->lock);
     
@@ -495,8 +561,30 @@ json_value_t* db_get_document(database_t* db, const char* collection_name, const
              collection_name ? collection_name : "NULL", 
              id ? id : "NULL");
     
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment read operation counter */
+    metric_t* db_read_ops = get_db_read_operations_metric();
+    if (db_read_ops) {
+        metrics_counter_inc(db_read_ops, 1);
+    }
+    
     if (!db || !collection_name || !id) {
         LOG_ERROR("Invalid parameters for db_get_document");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -537,6 +625,11 @@ json_value_t* db_get_document(database_t* db, const char* collection_name, const
         LOG_WARNING("Document with ID '%s' not found in collection '%s'", id, collection_name);
     }
     
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
+    
     return document;
 }
 
@@ -549,8 +642,30 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
              collection_name ? collection_name : "NULL", 
              id ? id : "NULL");
     
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment write operation counter */
+    metric_t* db_write_ops = get_db_write_operations_metric();
+    if (db_write_ops) {
+        metrics_counter_inc(db_write_ops, 1);
+    }
+    
     if (!db || !collection_name || !id || !document || document->type != JSON_OBJECT) {
         LOG_ERROR("Invalid parameters for db_update_document");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -572,6 +687,36 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
         return NULL;
     }
     json_object_set(result, "_id", json_create_string(id));
+    
+    /* Check if collection has a schema and validate document */
+    if (!db->is_bootstrap_mode) {
+        db_collection_t* coll = db_get_collection(db, collection_name);
+        if (coll && coll->schema) {
+            LOG_DEBUG("Validating document against collection schema");
+            schema_validation_result_t validation = db_validate_document(coll->schema, doc_copy);
+            
+            if (!validation.is_valid) {
+                LOG_ERROR("Document validation failed: %s (field: %s)", 
+                         validation.error_message ? validation.error_message : "unknown error",
+                         validation.error_field ? validation.error_field : "unknown");
+                
+                /* Clean up validation result */
+                if (validation.error_field) free(validation.error_field);
+                if (validation.error_message) free(validation.error_message);
+                
+                /* Clean up and return error */
+                json_free(doc_copy);
+                json_free(result);
+                if (op_timer) {
+                    metrics_timer_stop(op_timer);
+                }
+                return NULL;
+            }
+            LOG_DEBUG("Document validation passed");
+        }
+    } else {
+        LOG_DEBUG("Skipping schema validation - database in bootstrap mode");
+    }
     
     LOG_DEBUG("Acquiring database lock");
     pthread_mutex_lock(&db->lock);
@@ -622,10 +767,18 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
         LOG_ERROR("Document with ID '%s' not found in collection '%s'", id, collection_name);
         /* TEMP: Not freeing since we're not copying */
         json_free(result);
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
     LOG_INFO("Document updated successfully");
+    
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
     
     return result;
 }
@@ -638,8 +791,30 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
              collection_name ? collection_name : "NULL", 
              id ? id : "NULL");
     
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment write operation counter */
+    metric_t* db_write_ops = get_db_write_operations_metric();
+    if (db_write_ops) {
+        metrics_counter_inc(db_write_ops, 1);
+    }
+    
     if (!db || !collection_name || !id) {
         LOG_ERROR("Invalid parameters for db_delete_document");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return 0;
     }
     
@@ -651,6 +826,9 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     if (!collection || collection->type != JSON_ARRAY) {
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
         pthread_mutex_unlock(&db->lock);
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return 0;
     }
     
@@ -693,6 +871,11 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
         LOG_WARNING("Document with ID '%s' not found in collection '%s'", id, collection_name);
     }
     
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
+    
     return found;
 }
 
@@ -702,8 +885,30 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
 json_value_t* db_query_documents(database_t* db, const char* collection_name, json_value_t* query_json) {
     LOG_INFO("Starting document query for collection '%s'", collection_name ? collection_name : "NULL");
     
+    /* Start operation timer */
+    timer_context_t* op_timer = NULL;
+    metric_t* db_op_duration = get_db_operation_duration_metric();
+    if (db_op_duration) {
+        op_timer = metrics_timer_start(db_op_duration);
+    }
+    
+    /* Increment operation counter */
+    metric_t* db_ops = get_db_operations_metric();
+    if (db_ops) {
+        metrics_counter_inc(db_ops, 1);
+    }
+    
+    /* Increment read operation counter */
+    metric_t* db_read_ops = get_db_read_operations_metric();
+    if (db_read_ops) {
+        metrics_counter_inc(db_read_ops, 1);
+    }
+    
     if (!db || !collection_name) {
         LOG_ERROR("Invalid parameters for db_query_documents");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -724,6 +929,9 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         if (empty_query) {
             json_free(query_json);
         }
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -739,6 +947,9 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         if (empty_query) {
             json_free(query_json);
         }
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -750,6 +961,9 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         query_free_parse_result(&query_result);
         if (empty_query) {
             json_free(query_json);
+        }
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
         }
         return NULL;
     }
@@ -779,6 +993,9 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         if (empty_query) {
             json_free(query_json);
         }
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
         return NULL;
     }
     
@@ -805,6 +1022,11 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     }
     
     LOG_INFO("Query completed successfully");
+    
+    /* Stop operation timer */
+    if (op_timer) {
+        metrics_timer_stop(op_timer);
+    }
     
     return response;
 }
