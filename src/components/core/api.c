@@ -1,8 +1,10 @@
 #include "api/api.h"
+#include "api/session_api.h"
 #include "core/server.h"
 #include "database/database.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
+#include "rbac/rbac_database.h"
 #include "utils/metrics.h"
 #include "utils/logger.h"
 #include <stdio.h>
@@ -29,6 +31,11 @@ api_route_t routes[] = {
     {"/api/auth/login", HTTP_POST, original_api_handle_login, 0},
     {"/api/auth/register", HTTP_POST, api_handle_register, 0},
     {"/api/auth/refresh", HTTP_POST, api_handle_token_refresh, 0},
+    {"/api/auth/logout", HTTP_POST, api_handle_logout, 1},
+    
+    /* Session management routes */
+    {"/api/sessions", HTTP_GET, api_handle_get_sessions, 1},
+    {"/api/sessions/active", HTTP_GET, api_handle_get_active_sessions, 1},
     
     /* Collection routes - TEMP: auth disabled for persistence testing */
     {"/api/collections", HTTP_GET, api_handle_collections_list, 0},
@@ -651,9 +658,46 @@ http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* r
         LOG_DEBUG("JWT tokens generated successfully");
     }
     
+    /* Create session record */
+    if (g_logger) {
+        LOG_DEBUG("Checking session creation: ctx->db=%p, response=%p", ctx->db, response);
+    }
+    if (ctx->db && response) {
+        /* Get the access token from response */
+        json_value_t* token_val = json_object_get(response, "token");
+        if (g_logger) {
+            LOG_DEBUG("Token value: %s", token_val ? "found" : "not found");
+        }
+        if (token_val && token_val->type == JSON_STRING) {
+            const char* access_token = token_val->value.string;
+            
+            /* Extract client info from request */
+            /* TODO: Add header parsing to get IP and User-Agent */
+            const char* ip_address = NULL;
+            const char* user_agent = NULL;
+            
+            /* Create session with 30 minute expiration */
+            time_t expires_at = time(NULL) + (30 * 60);
+            char* session_id = rbac_db_create_session(ctx->db, user->id, access_token, 
+                                                    expires_at, ip_address, user_agent);
+            
+            if (session_id) {
+                if (g_logger) {
+                    LOG_DEBUG("Session created with ID: %s", session_id);
+                }
+                free(session_id);
+            } else {
+                if (g_logger) {
+                    LOG_WARNING("Failed to create session for user: %s", user->username);
+                }
+            }
+        }
+    }
+    
     /* Free resources */
     free(response_str); /* We'll stringify again below */
     json_free(body);
+    rbac_free_user(user);
     
     /* Generate the final response string */
     response_str = json_stringify(response);

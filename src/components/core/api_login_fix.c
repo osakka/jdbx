@@ -5,9 +5,14 @@
  */
 #include "api/api.h"
 #include "core/server.h"
+#include "database/database.h"
+#include "rbac/rbac.h"
+#include "rbac/jwt.h"
+#include "rbac/rbac_database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include <string.h>
+#include <time.h>
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     LOG_DEBUG("LOGIN: Starting login handler");
     
@@ -46,29 +51,51 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     
     /* For admin user with admin password, always succeed */
     if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
-        LOG_DEBUG("LOGIN: Admin credentials matched, creating response");
+        LOG_DEBUG("LOGIN: Admin credentials matched, creating proper JWT tokens");
         
-        /* Create a simple successful response like admin login */
-        json_value_t* response_obj = json_create_object();
-        LOG_DEBUG("LOGIN: Response object created");
-        json_object_set(response_obj, "success", json_create_boolean(1));
-        json_object_set(response_obj, "access_token", json_create_string("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsIm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTY5MDA4MzIwMCwiZXhwIjoxNjkwMDg2ODAwfQ.39IB0XUFCJnYkLmq3flAKTxWwrDWlAXV3NgJnU5xJLs"));
-        json_object_set(response_obj, "token_type", json_create_string("Bearer"));
-        json_object_set(response_obj, "expires_in", json_create_number(3600));
-        LOG_DEBUG("LOGIN: Response fields added");
+        /* Create proper JWT token pair */
+        const char* user_id = "user_admin";
+        json_value_t* response_obj = NULL;
+        char* response_str = jwt_create_token_pair(ctx->jwt_secret, user_id, username, &response_obj);
         
-        char* response_str = json_stringify(response_obj);
-        LOG_DEBUG("LOGIN: Response stringified");
+        if (!response_str || !response_obj) {
+            LOG_ERROR("LOGIN: Failed to create JWT tokens");
+            json_free(body);
+            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                      "{\"error\":\"Failed to create tokens\"}", "application/json");
+        }
         
+        LOG_DEBUG("LOGIN: JWT tokens created successfully");
+        
+        /* Create session record */
+        if (ctx->db && response_obj) {
+            json_value_t* token_val = json_object_get(response_obj, "token");
+            if (token_val && token_val->type == JSON_STRING) {
+                const char* access_token = token_val->value.string;
+                
+                /* Create session with 30 minute expiration */
+                time_t expires_at = time(NULL) + (30 * 60);
+                char* session_id = rbac_db_create_session(ctx->db, user_id, access_token, 
+                                                        expires_at, NULL, NULL);
+                
+                if (session_id) {
+                    LOG_DEBUG("LOGIN: Session created with ID: %s", session_id);
+                    free(session_id);
+                } else {
+                    LOG_WARNING("LOGIN: Failed to create session for user: %s", username);
+                }
+            }
+        }
+        
+        /* Clean up and return response */
+        free(response_str);
+        response_str = json_stringify(response_obj);
         json_free(response_obj);
         json_free(body);
-        LOG_DEBUG("LOGIN: Memory cleaned up");
         
         http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
-        LOG_DEBUG("LOGIN: HTTP response created");
+        LOG_DEBUG("LOGIN: Returning successful response with JWT tokens");
         
-        free(response_str);
-        LOG_DEBUG("LOGIN: Returning successful response");
         return response;
     }
     

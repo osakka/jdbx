@@ -80,6 +80,7 @@ init_status_t init_api(server_config_t* config, database_t* database,
         }
     }
     
+    
     INIT_LOG_SUCCESS("API", "API context initialized with all routes successfully");
     
     /* Set output parameter */
