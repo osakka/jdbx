@@ -17,9 +17,9 @@ int is_admin_route(const char* path) {
         return 1;
     }
     
-    /* Login path is not protected */
-    if (strcmp(path, "/login") == 0) {
-        return 0;
+    /* Login path is an admin route (for serving login.html) */
+    if (strcmp(path, "/login") == 0 || strcmp(path, "/login.html") == 0) {
+        return 1;
     }
     
     /* Check for admin paths */
