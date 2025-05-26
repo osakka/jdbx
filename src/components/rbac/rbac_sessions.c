@@ -35,6 +35,16 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
     json_object_set(session_doc, "user_id", json_create_string(user_id));
     json_object_set(session_doc, "token", json_create_string(token));
     
+    /* Get username from user document */
+    json_value_t* user_doc = db_get_document(db, "_users", user_id);
+    if (user_doc) {
+        json_value_t* username_val = json_object_get(user_doc, "username");
+        if (username_val && username_val->type == JSON_STRING) {
+            json_object_set(session_doc, "username", json_create_string(username_val->value.string));
+        }
+        json_free(user_doc);
+    }
+    
     /* Add timestamps */
     time_t now = time(NULL);
     char timestamp[64];

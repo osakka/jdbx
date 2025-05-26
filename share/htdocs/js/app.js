@@ -210,8 +210,8 @@ async function apiRequest(endpoint, options = {}) {
         
         if (!response.ok) {
             if (response.status === 401) {
-                // For RBAC endpoints, don't kick out, just throw error
-                if (endpoint.includes('/rbac/') || endpoint.includes('/admin/')) {
+                // For RBAC, admin, and metrics endpoints, don't kick out, just throw error
+                if (endpoint.includes('/rbac/') || endpoint.includes('/admin/') || endpoint.includes('/metrics/')) {
                     const error = await response.json().catch(() => ({ error: 'Unauthorized' }));
                     throw new Error(error.error || 'Unauthorized');
                 }
@@ -1225,16 +1225,18 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         // Get current metrics and historical data in parallel
-        const [health, collections, cacheStats, historyReadOps, historyWriteOps, historyResponseTime, historyCacheHits, historyCacheMisses] = await Promise.all([
+        const [health, collections, cacheStats] = await Promise.all([
             apiRequest('/api/health').catch(() => null),
             apiRequest('/api/collections').catch(() => ({ collections: [] })),
-            apiRequest('/api/cache/stats').catch(() => null),
-            apiRequest(`/api/metrics/aggregate?metric=db_read_operations_total&start=${startTime}&end=${now}&interval=${interval}`).catch(() => null),
-            apiRequest(`/api/metrics/aggregate?metric=db_write_operations_total&start=${startTime}&end=${now}&interval=${interval}`).catch(() => null),
-            apiRequest(`/api/metrics/aggregate?metric=db_operation_duration_seconds&start=${startTime}&end=${now}&interval=${interval}`).catch(() => null),
-            apiRequest(`/api/metrics/aggregate?metric=cache_hits_total&start=${startTime}&end=${now}&interval=${interval}`).catch(() => null),
-            apiRequest(`/api/metrics/aggregate?metric=cache_misses_total&start=${startTime}&end=${now}&interval=${interval}`).catch(() => null)
+            apiRequest('/api/cache/stats').catch(() => null)
         ]);
+        
+        // TODO: Historical metrics not yet implemented
+        const historyReadOps = null;
+        const historyWriteOps = null;
+        const historyResponseTime = null;
+        const historyCacheHits = null;
+        const historyCacheMisses = null;
         
         // Get real document counts from collections
         let totalDocs = 0;

@@ -270,9 +270,13 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
         if (user->type == JSON_OBJECT) {
             json_value_t* sanitized = json_create_object();
             
-            /* Copy id and username */
-            json_value_t* id = json_object_get(user, "id");
+            /* Copy user fields */
+            json_value_t* id = json_object_get(user, "_id");
             json_value_t* username = json_object_get(user, "username");
+            json_value_t* email = json_object_get(user, "email");
+            json_value_t* active = json_object_get(user, "active");
+            json_value_t* created_at = json_object_get(user, "created_at");
+            json_value_t* updated_at = json_object_get(user, "updated_at");
             json_value_t* roles = json_object_get(user, "roles");
             
             if (id && id->type == JSON_STRING) {
@@ -281,6 +285,22 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
             
             if (username && username->type == JSON_STRING) {
                 json_object_set(sanitized, "username", json_create_string(username->value.string));
+            }
+            
+            if (email && email->type == JSON_STRING) {
+                json_object_set(sanitized, "email", json_create_string(email->value.string));
+            }
+            
+            if (active) {
+                json_object_set(sanitized, "active", json_clone(active));
+            }
+            
+            if (created_at && created_at->type == JSON_STRING) {
+                json_object_set(sanitized, "created_at", json_create_string(created_at->value.string));
+            }
+            
+            if (updated_at && updated_at->type == JSON_STRING) {
+                json_object_set(sanitized, "updated_at", json_create_string(updated_at->value.string));
             }
             
             if (roles && roles->type == JSON_ARRAY) {
@@ -692,10 +712,13 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
         if (role->type == JSON_OBJECT) {
             json_value_t* role_data = json_create_object();
             
-            /* Copy id and name */
-            json_value_t* id = json_object_get(role, "id");
+            /* Copy role fields */
+            json_value_t* id = json_object_get(role, "_id");
             json_value_t* name = json_object_get(role, "name");
+            json_value_t* description = json_object_get(role, "description");
             json_value_t* permissions = json_object_get(role, "permissions");
+            json_value_t* created_at = json_object_get(role, "created_at");
+            json_value_t* updated_at = json_object_get(role, "updated_at");
             
             if (id && id->type == JSON_STRING) {
                 json_object_set(role_data, "id", json_create_string(id->value.string));
@@ -703,6 +726,18 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
             
             if (name && name->type == JSON_STRING) {
                 json_object_set(role_data, "name", json_create_string(name->value.string));
+            }
+            
+            if (description && description->type == JSON_STRING) {
+                json_object_set(role_data, "description", json_create_string(description->value.string));
+            }
+            
+            if (created_at && created_at->type == JSON_STRING) {
+                json_object_set(role_data, "created_at", json_create_string(created_at->value.string));
+            }
+            
+            if (updated_at && updated_at->type == JSON_STRING) {
+                json_object_set(role_data, "updated_at", json_create_string(updated_at->value.string));
             }
             
             if (permissions && permissions->type == JSON_OBJECT) {
