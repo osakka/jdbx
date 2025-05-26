@@ -522,11 +522,11 @@ int binary_serialize_database(const char* path, void* db) {
     uint32_t collection_count = 0;
     size_t current_offset = sizeof(binary_header_t);
     
-    LOG_DEBUG("MULTI_COL_TRACE: Starting serialization at offset %zu", current_offset);
+    LOG_TRACE("Starting serialization at offset %zu", current_offset);
     
     /* Iterate through collections manually */
     size_t coll_count = json_object_size(database->collections);
-    LOG_DEBUG("MULTI_COL_TRACE: Found %zu collections to serialize", coll_count);
+    LOG_TRACE("Found %zu collections to serialize", coll_count);
     
     for (size_t i = 0; i < coll_count; i++) {
         json_object_entry_t* entry = &database->collections->value.object.entries[i];
@@ -535,7 +535,7 @@ int binary_serialize_database(const char* path, void* db) {
         
         collection_count++;
         
-        LOG_DEBUG("MULTI_COL_TRACE: Collection %zu: '%s', %zu documents, starting at offset %zu", 
+        LOG_TRACE("Collection %zu: '%s', %zu documents, starting at offset %zu", 
                   i, collection_name, json_array_size(collection_data), current_offset);
         
         /* Write collection header placeholder */
@@ -546,7 +546,7 @@ int binary_serialize_database(const char* path, void* db) {
         coll_header.document_count = (uint32_t)json_array_size(collection_data);
         coll_header.data_offset = current_offset + sizeof(binary_collection_header_t) + coll_header.name_length;
         
-        LOG_DEBUG("MULTI_COL_TRACE: Collection '%s' header: name_len=%d, doc_count=%d, data_offset=%zu", 
+        LOG_TRACE("Collection '%s' header: name_len=%d, doc_count=%d, data_offset=%zu", 
                   collection_name, coll_header.name_length, coll_header.document_count, coll_header.data_offset);
         
         /* Write collection header */
@@ -600,10 +600,10 @@ int binary_serialize_database(const char* path, void* db) {
             json_value_t* id_val = json_object_get(document, "_id");
             const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
             
-            LOG_INFO("PERSIST_DEBUG: Serializing document '%s' in collection '%s': size=%zu bytes", 
-                     doc_id, collection_name, doc_size);
+            LOG_INFO("PERSIST_DEBUG: Serializing document '%s' in collection '%s': size=%lu bytes", 
+                     doc_id, collection_name, (unsigned long)doc_size);
             
-            LOG_DEBUG("MULTI_COL_TRACE: Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
+            LOG_TRACE("Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
                       collection_name, j, doc_size, doc_header->size, current_offset);
             
             /* Write document */
@@ -615,10 +615,10 @@ int binary_serialize_database(const char* path, void* db) {
             }
             
             current_offset += doc_size;
-            LOG_DEBUG("MULTI_COL_TRACE: After writing document %zu, current_offset=%zu", j, current_offset);
+            LOG_TRACE("After writing document %zu, current_offset=%zu", j, current_offset);
         }
         
-        LOG_DEBUG("MULTI_COL_TRACE: Finished collection '%s', final offset=%zu", collection_name, current_offset);
+        LOG_TRACE("Finished collection '%s', final offset=%zu", collection_name, current_offset);
         
         /* Calculate next collection header position */
         /* After all documents are read, position should be at next collection header */

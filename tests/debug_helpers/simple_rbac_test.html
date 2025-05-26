@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple RBAC Test</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Simple RBAC Test</h1>
+    
+    <button onclick="testWithAuth()">Test With Auth</button>
+    <button onclick="testWithoutAuth()">Test Without Auth</button>
+    <button onclick="clearAuth()">Clear Auth</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        function log(message) {
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        async function testWithAuth() {
+            const token = localStorage.getItem('jsondb_auth_token');
+            if (!token) {
+                log('No auth token found. Please login first.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/rbac/roles', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                const data = await response.json();
+                log('With Auth - Response: ' + JSON.stringify(data));
+                
+                // Check if response is just "admin"
+                if (data === 'admin' || (typeof data === 'string' && data.toLowerCase() === 'admin')) {
+                    log('ERROR: API returned just "admin" string!');
+                }
+            } catch (error) {
+                log('With Auth - Error: ' + error.message);
+            }
+        }
+        
+        async function testWithoutAuth() {
+            try {
+                const response = await fetch('/api/rbac/roles');
+                const data = await response.json();
+                log('Without Auth - Response: ' + JSON.stringify(data));
+            } catch (error) {
+                log('Without Auth - Error: ' + error.message);
+            }
+        }
+        
+        function clearAuth() {
+            localStorage.removeItem('jsondb_auth_token');
+            localStorage.removeItem('jsondb_refresh_token');
+            log('Auth cleared');
+        }
+        
+        // Initial check
+        const hasToken = !!localStorage.getItem('jsondb_auth_token');
+        log('Initial state: ' + (hasToken ? 'Authenticated' : 'Not authenticated'));
+    </script>
+</body>
+</html>

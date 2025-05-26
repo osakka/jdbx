@@ -23,12 +23,12 @@ logger_config_t* g_logger = NULL;
 #endif
 
 /* Forward declarations */
-http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request);
 
 /* API routes */
 api_route_t routes[] = {
     /* Authentication routes */
-    {"/api/auth/login", HTTP_POST, original_api_handle_login, 0},
+    {"/api/auth/login", HTTP_POST, api_handle_login, 0},
     {"/api/auth/register", HTTP_POST, api_handle_register, 0},
     {"/api/auth/refresh", HTTP_POST, api_handle_token_refresh, 0},
     {"/api/auth/logout", HTTP_POST, api_handle_logout, 1},
@@ -99,6 +99,9 @@ api_route_t routes[] = {
     {"/api/backup/", HTTP_DELETE, api_handle_backup_delete, 1},
     {"/api/export", HTTP_POST, api_handle_export, 1},
     {"/api/import", HTTP_POST, api_handle_import, 1},
+    
+    /* Authentication routes */
+    {"/api/login", HTTP_POST, api_handle_login, 0},
     
     /* Admin auth routes */
     {"/api/admin/login", HTTP_POST, api_handle_admin_login, 0},
@@ -593,7 +596,8 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
 
 /* Authentication handlers */
 
-/* Login handler - implementation in api_login_fix.c */
+/* Login handler - moved to api_login_fix.c */
+#if 0
 http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request) {
     if (!ctx || !request || !request->body) {
         return create_http_response(HTTP_BAD_REQUEST, 
@@ -705,6 +709,7 @@ http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* r
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
+#endif
 
 /* Handle token refresh request */
 http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* request) {

@@ -69,6 +69,16 @@ void init_cleanup(void);
 /* Cleanup metrics */
 void cleanup_metrics(void);
 
+/* Process type constants */
+#define PROCESS_TYPE_MAIN          0  /* Initial process */
+#define PROCESS_TYPE_DAEMON_PARENT 1  /* Parent that will exit after forking daemon */
+#define PROCESS_TYPE_DAEMON_CHILD  2  /* Daemon child that will fork again */
+#define PROCESS_TYPE_SERVER        3  /* Final server process */
+
+/* Process type management */
+void init_set_process_type(int type);
+int init_get_process_type(void);
+
 /* Registration functions for cleanup system */
 void init_register_database(database_t* database);
 void init_register_rbac(rbac_system_t* rbac, rbac_refcount_t* rbac_ref);

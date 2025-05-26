@@ -45,10 +45,75 @@ if (!authToken) {
     window.location.href = '/login.html';
 }
 
+// Debug: Monitor RBAC view for unexpected changes
+window.addEventListener('DOMContentLoaded', function() {
+    const rbacView = document.getElementById('rbac-view');
+    if (rbacView) {
+        console.log('Initial RBAC view content length:', rbacView.innerHTML.length);
+        console.log('Initial RBAC view text:', rbacView.textContent.substring(0, 50));
+        
+        // Monitor for the admin text issue
+        setInterval(() => {
+            if (rbacView.textContent.trim() === 'admin') {
+                console.error('DETECTED: RBAC view contains only "admin"!');
+                console.trace('Stack trace for admin text:');
+            }
+        }, 1000);
+    }
+});
+
+// ID Conflict Detector - Prevents issues like the "admin" bug
+function detectIDConflicts() {
+    const allElements = document.querySelectorAll('[id]');
+    const idMap = {};
+    let conflictsFound = false;
+    
+    allElements.forEach(el => {
+        const id = el.id;
+        if (!idMap[id]) {
+            idMap[id] = [];
+        }
+        idMap[id].push(el);
+    });
+    
+    // Report conflicts
+    Object.entries(idMap).forEach(([id, elements]) => {
+        if (elements.length > 1) {
+            conflictsFound = true;
+            console.error(`🚨 ID CONFLICT DETECTED: "${id}" used ${elements.length} times:`);
+            elements.forEach(el => {
+                console.error(`   - <${el.tagName}> ${el.className ? `class="${el.className}"` : ''}`, el);
+            });
+        }
+    });
+    
+    if (conflictsFound) {
+        console.error('⚠️  ID conflicts can cause serious bugs! See FRONTEND_BEST_PRACTICES.md');
+    } else {
+        console.log('✅ No ID conflicts detected');
+    }
+    
+    return !conflictsFound;
+}
+
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Run ID conflict detection
+    detectIDConflicts();
+    
     // Update base URL
-    document.getElementById('baseUrl').textContent = window.location.origin + '/api';
+    const baseUrlElement = document.getElementById('baseUrl');
+    if (baseUrlElement) {
+        baseUrlElement.textContent = window.location.origin + '/api';
+    }
+    
+    // Verify RBAC view structure
+    const rbacView = document.getElementById('rbac-view');
+    if (rbacView && rbacView.children.length === 0) {
+        console.error('RBAC view is empty! Reloading page...');
+        window.location.reload();
+        return;
+    }
     
     // Initialize based on hash
     const hash = window.location.hash.substring(1) || 'dashboard';
@@ -76,16 +141,31 @@ function switchView(view) {
         container.classList.remove('active');
     });
     
-    // Handle body overflow for browser view
+    // Handle body classes for different views
+    document.body.classList.remove('browser-active', 'page-dashboard', 'page-browser', 
+                                    'page-metrics', 'page-rbac', 'page-operations', 'page-api');
+    
     if (view === 'browser') {
         document.body.classList.add('browser-active');
-    } else {
-        document.body.classList.remove('browser-active');
     }
+    
+    // Add page-specific class
+    document.body.classList.add(`page-${view}`);
     
     // Show selected view with minimal delay to prevent snap
     const viewElement = document.getElementById(`${view}-view`);
     if (viewElement) {
+        console.log(`Switching to view: ${view}`);
+        console.log(`View element found:`, viewElement);
+        console.log(`View element content length:`, viewElement.innerHTML.length);
+        console.log(`View element text preview:`, viewElement.textContent.substring(0, 100));
+        
+        // Special check for RBAC view
+        if (view === 'rbac' && viewElement.textContent.trim() === 'admin') {
+            console.error('ERROR: RBAC view contains only "admin" when switching!');
+            console.error('This should not happen. View HTML length:', viewElement.innerHTML.length);
+        }
+        
         // Use requestAnimationFrame for smoother transition
         requestAnimationFrame(() => {
             viewElement.classList.add('active');
@@ -127,6 +207,13 @@ function switchView(view) {
                 }
                 break;
             case 'rbac':
+                // Add safeguard to ensure RBAC view isn't just text
+                const rbacView = document.getElementById('rbac-view');
+                if (rbacView && rbacView.textContent.trim() === 'admin') {
+                    console.error('RBAC view contains only "admin" text! Reloading page...');
+                    window.location.reload();
+                    return;
+                }
                 initializeRBAC();
                 // Set up polling for RBAC
                 if (POLLING_INTERVALS.rbac) {
@@ -1441,6 +1528,71 @@ function changeTimeRange(range) {
 
 // ===== RBAC FUNCTIONALITY =====
 function initializeRBAC() {
+    console.log('=== INITIALIZING RBAC VIEW ===');
+    const rbacView = document.getElementById('rbac-view');
+    console.log('RBAC View element:', rbacView);
+    console.log('RBAC View HTML length:', rbacView ? rbacView.innerHTML.length : 'null');
+    console.log('RBAC View text content:', rbacView ? rbacView.textContent.trim().substring(0, 100) : 'null');
+    
+    // Check if we should default to a specific tab
+    const hash = window.location.hash;
+    if (hash === '#rbac' || hash === '#rbac-roles') {
+        // Switch to Roles tab by default
+        const rolesTab = document.querySelector('#roles-tab');
+        if (rolesTab) {
+            setTimeout(() => {
+                rolesTab.click();
+                console.log('Switched to Roles tab');
+            }, 100);
+        }
+    }
+    
+    // Monitor for content being overwritten
+    const rbacInterval = setInterval(() => {
+        const rbacView = document.getElementById('rbac-view');
+        if (rbacView && rbacView.textContent.trim() === 'admin') {
+            console.error('DETECTED: RBAC view has been overwritten with "admin"!');
+            console.error('Current HTML length:', rbacView.innerHTML.length);
+            console.error('This should not happen!');
+            clearInterval(rbacInterval);
+            
+            // Try to restore it
+            const rolesTab = document.getElementById('roles');
+            if (rolesTab) {
+                console.log('Attempting to restore by re-showing roles tab');
+                rolesTab.classList.add('show', 'active');
+            }
+        }
+    }, 100);
+    
+    // Clear monitor after 5 seconds
+    setTimeout(() => clearInterval(rbacInterval), 5000);
+    
+    // Add Bootstrap tab event listeners
+    const rbacTabs = document.querySelectorAll('#rbacTabs button[data-bs-toggle="tab"]');
+    rbacTabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(event) {
+            console.log('Tab shown:', event.target.getAttribute('data-bs-target'));
+            const targetId = event.target.getAttribute('data-bs-target').substring(1); // Remove #
+            
+            // Render content for the shown tab
+            switch(targetId) {
+                case 'users':
+                    if (allUsers.length > 0) renderUsers();
+                    break;
+                case 'roles':
+                    if (allRoles.length > 0) renderRoles();
+                    break;
+                case 'permissions':
+                    renderPermissionMatrix();
+                    break;
+                case 'sessions':
+                    renderSessions(window.lastSessionsData || []);
+                    break;
+            }
+        });
+    });
+    
     loadRBACData();
 }
 
@@ -1462,6 +1614,20 @@ async function loadRBACData(isPolling = false) {
             loadAuditLog(),
             loadSessions()
         ]);
+        
+        // After loading, ensure the active tab's content is rendered
+        const activeTab = document.querySelector('#rbacTabContent .tab-pane.active');
+        if (activeTab) {
+            console.log('Active tab after load:', activeTab.id);
+            // If roles tab is active but empty, re-render
+            if (activeTab.id === 'roles') {
+                const rolesList = document.getElementById('rolesList');
+                if (rolesList && !rolesList.innerHTML.trim()) {
+                    console.log('Roles tab is active but empty, re-rendering');
+                    renderRoles();
+                }
+            }
+        }
         
         if (isPolling) {
             showNotification('RBAC data refreshed', 'info');
@@ -1514,61 +1680,142 @@ function renderUsers() {
         return;
     }
     
-    tbody.innerHTML = allUsers.map(user => `
-        <tr>
-            <td>
-                <div class="d-flex align-items-center">
-                    <div class="user-avatar me-3">
-                        ${user.username ? user.username.charAt(0).toUpperCase() : '?'}
+    tbody.innerHTML = allUsers.map(user => {
+        // Map role IDs to role names
+        const roleNames = (user.roles || []).map(roleId => {
+            const role = allRoles.find(r => r.id === roleId);
+            return role ? role.name : roleId;
+        });
+        
+        return `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar me-3">
+                            ${user.username ? user.username.charAt(0).toUpperCase() : '?'}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${user.username || 'Unknown'}</div>
+                            <small class="text-muted">ID: ${user.id || 'N/A'}</small>
+                        </div>
                     </div>
-                    <div>
-                        <div class="fw-bold">${user.username || 'Unknown'}</div>
-                        <small class="text-muted">ID: ${user.id || 'N/A'}</small>
+                </td>
+                <td>${user.email || 'N/A'}</td>
+                <td>
+                    ${roleNames.map(roleName => 
+                        `<span class="badge bg-primary me-1">${roleName}</span>`
+                    ).join('')}
+                </td>
+                <td>
+                    <span class="badge ${user.active !== false ? 'bg-success' : 'bg-danger'}">
+                        ${user.active !== false ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editUser('${user.id}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.id}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
-                </div>
-            </td>
-            <td>${user.email || 'N/A'}</td>
-            <td>
-                ${(user.roles || []).map(role => 
-                    `<span class="badge bg-primary me-1">${role}</span>`
-                ).join('')}
-            </td>
-            <td>
-                <span class="badge ${user.active !== false ? 'bg-success' : 'bg-danger'}">
-                    ${user.active !== false ? 'Active' : 'Inactive'}
-                </span>
-            </td>
-            <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="btn btn-sm btn-outline-primary" onclick="editUser('${user.id}')">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.id}')">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 async function loadRoles() {
+    console.log('=== loadRoles called ===');
+    console.log('Current view:', currentView);
+    console.log('Auth token exists:', !!localStorage.getItem('jsondb_auth_token'));
+    
     try {
         const response = await apiRequest('/api/rbac/roles');
-        allRoles = response.roles || [];
+        console.log('Roles API response:', response);
+        
+        // Handle both direct array and object with roles property
+        allRoles = Array.isArray(response) ? response : (response.roles || []);
+        console.log('Processed roles:', allRoles);
+        
         renderRoles();
         populateRoleSelects();
     } catch (error) {
         console.error('Error loading roles:', error);
+        console.log('Error details:', error.message, error.stack);
+        // Show error message in the roles tab
+        const rolesList = document.getElementById('rolesList');
+        if (rolesList) {
+            let errorMessage = 'Failed to load roles';
+            if (error.message?.includes('Unauthorized') || error.message?.includes('401')) {
+                errorMessage = 'Authentication expired. Please log in again.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            rolesList.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 2rem; color: var(--bs-danger);"></i>
+                    <p class="text-danger">${errorMessage}</p>
+                    ${error.message?.includes('Unauthorized') ? 
+                        '<button class="btn btn-primary btn-sm" onclick="window.location.href=\'/login.html\'">Go to Login</button>' : 
+                        '<button class="btn btn-secondary btn-sm" onclick="loadRoles()">Retry</button>'
+                    }
+                </div>
+            `;
+        }
+        // Set empty array to prevent errors in other functions
+        allRoles = [];
     }
 }
 
 function renderRoles() {
-    const rolesList = document.getElementById('rolesList');
-    if (!rolesList) return;
+    console.log('=== renderRoles called ===');
     
-    if (allRoles.length === 0) {
+    // Ensure we're in the RBAC view
+    if (currentView !== 'rbac') {
+        console.log('Not in RBAC view, skipping renderRoles');
+        return;
+    }
+    
+    // Make sure the roles tab is active first
+    const rolesTabButton = document.getElementById('roles-tab');
+    const rolesTabPane = document.getElementById('roles');
+    
+    if (rolesTabButton && rolesTabPane) {
+        // Ensure the tab is active
+        if (!rolesTabPane.classList.contains('active')) {
+            console.log('Roles tab not active, activating it now');
+            // Remove active from other tabs
+            document.querySelectorAll('#rbacTabContent .tab-pane').forEach(pane => {
+                pane.classList.remove('show', 'active');
+            });
+            document.querySelectorAll('#rbacTabs .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            // Make roles tab active
+            rolesTabButton.classList.add('active');
+            rolesTabPane.classList.add('show', 'active');
+        }
+    }
+    
+    // Now wait a moment for DOM to update
+    setTimeout(() => {
+        const rolesList = document.getElementById('rolesList');
+        console.log('rolesList element:', rolesList);
+        console.log('Roles tab classes:', rolesTabPane ? rolesTabPane.className : 'null');
+        
+        if (!rolesList) {
+            console.error('rolesList element not found!');
+            console.error('Roles tab HTML preview:', rolesTabPane ? rolesTabPane.innerHTML.substring(0, 200) : 'null');
+            return;
+        }
+    
+        console.log('renderRoles called with:', allRoles);
+    
+    if (!Array.isArray(allRoles) || allRoles.length === 0) {
         rolesList.innerHTML = `
             <div class="text-center text-muted py-4">
                 <i class="bi bi-shield-x" style="font-size: 2rem;"></i>
@@ -1578,19 +1825,25 @@ function renderRoles() {
         return;
     }
     
-    rolesList.innerHTML = allRoles.map(role => `
-        <div class="card role-card mb-2 ${selectedRole?.id === role.id ? 'active' : ''}" 
-             onclick="selectRole('${role.id}')">
-            <div class="card-body">
-                <h6 class="card-title mb-1">${role.name}</h6>
-                <p class="card-text small text-muted mb-2">${role.description || 'No description'}</p>
-                <div>
-                    <span class="badge bg-secondary">${(role.users || []).length} users</span>
-                    <span class="badge bg-info">${(role.permissions || []).length} permissions</span>
+    try {
+        rolesList.innerHTML = allRoles.map(role => `
+            <div class="card role-card mb-2 ${selectedRole?.id === role.id ? 'active' : ''}" 
+                 onclick="selectRole('${role.id}')">
+                <div class="card-body">
+                    <h6 class="card-title mb-1">${role.name}</h6>
+                    <p class="card-text small text-muted mb-2">${role.description || 'No description'}</p>
+                    <div>
+                        <span class="badge bg-secondary">${(role.users || []).length} users</span>
+                        <span class="badge bg-info">${Object.keys(role.permissions || {}).length} permissions</span>
+                    </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    } catch (error) {
+        console.error('Error rendering roles:', error);
+        rolesList.innerHTML = '<div class="alert alert-danger">Error rendering roles</div>';
+    }
+    }, 0); // Close setTimeout
 }
 
 function selectRole(roleId) {
@@ -1619,9 +1872,18 @@ function renderRoleDetails() {
         
         <h6 class="mt-4">Permissions</h6>
         <div class="mb-3">
-            ${(selectedRole.permissions || []).map(perm => 
-                `<span class="permission-badge">${perm}</span>`
-            ).join('')}
+            ${Object.entries(selectedRole.permissions || {}).map(([resource, perms]) => {
+                const permBitmask = parseInt(perms);
+                const permStrings = [];
+                if (permBitmask & 1) permStrings.push('Read');
+                if (permBitmask & 2) permStrings.push('Write');
+                if (permBitmask & 4) permStrings.push('Delete');
+                if (permBitmask & 8) permStrings.push('Admin');
+                return `<div class="mb-2">
+                    <span class="text-muted small">${resource}:</span>
+                    ${permStrings.map(p => `<span class="permission-badge">${p}</span>`).join(' ')}
+                </div>`;
+            }).join('')}
         </div>
         
         <div class="mt-4">
@@ -1638,54 +1900,93 @@ function renderRoleDetails() {
 async function loadPermissionMatrix() {
     try {
         const response = await apiRequest('/api/rbac/permissions');
-        allPermissions = response.permissions || [];
-        renderPermissionMatrix();
+        
+        // Extract permissions from roles
+        const permissionsByResource = {};
+        const roles = response.roles || [];
+        const resourceTypes = response.resource_types || {};
+        const permissionTypes = response.permission_types || {};
+        
+        // Process each role's permissions
+        roles.forEach(role => {
+            if (role.permissions) {
+                Object.entries(role.permissions).forEach(([key, value]) => {
+                    // Parse the resource type and ID from the key (e.g., "1:collection1" -> type: 1, id: collection1)
+                    const [typeNum, ...idParts] = key.split(':');
+                    const resourceId = idParts.join(':') || '*';
+                    const resourceType = resourceTypes[typeNum] || 'unknown';
+                    const resourceName = `${resourceType}:${resourceId}`;
+                    
+                    if (!permissionsByResource[resourceName]) {
+                        permissionsByResource[resourceName] = {
+                            roles: [],
+                            permissions: {}
+                        };
+                    }
+                    
+                    // Add role name if not already there
+                    if (!permissionsByResource[resourceName].roles.includes(role.name)) {
+                        permissionsByResource[resourceName].roles.push(role.name);
+                    }
+                    
+                    // Parse permission bitmask
+                    const permBitmask = parseInt(value);
+                    if (permBitmask & 1) permissionsByResource[resourceName].permissions.read = true;
+                    if (permBitmask & 2) permissionsByResource[resourceName].permissions.write = true;
+                    if (permBitmask & 4) permissionsByResource[resourceName].permissions.delete = true;
+                    if (permBitmask & 8) permissionsByResource[resourceName].permissions.admin = true;
+                });
+            }
+        });
+        
+        renderPermissionMatrix(permissionsByResource);
     } catch (error) {
         console.error('Error loading permissions:', error);
     }
 }
 
-function renderPermissionMatrix() {
+function renderPermissionMatrix(permissionsByResource) {
     const tbody = document.getElementById('permissionsTableBody');
     if (!tbody) return;
     
-    const permissionsByResource = {};
-    allPermissions.forEach(perm => {
-        const resource = perm.resource || 'Unknown';
-        if (!permissionsByResource[resource]) {
-            permissionsByResource[resource] = {
-                create: false,
-                read: false,
-                update: false,
-                delete: false,
-                admin: false
-            };
-        }
-        if (perm.action) {
-            permissionsByResource[resource][perm.action.toLowerCase()] = true;
-        }
-    });
+    if (Object.keys(permissionsByResource).length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">
+                    <i class="bi bi-shield-x" style="font-size: 2rem;"></i>
+                    <p>No permissions configured</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
     
-    tbody.innerHTML = Object.entries(permissionsByResource).map(([resource, perms]) => `
-        <tr>
-            <td class="fw-bold">${resource}</td>
-            <td class="text-center">
-                ${perms.create ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
-            </td>
-            <td class="text-center">
-                ${perms.read ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
-            </td>
-            <td class="text-center">
-                ${perms.update ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
-            </td>
-            <td class="text-center">
-                ${perms.delete ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
-            </td>
-            <td class="text-center">
-                ${perms.admin ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = Object.entries(permissionsByResource).map(([resource, data]) => {
+        const perms = data.permissions;
+        return `
+            <tr>
+                <td>
+                    <div class="fw-bold">${resource}</div>
+                    <small class="text-muted">Roles: ${data.roles.join(', ')}</small>
+                </td>
+                <td class="text-center">
+                    ${perms.create ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                </td>
+                <td class="text-center">
+                    ${perms.read ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                </td>
+                <td class="text-center">
+                    ${perms.write ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                </td>
+                <td class="text-center">
+                    ${perms.delete ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                </td>
+                <td class="text-center">
+                    ${perms.admin ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function loadAuditLog() {
@@ -1823,12 +2124,15 @@ async function revokeSession(sessionId) {
 }
 
 function populateRoleSelects() {
-    const roleSelect = document.getElementById('roles');
-    if (roleSelect) {
-        roleSelect.innerHTML = allRoles.map(role => 
-            `<option value="${role.id}">${role.name}</option>`
-        ).join('');
-    }
+    // Be specific - only target select elements, not the tab pane
+    const roleSelects = document.querySelectorAll('select#userRolesSelect, select[name="roles"]');
+    roleSelects.forEach(roleSelect => {
+        if (roleSelect && roleSelect.tagName === 'SELECT') {
+            roleSelect.innerHTML = allRoles.map(role => 
+                `<option value="${role.id}">${role.name}</option>`
+            ).join('');
+        }
+    });
 }
 
 // ===== API DOCUMENTATION =====

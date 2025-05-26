@@ -649,7 +649,21 @@ body {
 .page-dashboard .stat-card { min-height: 150px; }
 .page-browser .browser-container { height: calc(100vh - 60px); }
 .page-metrics .chart-container { min-height: 300px; }
-.page-rbac .role-card { cursor: pointer; }
+.page-rbac .role-card { 
+    cursor: pointer; 
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color);
+}
+
+.page-rbac .role-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-rbac .role-card.active {
+    border-color: var(--primary);
+    background-color: rgba(13, 110, 253, 0.05);
+}
 .page-swagger .swagger-ui { margin-top: 1rem; }
 
 /* Responsive adjustments */

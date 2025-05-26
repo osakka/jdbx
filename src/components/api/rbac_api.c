@@ -273,6 +273,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
             /* Copy user fields */
             json_value_t* id = json_object_get(user, "_id");
             json_value_t* username = json_object_get(user, "username");
+            json_value_t* cn = json_object_get(user, "cn");
             json_value_t* email = json_object_get(user, "email");
             json_value_t* active = json_object_get(user, "active");
             json_value_t* created_at = json_object_get(user, "created_at");
@@ -285,6 +286,10 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
             
             if (username && username->type == JSON_STRING) {
                 json_object_set(sanitized, "username", json_create_string(username->value.string));
+            }
+            
+            if (cn && cn->type == JSON_STRING) {
+                json_object_set(sanitized, "cn", json_create_string(cn->value.string));
             }
             
             if (email && email->type == JSON_STRING) {
@@ -679,12 +684,12 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
         return create_error_response("Unauthorized", HTTP_FORBIDDEN);
     }
     
-    /* Check admin permission on roles */
-    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_ROLE, "*", RBAC_ADMIN);
+    /* Check read permission on roles */
+    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_ROLE, "*", RBAC_READ);
     LOG_TRACE("RBAC_API: Role permission check result: %d", has_permission);
     
     if (!has_permission) {
-        LOG_TRACE("RBAC_API: User %s does not have role admin permission", user_id);
+        LOG_TRACE("RBAC_API: User %s does not have role read permission", user_id);
         return create_error_response("Unauthorized", HTTP_FORBIDDEN);
     }
     
@@ -715,8 +720,10 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
             /* Copy role fields */
             json_value_t* id = json_object_get(role, "_id");
             json_value_t* name = json_object_get(role, "name");
+            json_value_t* cn = json_object_get(role, "cn");
             json_value_t* description = json_object_get(role, "description");
             json_value_t* permissions = json_object_get(role, "permissions");
+            json_value_t* users = json_object_get(role, "users");
             json_value_t* created_at = json_object_get(role, "created_at");
             json_value_t* updated_at = json_object_get(role, "updated_at");
             
@@ -726,6 +733,10 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
             
             if (name && name->type == JSON_STRING) {
                 json_object_set(role_data, "name", json_create_string(name->value.string));
+            }
+            
+            if (cn && cn->type == JSON_STRING) {
+                json_object_set(role_data, "cn", json_create_string(cn->value.string));
             }
             
             if (description && description->type == JSON_STRING) {
@@ -744,6 +755,12 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
                 json_object_set(role_data, "permissions", json_clone(permissions));
             } else {
                 json_object_set(role_data, "permissions", json_create_object());
+            }
+            
+            if (users && users->type == JSON_ARRAY) {
+                json_object_set(role_data, "users", json_clone(users));
+            } else {
+                json_object_set(role_data, "users", json_create_array());
             }
             
             json_array_append(roles, role_data);
@@ -792,6 +809,7 @@ http_response_t* api_handle_rbac_get_role(api_context_t* ctx, http_request_t* re
     json_value_t* id = json_object_get(role_doc, "id");
     json_value_t* name = json_object_get(role_doc, "name");
     json_value_t* permissions = json_object_get(role_doc, "permissions");
+    json_value_t* users = json_object_get(role_doc, "users");
     
     if (id && id->type == JSON_STRING) {
         json_object_set(role_data, "id", json_create_string(id->value.string));
@@ -805,6 +823,12 @@ http_response_t* api_handle_rbac_get_role(api_context_t* ctx, http_request_t* re
         json_object_set(role_data, "permissions", json_clone(permissions));
     } else {
         json_object_set(role_data, "permissions", json_create_object());
+    }
+    
+    if (users && users->type == JSON_ARRAY) {
+        json_object_set(role_data, "users", json_clone(users));
+    } else {
+        json_object_set(role_data, "users", json_create_array());
     }
     
     json_free(role_doc);
@@ -1342,6 +1366,96 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
     return create_json_response(response_json, HTTP_OK);
 }
 
+/**
+ * Get all permissions in the system
+ * 
+ * GET /api/rbac/permissions
+ * 
+ * Returns a permission matrix showing all roles and their permissions
+ */
+http_response_t* api_handle_rbac_get_permissions(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !ctx->db || !ctx->rbac) {
+        return create_error_response("RBAC not initialized", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    /* Check if user has permission to view permissions */
+    const char* user_id = get_request_user_id(request);
+    if (!user_id) {
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Check if user can read permissions */
+    int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_PERMISSION, "*", RBAC_READ);
+    if (!has_permission) {
+        return create_error_response("Unauthorized", HTTP_FORBIDDEN);
+    }
+    
+    /* Build permission matrix */
+    json_value_t* response_json = json_create_object();
+    
+    /* Get all roles */
+    json_value_t* query = json_create_object();
+    json_value_t* roles_result = db_query_documents(ctx->db, RBAC_ROLES_COLLECTION, query);
+    json_free(query);
+    
+    if (!roles_result) {
+        json_free(response_json);
+        return create_error_response("Failed to query roles", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    json_value_t* roles_docs = json_object_get(roles_result, "documents");
+    if (!roles_docs || roles_docs->type != JSON_ARRAY) {
+        json_free(roles_result);
+        json_free(response_json);
+        return create_error_response("Invalid roles data", HTTP_INTERNAL_SERVER_ERROR);
+    }
+    
+    /* Build roles array with permissions */
+    json_value_t* roles_array = json_create_array();
+    
+    for (size_t i = 0; i < json_array_size(roles_docs); i++) {
+        json_value_t* role_doc = json_array_get(roles_docs, i);
+        json_value_t* role_obj = json_create_object();
+        
+        /* Copy role basic info */
+        json_value_t* id = json_object_get(role_doc, "_id");
+        json_value_t* name = json_object_get(role_doc, "name");
+        json_value_t* description = json_object_get(role_doc, "description");
+        json_value_t* permissions = json_object_get(role_doc, "permissions");
+        
+        if (id) json_object_set(role_obj, "id", json_clone(id));
+        if (name) json_object_set(role_obj, "name", json_clone(name));
+        if (description) json_object_set(role_obj, "description", json_clone(description));
+        if (permissions) json_object_set(role_obj, "permissions", json_clone(permissions));
+        
+        json_array_append(roles_array, role_obj);
+    }
+    
+    json_free(roles_result);
+    
+    /* Add resource types for reference */
+    json_value_t* resource_types = json_create_object();
+    json_object_set(resource_types, "0", json_create_string("database"));
+    json_object_set(resource_types, "1", json_create_string("collection"));
+    json_object_set(resource_types, "2", json_create_string("document"));
+    json_object_set(resource_types, "3", json_create_string("user"));
+    json_object_set(resource_types, "4", json_create_string("role"));
+    json_object_set(resource_types, "5", json_create_string("permission"));
+    
+    /* Add permission types for reference */
+    json_value_t* permission_types = json_create_object();
+    json_object_set(permission_types, "1", json_create_string("READ"));
+    json_object_set(permission_types, "2", json_create_string("WRITE"));
+    json_object_set(permission_types, "4", json_create_string("DELETE"));
+    json_object_set(permission_types, "8", json_create_string("ADMIN"));
+    
+    json_object_set(response_json, "roles", roles_array);
+    json_object_set(response_json, "resource_types", resource_types);
+    json_object_set(response_json, "permission_types", permission_types);
+    
+    return create_json_response(response_json, HTTP_OK);
+}
+
 /* Register RBAC API routes */
 int rbac_api_register_routes(api_route_t* api_routes, int num_routes, database_t* db, 
                             rbac_system_t* rbac) {
@@ -1370,6 +1484,7 @@ int rbac_api_register_routes(api_route_t* api_routes, int num_routes, database_t
     /* Register permission management routes */
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles/:id/permissions", HTTP_POST, api_handle_rbac_grant_permission, 1};
     api_routes[num_routes++] = (api_route_t){"/api/rbac/roles/:id/permissions", HTTP_DELETE, api_handle_rbac_revoke_permission, 1};
+    api_routes[num_routes++] = (api_route_t){"/api/rbac/permissions", HTTP_GET, api_handle_rbac_get_permissions, 1};
     
     return num_routes;
 }

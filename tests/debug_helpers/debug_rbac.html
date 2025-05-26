@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug RBAC Display</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .debug-section { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 1px solid #ccc; 
+            background: #f5f5f5;
+        }
+        pre { background: #fff; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>RBAC Debug Tool</h1>
+    
+    <div class="debug-section">
+        <h2>Authentication Status</h2>
+        <div id="auth-status">Checking...</div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>RBAC View Content</h2>
+        <button onclick="checkRBACView()">Check RBAC View</button>
+        <pre id="rbac-content"></pre>
+    </div>
+    
+    <div class="debug-section">
+        <h2>Roles List Element</h2>
+        <button onclick="checkRolesList()">Check Roles List</button>
+        <pre id="roles-list"></pre>
+    </div>
+    
+    <div class="debug-section">
+        <h2>Console Output</h2>
+        <button onclick="window.location.href='/index.html#rbac'">Go to RBAC View</button>
+        <p>Open browser console to see debug output</p>
+    </div>
+
+    <script>
+        // Check authentication
+        const token = localStorage.getItem('jsondb_auth_token');
+        document.getElementById('auth-status').innerHTML = token ? 
+            '<span style="color: green;">Authenticated (token exists)</span>' : 
+            '<span style="color: red;">Not authenticated</span>';
+        
+        function checkRBACView() {
+            // Load main page in iframe to check
+            const iframe = document.createElement('iframe');
+            iframe.src = '/index.html';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            iframe.onload = function() {
+                const rbacView = iframe.contentDocument.getElementById('rbac-view');
+                const content = rbacView ? rbacView.innerHTML : 'RBAC view not found';
+                document.getElementById('rbac-content').textContent = content;
+                
+                // Also check text content
+                if (rbacView) {
+                    const textOnly = rbacView.textContent.trim();
+                    console.log('RBAC View text content:', textOnly);
+                    if (textOnly === 'admin') {
+                        alert('Found the issue! RBAC view contains only "admin" text');
+                    }
+                }
+                
+                document.body.removeChild(iframe);
+            };
+        }
+        
+        function checkRolesList() {
+            const iframe = document.createElement('iframe');
+            iframe.src = '/index.html';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            iframe.onload = function() {
+                const rolesList = iframe.contentDocument.getElementById('rolesList');
+                const content = rolesList ? rolesList.innerHTML : 'rolesList element not found';
+                document.getElementById('roles-list').textContent = content;
+                document.body.removeChild(iframe);
+            };
+        }
+    </script>
+</body>
+</html>

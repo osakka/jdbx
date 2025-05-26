@@ -59,7 +59,7 @@ static void persistence_cleanup(persistence_thread_t* persistence) {
 static int should_save_now(persistence_thread_t* persistence, int force_periodic) {
     time_t current_time = time(NULL);
     
-    if (g_logger) LOG_INFO("PERSIST_DEBUG: should_save_now called - ops=%d (threshold=%d), size=%zu (threshold=%d), force_periodic=%d",
+    if (g_logger) LOG_TRACE("should_save_now called - ops=%d (threshold=%d), size=%zu (threshold=%d), force_periodic=%d",
                           persistence->operations_count, PERSISTENCE_BUFFER_OPS_THRESHOLD,
                           persistence->data_size_estimate, PERSISTENCE_BUFFER_SIZE_THRESHOLD,
                           force_periodic);
@@ -105,23 +105,23 @@ static void* persistence_thread_main(void* arg) {
     database_t* db = (database_t*)arg;
     persistence_thread_t* persistence = db->persistence;
     
-    if (g_logger) LOG_INFO("PERSIST_DEBUG: Persistence thread main started for db=%p, path=%s", db, db->path);
+    if (g_logger) LOG_DEBUG("Persistence thread main started for db=%p, path=%s", db, db->path);
     
     pthread_mutex_lock(&persistence->mutex);
     
-    if (g_logger) LOG_INFO("PERSIST_DEBUG: Persistence thread entering main loop");
+    if (g_logger) LOG_DEBUG("Persistence thread entering main loop");
     
     while (!persistence->shutdown) {
         struct timespec timeout;
         clock_gettime(CLOCK_REALTIME, &timeout);
         timeout.tv_sec += 1; /* Check every 1 second */
         
-        if (g_logger) LOG_INFO("PERSIST_DEBUG: Waiting on condition variable...");
+        if (g_logger) LOG_TRACE("Waiting on condition variable...");
         
         /* Wait for notification or timeout */
         pthread_cond_timedwait(&persistence->condition, &persistence->mutex, &timeout);
         
-        if (g_logger) LOG_INFO("PERSIST_DEBUG: Woke up from condition wait");
+        if (g_logger) LOG_TRACE("Woke up from condition wait");
         
         if (persistence->shutdown) break;
         
@@ -130,7 +130,7 @@ static void* persistence_thread_main(void* arg) {
         int should_save_periodic = should_save_now(persistence, 1);
         
         /* TEMP: Debug persistence condition */
-        if (g_logger) LOG_INFO("PERSIST_DEBUG: Checking save conditions: should_save_buffer=%d, should_save_periodic=%d, db->is_modified=%d, save_in_progress=%d, ops=%d", 
+        if (g_logger) LOG_TRACE("Checking save conditions: should_save_buffer=%d, should_save_periodic=%d, db->is_modified=%d, save_in_progress=%d, ops=%d", 
                                should_save_buffer, should_save_periodic, db->is_modified, persistence->save_in_progress, persistence->operations_count);
         
         if ((should_save_buffer || should_save_periodic) && db->is_modified && !persistence->save_in_progress) {
@@ -179,7 +179,7 @@ int db_start_persistence_thread(database_t* db) {
         return 0;
     }
     
-    LOG_INFO("PERSIST_DEBUG: Starting persistence thread for database: %s", db->path);
+    LOG_DEBUG("Starting persistence thread for database: %s", db->path);
     
     if (db->persistence) {
         if (g_logger) LOG_WARNING("Persistence thread already exists for database");
@@ -187,7 +187,7 @@ int db_start_persistence_thread(database_t* db) {
     }
     
     /* Initialize persistence structure */
-    LOG_INFO("PERSIST_DEBUG: Initializing persistence structure...");
+    LOG_DEBUG("Initializing persistence structure...");
     db->persistence = persistence_init();
     if (!db->persistence) {
         LOG_ERROR("PERSIST_DEBUG: Failed to initialize persistence structure");
@@ -195,7 +195,7 @@ int db_start_persistence_thread(database_t* db) {
     }
     
     /* Create the persistence thread */
-    LOG_INFO("PERSIST_DEBUG: Creating persistence thread...");
+    LOG_DEBUG("Creating persistence thread...");
     if (pthread_create(&db->persistence->thread, NULL, persistence_thread_main, db) != 0) {
         if (g_logger) LOG_ERROR("PERSIST_DEBUG: Failed to create persistence thread: %s", strerror(errno));
         persistence_cleanup(db->persistence);
@@ -203,7 +203,7 @@ int db_start_persistence_thread(database_t* db) {
         return 0;
     }
     
-    if (g_logger) LOG_INFO("PERSIST_DEBUG: Persistence thread started successfully for database: %s", db->path);
+    if (g_logger) LOG_DEBUG("Persistence thread started successfully for database: %s", db->path);
     return 1;
 }
 
@@ -253,7 +253,7 @@ int db_notify_data_change_sync(database_t* db, size_t estimated_size) {
     persistence->operations_count++;
     persistence->data_size_estimate += estimated_size;
     
-    if (g_logger) LOG_INFO("PERSIST_DEBUG: Data change notification: ops=%d, size=%zu", 
+    if (g_logger) LOG_DEBUG("Data change notification: ops=%d, size=%zu", 
                            persistence->operations_count, persistence->data_size_estimate);
     
     /* Check if immediate save is needed */

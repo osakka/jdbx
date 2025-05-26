@@ -19,10 +19,6 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
         return NULL;
     }
     
-    /* Generate session ID */
-    char session_id[64];
-    snprintf(session_id, sizeof(session_id), "session_%ld_%d", time(NULL), rand() % 10000);
-    
     /* Create session document */
     json_value_t* session_doc = json_create_object();
     if (!session_doc) {
@@ -30,8 +26,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
         return NULL;
     }
     
-    /* Add session fields */
-    json_object_set(session_doc, "_id", json_create_string(session_id));
+    /* Don't set _id - let db_insert_document generate it */
     json_object_set(session_doc, "user_id", json_create_string(user_id));
     json_object_set(session_doc, "token", json_create_string(token));
     
@@ -79,8 +74,13 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
     
     /* Get the actual session ID from result */
     const char* actual_id = json_get_string(json_object_get(result, "_id"));
-    char* session_id_copy = actual_id ? strdup(actual_id) : strdup(session_id);
+    char* session_id_copy = actual_id ? strdup(actual_id) : NULL;
     json_free(result);
+    
+    if (!session_id_copy) {
+        LOG_ERROR("RBAC_DB: Failed to get session ID from insert result");
+        return NULL;
+    }
     
     LOG_TRACE("RBAC_DB: Session created with ID: %s", session_id_copy);
     return session_id_copy;

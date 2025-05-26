@@ -456,18 +456,19 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     LOG_DEBUG("Using document directly for insertion (TEMP: no deep copy)");
     json_value_t* doc_copy = document; /* TEMP: Use original document */
     
-    LOG_DEBUG("Generating document ID if needed");
-    if (!json_object_has(doc_copy, "_id")) {
-        char* id = generate_simple_id();
-        if (id) {
-            LOG_DEBUG("Generated new ID: %s", id);
-            json_object_set(doc_copy, "_id", json_create_string(id));
-            free(id);
-        } else {
-            LOG_ERROR("Failed to generate ID for document");
-            /* TEMP: Not freeing since we're not copying */
-            return NULL;
-        }
+    LOG_DEBUG("Generating document ID (always use standard format)");
+    /* Always generate a new ID to ensure consistency */
+    char* generated_id = generate_simple_id();
+    if (generated_id) {
+        LOG_DEBUG("Generated new ID: %s", generated_id);
+        /* Remove any existing _id and use our generated one */
+        json_object_remove(doc_copy, "_id");
+        json_object_set(doc_copy, "_id", json_create_string(generated_id));
+        free(generated_id);
+    } else {
+        LOG_ERROR("Failed to generate ID for document");
+        /* TEMP: Not freeing since we're not copying */
+        return NULL;
     }
     
     LOG_DEBUG("Verifying document has valid ID");

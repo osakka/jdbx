@@ -1,5 +1,6 @@
 #include "utils/daemonize.h"
 #include "utils/logger.h"
+#include "init.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -69,6 +70,9 @@ int daemonize_process(const char* pid_file) {
     
     /* Child process continues - now we're in the intermediate process */
     DAEMON_DEBUG("First fork successful, now in intermediate process (PID: %d)", getpid());
+    
+    /* Mark this as the intermediate daemon child process */
+    init_set_process_type(PROCESS_TYPE_DAEMON_CHILD);
     
     /* Create a new session with no controlling terminal */
     DAEMON_DEBUG("Creating new session with setsid()");

@@ -27,8 +27,22 @@ int g_verbose_mode = 0;
 static int cleanup_registered = 0;
 static int cleanup_in_progress = 0;
 
+/* Process type tracking */
+static int g_process_type = PROCESS_TYPE_MAIN;
+
 /* Cleanup resources safely */
 void init_cleanup(void) {
+    /* Only cleanup in the actual server process */
+    if (g_process_type != PROCESS_TYPE_SERVER) {
+        /* Always log this at INFO level so we can see it */
+        if (g_logger) {
+            LOG_INFO("[INIT:CORE] Skipping cleanup in non-server process (type=%d)", g_process_type);
+        } else {
+            printf("[INIT:CORE] Skipping cleanup in non-server process (type=%d)\n", g_process_type);
+        }
+        return;
+    }
+    
     /* Prevent recursive cleanup */
     if (cleanup_in_progress) {
         return;
@@ -36,7 +50,7 @@ void init_cleanup(void) {
     
     cleanup_in_progress = 1;
     
-    INIT_LOG_PROGRESS("CORE", "Performing cleanup before shutdown");
+    INIT_LOG_PROGRESS("CORE", "Performing cleanup before shutdown in server process");
 
     /* Save data first if needed */
     if (g_database) {
@@ -137,4 +151,20 @@ void init_set_verbose(int verbose) {
 /* Register server configuration */
 void init_register_config(server_config_t* config) {
     g_server_config = config;
+}
+
+/* Set process type */
+void init_set_process_type(int type) {
+    g_process_type = type;
+    /* Always log this at INFO level so we can see it */
+    if (g_logger) {
+        LOG_INFO("[INIT:CORE] Process type set to: %d", type);
+    } else {
+        printf("[INIT:CORE] Process type set to: %d\n", type);
+    }
+}
+
+/* Get process type */
+int init_get_process_type(void) {
+    return g_process_type;
 }

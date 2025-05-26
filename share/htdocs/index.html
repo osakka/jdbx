@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-dark" disabled>
     <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/rbac_debug_trap.js"></script>
     <script src="js/theme.js"></script>
     <style>
         /* SPA-specific styles */
@@ -836,12 +837,12 @@
             <!-- RBAC Tabs -->
             <ul class="nav nav-tabs" id="rbacTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
+                    <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
                         <i class="bi bi-people"></i> Users
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles" type="button">
+                    <button class="nav-link active" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles" type="button">
                         <i class="bi bi-shield"></i> Roles
                     </button>
                 </li>
@@ -865,7 +866,7 @@
             <!-- RBAC Content -->
             <div class="tab-content mt-3" id="rbacTabContent">
                 <!-- Users Tab -->
-                <div class="tab-pane fade show active" id="users" role="tabpanel">
+                <div class="tab-pane fade" id="users" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h4>User Management</h4>
                         <button class="btn btn-primary" onclick="showCreateUserModal()">
@@ -896,7 +897,7 @@
                 </div>
 
                 <!-- Roles Tab -->
-                <div class="tab-pane fade" id="roles" role="tabpanel">
+                <div class="tab-pane fade show active" id="roles" role="tabpanel">
                     <div class="row">
                         <div class="col-md-4">
                             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1185,8 +1186,8 @@
                             <input type="password" class="form-control" id="password" required>
                         </div>
                         <div class="mb-3">
-                            <label for="roles" class="form-label">Roles</label>
-                            <select multiple class="form-select" id="roles">
+                            <label for="userRolesSelect" class="form-label">Roles</label>
+                            <select multiple class="form-select" id="userRolesSelect" name="roles">
                                 <!-- Roles will be loaded here -->
                             </select>
                         </div>
@@ -1287,6 +1288,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+    <script src="js/rbac_protection.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

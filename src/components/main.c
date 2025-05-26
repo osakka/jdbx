@@ -104,8 +104,7 @@ int main(int argc, char** argv) {
     /* Display banner */
     display_banner();
     
-    /* Register cleanup handler */
-    init_register_cleanup();
+    /* DO NOT register cleanup handler here - wait until after daemon initialization */
     
     /* Initialize configuration */
     status = init_config(argc, argv, &config);
@@ -244,6 +243,9 @@ int main(int argc, char** argv) {
         /* Child process continues here */
         INIT_LOG_SUCCESS("DAEMON", "Daemon process initialized successfully, continuing with child process");
     }
+    
+    /* NOW register cleanup handler - we're in the final server process */
+    init_register_cleanup();
     
     /* Initialize socket - AFTER daemon process is fully established */
     LOG_DEBUG("Initializing Socket");

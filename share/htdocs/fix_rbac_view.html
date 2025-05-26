@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix RBAC View</title>
+    <script>
+        function diagnoseRBACIssue() {
+            // Get the RBAC view
+            const rbacView = document.getElementById('rbac-view');
+            console.log('RBAC View:', rbacView);
+            
+            if (rbacView) {
+                // Check all child elements
+                const children = rbacView.querySelectorAll('*');
+                console.log('Total child elements:', children.length);
+                
+                // Find any element that contains just "admin"
+                children.forEach(el => {
+                    if (el.textContent.trim() === 'admin' && el.children.length === 0) {
+                        console.error('Found element with just "admin":', el);
+                        console.error('Element tag:', el.tagName);
+                        console.error('Element id:', el.id);
+                        console.error('Element classes:', el.className);
+                        console.error('Parent:', el.parentElement);
+                    }
+                });
+                
+                // Check if RBAC view itself is just "admin"
+                if (rbacView.textContent.trim() === 'admin') {
+                    console.error('ENTIRE RBAC VIEW IS JUST "admin"!');
+                }
+                
+                // Look for hidden elements
+                const hiddenElements = rbacView.querySelectorAll('[style*="display: none"], [style*="display:none"], .d-none, [hidden]');
+                console.log('Hidden elements found:', hiddenElements.length);
+                
+                // Check Bootstrap tab structure
+                const tabContent = rbacView.querySelector('#rbacTabContent');
+                if (tabContent) {
+                    console.log('Tab content found');
+                    const tabs = tabContent.querySelectorAll('.tab-pane');
+                    tabs.forEach(tab => {
+                        console.log(`Tab ${tab.id}: active=${tab.classList.contains('active')}, show=${tab.classList.contains('show')}`);
+                    });
+                }
+            }
+        }
+        
+        // Run on load
+        window.addEventListener('load', () => {
+            // Load main admin page in iframe
+            const iframe = document.createElement('iframe');
+            iframe.src = '/index.html#rbac';
+            iframe.style.width = '100%';
+            iframe.style.height = '600px';
+            document.body.appendChild(iframe);
+            
+            iframe.onload = () => {
+                // Wait for RBAC to load
+                setTimeout(() => {
+                    const iframeDoc = iframe.contentDocument;
+                    const rbacView = iframeDoc.getElementById('rbac-view');
+                    
+                    console.log('=== IFRAME RBAC ANALYSIS ===');
+                    console.log('RBAC view found:', !!rbacView);
+                    console.log('RBAC view text:', rbacView ? rbacView.textContent.substring(0, 100) : 'null');
+                    
+                    // Find what contains "admin"
+                    if (rbacView) {
+                        const walker = iframeDoc.createTreeWalker(
+                            rbacView,
+                            NodeFilter.SHOW_TEXT,
+                            null,
+                            false
+                        );
+                        
+                        let node;
+                        while (node = walker.nextNode()) {
+                            if (node.nodeValue.trim() === 'admin') {
+                                console.error('Found text node with "admin":', node);
+                                console.error('Parent element:', node.parentElement);
+                                console.error('Parent HTML:', node.parentElement.outerHTML);
+                            }
+                        }
+                    }
+                }, 2000);
+            };
+        });
+    </script>
+</head>
+<body>
+    <h1>RBAC View Diagnostic</h1>
+    <p>Check console for analysis...</p>
+</body>
+</html>

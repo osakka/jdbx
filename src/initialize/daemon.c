@@ -20,6 +20,9 @@ init_status_t init_daemon(server_config_t* config) {
     if (config->verbose_mode) {
         INIT_LOG_PROGRESS("DAEMON", "Running in foreground mode, daemon not initialized");
         
+        /* In foreground mode, we're the server process */
+        init_set_process_type(PROCESS_TYPE_SERVER);
+        
         /* Add detailed logs in debug mode */
         if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
             char cwd[PATH_MAX];
@@ -60,6 +63,9 @@ init_status_t init_daemon(server_config_t* config) {
         LOG_DEBUG("[DAEMON] Logger file path: %s", config->log_file ? config->log_file : "(none)");
     }
     
+    /* Mark this as the parent process that will fork the daemon */
+    init_set_process_type(PROCESS_TYPE_DAEMON_PARENT);
+    
     /* Use daemonize_process function - our proven approach from testing */
     int daemonize_result = daemonize_process(config->pid_file);
     
@@ -76,6 +82,9 @@ init_status_t init_daemon(server_config_t* config) {
         /* Return special status code to indicate parent should exit */
         return INIT_DAEMON_PARENT_EXIT;
     }
+    
+    /* This is the final daemon process after double fork */
+    init_set_process_type(PROCESS_TYPE_SERVER);
     
     /* This is the child (daemon) process */
     if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {

@@ -5,6 +5,52 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2025-05-26
+
+### 🐛 Bug Fixes
+
+#### RBAC Display Issue Fix
+- **FIXED**: RBAC interface showing only "admin" text when authenticated
+- **CAUSE**: ID conflict between `<div id="roles">` tab pane and `<select id="roles">` form element
+- **IMPACT**: `populateRoleSelects()` was replacing entire RBAC tab content with `<option>` elements
+- **SOLUTION**: 
+  - Renamed form select to `id="userRolesSelect"` to avoid conflicts
+  - Updated `populateRoleSelects()` to target specific select elements
+  - Added ID conflict detector to prevent future issues
+
+### ✨ New Features
+
+#### Frontend Safety System
+- **NEW**: Automatic ID conflict detection on page load
+- **NEW**: Console warnings for duplicate IDs with detailed element information
+- **NEW**: Debug tools for RBAC troubleshooting (`rbac_debug.html`, `rbac_protection.js`)
+- **NEW**: Comprehensive frontend best practices documentation
+
+#### Documentation
+- **NEW**: `docs/guidelines/FRONTEND_BEST_PRACTICES.md` - Preventing ID conflicts and DOM issues
+- **NEW**: `docs/RBAC_COMPLETE_DOCUMENTATION.md` - Complete RBAC implementation guide
+- **NEW**: `docs/RBAC_API_TOKENS_IMPLEMENTATION.md` - Long-lived API token design
+
+### 🔧 Improvements
+
+#### Authentication & Session Management
+- **FIXED**: Login endpoint registration (was missing from routes array)
+- **IMPROVED**: Session management with proper JWT token handling
+- **ENHANCED**: RBAC roles tab now displays by default instead of users tab
+- **FIXED**: Bootstrap tab switching for proper content rendering
+
+#### UI/UX Improvements
+- **FIXED**: CSS selector warnings in theme files
+- **IMPROVED**: Role cards styling with hover effects
+- **ENHANCED**: Tab event listeners for proper content rendering
+- **FIXED**: Persistence thread logging changed from DEBUG to TRACE level
+
+### ✅ Verification Results
+- RBAC interface displays correctly when authenticated
+- All tabs (Users, Roles, Permissions, Sessions, Audit) function properly
+- ID conflict detection prevents similar issues
+- No regression in existing functionality
+
 ## [2.0.3] - 2025-05-23
 
 ### 🐛 Bug Fixes

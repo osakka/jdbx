@@ -53,13 +53,45 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
         LOG_DEBUG("LOGIN: Admin credentials matched, creating proper JWT tokens");
         
+        /* Look up the admin user to get their actual ID */
+        json_value_t* query = json_create_object();
+        json_object_set(query, "username", json_create_string("admin"));
+        json_value_t* results = db_query_documents(ctx->db, "_users", query);
+        json_free(query);
+        
+        if (!results) {
+            json_free(body);
+            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                      "{\"error\":\"Failed to query user\"}", "application/json");
+        }
+        
+        json_value_t* documents = json_object_get(results, "documents");
+        if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
+            json_free(results);
+            json_free(body);
+            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                      "{\"error\":\"Admin user not found\"}", "application/json");
+        }
+        
+        /* Get the actual user ID */
+        json_value_t* admin_doc = json_array_get(documents, 0);
+        json_value_t* id_val = json_object_get(admin_doc, "_id");
+        if (!id_val || id_val->type != JSON_STRING) {
+            json_free(results);
+            json_free(body);
+            return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                                      "{\"error\":\"Admin user has no ID\"}", "application/json");
+        }
+        
+        const char* user_id = id_val->value.string;
+        
         /* Create proper JWT token pair */
-        const char* user_id = "user_admin";
         json_value_t* response_obj = NULL;
         char* response_str = jwt_create_token_pair(ctx->jwt_secret, user_id, username, &response_obj);
         
         if (!response_str || !response_obj) {
             LOG_ERROR("LOGIN: Failed to create JWT tokens");
+            json_free(results);
             json_free(body);
             return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                       "{\"error\":\"Failed to create tokens\"}", "application/json");
@@ -91,6 +123,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         free(response_str);
         response_str = json_stringify(response_obj);
         json_free(response_obj);
+        json_free(results);
         json_free(body);
         
         http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");

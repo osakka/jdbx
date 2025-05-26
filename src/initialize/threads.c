@@ -81,30 +81,21 @@ init_status_t run_server(server_config_t* config) {
         
         return INIT_OK;
     } else {
-        /* In daemon mode, let the server run independently (our parent has already exited) */
-        /* Just return success without waiting for server to exit */
-        INIT_LOG_SUCCESS("SERVER", "Server started in daemon mode (continuing independently)");
-        
-        /* Fork again to avoid blocking */
-        pid_t pid = fork();
-        if (pid < 0) {
-            INIT_LOG_FAILURE("SERVER", "Failed to fork server process: %s", strerror(errno));
-            return INIT_ERROR;
-        } else if (pid > 0) {
-            /* Parent process exits normally */
-            return INIT_OK;
-        }
-        
-        /* Child process runs the server */
+        /* In daemon mode, run the server directly (we're already the daemon process) */
         INIT_LOG_PROGRESS("SERVER", "Running server in daemon mode with socket %d", config->socket_fd);
         server_status_t server_status = server_initialize_and_run(config, config->api_ctx);
         
-        /* This code should only run when server shuts down */
+        /* Check if the server completed successfully */
+        INIT_LOG_PROGRESS("SERVER", "Server completed with status: %d", server_status);
+        
+        /* Handle server status */
         if (server_status != SERVER_OK) {
-            INIT_LOG_FAILURE("SERVER", "Server failed with status: %d", server_status);
-            exit(1);
+            INIT_LOG_FAILURE("SERVER", "Server failed to start or run with status: %d", server_status);
+            return INIT_ERROR;
         }
         
-        exit(0);
+        INIT_LOG_SUCCESS("SERVER", "Server shutdown completed successfully");
+        
+        return INIT_OK;
     }
 }
