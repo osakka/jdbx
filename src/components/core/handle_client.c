@@ -191,53 +191,57 @@ void* handle_client(void* client_data) {
     }
     
     /* Debug request */
-    printf("Received request: %s %s\n",
-          request->method == HTTP_GET ? "GET" :
-          request->method == HTTP_POST ? "POST" :
-          request->method == HTTP_PUT ? "PUT" :
-          request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
-          request->path);
-
-    if (request->origin) {
-        printf("Origin: %s\n", request->origin);
-    }
-
-    if (request->content_type) {
-        printf("Content-Type: %s\n", request->content_type);
+    if (g_logger) {
+        LOG_DEBUG("Received request: %s %s",
+              request->method == HTTP_GET ? "GET" :
+              request->method == HTTP_POST ? "POST" :
+              request->method == HTTP_PUT ? "PUT" :
+              request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+              request->path);
+        
+        if (request->origin) {
+            LOG_DEBUG("Origin: %s", request->origin);
+        }
+        
+        if (request->content_type) {
+            LOG_DEBUG("Content-Type: %s", request->content_type);
+        }
     }
 
     /* Check if this is an admin interface route */
     if (request->method == HTTP_GET && is_admin_route(request->path)) {
         http_response_t* response = NULL;
 
-        printf("Handling admin route: %s\n", request->path);
+        if (g_logger) {
+            LOG_DEBUG("Handling admin route: %s", request->path);
+        }
 
         /* Get proper web root directory from server config */
         const char* web_root = ADMIN_FILES_DIR;
         extern server_config_t* g_server_config;
         if (g_server_config && g_server_config->web_root) {
             web_root = g_server_config->web_root;
-            printf("Using configured web root: %s\n", web_root);
+            if (g_logger) LOG_DEBUG("Using configured web root: %s", web_root);
         } else {
-            printf("Using default web root: %s\n", web_root);
+            if (g_logger) LOG_DEBUG("Using default web root: %s", web_root);
         }
         
         /* Always serve static files without authentication for simplicity */
         response = serve_admin_file(request->path);
-        printf("File served: %s\n", response ? "yes" : "no");
+        if (g_logger) LOG_DEBUG("File served: %s", response ? "yes" : "no");
 
         /* Print debug info about file path if response wasn't generated */
         if (!response) {
             /* Check if web root directory exists */
-            printf("Admin files directory: %s\n", web_root);
+            if (g_logger) LOG_DEBUG("Admin files directory: %s", web_root);
             char filepath[512] = {0};
 
             if (strcmp(request->path, "/") == 0) {
                 sprintf(filepath, "%s/index.html", web_root);
-                printf("Attempting to serve index.html from: %s\n", filepath);
+                if (g_logger) LOG_DEBUG("Attempting to serve index.html from: %s", filepath);
             } else if (strcmp(request->path, "/login") == 0) {
                 sprintf(filepath, "%s/login.html", web_root);
-                printf("Attempting to serve login.html from: %s\n", filepath);
+                if (g_logger) LOG_DEBUG("Attempting to serve login.html from: %s", filepath);
             }
         }
         
