@@ -5,6 +5,64 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.5] - 2025-05-27
+
+### 🚀 Performance Improvements
+
+#### Metrics Storage Overhaul
+- **FIXED**: Critical performance degradation from ~1ms to ~400ms response times
+- **CAUSE**: Metrics creating new documents every minute, leading to unbounded growth
+- **SOLUTION**: Redesigned metrics to use 5 fixed documents with time-series data
+  - Operations metrics (reads, writes, database operations)
+  - Performance metrics (response times, active connections)
+  - Cache metrics (hit rate, size, evictions)
+  - Memory metrics (total, used, free, process memory)
+  - Connection metrics (active connections, total connections)
+- **RESULT**: 10x performance improvement - response times back to ~38ms
+
+### ✨ New Features
+
+#### Time-Series Metrics Implementation
+- **NEW**: Append-and-trim pattern for metrics data
+- **NEW**: Configurable retention (default 15 minutes/15 data points)
+- **NEW**: Fixed document IDs using standard `doc-<timestamp>-<random>` format
+- **NEW**: Human-readable `name` field for searching metrics
+
+#### System Collections
+- **NEW**: Proper `_system_metrics` collection with underscore prefix
+- **NEW**: Document count tracking for all collections
+- **NEW**: UI support for viewing system collection documents
+
+### 🐛 Bug Fixes
+
+#### Database Operations
+- **FIXED**: `db_insert_document` now respects provided `_id` values
+- **FIXED**: `db_list_collections_with_info` returns document counts
+- **FIXED**: Binary persistence no longer locks during serialization
+
+#### UI/Frontend
+- **FIXED**: JavaScript sending "[object Object]" instead of collection names
+- **FIXED**: Collections data properly normalized in UI
+- **FIXED**: Dashboard metrics display showing correct values
+- **FIXED**: System collections showing hardcoded "0" document counts
+
+#### Server Stability
+- **FIXED**: Server crashes from excessive trace-level logging (910MB log files)
+- **FIXED**: Log level changed from trace to info for production stability
+- **FIXED**: Memory usage stabilized with proper metrics retention
+
+### 🔧 Technical Improvements
+
+#### Code Quality
+- **REMOVED**: Unused `users` variable warning in rbac_api.c
+- **CLEANED**: Temporary metrics cleanup scripts
+- **IMPROVED**: Error handling in collection browsing
+
+#### Documentation
+- **NEW**: `docs/METRICS_STORAGE_FIX_PLAN.md` - Complete metrics redesign plan
+- **NEW**: `docs/METRICS_IMPLEMENTATION_COMPLETE.md` - Implementation details
+- **NEW**: `docs/METRICS_AND_PERMISSIONS_PLAN.md` - Permissions integration
+
 ## [2.0.4] - 2025-05-26
 
 ### 🐛 Bug Fixes

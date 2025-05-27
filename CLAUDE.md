@@ -112,3 +112,13 @@ The JSONdb server includes a complete binary persistence system with automatic d
 - Location: `/opt/jsondb/build/var/database.jdb`
 - Format: Binary with magic number 0x4A534442 ("JSDB")
 - Persistence: Automatic saves ensure data durability across server restarts
+
+## Metrics System
+
+The metrics system uses a time-series approach with fixed documents:
+
+1. **Collection**: `_system_metrics` (with underscore prefix for system collections)
+2. **Fixed Documents**: 5 metric types (operations, performance, cache, memory, connections)
+3. **Data Storage**: Append-and-trim pattern with configurable retention (default 15 data points)
+4. **Performance**: O(1) updates, no unbounded growth
+5. **Document IDs**: Standard format `doc-<timestamp>-<random>` with searchable `name` field

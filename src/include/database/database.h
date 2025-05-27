@@ -157,6 +157,7 @@ int db_create_collection(database_t* db, const char* name);
 int db_drop_collection(database_t* db, const char* name);
 db_collection_t* db_get_collection(database_t* db, const char* name);
 json_value_t* db_list_collections(database_t* db);
+json_value_t* db_list_collections_with_info(database_t* db);
 
 /* Collection operations */
 int db_collection_exists(database_t* db, const char* collection_name);

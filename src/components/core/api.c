@@ -892,16 +892,16 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
                                   "{\"error\":\"Invalid request\"}", "application/json");
     }
     
-    /* Get collections */
-    json_value_t* collections = db_list_collections(ctx->db);
-    if (!collections) {
+    /* Get collections with info */
+    json_value_t* collections_info = db_list_collections_with_info(ctx->db);
+    if (!collections_info) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                                   "{\"error\":\"Failed to list collections\"}", "application/json");
     }
     
     /* Create response */
     json_value_t* response = json_create_object();
-    json_object_set(response, "collections", collections);
+    json_object_set(response, "collections", collections_info);
     
     char* response_str = json_stringify(response);
     json_free(response);

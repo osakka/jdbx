@@ -38,6 +38,8 @@ JSONdb is a lightweight, high-performance document database built specifically f
   - Document caching system with intelligent invalidation
   - Thread-safe persistence with automatic triggers and rollback support
   - Optimized for both read and write operations
+  - **Time-series metrics** with append-and-trim pattern for O(1) updates
+  - Sub-millisecond response times for typical operations
 - **RESTful API**: Complete API for database operations
 - **Visualization & Metrics**: 
   - Transaction visualization for monitoring

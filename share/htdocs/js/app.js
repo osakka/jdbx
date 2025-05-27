@@ -430,7 +430,15 @@ function hasDataChanged(newData) {
 async function loadCollections() {
     try {
         const response = await apiRequest('/api/collections');
-        const collections = Array.isArray(response) ? response : (response.collections || []);
+        let collectionsData = Array.isArray(response) ? response : (response.collections || []);
+        
+        // Ensure we don't have mixed formats that could cause issues
+        const collections = collectionsData.map(item => {
+            if (typeof item === 'string') {
+                return { name: item, documentCount: 0, isSystem: item.startsWith('_') };
+            }
+            return item;
+        });
         
         if (previousData.totalCollections !== collections.length) {
             document.getElementById('totalCollections').textContent = collections.length;
@@ -440,21 +448,32 @@ async function loadCollections() {
         let totalDocuments = 0;
         let totalSize = 0;
         
-        for (const collection of collections) {
+        for (const collectionInfo of collections) {
             try {
-                const docsResponse = await apiRequest(`/api/collections/${collection}`);
-                const documents = Array.isArray(docsResponse) ? docsResponse : (docsResponse.documents || []);
-                const docCount = documents.length;
-                const size = JSON.stringify(documents).length;
+                // Handle both old format (string) and new format (object)
+                const collectionName = typeof collectionInfo === 'string' ? collectionInfo : collectionInfo.name;
+                const docCountFromInfo = typeof collectionInfo === 'object' ? collectionInfo.documentCount : null;
+                
+                // If we already have the count from the API, use it for efficiency
+                let docCount = docCountFromInfo;
+                let size = 0;
+                
+                if (docCount === null || docCount > 0) {
+                    // Only fetch documents if we don't have count or if there are documents
+                    const docsResponse = await apiRequest(`/api/collections/${collectionName}/documents`);
+                    const documents = Array.isArray(docsResponse) ? docsResponse : (docsResponse.documents || []);
+                    docCount = docCount !== null ? docCount : documents.length;
+                    size = JSON.stringify(documents).length;
+                }
                 
                 totalDocuments += docCount;
                 totalSize += size;
                 
-                const collectionKey = `${collection}_${docCount}_${size}`;
-                previousData.collectionsData[collection] = collectionKey;
+                const collectionKey = `${collectionName}_${docCount}_${size}`;
+                previousData.collectionsData[collectionName] = collectionKey;
                 
             } catch (error) {
-                console.error(`Error loading collection ${collection}:`, error);
+                console.error(`Error loading collection ${collectionName}:`, error);
             }
         }
         
@@ -539,13 +558,25 @@ async function loadBrowserCollections() {
         ]);
         
         // Handle both array response and object with collections property
+        let rawCollections = [];
         if (Array.isArray(collectionsResponse)) {
-            collections = collectionsResponse;
+            rawCollections = collectionsResponse;
         } else if (collectionsResponse.collections) {
-            collections = collectionsResponse.collections;
-        } else {
-            collections = [];
+            rawCollections = collectionsResponse.collections;
         }
+        
+        // Normalize collections to always be objects with name, documentCount, isSystem
+        collections = rawCollections.map(item => {
+            if (typeof item === 'string') {
+                return { name: item, documentCount: 0, isSystem: item.startsWith('_') };
+            }
+            // Ensure the object has all required fields
+            return {
+                name: item.name || item,
+                documentCount: item.documentCount || 0,
+                isSystem: item.isSystem !== undefined ? item.isSystem : (item.name || item).startsWith('_')
+            };
+        });
         
         // Store schemas for reference
         if (schemasResponse && schemasResponse.schemas) {
@@ -594,8 +625,15 @@ async function renderCollections() {
     }
     
     // Separate system collections (starting with _) from user collections
-    const systemCollections = collections.filter(c => c.startsWith('_'));
-    const userCollections = collections.filter(c => !c.startsWith('_'));
+    // Handle both old format (strings) and new format (objects)
+    const systemCollections = collections.filter(c => {
+        const name = typeof c === 'string' ? c : c.name;
+        return name.startsWith('_');
+    });
+    const userCollections = collections.filter(c => {
+        const name = typeof c === 'string' ? c : c.name;
+        return !name.startsWith('_');
+    });
     
     let html = '';
     
@@ -607,16 +645,18 @@ async function renderCollections() {
                     <i class="bi bi-database me-2"></i>
                     <span>System Collections</span>
                 </div>
-                ${systemCollections.map(collection => {
-                    const hasSchema = schemas && schemas.some(s => s.collection === collection);
+                ${systemCollections.map(collectionInfo => {
+                    const name = typeof collectionInfo === 'string' ? collectionInfo : collectionInfo.name;
+                    const count = typeof collectionInfo === 'object' ? collectionInfo.documentCount : 0;
+                    const hasSchema = schemas && schemas.some(s => s.collection === name);
                     return `
-                        <div class="collection-item ${currentCollection === collection ? 'active' : ''}" 
-                             data-collection="${collection}" 
-                             onclick="selectCollection('${collection}')">
+                        <div class="collection-item ${currentCollection === name ? 'active' : ''}" 
+                             data-collection="${name}" 
+                             onclick="selectCollection('${name}')">
                             <i class="bi bi-gear-fill me-2" style="font-size: 0.875rem;"></i>
-                            <span class="collection-name">${collection}</span>
+                            <span class="collection-name">${name}</span>
                             ${hasSchema ? '<i class="bi bi-shield-check text-success ms-1" title="Schema defined"></i>' : ''}
-                            <span class="badge bg-secondary ms-auto">0</span>
+                            <span class="badge bg-secondary ms-auto">${count}</span>
                         </div>
                     `;
                 }).join('')}
@@ -632,15 +672,17 @@ async function renderCollections() {
                     <i class="bi bi-collection me-2"></i>
                     <span>User Collections</span>
                 </div>
-                ${userCollections.map(collection => {
-                    const hasSchema = schemas && schemas.some(s => s.collection === collection);
+                ${userCollections.map(collectionInfo => {
+                    const name = typeof collectionInfo === 'string' ? collectionInfo : collectionInfo.name;
+                    const count = typeof collectionInfo === 'object' ? collectionInfo.documentCount : 0;
+                    const hasSchema = schemas && schemas.some(s => s.collection === name);
                     return `
-                        <div class="collection-item ${currentCollection === collection ? 'active' : ''}" 
-                             onclick="selectCollection('${collection}')">
+                        <div class="collection-item ${currentCollection === name ? 'active' : ''}" 
+                             onclick="selectCollection('${name}')">
                             <i class="bi bi-folder me-2" style="font-size: 0.875rem;"></i>
-                            <span class="collection-name">${collection}</span>
+                            <span class="collection-name">${name}</span>
                             ${hasSchema ? '<i class="bi bi-shield-check text-success ms-1" title="Schema defined"></i>' : ''}
-                            <span class="badge bg-secondary ms-auto">0</span>
+                            <span class="badge bg-secondary ms-auto">${count}</span>
                         </div>
                     `;
                 }).join('')}
@@ -759,15 +801,29 @@ function renderDocuments() {
     
     container.innerHTML = documents.map((doc, index) => {
         const docId = doc._id || doc.id || `Document ${index + 1}`;
+        const docName = doc.name || docId; // Use name if available, otherwise fallback to ID
         const docSize = JSON.stringify(doc).length;
         const sizeStr = docSize < 1024 ? `${docSize} B` : `${(docSize / 1024).toFixed(1)} KB`;
+        const updatedAt = doc.updated_at || doc.created_at || '';
+        
+        // Format the display based on whether we have a custom name
+        const hasCustomName = doc.name && doc.name !== docId;
         
         return `
             <div class="document-item ${currentDocument === (doc._id || doc.id) ? 'active' : ''}" 
                  onclick="selectDocument(${index})">
-                <i class="bi bi-file-text me-2" style="font-size: 0.875rem;"></i>
-                <span class="document-name">${docId}</span>
-                <span class="badge bg-secondary ms-auto">${sizeStr}</span>
+                <div class="d-flex align-items-center w-100">
+                    <i class="bi bi-file-text me-2" style="font-size: 0.875rem;"></i>
+                    <div class="flex-grow-1">
+                        ${hasCustomName ? `
+                            <div class="document-name fw-bold">${docName}</div>
+                            <div class="document-id text-muted small">${docId}${updatedAt ? ` • ${new Date(updatedAt).toLocaleDateString()}` : ''}</div>
+                        ` : `
+                            <span class="document-name">${docId}</span>
+                        `}
+                    </div>
+                    <span class="badge bg-secondary ms-2">${sizeStr}</span>
+                </div>
             </div>
         `;
     }).join('');
@@ -1190,6 +1246,8 @@ function copyToClipboard() {
 
 // ===== METRICS FUNCTIONALITY =====
 function initializeMetrics() {
+    console.log('initializeMetrics called');
+    
     // Initialize charts if not already done
     if (!operationsChart) {
         const ctx = document.getElementById('operationsChart');
@@ -1280,10 +1338,16 @@ function initializeMetrics() {
         }
     }
     
-    loadMetrics();
+    // Force immediate load with a small delay to ensure DOM is ready
+    console.log('Scheduling loadMetrics...');
+    setTimeout(() => {
+        console.log('Calling loadMetrics from initializeMetrics');
+        loadMetrics();
+    }, 100);
 }
 
 async function loadMetrics(timeRange = '1h', isPolling = false) {
+    console.log('loadMetrics called with timeRange:', timeRange, 'isPolling:', isPolling);
     try {
         // Calculate time range for historical data
         const now = Math.floor(Date.now() / 1000);
@@ -1312,11 +1376,14 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         // Get current metrics and historical data in parallel
+        console.log('Fetching metrics data...');
         const [health, collections, cacheStats] = await Promise.all([
-            apiRequest('/api/health').catch(() => null),
-            apiRequest('/api/collections').catch(() => ({ collections: [] })),
-            apiRequest('/api/cache/stats').catch(() => null)
+            apiRequest('/api/health').catch(err => { console.error('Health API error:', err); return null; }),
+            apiRequest('/api/collections').catch(err => { console.error('Collections API error:', err); return { collections: [] }; }),
+            apiRequest('/api/cache/stats').catch(err => { console.error('Cache stats API error:', err); return null; })
         ]);
+        
+        console.log('API responses:', { health, collections, cacheStats });
         
         // TODO: Historical metrics not yet implemented
         const historyReadOps = null;
@@ -1344,7 +1411,10 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         let writeOps = 0;
         let avgResponseTime = null;
         
+        console.log('Health API response:', health);
+        
         if (health && health.metrics) {
+            console.log('Health metrics:', health.metrics);
             totalOps = health.metrics.operations.total || 0;
             readOps = health.metrics.operations.read || 0;
             writeOps = health.metrics.operations.write || 0;
@@ -1352,6 +1422,9 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             if (health.metrics.performance) {
                 avgResponseTime = health.metrics.performance.avg_response_time_ms;
             }
+            console.log('Parsed metrics - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
+        } else {
+            console.log('No health metrics available');
         }
         
         // Add visual indicator for updates
@@ -1363,12 +1436,27 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         // Update metrics display with real values
-        document.getElementById('totalOps').textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
-        document.getElementById('readOps').textContent = readOps > 0 ? formatNumber(readOps) : '0';
-        document.getElementById('writeOps').textContent = writeOps > 0 ? formatNumber(writeOps) : '0';
+        console.log('Updating DOM elements - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
+        const totalOpsElement = document.getElementById('totalOps');
+        const readOpsElement = document.getElementById('readOps');
+        const writeOpsElement = document.getElementById('writeOps');
+        const avgResponseTimeElement = document.getElementById('avgResponseTime');
+        
+        console.log('DOM elements found:', {
+            totalOps: !!totalOpsElement,
+            readOps: !!readOpsElement,
+            writeOps: !!writeOpsElement,
+            avgResponseTime: !!avgResponseTimeElement
+        });
+        
+        if (totalOpsElement) totalOpsElement.textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
+        if (readOpsElement) readOpsElement.textContent = readOps > 0 ? formatNumber(readOps) : '0';
+        if (writeOpsElement) writeOpsElement.textContent = writeOps > 0 ? formatNumber(writeOps) : '0';
         
         // Show real response time if available
-        document.getElementById('avgResponseTime').textContent = avgResponseTime !== null ? `${avgResponseTime.toFixed(2)}ms` : 'N/A';
+        if (avgResponseTimeElement) {
+            avgResponseTimeElement.textContent = avgResponseTime !== null ? `${avgResponseTime.toFixed(2)}ms` : 'N/A';
+        }
         
         // Update cache metrics
         if (cacheStats) {

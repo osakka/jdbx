@@ -710,6 +710,16 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
         return create_error_response("Failed to query roles - invalid result format", HTTP_INTERNAL_SERVER_ERROR);
     }
     
+    /* Query all users to compute role membership */
+    json_value_t* users_query = json_create_object();
+    json_value_t* users_result = db_query_documents(ctx->db, RBAC_USERS_COLLECTION, users_query);
+    json_free(users_query);
+    
+    json_value_t* users_docs = NULL;
+    if (users_result && users_result->type == JSON_OBJECT) {
+        users_docs = json_object_get(users_result, "documents");
+    }
+    
     /* Create response array */
     json_value_t* roles = json_create_array();
     for (size_t i = 0; i < documents->value.array.size; i++) {
@@ -723,7 +733,6 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
             json_value_t* cn = json_object_get(role, "cn");
             json_value_t* description = json_object_get(role, "description");
             json_value_t* permissions = json_object_get(role, "permissions");
-            json_value_t* users = json_object_get(role, "users");
             json_value_t* created_at = json_object_get(role, "created_at");
             json_value_t* updated_at = json_object_get(role, "updated_at");
             
@@ -757,17 +766,44 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
                 json_object_set(role_data, "permissions", json_create_object());
             }
             
-            if (users && users->type == JSON_ARRAY) {
-                json_object_set(role_data, "users", json_clone(users));
-            } else {
-                json_object_set(role_data, "users", json_create_array());
+            /* Compute users array by checking which users have this role */
+            json_value_t* computed_users = json_create_array();
+            if (id && id->type == JSON_STRING && users_docs && users_docs->type == JSON_ARRAY) {
+                const char* role_id = id->value.string;
+                
+                /* Check each user to see if they have this role */
+                for (size_t j = 0; j < users_docs->value.array.size; j++) {
+                    json_value_t* user = users_docs->value.array.items[j];
+                    if (user && user->type == JSON_OBJECT) {
+                        json_value_t* user_roles = json_object_get(user, "roles");
+                        if (user_roles && user_roles->type == JSON_ARRAY) {
+                            /* Check if user has this role */
+                            for (size_t k = 0; k < user_roles->value.array.size; k++) {
+                                json_value_t* user_role = user_roles->value.array.items[k];
+                                if (user_role && user_role->type == JSON_STRING &&
+                                    strcmp(user_role->value.string, role_id) == 0) {
+                                    /* User has this role, add user ID to array */
+                                    json_value_t* user_id = json_object_get(user, "_id");
+                                    if (user_id && user_id->type == JSON_STRING) {
+                                        json_array_append(computed_users, json_create_string(user_id->value.string));
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            json_object_set(role_data, "users", computed_users);
             
             json_array_append(roles, role_data);
         }
     }
     
     json_free(result);
+    if (users_result) {
+        json_free(users_result);
+    }
     
     return create_json_response(roles, HTTP_OK);
 }

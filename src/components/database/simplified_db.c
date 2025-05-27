@@ -421,6 +421,53 @@ json_value_t* db_list_collections(database_t* db) {
 }
 
 /**
+ * List collections with document counts and info
+ */
+json_value_t* db_list_collections_with_info(database_t* db) {
+    if (!db) {
+        return NULL;
+    }
+    
+    pthread_mutex_lock(&db->lock);
+    
+    /* Create array of collection info objects */
+    json_value_t* result = json_create_array();
+    if (!result) {
+        pthread_mutex_unlock(&db->lock);
+        return NULL;
+    }
+    
+    /* Iterate over collections */
+    for (size_t i = 0; i < db->collections->value.object.size; i++) {
+        const char* name = db->collections->value.object.entries[i].key;
+        json_value_t* collection = db->collections->value.object.entries[i].value;
+        
+        /* Create collection info object */
+        json_value_t* info = json_create_object();
+        if (!info) continue;
+        
+        /* Add collection name */
+        json_object_set(info, "name", json_create_string(name));
+        
+        /* Count documents in collection */
+        size_t doc_count = 0;
+        if (collection && collection->type == JSON_ARRAY) {
+            doc_count = json_array_size(collection);
+        }
+        json_object_set(info, "documentCount", json_create_integer(doc_count));
+        
+        /* Add system flag */
+        json_object_set(info, "isSystem", json_create_boolean(name[0] == '_'));
+        
+        json_array_append(result, info);
+    }
+    
+    pthread_mutex_unlock(&db->lock);
+    
+    return result;
+}
+
+/**
  * Insert document - Binary format optimized
  */
 json_value_t* db_insert_document(database_t* db, const char* collection_name, json_value_t* document) {
@@ -463,19 +510,50 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         return NULL;
     }
     
-    LOG_DEBUG("Generating document ID (always use standard format)");
-    /* Always generate a new ID to ensure consistency */
-    char* generated_id = generate_simple_id();
-    if (generated_id) {
-        LOG_DEBUG("Generated new ID: %s", generated_id);
-        /* Remove any existing _id and use our generated one */
-        json_object_remove(doc_copy, "_id");
-        json_object_set(doc_copy, "_id", json_create_string(generated_id));
-        free(generated_id);
+    LOG_DEBUG("Checking for existing document ID");
+    json_value_t* existing_id = json_object_get(doc_copy, "_id");
+    
+    if (!existing_id || existing_id->type != JSON_STRING || strlen(json_get_string(existing_id)) == 0) {
+        /* No valid existing ID, generate a new one */
+        LOG_DEBUG("No valid existing ID found, generating new one");
+        char* generated_id = generate_simple_id();
+        if (generated_id) {
+            LOG_DEBUG("Generated new ID: %s", generated_id);
+            json_object_set(doc_copy, "_id", json_create_string(generated_id));
+            free(generated_id);
+        } else {
+            LOG_ERROR("Failed to generate ID for document");
+            json_free(doc_copy);
+            return NULL;
+        }
     } else {
-        LOG_ERROR("Failed to generate ID for document");
-        json_free(doc_copy);
-        return NULL;
+        /* Use the provided ID */
+        const char* provided_id = json_get_string(existing_id);
+        LOG_DEBUG("Using provided ID: %s", provided_id);
+        
+        /* Check if this ID already exists in the collection */
+        pthread_mutex_lock(&db->lock);
+        json_value_t* collection = json_object_get(db->collections, collection_name);
+        if (collection && collection->type == JSON_ARRAY) {
+            for (size_t i = 0; i < collection->value.array.size; i++) {
+                json_value_t* doc = collection->value.array.items[i];
+                if (doc && doc->type == JSON_OBJECT) {
+                    json_value_t* doc_id = json_object_get(doc, "_id");
+                    if (doc_id && doc_id->type == JSON_STRING &&
+                        strcmp(json_get_string(doc_id), provided_id) == 0) {
+                        LOG_ERROR("Document with ID '%s' already exists in collection '%s'", 
+                                  provided_id, collection_name);
+                        pthread_mutex_unlock(&db->lock);
+                        json_free(doc_copy);
+                        if (op_timer) {
+                            metrics_timer_stop(op_timer);
+                        }
+                        return NULL;
+                    }
+                }
+            }
+        }
+        pthread_mutex_unlock(&db->lock);
     }
     
     LOG_DEBUG("Verifying document has valid ID");

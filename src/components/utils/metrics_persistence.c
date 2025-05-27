@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/sysinfo.h>
 
 /* Clone a JSON value - temporary until json_deep_copy is added to json utils */
 static json_value_t* json_deep_copy(json_value_t* value) {
@@ -22,10 +23,18 @@ static json_value_t* json_deep_copy(json_value_t* value) {
 }
 
 /* Metrics persistence configuration */
-#define METRICS_COLLECTION_NAME "_system_metrics"
+#define METRICS_COLLECTION_NAME "_system_metrics"  /* Collection for new metrics */
+#define OLD_METRICS_COLLECTION "metrics"           /* Old collection to clean up */
 #define METRICS_SNAPSHOT_INTERVAL 60  /* Save metrics every 60 seconds */
 #define METRICS_RETENTION_DAYS 7      /* Keep metrics for 7 days */
 #define METRICS_CLEANUP_INTERVAL 3600 /* Clean old metrics every hour */
+
+/* Global variables to store metric document IDs - will be generated once */
+static char* g_metric_id_operations = NULL;
+static char* g_metric_id_performance = NULL;
+static char* g_metric_id_cache = NULL;
+static char* g_metric_id_memory = NULL;
+static char* g_metric_id_connections = NULL;
 
 /* Metrics persistence state */
 typedef struct {
@@ -121,6 +130,13 @@ void metrics_persistence_shutdown(void) {
     free(g_metrics_persistence);
     g_metrics_persistence = NULL;
     
+    /* Free metric IDs */
+    if (g_metric_id_operations) { free(g_metric_id_operations); g_metric_id_operations = NULL; }
+    if (g_metric_id_performance) { free(g_metric_id_performance); g_metric_id_performance = NULL; }
+    if (g_metric_id_cache) { free(g_metric_id_cache); g_metric_id_cache = NULL; }
+    if (g_metric_id_memory) { free(g_metric_id_memory); g_metric_id_memory = NULL; }
+    if (g_metric_id_connections) { free(g_metric_id_connections); g_metric_id_connections = NULL; }
+    
     LOG_INFO("Metrics persistence shutdown complete");
 }
 
@@ -166,6 +182,155 @@ static void* metrics_persistence_thread(void* arg) {
 }
 
 /**
+ * Helper function to find metric document by name
+ */
+static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_name) {
+    json_value_t* query = json_create_object();
+    json_object_set(query, "name", json_create_string(metric_name));
+    
+    json_value_t* result = db_query_documents(mp->db, METRICS_COLLECTION_NAME, query);
+    json_free(query);
+    
+    if (result) {
+        json_value_t* documents = json_object_get(result, "documents");
+        if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+            json_value_t* doc = json_array_get(documents, 0);
+            json_value_t* id = json_object_get(doc, "_id");
+            if (id && id->type == JSON_STRING) {
+                char* id_copy = strdup(json_get_string(id));
+                json_free(result);
+                return id_copy;
+            }
+        }
+        json_free(result);
+    }
+    return NULL;
+}
+
+/**
+ * Helper function to update or create a metric document with time-series data
+ */
+static int update_metric_document(metrics_persistence_t* mp, char** metric_id_ptr,
+                                  const char* metric_name, const char* metric_type, json_value_t* current_data) {
+    if (!mp || !metric_id_ptr || !metric_name || !metric_type || !current_data) {
+        return 0;
+    }
+    
+    /* Create timestamp */
+    time_t timestamp = time(NULL);
+    char iso_time[32];
+    struct tm* tm_info = gmtime(&timestamp);
+    strftime(iso_time, sizeof(iso_time), "%Y-%m-%dT%H:%M:%SZ", tm_info);
+    
+    /* Create data point */
+    json_value_t* data_point = json_deep_copy(current_data);
+    json_object_set(data_point, "timestamp", json_create_string(iso_time));
+    
+    /* Find or get metric ID */
+    char* metric_id = *metric_id_ptr;
+    if (!metric_id) {
+        /* Try to find existing document by name */
+        metric_id = find_metric_by_name(mp, metric_name);
+        if (metric_id) {
+            *metric_id_ptr = metric_id;
+        }
+    }
+    
+    /* Check if document exists */
+    json_value_t* existing = metric_id ? db_get_document(mp->db, METRICS_COLLECTION_NAME, metric_id) : NULL;
+    json_value_t* document_to_save = NULL;
+    
+    if (existing) {
+        /* Document exists, append new data point and trim old ones */
+        json_value_t* data_array = json_object_get(existing, "data");
+        json_value_t* max_entries_val = json_object_get(existing, "max_entries");
+        
+        int max_entries = (max_entries_val && max_entries_val->type == JSON_INTEGER) ? 
+                          json_get_integer(max_entries_val) : 15;
+        
+        if (!data_array || data_array->type != JSON_ARRAY) {
+            data_array = json_create_array();
+            json_object_set(existing, "data", data_array);
+        }
+        
+        /* Append new data point */
+        json_array_append(data_array, data_point);
+        
+        /* Trim old entries (keep only last max_entries) */
+        size_t array_size = json_array_size(data_array);
+        if (array_size > (size_t)max_entries) {
+            /* Create new array with only recent entries */
+            json_value_t* new_array = json_create_array();
+            for (size_t i = array_size - max_entries; i < array_size; i++) {
+                json_value_t* item = json_array_get(data_array, i);
+                if (item) {
+                    json_array_append(new_array, json_deep_copy(item));
+                }
+            }
+            json_object_set(existing, "data", new_array);
+        }
+        
+        /* Update current values and timestamp */
+        json_object_set(existing, "current", json_deep_copy(current_data));
+        json_object_set(existing, "updated_at", json_create_string(iso_time));
+        
+        document_to_save = existing;
+    } else {
+        /* Create new document - let db_insert_document generate the ID */
+        json_value_t* new_doc = json_create_object();
+        json_object_set(new_doc, "name", json_create_string(metric_name));
+        json_object_set(new_doc, "type", json_create_string(metric_type));
+        json_object_set(new_doc, "retention_minutes", json_create_integer(15));
+        json_object_set(new_doc, "max_entries", json_create_integer(15));
+        
+        /* Create data array with first entry */
+        json_value_t* data_array = json_create_array();
+        json_array_append(data_array, data_point);
+        json_object_set(new_doc, "data", data_array);
+        
+        /* Set current values and timestamps */
+        json_object_set(new_doc, "current", json_deep_copy(current_data));
+        json_object_set(new_doc, "created_at", json_create_string(iso_time));
+        json_object_set(new_doc, "updated_at", json_create_string(iso_time));
+        
+        document_to_save = new_doc;
+    }
+    
+    /* Save the document */
+    json_value_t* result = NULL;
+    if (existing && metric_id) {
+        /* Update existing document */
+        result = db_update_document(mp->db, METRICS_COLLECTION_NAME, metric_id, document_to_save);
+    } else {
+        /* Insert new document */
+        result = db_insert_document(mp->db, METRICS_COLLECTION_NAME, document_to_save);
+        if (result && !*metric_id_ptr) {
+            /* Get and store the generated ID */
+            json_value_t* id_val = json_object_get(result, "_id");
+            if (id_val && id_val->type == JSON_STRING) {
+                *metric_id_ptr = strdup(json_get_string(id_val));
+            }
+        }
+    }
+    
+    /* Clean up */
+    if (existing) {
+        json_free(existing);
+    } else {
+        json_free(document_to_save);
+    }
+    
+    if (result) {
+        LOG_DEBUG("Updated metric document: %s", metric_id);
+        json_free(result);
+        return 1;
+    } else {
+        LOG_ERROR("Failed to update metric document: %s", metric_id);
+        return 0;
+    }
+}
+
+/**
  * Save current metrics snapshot to database
  */
 static int save_metrics_snapshot(metrics_persistence_t* mp) {
@@ -173,72 +338,116 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
         return 0;
     }
     
-    /* Get current metrics as JSON */
-    char* metrics_json_str = metrics_get_json(g_metrics_registry);
-    if (!metrics_json_str) {
-        LOG_ERROR("Failed to get metrics JSON");
-        return 0;
+    int success = 1;
+    
+    /* Update operations metrics */
+    metric_t* request_counter = get_server_requests_metric();
+    metric_t* db_ops_counter = get_db_operations_metric();
+    metric_t* db_read_ops = get_db_read_operations_metric();
+    metric_t* db_write_ops = get_db_write_operations_metric();
+    
+    json_value_t* operations = json_create_object();
+    json_object_set(operations, "total", json_create_integer(request_counter ? request_counter->value.counter : 0));
+    json_object_set(operations, "database", json_create_integer(db_ops_counter ? db_ops_counter->value.counter : 0));
+    json_object_set(operations, "read", json_create_integer(db_read_ops ? db_read_ops->value.counter : 0));
+    json_object_set(operations, "write", json_create_integer(db_write_ops ? db_write_ops->value.counter : 0));
+    
+    if (!update_metric_document(mp, &g_metric_id_operations, "operations", "operations", operations)) {
+        success = 0;
     }
+    json_free(operations);
     
-    /* Parse metrics JSON */
-    json_value_t* metrics_json = json_parse(metrics_json_str);
-    free(metrics_json_str);
+    /* Update performance metrics */
+    metric_t* request_timer = get_server_request_duration_metric();
+    metric_t* active_conns = get_active_connections_metric();
     
-    if (!metrics_json) {
-        LOG_ERROR("Failed to parse metrics JSON");
-        return 0;
-    }
-    
-    /* Create snapshot document */
-    json_value_t* snapshot = json_create_object();
-    if (!snapshot) {
-        json_free(metrics_json);
-        LOG_ERROR("Failed to create snapshot document");
-        return 0;
-    }
-    
-    /* Add timestamp */
-    time_t timestamp = time(NULL);
-    json_object_set(snapshot, "timestamp", json_create_integer(timestamp));
-    
-    /* Add ISO timestamp for easier querying */
-    char iso_time[32];
-    struct tm* tm_info = gmtime(&timestamp);
-    strftime(iso_time, sizeof(iso_time), "%Y-%m-%dT%H:%M:%SZ", tm_info);
-    json_object_set(snapshot, "time", json_create_string(iso_time));
-    
-    /* Add metrics data */
-    json_value_t* metrics_array = json_object_get(metrics_json, "metrics");
-    if (metrics_array) {
-        /* Convert metrics array to object for easier querying */
-        json_value_t* metrics_obj = json_create_object();
-        
-        for (size_t i = 0; i < metrics_array->value.array.size; i++) {
-            json_value_t* metric = json_array_get(metrics_array, i);
-            json_value_t* name = json_object_get(metric, "name");
-            json_value_t* value = json_object_get(metric, "value");
-            
-            if (name && name->type == JSON_STRING && value) {
-                json_object_set(metrics_obj, json_get_string(name), json_deep_copy(value));
-            }
-        }
-        
-        json_object_set(snapshot, "metrics", metrics_obj);
-    }
-    
-    json_free(metrics_json);
-    
-    /* Insert snapshot into database */
-    json_value_t* result = db_insert_document(mp->db, METRICS_COLLECTION_NAME, snapshot);
-    
-    if (result) {
-        LOG_DEBUG("Metrics snapshot saved successfully");
-        json_free(result);
-        return 1;
+    json_value_t* performance = json_create_object();
+    if (request_timer && request_timer->value.timer.count > 0) {
+        double avg_ms = (request_timer->value.timer.sum / request_timer->value.timer.count) * 1000.0;
+        json_object_set(performance, "avg_response_time_ms", json_create_number(avg_ms));
+        json_object_set(performance, "min_response_time_ms", json_create_number(request_timer->value.timer.min * 1000.0));
+        json_object_set(performance, "max_response_time_ms", json_create_number(request_timer->value.timer.max * 1000.0));
     } else {
-        LOG_ERROR("Failed to save metrics snapshot");
-        return 0;
+        json_object_set(performance, "avg_response_time_ms", json_create_number(0.0));
+        json_object_set(performance, "min_response_time_ms", json_create_number(0.0));
+        json_object_set(performance, "max_response_time_ms", json_create_number(0.0));
     }
+    json_object_set(performance, "active_connections", json_create_integer(active_conns ? (int64_t)active_conns->value.gauge : 0));
+    
+    if (!update_metric_document(mp, &g_metric_id_performance, "performance", "performance", performance)) {
+        success = 0;
+    }
+    json_free(performance);
+    
+    /* Update cache metrics */
+    metric_t* cache_hits = get_cache_hits_metric();
+    metric_t* cache_misses = get_cache_misses_metric();
+    metric_t* cache_evictions = get_cache_evictions_metric();
+    metric_t* cache_size = get_cache_size_metric();
+    
+    double hits = cache_hits ? cache_hits->value.counter : 0.0;
+    double misses = cache_misses ? cache_misses->value.counter : 0.0;
+    double total_requests = hits + misses;
+    double hit_rate = (total_requests > 0) ? (hits / total_requests) * 100.0 : 0.0;
+    
+    json_value_t* cache = json_create_object();
+    json_object_set(cache, "hit_rate", json_create_number(hit_rate));
+    json_object_set(cache, "hits", json_create_integer((int64_t)hits));
+    json_object_set(cache, "misses", json_create_integer((int64_t)misses));
+    json_object_set(cache, "evictions", json_create_integer(cache_evictions ? cache_evictions->value.counter : 0));
+    json_object_set(cache, "size_bytes", json_create_integer(cache_size ? (int64_t)cache_size->value.gauge : 0));
+    
+    if (!update_metric_document(mp, &g_metric_id_cache, "cache", "cache", cache)) {
+        success = 0;
+    }
+    json_free(cache);
+    
+    /* Update memory metrics */
+    struct sysinfo mem_info;
+    if (sysinfo(&mem_info) == 0) {
+        json_value_t* memory = json_create_object();
+        json_object_set(memory, "total_kb", json_create_integer(mem_info.totalram / 1024));
+        json_object_set(memory, "free_kb", json_create_integer(mem_info.freeram / 1024));
+        json_object_set(memory, "used_kb", json_create_integer((mem_info.totalram - mem_info.freeram) / 1024));
+        
+        /* Get process memory */
+        unsigned long process_mem = 0;
+        FILE* f = fopen("/proc/self/status", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                if (strncmp(line, "VmRSS:", 6) == 0) {
+                    sscanf(line, "VmRSS: %lu kB", &process_mem);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+        json_object_set(memory, "process_kb", json_create_integer(process_mem));
+        
+        if (!update_metric_document(mp, &g_metric_id_memory, "memory", "memory", memory)) {
+            success = 0;
+        }
+        json_free(memory);
+    }
+    
+    /* Update connections metrics */
+    json_value_t* connections = json_create_object();
+    json_object_set(connections, "active", json_create_integer(active_conns ? (int64_t)active_conns->value.gauge : 0));
+    json_object_set(connections, "total", json_create_integer(request_counter ? request_counter->value.counter : 0));
+    
+    if (!update_metric_document(mp, &g_metric_id_connections, "connections", "connections", connections)) {
+        success = 0;
+    }
+    json_free(connections);
+    
+    if (success) {
+        LOG_DEBUG("All metrics saved successfully");
+    } else {
+        LOG_ERROR("Some metrics failed to save");
+    }
+    
+    return success;
 }
 
 /**
@@ -249,49 +458,35 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
         return 0;
     }
     
-    /* Calculate cutoff timestamp */
-    time_t cutoff = time(NULL) - (METRICS_RETENTION_DAYS * 24 * 60 * 60);
-    
-    /* Create query to find old metrics */
-    json_value_t* query = json_create_object();
-    json_value_t* timestamp_query = json_create_object();
-    json_object_set(timestamp_query, "$lt", json_create_integer(cutoff));
-    json_object_set(query, "timestamp", timestamp_query);
-    
-    /* Query old metrics */
-    json_value_t* result = db_query_documents(mp->db, METRICS_COLLECTION_NAME, query);
-    json_free(query);
-    
-    if (!result) {
-        LOG_ERROR("Failed to query old metrics");
-        return 0;
-    }
-    
-    json_value_t* documents = json_object_get(result, "documents");
-    if (!documents || documents->type != JSON_ARRAY) {
-        json_free(result);
-        return 0;
-    }
-    
     int deleted_count = 0;
     
-    /* Delete each old metric document */
-    for (size_t i = 0; i < documents->value.array.size; i++) {
-        json_value_t* doc = json_array_get(documents, i);
-        json_value_t* id = json_object_get(doc, "_id");
-        
-        if (id && id->type == JSON_STRING) {
-            if (db_delete_document(mp->db, METRICS_COLLECTION_NAME, json_get_string(id))) {
-                deleted_count++;
+    /* Clean up old metrics collection entirely */
+    json_value_t* result = db_query_documents(mp->db, OLD_METRICS_COLLECTION, json_create_object());
+    
+    if (result) {
+        json_value_t* documents = json_object_get(result, "documents");
+        if (documents && documents->type == JSON_ARRAY) {
+            /* Delete all documents in old metrics collection */
+            for (size_t i = 0; i < documents->value.array.size; i++) {
+                json_value_t* doc = json_array_get(documents, i);
+                json_value_t* id = json_object_get(doc, "_id");
+                
+                if (id && id->type == JSON_STRING) {
+                    const char* id_str = json_get_string(id);
+                    if (db_delete_document(mp->db, OLD_METRICS_COLLECTION, id_str)) {
+                        deleted_count++;
+                    }
+                }
             }
         }
+        json_free(result);
     }
-    
-    json_free(result);
     
     if (deleted_count > 0) {
-        LOG_INFO("Cleaned up %d old metrics records", deleted_count);
+        LOG_INFO("Cleaned up %d legacy metrics documents from old collection", deleted_count);
     }
+    
+    /* No need to clean up system_metrics collection - it uses fixed document IDs with time-series data */
     
     return 1;
 }
