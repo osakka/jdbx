@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <sys/syscall.h>
 #include <pthread.h>
+#include <arpa/inet.h>
 
 /* Handle client connection */
 void* handle_client(void* client_data) {
@@ -145,6 +146,14 @@ void* handle_client(void* client_data) {
         close(client_fd);
         client->client_fd = 0;
         return NULL;
+    }
+    
+    /* Set client IP address */
+    if (client && request) {
+        char ip_str[INET_ADDRSTRLEN];
+        if (inet_ntop(AF_INET, &(client->address.sin_addr), ip_str, INET_ADDRSTRLEN)) {
+            request->remote_addr = strdup(ip_str);
+        }
     }
     
     /* Handle OPTIONS requests for CORS */

@@ -107,8 +107,13 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                 
                 /* Create session with 30 minute expiration */
                 time_t expires_at = time(NULL) + (30 * 60);
+                
+                /* Extract IP address and user agent from request */
+                const char* ip_address = request->remote_addr ? request->remote_addr : "unknown";
+                const char* user_agent = request->user_agent ? request->user_agent : "unknown";
+                
                 char* session_id = rbac_db_create_session(ctx->db, user_id, access_token, 
-                                                        expires_at, NULL, NULL);
+                                                        expires_at, ip_address, user_agent);
                 
                 if (session_id) {
                     LOG_DEBUG("LOGIN: Session created with ID: %s", session_id);

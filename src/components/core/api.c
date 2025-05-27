@@ -36,6 +36,7 @@ api_route_t routes[] = {
     /* Session management routes */
     {"/api/sessions", HTTP_GET, api_handle_get_sessions, 1},
     {"/api/sessions/active", HTTP_GET, api_handle_get_active_sessions, 1},
+    {"/api/sessions/", HTTP_POST, api_handle_session_terminate, 1},
     
     /* Collection routes - TEMP: auth disabled for persistence testing */
     {"/api/collections", HTTP_GET, api_handle_collections_list, 0},

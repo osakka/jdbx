@@ -25,6 +25,8 @@ JSONdb is a lightweight, high-performance document database built specifically f
 - **Security First**:
   - Database-backed Role-Based Access Control (RBAC) with UUID support
   - JWT authentication with secure HMAC-SHA256 signatures
+  - Comprehensive session management with IP and User-Agent tracking
+  - Session lifecycle control with soft deletion for audit trails
   - Fine-grained permission system with bitwise operations
   - Full role management API (create, update, delete roles)
   - Parameterized route support for RESTful operations

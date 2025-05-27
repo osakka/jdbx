@@ -140,7 +140,6 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
         metric_t *request_counter = get_server_requests_metric();
         metric_t *request_timer = get_server_request_duration_metric();
         metric_t *db_ops_counter = get_db_operations_metric();
-        metric_t *db_timer = get_db_operation_duration_metric();
         metric_t *active_conns = get_active_connections_metric();
         
         /* Add operations object */

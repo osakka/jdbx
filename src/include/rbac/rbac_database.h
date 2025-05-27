@@ -125,6 +125,14 @@ char* rbac_db_validate_session(struct database* db, const char* token);
 int rbac_db_revoke_session(struct database* db, const char* session_id);
 
 /**
+ * Invalidate session
+ * @param db Database instance
+ * @param session_id Session ID
+ * @return 1 on success, 0 on failure
+ */
+int rbac_db_invalidate_session(struct database* db, const char* session_id);
+
+/**
  * Create collection with owner
  * @param db Database instance
  * @param name Collection name

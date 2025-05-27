@@ -453,8 +453,15 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         return NULL;
     }
     
-    LOG_DEBUG("Using document directly for insertion (TEMP: no deep copy)");
-    json_value_t* doc_copy = document; /* TEMP: Use original document */
+    LOG_DEBUG("Creating deep copy of document for insertion");
+    json_value_t* doc_copy = json_deep_copy(document);
+    if (!doc_copy) {
+        LOG_ERROR("Failed to create document copy");
+        if (op_timer) {
+            metrics_timer_stop(op_timer);
+        }
+        return NULL;
+    }
     
     LOG_DEBUG("Generating document ID (always use standard format)");
     /* Always generate a new ID to ensure consistency */
@@ -467,7 +474,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         free(generated_id);
     } else {
         LOG_ERROR("Failed to generate ID for document");
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     
@@ -475,7 +482,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_value_t* id = json_object_get(doc_copy, "_id");
     if (!id || id->type != JSON_STRING) {
         LOG_ERROR("Document has no valid ID after preparation");
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     const char* id_str = json_get_string(id);
@@ -484,7 +491,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_value_t* result = json_create_object();
     if (!result) {
         LOG_ERROR("Failed to create result object");
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     json_object_set(result, "_id", json_create_string(id_str));
@@ -507,6 +514,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
                 
                 /* Clean up and return error */
                 json_free(result);
+                json_free(doc_copy);
                 if (op_timer) {
                     metrics_timer_stop(op_timer);
                 }
@@ -527,7 +535,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
         pthread_mutex_unlock(&db->lock);
         json_free(result);
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     
@@ -687,7 +695,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     json_value_t* result = json_create_object();
     if (!result) {
         LOG_ERROR("Failed to create result object");
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     json_object_set(result, "_id", json_create_string(id));
@@ -731,7 +739,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
         LOG_ERROR("Collection '%s' not found or not an array", collection_name);
         pthread_mutex_unlock(&db->lock);
         json_free(result);
-        /* TEMP: Not freeing since we're not copying */
+        json_free(doc_copy);
         return NULL;
     }
     
@@ -952,7 +960,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
         const char* key;
         json_value_t* value;
         json_object_foreach(db->collections, key, value) {
-            LOG_DEBUG("  - %s (type: %d)", key, value ? value->type : -1);
+            LOG_DEBUG("  - %s (type: %d)", key, value ? (int)value->type : -1);
         }
         
         pthread_mutex_unlock(&db->lock);

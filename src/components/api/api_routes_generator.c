@@ -24,8 +24,6 @@ const char* generate_api_routes_json(api_context_t* ctx) {
     
     /* Use routes from context */
     const char* current_path = NULL;
-    int first_path = 1;
-    int first_method = 1;
     
     for (int i = 0; i < ctx->num_routes; i++) {
         api_route_t* route = &ctx->routes[i];
@@ -44,12 +42,9 @@ const char* generate_api_routes_json(api_context_t* ctx) {
             /* Start new path */
             offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "    \"%s\": {\n", route->path);
             current_path = route->path;
-            first_method = 1;
-            first_path = 0;
         } else {
             /* Multiple methods for same path */
             offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, ",\n");
-            first_method = 0;
         }
         
         /* Add method */

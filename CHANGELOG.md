@@ -45,9 +45,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ENHANCED**: Tab event listeners for proper content rendering
 - **FIXED**: Persistence thread logging changed from DEBUG to TRACE level
 
+### 🔄 Session Management Overhaul
+- **FIXED**: Sessions not persisting through server restarts
+  - Root cause: `db_insert_document` was not creating deep copies
+  - Solution: Implemented proper document copying before insertion
+- **NEW**: Comprehensive session tracking
+  - IP address capture from client socket
+  - User-Agent header extraction
+  - Session creation on login with 30-minute expiration
+  - Soft deletion for audit trail
+- **NEW**: Session termination API endpoint `/api/sessions/{id}/terminate`
+  - Permission-based access control
+  - Users can terminate own sessions
+  - Admins can terminate any session
+- **ENHANCED**: Admin UI session display
+  - Added IP Address and User-Agent columns
+  - Tooltips for long User-Agent strings
+  - Status indicators for active/expired/terminated sessions
+  - Revoke button with proper API integration
+
+### 📝 Implementation Files
+- `src/components/rbac/rbac_sessions.c` - Core session functions
+- `src/components/api/session_terminate_api.c` - Termination endpoint
+- `src/components/core/http_request.c` - Header extraction
+- `src/components/core/handle_client.c` - IP address capture
+- `share/htdocs/js/app.js` - Enhanced session UI
+
 ### ✅ Verification Results
 - RBAC interface displays correctly when authenticated
 - All tabs (Users, Roles, Permissions, Sessions, Audit) function properly
+- Sessions persist through server restarts
+- Session tracking captures IP and User-Agent correctly
+- Session termination works with proper authorization
 - ID conflict detection prevents similar issues
 - No regression in existing functionality
 

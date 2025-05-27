@@ -139,6 +139,8 @@ typedef struct {
     cookie_t* cookies;     /* Parsed cookies list */
     char* origin;          /* Origin header value */
     size_t content_length;
+    char* user_agent;      /* User-Agent header */
+    char* remote_addr;     /* Client IP address */
 } http_request_t;
 
 /* HTTP response struct */

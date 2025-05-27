@@ -95,6 +95,8 @@ http_request_t* parse_http_request(const char* request_str) {
     request->cookies = NULL;
     request->origin = NULL;
     request->content_length = 0;
+    request->user_agent = NULL;
+    request->remote_addr = NULL;
     
     /* Parse request line and headers */
     char* request_copy = strdup(request_str);
@@ -167,6 +169,15 @@ http_request_t* parse_http_request(const char* request_str) {
                 }
             }
             
+            /* User-Agent header */
+            else if (strncasecmp(line, "User-Agent:", 11) == 0) {
+                request->user_agent = strdup(line + 12);
+                /* Trim leading/trailing whitespace */
+                while (*request->user_agent == ' ') {
+                    request->user_agent++;
+                }
+            }
+            
             line = strtok(NULL, "\r\n");
         }
         
@@ -200,6 +211,8 @@ void free_http_request(http_request_t* request) {
         if (request->authorization) free(request->authorization);
         if (request->cookie_header) free(request->cookie_header);
         if (request->origin) free(request->origin);
+        if (request->user_agent) free(request->user_agent);
+        if (request->remote_addr) free(request->remote_addr);
         
         /* Free cookies */
         cookie_t* cookie = request->cookies;

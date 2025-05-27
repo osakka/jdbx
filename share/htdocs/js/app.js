@@ -2022,7 +2022,7 @@ function renderSessions(sessions) {
     if (sessions.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center text-muted py-4">
+                <td colspan="9" class="text-center text-muted py-4">
                     <i class="bi bi-clock-history" style="font-size: 2rem;"></i>
                     <p>No active sessions</p>
                 </td>
@@ -2033,20 +2033,32 @@ function renderSessions(sessions) {
     
     tbody.innerHTML = sessions.map(session => {
         const createdAt = new Date(session.created_at || Date.now());
-        const lastActivity = new Date(session.last_activity || Date.now());
+        const lastActivity = new Date(session.last_seen || session.last_activity || session.created_at || Date.now());
         const expiresAt = new Date(session.expires_at || Date.now() + 86400000);
         const isExpired = expiresAt < new Date();
-        const status = isExpired ? 'Expired' : 'Active';
+        const status = session.active === false ? 'Terminated' : (isExpired ? 'Expired' : 'Active');
+        const statusClass = session.active === false ? 'bg-secondary' : (isExpired ? 'bg-danger' : 'bg-success');
+        
+        // Format IP address
+        const ipAddress = session.ip_address || 'Unknown';
+        
+        // Format user agent - truncate if too long
+        let userAgent = session.user_agent || 'Unknown';
+        if (userAgent.length > 50) {
+            userAgent = userAgent.substring(0, 47) + '...';
+        }
         
         return `
             <tr>
                 <td class="font-monospace small">${session._id || session.id || 'N/A'}</td>
                 <td>${session.username || session.user || 'Unknown'}</td>
+                <td class="font-monospace">${ipAddress}</td>
+                <td class="small" title="${session.user_agent || 'Unknown'}">${userAgent}</td>
                 <td>${formatDate(createdAt)}</td>
                 <td>${formatDate(lastActivity)}</td>
                 <td>${formatDate(expiresAt)}</td>
                 <td>
-                    <span class="badge ${isExpired ? 'bg-danger' : 'bg-success'}">
+                    <span class="badge ${statusClass}">
                         ${status}
                     </span>
                 </td>
@@ -2065,7 +2077,7 @@ function renderSessionsError() {
     if (tbody) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center text-danger py-4">
+                <td colspan="9" class="text-center text-danger py-4">
                     <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
                     <p>Failed to load sessions</p>
                 </td>
@@ -2111,8 +2123,9 @@ async function revokeSession(sessionId) {
     }
     
     try {
-        await apiRequest(`/api/collections/_sessions/documents/${sessionId}`, {
-            method: 'DELETE'
+        // Use the proper session termination endpoint
+        await apiRequest(`/api/sessions/${sessionId}/terminate`, {
+            method: 'POST'
         });
         
         showNotification('Session revoked', 'success');

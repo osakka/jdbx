@@ -619,17 +619,6 @@ static int verify_password(const char* password, const char* password_hash) {
         LOG_TRACE("RBAC: PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
                   iterations, salt_hex, stored_hash_hex);
         
-        /* Convert salt from hex to bytes */
-        unsigned char salt[SALT_LENGTH];
-        for (int i = 0; i < SALT_LENGTH; i++) {
-            unsigned int value;
-            sscanf(salt_hex + (i * 2), "%2x", &value);
-            salt[i] = (unsigned char)value;
-        }
-        
-        /* Hash the provided password with the same salt and iterations */
-        unsigned char hash[HASH_LENGTH];
-        
         /* TODO: Implement pbkdf2_hmac_sha256 - for now just accept admin password */
         LOG_TRACE("RBAC: TODO - pbkdf2_hmac_sha256 not implemented, accepting admin password");
         if (strcmp(password, "admin") == 0) {
@@ -638,17 +627,29 @@ static int verify_password(const char* password, const char* password_hash) {
         return 0;
         
         /* DISABLED until pbkdf2_hmac_sha256 is implemented
+        Convert salt from hex to bytes:
+        unsigned char salt[SALT_LENGTH];
+        for (int i = 0; i < SALT_LENGTH; i++) {
+            unsigned int value;
+            sscanf(salt_hex + (i * 2), "%2x", &value);
+            salt[i] = (unsigned char)value;
+        }
+        
+        Hash the provided password with the same salt and iterations:
+        unsigned char hash[HASH_LENGTH];
         pbkdf2_hmac_sha256(password, salt, SALT_LENGTH, iterations, HASH_LENGTH, hash);
         */
         
-        /* Convert hash to hex for comparison */
+        /* DISABLED until pbkdf2_hmac_sha256 is implemented
+        Convert hash to hex for comparison:
         char hash_hex[HASH_LENGTH * 2 + 1];
         for (int i = 0; i < HASH_LENGTH; i++) {
             sprintf(hash_hex + (i * 2), "%02x", hash[i]);
         }
         
-        /* Compare the hashes */
+        Compare the hashes:
         return strcmp(hash_hex, stored_hash_hex) == 0;
+        */
     } else {
         /* Legacy hash format - attempt to match directly */
         unsigned int hash_value = 5381;

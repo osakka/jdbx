@@ -191,10 +191,10 @@ static schema_validation_result_t validate_array(json_value_t* schema, json_valu
     /* Check minItems */
     json_value_t* min_items = json_object_get(schema, "minItems");
     if (min_items && (min_items->type == JSON_INTEGER || min_items->type == JSON_NUMBER)) {
-        int min = min_items->type == JSON_INTEGER ? min_items->value.integer : (int)min_items->value.number;
-        if (value->value.array.size < min) {
+        size_t min = min_items->type == JSON_INTEGER ? (size_t)min_items->value.integer : (size_t)min_items->value.number;
+        if ((int)value->value.array.size < (int)min) {
             char error[256];
-            snprintf(error, sizeof(error), "Array has %zu items, minimum is %d", 
+            snprintf(error, sizeof(error), "Array has %zu items, minimum is %zu", 
                      value->value.array.size, min);
             return error_result(error, path);
         }
@@ -203,10 +203,10 @@ static schema_validation_result_t validate_array(json_value_t* schema, json_valu
     /* Check maxItems */
     json_value_t* max_items = json_object_get(schema, "maxItems");
     if (max_items && (max_items->type == JSON_INTEGER || max_items->type == JSON_NUMBER)) {
-        int max = max_items->type == JSON_INTEGER ? max_items->value.integer : (int)max_items->value.number;
-        if (value->value.array.size > max) {
+        size_t max = max_items->type == JSON_INTEGER ? (size_t)max_items->value.integer : (size_t)max_items->value.number;
+        if ((int)value->value.array.size > (int)max) {
             char error[256];
-            snprintf(error, sizeof(error), "Array has %zu items, maximum is %d", 
+            snprintf(error, sizeof(error), "Array has %zu items, maximum is %zu", 
                      value->value.array.size, max);
             return error_result(error, path);
         }
@@ -223,10 +223,10 @@ static schema_validation_result_t validate_string(json_value_t* schema, json_val
     /* Check minLength */
     json_value_t* min_length = json_object_get(schema, "minLength");
     if (min_length && (min_length->type == JSON_INTEGER || min_length->type == JSON_NUMBER)) {
-        int min = min_length->type == JSON_INTEGER ? min_length->value.integer : (int)min_length->value.number;
+        size_t min = min_length->type == JSON_INTEGER ? (size_t)min_length->value.integer : (size_t)min_length->value.number;
         if (len < min) {
             char error[256];
-            snprintf(error, sizeof(error), "String length %zu is less than minimum %d", len, min);
+            snprintf(error, sizeof(error), "String length %zu is less than minimum %zu", len, min);
             return error_result(error, path);
         }
     }
@@ -234,10 +234,10 @@ static schema_validation_result_t validate_string(json_value_t* schema, json_val
     /* Check maxLength */
     json_value_t* max_length = json_object_get(schema, "maxLength");
     if (max_length && (max_length->type == JSON_INTEGER || max_length->type == JSON_NUMBER)) {
-        int max = max_length->type == JSON_INTEGER ? max_length->value.integer : (int)max_length->value.number;
+        size_t max = max_length->type == JSON_INTEGER ? (size_t)max_length->value.integer : (size_t)max_length->value.number;
         if (len > max) {
             char error[256];
-            snprintf(error, sizeof(error), "String length %zu exceeds maximum %d", len, max);
+            snprintf(error, sizeof(error), "String length %zu exceeds maximum %zu", len, max);
             return error_result(error, path);
         }
     }
