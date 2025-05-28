@@ -62,29 +62,33 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   /* Check if we need to extend the session */
   /* For simplicity, we'll always extend on activity */
   
-  /* Create update document */
-  json_value_t* update = json_create_object();
+  /* Get the full session document first to preserve all fields */
+  json_value_t* full_session = json_clone(session);
+  if (!full_session) {
+    json_free(results);
+    return;
+  }
   
   /* Update last_seen */
   time_t now = time(NULL);
   char timestamp[64];
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-  json_object_set(update, "last_seen", json_create_string(timestamp));
+  json_object_set(full_session, "last_seen", json_create_string(timestamp));
   
   /* Update expires_at to extend the session */
   time_t new_expiry = now + SESSION_EXTENSION_SECONDS;
   char expire_time[64];
   strftime(expire_time, sizeof(expire_time), "%Y-%m-%dT%H:%M:%SZ", gmtime(&new_expiry));
-  json_object_set(update, "expires_at", json_create_string(expire_time));
+  json_object_set(full_session, "expires_at", json_create_string(expire_time));
   
-  /* Update the session document */
-  db_update_document(ctx->db, "_sessions", session_id, update);
+  /* Update the session document with all fields */
+  db_update_document(ctx->db, "_sessions", session_id, full_session);
   
   if (g_logger) {
     LOG_DEBUG("Extended session %s expiration to %s", session_id, expire_time);
   }
   
-  json_free(update);
+  json_free(full_session);
   json_free(results);
 }
 

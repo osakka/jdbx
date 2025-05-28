@@ -18,6 +18,9 @@ let collectionsChart = null;
 let operationsChart = null;
 let operationTypesChart = null;
 let cacheHitRateChart = null;
+let memoryUsageChart = null;
+let processMemoryChart = null;
+let storageChart = null;
 
 // Data storage
 let allUsers = [];
@@ -357,7 +360,8 @@ function initializeDashboard() {
                         label: 'Documents',
                         data: [],
                         backgroundColor: [],
-                        borderWidth: 0
+                        borderWidth: 0,
+                        borderRadius: 4
                     }]
                 },
                 options: {
@@ -366,11 +370,29 @@ function initializeDashboard() {
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Documents: ${formatNumber(context.parsed.y)}`;
+                                }
+                            }
                         }
                     },
                     scales: {
                         y: {
-                            beginAtZero: true
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatNumber(value);
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
                         }
                     }
                 }
@@ -529,16 +551,40 @@ function updateCollectionsChart(collectionsData) {
     const data = [];
     const backgroundColors = [];
     
+    // Sort collections by document count (descending) and take top 10
+    const sortedCollections = [];
+    
     for (const [collection, info] of Object.entries(previousData.collectionsData)) {
+        // Skip system collections unless they have significant data
+        if (collection.startsWith('_') && !['_users', '_roles', '_sessions', '_system_metrics'].includes(collection)) {
+            continue;
+        }
+        
         const parts = info.split('_');
         const docCount = parseInt(parts[1]) || 0;
         if (docCount > 0) {
-            labels.push(collection);
-            data.push(docCount);
-            backgroundColors.push(`hsl(${labels.length * 360 / 10}, 70%, 60%)`);
+            sortedCollections.push({ name: collection, count: docCount });
         }
     }
     
+    // Sort by count descending and take top 10
+    sortedCollections.sort((a, b) => b.count - a.count);
+    const topCollections = sortedCollections.slice(0, 10);
+    
+    // Create chart data
+    topCollections.forEach((col, index) => {
+        labels.push(col.name);
+        data.push(col.count);
+        
+        // Use different colors for system collections
+        if (col.name.startsWith('_')) {
+            backgroundColors.push(`hsl(${200 + index * 20}, 60%, 50%)`); // Blue-ish for system
+        } else {
+            backgroundColors.push(`hsl(${index * 36}, 70%, 60%)`); // Rainbow for user collections
+        }
+    });
+    
+    // Update chart
     collectionsChart.data.labels = labels;
     collectionsChart.data.datasets[0].data = data;
     collectionsChart.data.datasets[0].backgroundColor = backgroundColors;
@@ -1257,13 +1303,13 @@ function initializeMetrics() {
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Read Operations',
+                        label: 'Read Ops/sec',
                         data: [],
                         borderColor: '#61affe',
                         backgroundColor: 'rgba(97, 175, 254, 0.1)',
                         tension: 0.4
                     }, {
-                        label: 'Write Operations',
+                        label: 'Write Ops/sec',
                         data: [],
                         borderColor: '#49cc90',
                         backgroundColor: 'rgba(73, 204, 144, 0.1)',
@@ -1338,6 +1384,137 @@ function initializeMetrics() {
         }
     }
     
+    // Initialize memory usage chart
+    if (!memoryUsageChart) {
+        const ctx = document.getElementById('memoryUsageChart');
+        if (ctx) {
+            memoryUsageChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Used Memory (MB)',
+                        data: [],
+                        borderColor: '#fca130',
+                        backgroundColor: 'rgba(252, 161, 48, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Process Memory (MB)',
+                        data: [],
+                        borderColor: '#f93e3e',
+                        backgroundColor: 'rgba(249, 62, 62, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' MB';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Initialize process memory chart
+    if (!processMemoryChart) {
+        const ctx = document.getElementById('processMemoryChart');
+        if (ctx) {
+            processMemoryChart = new Chart(ctx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Total', 'Used', 'Free', 'Process'],
+                    datasets: [{
+                        label: 'Memory (MB)',
+                        data: [],
+                        backgroundColor: ['#61affe', '#49cc90', '#fca130', '#f93e3e']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' MB';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Initialize storage chart
+    if (!storageChart) {
+        const ctx = document.getElementById('storageChart');
+        if (ctx) {
+            storageChart = new Chart(ctx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [
+                            '#61affe', '#49cc90', '#fca130', '#f93e3e', '#ff6384',
+                            '#36a2eb', '#cc65fe', '#ffce56', '#4bc0c0', '#9966ff'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                padding: 15,
+                                usePointStyle: true,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${formatBytes(value * 1024)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
     // Force immediate load with a small delay to ensure DOM is ready
     console.log('Scheduling loadMetrics...');
     setTimeout(() => {
@@ -1385,31 +1562,75 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         console.log('API responses:', { health, collections, cacheStats });
         
-        // TODO: Historical metrics not yet implemented
-        const historyReadOps = null;
-        const historyWriteOps = null;
-        const historyResponseTime = null;
-        const historyCacheHits = null;
-        const historyCacheMisses = null;
+        // Fetch metrics data from _system_metrics collection
+        console.log('Fetching metrics from _system_metrics collection...');
+        const metricsData = await apiRequest('/api/collections/_system_metrics').catch(err => {
+            console.error('Failed to fetch metrics data:', err);
+            return { documents: [] };
+        });
+        
+        console.log('Metrics data:', metricsData);
+        
+        // Extract metrics documents by type
+        const metricsDocuments = metricsData.documents || [];
+        const operationsDoc = metricsDocuments.find(doc => doc.type === 'operations');
+        const performanceDoc = metricsDocuments.find(doc => doc.type === 'performance');
+        const cacheDoc = metricsDocuments.find(doc => doc.type === 'cache');
+        const memoryDoc = metricsDocuments.find(doc => doc.type === 'memory');
+        const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
+        
+        console.log('Found metrics documents:', {
+            operations: !!operationsDoc,
+            performance: !!performanceDoc,
+            cache: !!cacheDoc,
+            memory: !!memoryDoc,
+            connections: !!connectionsDoc
+        });
         
         // Get real document counts from collections
         let totalDocs = 0;
         const collectionList = Array.isArray(collections) ? collections : (collections.collections || []);
-        for (const collection of collectionList) {
-            try {
-                const docs = await apiRequest(`/api/collections/${collection}`);
-                const docCount = Array.isArray(docs) ? docs.length : (docs.documents ? docs.documents.length : 0);
-                totalDocs += docCount;
-            } catch (e) {
-                console.error(`Error loading collection ${collection}:`, e);
-            }
+        
+        // Collections API returns array of objects with {name, documentCount, isSystem}
+        // Sum up document counts directly from the response
+        if (Array.isArray(collectionList)) {
+            collectionList.forEach(col => {
+                if (col && typeof col === 'object' && col.documentCount !== undefined) {
+                    totalDocs += col.documentCount;
+                }
+            });
         }
         
-        // Get current metrics from health endpoint
+        // Get current metrics from the latest data point
         let totalOps = 0;
         let readOps = 0;
         let writeOps = 0;
         let avgResponseTime = null;
+        let previousTotalOps = 0;
+        let previousReadOps = 0;
+        let previousWriteOps = 0;
+        
+        // Extract latest and previous values from operations document
+        if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
+            const latestOps = operationsDoc.data[operationsDoc.data.length - 1];
+            totalOps = latestOps.total || 0;
+            readOps = latestOps.read || 0;
+            writeOps = latestOps.write || 0;
+            
+            // Get previous data point for trend calculation
+            if (operationsDoc.data.length > 1) {
+                const previousOps = operationsDoc.data[operationsDoc.data.length - 2];
+                previousTotalOps = previousOps.total || 0;
+                previousReadOps = previousOps.read || 0;
+                previousWriteOps = previousOps.write || 0;
+            }
+        }
+        
+        // Get performance metrics
+        if (performanceDoc && performanceDoc.data && performanceDoc.data.length > 0) {
+            const latestPerf = performanceDoc.data[performanceDoc.data.length - 1];
+            avgResponseTime = latestPerf.avg_response_time_ms || null;
+        }
         
         console.log('Health API response:', health);
         
@@ -1449,33 +1670,110 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             avgResponseTime: !!avgResponseTimeElement
         });
         
-        if (totalOpsElement) totalOpsElement.textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
-        if (readOpsElement) readOpsElement.textContent = readOps > 0 ? formatNumber(readOps) : '0';
-        if (writeOpsElement) writeOpsElement.textContent = writeOps > 0 ? formatNumber(writeOps) : '0';
+        if (totalOpsElement) {
+            totalOpsElement.textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
+            // Update trend indicator
+            const totalOpsCard = totalOpsElement.closest('.metric-card');
+            if (totalOpsCard) {
+                const changeElement = totalOpsCard.querySelector('.metric-change');
+                if (changeElement && previousTotalOps > 0) {
+                    const change = totalOps - previousTotalOps;
+                    const changePercent = ((change / previousTotalOps) * 100).toFixed(1);
+                    const changeText = change > 0 ? `+${change} (${changePercent}%)` : `${change} (${changePercent}%)`;
+                    const changeClass = change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-muted';
+                    changeElement.innerHTML = `<small class="${changeClass}"><i class="bi bi-arrow-${change > 0 ? 'up' : 'down'}"></i> ${changeText}</small>`;
+                }
+            }
+        }
+        
+        if (readOpsElement) {
+            readOpsElement.textContent = readOps > 0 ? formatNumber(readOps) : '0';
+            // Update trend indicator
+            const readOpsCard = readOpsElement.closest('.metric-card');
+            if (readOpsCard) {
+                const changeElement = readOpsCard.querySelector('.metric-change');
+                if (changeElement && previousReadOps > 0) {
+                    const change = readOps - previousReadOps;
+                    const changePercent = ((change / previousReadOps) * 100).toFixed(1);
+                    const changeText = change > 0 ? `+${change} (${changePercent}%)` : `${change} (${changePercent}%)`;
+                    const changeClass = change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-muted';
+                    changeElement.innerHTML = `<small class="${changeClass}"><i class="bi bi-arrow-${change > 0 ? 'up' : 'down'}"></i> ${changeText}</small>`;
+                }
+            }
+        }
+        
+        if (writeOpsElement) {
+            writeOpsElement.textContent = writeOps > 0 ? formatNumber(writeOps) : '0';
+            // Update trend indicator
+            const writeOpsCard = writeOpsElement.closest('.metric-card');
+            if (writeOpsCard) {
+                const changeElement = writeOpsCard.querySelector('.metric-change');
+                if (changeElement && previousWriteOps > 0) {
+                    const change = writeOps - previousWriteOps;
+                    const changePercent = ((change / previousWriteOps) * 100).toFixed(1);
+                    const changeText = change > 0 ? `+${change} (${changePercent}%)` : `${change} (${changePercent}%)`;
+                    const changeClass = change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-muted';
+                    changeElement.innerHTML = `<small class="${changeClass}"><i class="bi bi-arrow-${change > 0 ? 'up' : 'down'}"></i> ${changeText}</small>`;
+                }
+            }
+        }
         
         // Show real response time if available
         if (avgResponseTimeElement) {
             avgResponseTimeElement.textContent = avgResponseTime !== null ? `${avgResponseTime.toFixed(2)}ms` : 'N/A';
         }
         
-        // Update cache metrics
+        // Update cache metrics from time-series data
+        let cacheHitRate = 0;
+        let cacheHits = 0;
+        let cacheMisses = 0;
+        let previousCacheHitRate = 0;
+        
+        if (cacheDoc && cacheDoc.data && cacheDoc.data.length > 0) {
+            const latestCache = cacheDoc.data[cacheDoc.data.length - 1];
+            cacheHits = latestCache.hits || 0;
+            cacheMisses = latestCache.misses || 0;
+            const total = cacheHits + cacheMisses;
+            cacheHitRate = total > 0 ? (cacheHits / total * 100) : 0;
+            
+            // Get previous hit rate for trend
+            if (cacheDoc.data.length > 1) {
+                const previousCache = cacheDoc.data[cacheDoc.data.length - 2];
+                const prevHits = previousCache.hits || 0;
+                const prevMisses = previousCache.misses || 0;
+                const prevTotal = prevHits + prevMisses;
+                previousCacheHitRate = prevTotal > 0 ? (prevHits / prevTotal * 100) : 0;
+            }
+        }
+        
+        // Update cache stats from current API if available
         if (cacheStats) {
-            const hitRate = cacheStats.hit_rate_percent || 0;
-            const hits = cacheStats.hits || 0;
-            const misses = cacheStats.misses || 0;
             const size = cacheStats.size || 0;
             const memoryMB = (cacheStats.memory_mb || 0).toFixed(2);
-            
-            document.getElementById('cacheHitRate').textContent = `${hitRate.toFixed(1)}%`;
-            document.getElementById('cacheStats').textContent = `${formatNumber(hits)} hits / ${formatNumber(misses)} misses`;
             document.getElementById('cacheSize').textContent = formatNumber(size);
             document.getElementById('cacheMemory').textContent = `${memoryMB} MB`;
         } else {
-            document.getElementById('cacheHitRate').textContent = '0%';
-            document.getElementById('cacheStats').textContent = '0 hits / 0 misses';
             document.getElementById('cacheSize').textContent = '0';
             document.getElementById('cacheMemory').textContent = '0 MB';
         }
+        
+        // Update cache hit rate with trend
+        const cacheHitRateElement = document.getElementById('cacheHitRate');
+        if (cacheHitRateElement) {
+            cacheHitRateElement.textContent = `${cacheHitRate.toFixed(1)}%`;
+            const cacheCard = cacheHitRateElement.closest('.metric-card');
+            if (cacheCard) {
+                const changeElement = cacheCard.querySelector('.metric-change');
+                if (changeElement && previousCacheHitRate > 0) {
+                    const change = cacheHitRate - previousCacheHitRate;
+                    const changeText = change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`;
+                    const changeClass = change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-muted';
+                    changeElement.innerHTML = `<small class="${changeClass}"><i class="bi bi-arrow-${change > 0 ? 'up' : 'down'}"></i> ${changeText}</small>`;
+                }
+            }
+        }
+        
+        document.getElementById('cacheStats').textContent = `${formatNumber(cacheHits)} hits / ${formatNumber(cacheMisses)} misses`;
         
         // Process historical data for charts
         const labels = [];
@@ -1483,10 +1781,12 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         const writeData = [];
         const responseTimeData = [];
         
-        // Extract data from historical metrics
-        if (historyReadOps && historyReadOps.data) {
-            historyReadOps.data.forEach(point => {
-                const date = new Date(point.timestamp * 1000);
+        // Extract data from operations time-series and convert to operations per second
+        if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
+            // Calculate operations per second based on deltas between data points
+            for (let i = 0; i < operationsDoc.data.length; i++) {
+                const point = operationsDoc.data[i];
+                const date = new Date(point.timestamp);
                 let label;
                 
                 if (timeRange === '1h') {
@@ -1500,48 +1800,50 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 
                 labels.push(label);
-                readData.push(point.avg || 0);
-            });
-        }
-        
-        // Extract write operations data
-        if (historyWriteOps && historyWriteOps.data) {
-            historyWriteOps.data.forEach((point, index) => {
-                writeData.push(point.avg || 0);
-            });
-        }
-        
-        // Extract response time data
-        if (historyResponseTime && historyResponseTime.data) {
-            historyResponseTime.data.forEach((point, index) => {
-                // Convert seconds to milliseconds
-                responseTimeData.push((point.avg || 0) * 1000);
-            });
-        }
-        
-        // If no historical data, create empty arrays
-        if (labels.length === 0) {
-            const now = new Date();
-            const dataPoints = timeRange === '1h' ? 12 : timeRange === '24h' ? 24 : timeRange === '7d' ? 7 : 30;
-            
-            for (let i = dataPoints - 1; i >= 0; i--) {
-                if (timeRange === '1h') {
-                    const time = new Date(now - i * 5 * 60000);
-                    labels.push(time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0'));
-                } else if (timeRange === '24h') {
-                    const time = new Date(now - i * 3600000);
-                    labels.push(time.getHours() + ':00');
-                } else if (timeRange === '7d') {
-                    const time = new Date(now - i * 86400000);
-                    labels.push(time.toLocaleDateString('en', { weekday: 'short' }));
+                
+                // Calculate ops/sec from the delta since last data point
+                if (i > 0) {
+                    const prevPoint = operationsDoc.data[i - 1];
+                    const timeDiff = (new Date(point.timestamp) - new Date(prevPoint.timestamp)) / 1000; // seconds
+                    
+                    // Calculate the delta in operations
+                    const readDelta = (point.read || 0) - (prevPoint.read || 0);
+                    const writeDelta = (point.write || 0) - (prevPoint.write || 0);
+                    
+                    // Convert to operations per second
+                    const readOpsPerSec = timeDiff > 0 ? readDelta / timeDiff : 0;
+                    const writeOpsPerSec = timeDiff > 0 ? writeDelta / timeDiff : 0;
+                    
+                    // Round to 2 decimal places and ensure non-negative
+                    readData.push(Math.max(0, Math.round(readOpsPerSec * 100) / 100));
+                    writeData.push(Math.max(0, Math.round(writeOpsPerSec * 100) / 100));
                 } else {
-                    const time = new Date(now - i * 86400000);
-                    labels.push(time.toLocaleDateString('en', { month: 'short', day: 'numeric' }));
+                    // For the first point, we can't calculate a rate
+                    readData.push(0);
+                    writeData.push(0);
                 }
-                readData.push(0);
-                writeData.push(0);
-                responseTimeData.push(0);
             }
+            
+            console.log('Extracted operations per second data:', {
+                labels: labels,
+                readData: readData,
+                writeData: writeData
+            });
+        }
+        
+        // Extract response time data from performance metrics
+        if (performanceDoc && performanceDoc.data && performanceDoc.data.length > 0) {
+            performanceDoc.data.forEach(point => {
+                responseTimeData.push(point.avg_response_time_ms || 0);
+            });
+        }
+        
+        // If no data available, show empty state
+        if (labels.length === 0) {
+            labels.push('No data');
+            readData.push(0);
+            writeData.push(0);
+            responseTimeData.push(0);
         }
         
         // Update operations chart with real data
@@ -1552,32 +1854,48 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             operationsChart.update();
         }
         
-        // Calculate operation types for pie chart
-        const currentReadOps = readData[readData.length - 1] || readOps;
-        const currentWriteOps = writeData[writeData.length - 1] || writeOps;
+        // Calculate operation types for pie chart from latest data
+        const currentReadOps = readOps;
+        const currentWriteOps = writeOps;
+        const currentDeleteOps = 0; // TODO: Add delete operations tracking
+        const currentQueryOps = 0; // TODO: Add query operations tracking
         
         if (operationTypesChart) {
+            const total = currentReadOps + currentWriteOps + currentDeleteOps + currentQueryOps;
             operationTypesChart.data.datasets[0].data = [
                 currentReadOps,
                 currentWriteOps,
-                0, // Updates (placeholder)
-                0  // Deletes (placeholder)
+                currentDeleteOps,
+                currentQueryOps
             ];
+            
+            // Update labels to show percentages
+            if (total > 0) {
+                operationTypesChart.data.labels = [
+                    `Read (${((currentReadOps/total)*100).toFixed(1)}%)`,
+                    `Write (${((currentWriteOps/total)*100).toFixed(1)}%)`,
+                    `Delete (${((currentDeleteOps/total)*100).toFixed(1)}%)`,
+                    `Query (${((currentQueryOps/total)*100).toFixed(1)}%)`
+                ];
+            }
             operationTypesChart.update();
         }
         
-        // Process cache hit rate data
+        // Process cache hit rate data from time-series
         const cacheHitRateData = [];
-        if (historyCacheHits && historyCacheMisses && 
-            historyCacheHits.data && historyCacheMisses.data) {
-            
+        if (cacheDoc && cacheDoc.data && cacheDoc.data.length > 0) {
             // Calculate hit rate for each time point
-            for (let i = 0; i < historyCacheHits.data.length; i++) {
-                const hits = historyCacheHits.data[i].avg || 0;
-                const misses = historyCacheMisses.data[i].avg || 0;
+            cacheDoc.data.forEach(point => {
+                const hits = point.hits || 0;
+                const misses = point.misses || 0;
                 const total = hits + misses;
                 const hitRate = total > 0 ? (hits / total * 100) : 0;
                 cacheHitRateData.push(hitRate);
+            });
+            
+            // Ensure cache data matches operations data length
+            while (cacheHitRateData.length < labels.length) {
+                cacheHitRateData.push(cacheHitRateData[cacheHitRateData.length - 1] || 0);
             }
         } else {
             // Fill with zeros if no data
@@ -1593,6 +1911,133 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             cacheHitRateChart.update();
         }
         
+        // Process memory data from time-series
+        const memoryData = [];
+        const processMemoryData = [];
+        let latestMemoryStats = null;
+        
+        if (memoryDoc && memoryDoc.data && memoryDoc.data.length > 0) {
+            // Extract memory usage over time
+            memoryDoc.data.forEach(point => {
+                const usedMB = (point.used_kb || 0) / 1024; // Convert KB to MB
+                const processMB = (point.process_kb || 0) / 1024; // Convert KB to MB
+                memoryData.push(Math.round(usedMB * 10) / 10); // Round to 1 decimal
+                processMemoryData.push(Math.round(processMB * 10) / 10);
+            });
+            
+            // Get latest memory stats for process memory chart
+            latestMemoryStats = memoryDoc.data[memoryDoc.data.length - 1];
+            
+            // Ensure memory data matches operations data length
+            while (memoryData.length < labels.length) {
+                memoryData.push(memoryData[memoryData.length - 1] || 0);
+                processMemoryData.push(processMemoryData[processMemoryData.length - 1] || 0);
+            }
+        } else {
+            // Fill with zeros if no data
+            for (let i = 0; i < labels.length; i++) {
+                memoryData.push(0);
+                processMemoryData.push(0);
+            }
+        }
+        
+        // Update memory usage chart
+        if (memoryUsageChart) {
+            memoryUsageChart.data.labels = labels;
+            memoryUsageChart.data.datasets[0].data = memoryData;
+            memoryUsageChart.data.datasets[1].data = processMemoryData;
+            memoryUsageChart.update();
+        }
+        
+        // Update process memory chart with latest stats
+        if (processMemoryChart && latestMemoryStats) {
+            const totalMB = (latestMemoryStats.total_kb || 0) / 1024;
+            const usedMB = (latestMemoryStats.used_kb || 0) / 1024;
+            const freeMB = (latestMemoryStats.free_kb || 0) / 1024;
+            const processMB = (latestMemoryStats.process_kb || 0) / 1024;
+            
+            processMemoryChart.data.datasets[0].data = [
+                Math.round(totalMB * 10) / 10,
+                Math.round(usedMB * 10) / 10,
+                Math.round(freeMB * 10) / 10,
+                Math.round(processMB * 10) / 10
+            ];
+            processMemoryChart.update();
+        }
+        
+        // Update storage chart with collection sizes
+        if (storageChart && collections) {
+            try {
+                const collectionSizes = [];
+                const collectionLabels = [];
+                const collectionList = Array.isArray(collections) ? collections : (collections.collections || []);
+                let totalSizeKB = 0;
+                
+                console.log('Collection list:', collectionList);
+                
+                // Collections API returns array of objects with {name, documentCount, isSystem}
+                // Process collections directly from the response
+                if (Array.isArray(collectionList)) {
+                    collectionList.forEach(col => {
+                        if (col && typeof col === 'object' && col.name && col.documentCount !== undefined) {
+                            // Estimate size based on document count (rough estimate: 1KB per doc)
+                            const estimatedSizeKB = col.documentCount * 1; // 1KB per document estimate
+                            totalSizeKB += estimatedSizeKB;
+                            
+                            console.log(`Collection ${col.name}: ${col.documentCount} docs, ${estimatedSizeKB}KB`);
+                            
+                            if (estimatedSizeKB > 0) {
+                                collectionSizes.push(estimatedSizeKB);
+                                collectionLabels.push(col.name);
+                            }
+                        }
+                    });
+                }
+                
+                // Update database size metric
+                const databaseSizeMB = (totalSizeKB / 1024).toFixed(2);
+                const dbSizeElement = document.getElementById('databaseSize');
+                const collElement = document.getElementById('totalCollections');
+                
+                if (dbSizeElement) dbSizeElement.textContent = `${databaseSizeMB} MB`;
+                if (collElement) collElement.textContent = `${collectionList.length} collections`;
+                
+                // Sort by size and take top 10
+                const sizeData = collectionLabels.map((label, i) => ({
+                    label: label,
+                    size: collectionSizes[i]
+                })).sort((a, b) => b.size - a.size).slice(0, 10);
+                
+                console.log('Storage chart data:', sizeData);
+                
+                if (sizeData.length > 0) {
+                    storageChart.data.labels = sizeData.map(d => d.label);
+                    storageChart.data.datasets[0].data = sizeData.map(d => d.size);
+                    storageChart.update();
+                } else {
+                    console.log('No data for storage chart');
+                }
+            } catch (error) {
+                console.error('Error updating storage chart:', error);
+            }
+        }
+        
+        // Generate insights based on the data
+        generateMetricsInsights({
+            operationsDoc,
+            performanceDoc,
+            cacheDoc,
+            memoryDoc,
+            connectionsDoc,
+            totalOps,
+            readOps,
+            writeOps,
+            previousTotalOps,
+            cacheHitRate,
+            previousCacheHitRate,
+            avgResponseTime
+        });
+        
     } catch (error) {
         console.error('Error loading metrics:', error);
         // Show N/A on error
@@ -1601,6 +2046,206 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         document.getElementById('writeOps').textContent = 'N/A';
         document.getElementById('avgResponseTime').textContent = 'N/A';
     }
+}
+
+function generateMetricsInsights(data) {
+    const insightsContainer = document.getElementById('metricsInsights');
+    if (!insightsContainer) return;
+    
+    const insights = [];
+    
+    // Analyze operations trend
+    if (data.operationsDoc && data.operationsDoc.data && data.operationsDoc.data.length > 1) {
+        const trend = analyzeOperationsTrend(data.operationsDoc.data);
+        if (trend) insights.push(trend);
+    }
+    
+    // Analyze cache performance
+    if (data.cacheHitRate !== undefined) {
+        const cacheInsight = analyzeCachePerformance(data.cacheHitRate, data.previousCacheHitRate);
+        if (cacheInsight) insights.push(cacheInsight);
+    }
+    
+    // Analyze read/write ratio
+    if (data.readOps > 0 || data.writeOps > 0) {
+        const ratioInsight = analyzeReadWriteRatio(data.readOps, data.writeOps);
+        if (ratioInsight) insights.push(ratioInsight);
+    }
+    
+    // Analyze response time
+    if (data.avgResponseTime !== null) {
+        const perfInsight = analyzePerformance(data.avgResponseTime, data.performanceDoc);
+        if (perfInsight) insights.push(perfInsight);
+    }
+    
+    // Analyze system health
+    const healthInsight = analyzeSystemHealth(data);
+    if (healthInsight) insights.push(healthInsight);
+    
+    // Render insights
+    if (insights.length > 0) {
+        insightsContainer.innerHTML = `
+            <div class="insights-list">
+                ${insights.map(insight => `
+                    <div class="insight-item ${insight.type}">
+                        <div class="insight-icon">
+                            <i class="bi ${insight.icon}"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h6>${insight.title}</h6>
+                            <p>${insight.description}</p>
+                            ${insight.recommendation ? `<small class="text-muted"><i class="bi bi-lightbulb"></i> ${insight.recommendation}</small>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        insightsContainer.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                <p>System is performing optimally. No issues detected.</p>
+            </div>
+        `;
+    }
+}
+
+function analyzeOperationsTrend(data) {
+    if (data.length < 3) return null;
+    
+    // Calculate trend over last 3 data points
+    const recent = data.slice(-3);
+    const totalOps = recent.map(d => d.total || 0);
+    const avgIncrease = (totalOps[2] - totalOps[0]) / 2;
+    const percentChange = totalOps[0] > 0 ? ((totalOps[2] - totalOps[0]) / totalOps[0] * 100) : 0;
+    
+    if (Math.abs(percentChange) < 5) return null; // Ignore small changes
+    
+    if (percentChange > 20) {
+        return {
+            type: 'warning',
+            icon: 'bi-graph-up-arrow',
+            title: 'High Traffic Detected',
+            description: `Operations increased by ${percentChange.toFixed(1)}% in the last ${recent.length} intervals.`,
+            recommendation: 'Monitor system resources. Consider scaling if this trend continues.'
+        };
+    } else if (percentChange < -20) {
+        return {
+            type: 'info',
+            icon: 'bi-graph-down-arrow',
+            title: 'Reduced Activity',
+            description: `Operations decreased by ${Math.abs(percentChange).toFixed(1)}% in the last ${recent.length} intervals.`,
+            recommendation: 'This may indicate reduced usage or potential connectivity issues.'
+        };
+    }
+    
+    return null;
+}
+
+function analyzeCachePerformance(currentRate, previousRate) {
+    if (currentRate < 50) {
+        return {
+            type: 'warning',
+            icon: 'bi-speedometer2',
+            title: 'Low Cache Hit Rate',
+            description: `Current cache hit rate is ${currentRate.toFixed(1)}%, which is below optimal levels.`,
+            recommendation: 'Consider adjusting cache size or reviewing query patterns to improve performance.'
+        };
+    } else if (previousRate > 0 && currentRate - previousRate < -10) {
+        return {
+            type: 'info',
+            icon: 'bi-arrow-down-circle',
+            title: 'Cache Performance Degraded',
+            description: `Cache hit rate dropped by ${(previousRate - currentRate).toFixed(1)}% from the previous period.`,
+            recommendation: 'Review recent query patterns or data changes that might affect cache efficiency.'
+        };
+    } else if (currentRate > 90) {
+        return {
+            type: 'success',
+            icon: 'bi-trophy',
+            title: 'Excellent Cache Performance',
+            description: `Cache hit rate is ${currentRate.toFixed(1)}%, indicating highly efficient caching.`
+        };
+    }
+    
+    return null;
+}
+
+function analyzeReadWriteRatio(reads, writes) {
+    const total = reads + writes;
+    if (total === 0) return null;
+    
+    const readPercent = (reads / total) * 100;
+    const writePercent = (writes / total) * 100;
+    
+    if (writePercent > 40) {
+        return {
+            type: 'info',
+            icon: 'bi-pencil-square',
+            title: 'Write-Heavy Workload',
+            description: `${writePercent.toFixed(1)}% of operations are writes, indicating a write-intensive workload.`,
+            recommendation: 'Ensure write performance is optimized and consider batching writes if possible.'
+        };
+    } else if (readPercent > 95) {
+        return {
+            type: 'info',
+            icon: 'bi-book',
+            title: 'Read-Heavy Workload',
+            description: `${readPercent.toFixed(1)}% of operations are reads. Cache optimization is crucial.`,
+            recommendation: 'Maximize cache efficiency and consider read replicas for scaling.'
+        };
+    }
+    
+    return null;
+}
+
+function analyzePerformance(avgResponseTime, performanceDoc) {
+    if (avgResponseTime > 100) {
+        return {
+            type: 'warning',
+            icon: 'bi-clock-history',
+            title: 'High Response Times',
+            description: `Average response time is ${avgResponseTime.toFixed(2)}ms, which may impact user experience.`,
+            recommendation: 'Review slow queries and consider optimizing database indices.'
+        };
+    } else if (avgResponseTime < 10) {
+        return {
+            type: 'success',
+            icon: 'bi-lightning',
+            title: 'Excellent Performance',
+            description: `Average response time is ${avgResponseTime.toFixed(2)}ms, indicating fast query processing.`
+        };
+    }
+    
+    return null;
+}
+
+function analyzeSystemHealth(data) {
+    const issues = [];
+    
+    if (data.totalOps === 0) {
+        issues.push('No operations recorded');
+    }
+    
+    if (data.cacheHitRate !== undefined && data.cacheHitRate < 30) {
+        issues.push('Very low cache hit rate');
+    }
+    
+    if (data.avgResponseTime && data.avgResponseTime > 200) {
+        issues.push('Very high response times');
+    }
+    
+    if (issues.length > 0) {
+        return {
+            type: 'danger',
+            icon: 'bi-exclamation-triangle',
+            title: 'System Health Issues Detected',
+            description: `The following issues need attention: ${issues.join(', ')}.`,
+            recommendation: 'Review system logs and consider immediate investigation.'
+        };
+    }
+    
+    return null;
 }
 
 function changeTimeRange(range) {
@@ -2274,6 +2919,14 @@ function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 function formatDate(dateString) {

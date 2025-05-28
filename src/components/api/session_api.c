@@ -41,10 +41,41 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
   
-  /* Create response with sessions */
+  /* Filter out corrupted sessions */
+  json_value_t* valid_sessions = json_create_array();
+  size_t doc_count = json_array_size(documents);
+  
+  for (size_t i = 0; i < doc_count; i++) {
+    json_value_t* session = json_array_get(documents, i);
+    if (!session) continue;
+    
+    /* Check for required fields */
+    json_value_t* user_id = json_object_get(session, "user_id");
+    json_value_t* username = json_object_get(session, "username");
+    json_value_t* token = json_object_get(session, "token");
+    json_value_t* created_at = json_object_get(session, "created_at");
+    json_value_t* expires_at = json_object_get(session, "expires_at");
+    
+    /* Only include sessions with all required fields */
+    if (user_id && user_id->type == JSON_STRING &&
+        username && username->type == JSON_STRING &&
+        token && token->type == JSON_STRING &&
+        created_at && created_at->type == JSON_STRING &&
+        expires_at && expires_at->type == JSON_STRING) {
+      json_array_append(valid_sessions, json_clone(session));
+    } else {
+      /* Log corrupted session for debugging */
+      json_value_t* session_id = json_object_get(session, "_id");
+      if (session_id && session_id->type == JSON_STRING) {
+        LOG_WARNING("Skipping corrupted session: %s", session_id->value.string);
+      }
+    }
+  }
+  
+  /* Create response with valid sessions */
   json_value_t* response_obj = json_create_object();
-  json_object_set(response_obj, "sessions", json_clone(documents));
-  json_object_set(response_obj, "count", json_create_number(json_array_size(documents)));
+  json_object_set(response_obj, "sessions", valid_sessions);
+  json_object_set(response_obj, "count", json_create_number(json_array_size(valid_sessions)));
   
   json_free(results);
   
@@ -90,10 +121,41 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
   
-  /* Create response with sessions */
+  /* Filter out corrupted sessions */
+  json_value_t* valid_sessions = json_create_array();
+  size_t doc_count = json_array_size(documents);
+  
+  for (size_t i = 0; i < doc_count; i++) {
+    json_value_t* session = json_array_get(documents, i);
+    if (!session) continue;
+    
+    /* Check for required fields */
+    json_value_t* user_id = json_object_get(session, "user_id");
+    json_value_t* username = json_object_get(session, "username");
+    json_value_t* token = json_object_get(session, "token");
+    json_value_t* created_at = json_object_get(session, "created_at");
+    json_value_t* expires_at = json_object_get(session, "expires_at");
+    
+    /* Only include sessions with all required fields */
+    if (user_id && user_id->type == JSON_STRING &&
+        username && username->type == JSON_STRING &&
+        token && token->type == JSON_STRING &&
+        created_at && created_at->type == JSON_STRING &&
+        expires_at && expires_at->type == JSON_STRING) {
+      json_array_append(valid_sessions, json_clone(session));
+    } else {
+      /* Log corrupted session for debugging */
+      json_value_t* session_id = json_object_get(session, "_id");
+      if (session_id && session_id->type == JSON_STRING) {
+        LOG_WARNING("Skipping corrupted active session: %s", session_id->value.string);
+      }
+    }
+  }
+  
+  /* Create response with valid sessions */
   json_value_t* response_obj = json_create_object();
-  json_object_set(response_obj, "sessions", json_clone(documents));
-  json_object_set(response_obj, "count", json_create_number(json_array_size(documents)));
+  json_object_set(response_obj, "sessions", valid_sessions);
+  json_object_set(response_obj, "count", json_create_number(json_array_size(valid_sessions)));
   
   json_free(results);
   

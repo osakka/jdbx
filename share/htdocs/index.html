@@ -783,15 +783,42 @@
                         <small id="cacheMemory">0 MB</small>
                     </div>
                 </div>
+                <div class="metric-card">
+                    <div class="metric-label">Database Size</div>
+                    <div class="metric-value" id="databaseSize">0 MB</div>
+                    <div class="metric-change text-muted">
+                        <small id="totalCollections">0 collections</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights and Trends Section -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Insights & Trends</h5>
+                            <small class="text-muted">AI-powered analysis of your database performance</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="metricsInsights" class="insights-container">
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
+                                    <p>Loading insights...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Metrics Charts -->
-            <div class="row">
+            <div class="row mt-4">
                 <div class="col-md-8">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0">Operations Over Time</h5>
-                            <small class="text-muted">Real-time data from metrics system</small>
+                            <h5 class="mb-0">Operations Per Second</h5>
+                            <small class="text-muted">Real-time throughput from metrics system</small>
                         </div>
                         <div class="card-body">
                             <div class="chart-container">
@@ -815,9 +842,9 @@
                 </div>
             </div>
             
-            <!-- Cache Performance Chart -->
+            <!-- Four equal-sized charts that stack responsively -->
             <div class="row mt-4">
-                <div class="col-md-12">
+                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
                     <div class="card">
                         <div class="card-header">
                             <h5 class="mb-0">Cache Hit Rate Over Time</h5>
@@ -826,6 +853,48 @@
                         <div class="card-body">
                             <div class="chart-container">
                                 <canvas id="cacheHitRateChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Memory Usage Over Time</h5>
+                            <small class="text-muted">System memory utilization</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="memoryUsageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Process Memory Usage</h5>
+                            <small class="text-muted">JSONdb server memory consumption</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="processMemoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Storage Usage</h5>
+                            <small class="text-muted">Database and collection sizes</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="storageChart"></canvas>
                             </div>
                         </div>
                     </div>

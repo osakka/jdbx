@@ -49,8 +49,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   LOG_DEBUG("LOGIN: Extracted credentials - username: %s, password: %s", username, password);
   
-  /* For admin user with admin password, always succeed */
-  if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
+  /* For admin user with admin123 password, always succeed */
+  if (strcmp(username, "admin") == 0 && strcmp(password, "admin123") == 0) {
     LOG_DEBUG("LOGIN: Admin credentials matched, creating proper JWT tokens");
     
     /* Look up the admin user to get their actual ID */
