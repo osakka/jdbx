@@ -562,7 +562,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       /* Check if route requires authentication */
       if (ctx->routes[i].requires_auth) {
         if (g_logger) LOG_DEBUG("Route requires authentication, checking token");
-        if (!api_authenticate_request(ctx, request)) {
+        if (!api_authenticate_request_sliding(ctx, request)) {
           if (g_logger) LOG_WARNING("Authentication failed for route: %s", ctx->routes[i].path);
           return create_http_response(HTTP_UNAUTHORIZED, 
                        "{\"error\":\"Unauthorized\"}", "application/json");

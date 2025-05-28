@@ -41,6 +41,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
 void api_free_context(api_context_t* ctx);
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request);
 int api_authenticate_request(api_context_t* ctx, http_request_t* request);
+int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request);
 char* api_extract_token(http_request_t* request);
 int init_shared_api_context(void); /* Initialize shared memory for API context */
 
