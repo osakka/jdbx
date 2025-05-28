@@ -1,5 +1,7 @@
 # JSONdb Development Guidelines
 
+**Last Updated**: January 28, 2025 (v2.0.6)
+
 ## Core Principles
 
 - Do not make minimal implementations. Delete partial concept files and ideas. Focus on:
@@ -20,6 +22,9 @@
  15. Use proper string handling to prevent buffer overflows
  16. Document all fixes thoroughly for future reference
  17. Never recreate parallel implementations, always integrate and test your fixes directly in the main code
+ 18. Maintain consistent logging format - avoid redundant prefixes since file/function/line are in log format
+ 19. Clean workspace regularly - move backup files and temporary scripts to trash/
+ 20. Verify all changes compile cleanly before committing
 
 ## Build and Run Guidelines
 
@@ -101,6 +106,7 @@ The JSONdb server includes a complete binary persistence system with automatic d
 4. **Error Handling**: API errors on persistence failures with database rollback support
 5. **Data Integrity**: CRC32 checksums and magic number verification
 6. **Zero Deadlocks**: Fixed serialization locking to prevent thread deadlocks
+7. **Buffer Management**: Dynamic allocation with safety margins for complex documents
 
 ### Key Implementation Files:
 - `src/components/database/persistence.c` - Persistence thread and buffer management
@@ -122,3 +128,40 @@ The metrics system uses a time-series approach with fixed documents:
 3. **Data Storage**: Append-and-trim pattern with configurable retention (default 15 data points)
 4. **Performance**: O(1) updates, no unbounded growth
 5. **Document IDs**: Standard format `doc-<timestamp>-<random>` with searchable `name` field
+
+## Logging Standards
+
+The project follows strict logging standards:
+
+1. **Log Levels**:
+   - ERROR: Critical failures that prevent normal operation
+   - WARNING: Important issues that need attention but don't stop operation
+   - INFO: Important operational events (default production level)
+   - DEBUG: Detailed information for troubleshooting
+   - TRACE: Very detailed execution flow information
+
+2. **Format Rules**:
+   - No redundant prefixes (file/function/line are automatic)
+   - Clear, actionable messages
+   - Include relevant context in parameters
+   - Avoid excessive verbosity
+
+3. **Example**:
+   ```c
+   LOG_ERROR("Failed to open database file: %s", strerror(errno));
+   LOG_INFO("Server started on port %d", port);
+   LOG_DEBUG("Processing request from %s", client_ip);
+   ```
+
+## Code Audit Process
+
+Regular code audits ensure quality:
+
+1. **Check Git Status**: Identify uncommitted changes
+2. **Verify Single Source**: Eliminate duplicate implementations
+3. **Check Timestamps**: Find missed integrations
+4. **Clean Build**: Ensure zero warnings with -Wall -Wextra
+5. **Clean Workspace**: Move redundant files to trash/
+6. **Update Documentation**: Keep READMEs current
+7. **Commit Changes**: Use descriptive commit messages
+8. **Tag Releases**: When appropriate with comprehensive messages

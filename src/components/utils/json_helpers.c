@@ -14,44 +14,44 @@
  * @return Number of keys retrieved
  */
 int json_object_keys(json_value_t* obj, char** keys, int max_keys) {
-    if (!obj || !keys || max_keys <= 0) {
-        return 0;
+  if (!obj || !keys || max_keys <= 0) {
+    return 0;
+  }
+  
+  /* Since we can't access the internal structure directly, 
+    we'll create a dummy object with the same keys */
+  int size = json_object_size(obj);
+  if (size <= 0) {
+    return 0;
+  }
+  
+  /* Convert object to string and parse back as a workaround */
+  int count = 0;
+  
+  /* For each key in the object, we'll try common key names and see if they exist */
+  /* This is a very simple implementation that works for our specific use case */
+  const char* common_keys[] = {
+    "transaction_id", "state", "timestamp", "user_id", "operation", 
+    "collection", "document_id", "isolation_level", "start_time", 
+    "commit_time", "duration", "operations", "events", "complexity",
+    "error_code", "client_ip", "application_name", "retry_count",
+    "before_state", "after_state", "type"
+  };
+  
+  int num_common_keys = sizeof(common_keys) / sizeof(common_keys[0]);
+  
+  for (int i = 0; i < num_common_keys && count < max_keys; i++) {
+    const char* key = common_keys[i];
+    json_value_t* value = json_object_get(obj, key);
+    if (value) {
+      keys[count] = strdup(key);
+      if (keys[count]) {
+        count++;
+      }
     }
-    
-    /* Since we can't access the internal structure directly, 
-       we'll create a dummy object with the same keys */
-    int size = json_object_size(obj);
-    if (size <= 0) {
-        return 0;
-    }
-    
-    /* Convert object to string and parse back as a workaround */
-    int count = 0;
-    
-    /* For each key in the object, we'll try common key names and see if they exist */
-    /* This is a very simple implementation that works for our specific use case */
-    const char* common_keys[] = {
-        "transaction_id", "state", "timestamp", "user_id", "operation", 
-        "collection", "document_id", "isolation_level", "start_time", 
-        "commit_time", "duration", "operations", "events", "complexity",
-        "error_code", "client_ip", "application_name", "retry_count",
-        "before_state", "after_state", "type"
-    };
-    
-    int num_common_keys = sizeof(common_keys) / sizeof(common_keys[0]);
-    
-    for (int i = 0; i < num_common_keys && count < max_keys; i++) {
-        const char* key = common_keys[i];
-        json_value_t* value = json_object_get(obj, key);
-        if (value) {
-            keys[count] = strdup(key);
-            if (keys[count]) {
-                count++;
-            }
-        }
-    }
-    
-    return count;
+  }
+  
+  return count;
 }
 
 /**
@@ -62,45 +62,45 @@ int json_object_keys(json_value_t* obj, char** keys, int max_keys) {
  * @return JSON value containing the exported collection, or NULL on error
  */
 json_value_t* json_export_collection(database_t* db, const char* collection) {
-    if (!db || !collection) {
-        return NULL;
-    }
-    
-    /* Check if collection exists */
-    db_collection_t* db_coll = db_get_collection(db, collection);
-    if (!db_coll) {
-        return NULL;
-    }
-    
-    /* Get the actual JSON value from the collection */
-    json_value_t* coll = db_coll->documents;
-    
-    /* Create a new object with just this collection */
-    json_value_t* result = json_create_object();
-    if (!result) {
-        return NULL;
-    }
-    
-    /* Create a deep copy of the collection */
-    char* coll_str = json_stringify(coll);
-    if (!coll_str) {
-        json_free(result);
-        return NULL;
-    }
-    
-    json_value_t* coll_copy = json_parse(coll_str);
-    free(coll_str);
-    
-    if (!coll_copy) {
-        json_free(result);
-        /* No need to free db_coll - it's managed by the database */
-        return NULL;
-    }
-    
-    json_object_set(result, collection, coll_copy);
-    
+  if (!db || !collection) {
+    return NULL;
+  }
+  
+  /* Check if collection exists */
+  db_collection_t* db_coll = db_get_collection(db, collection);
+  if (!db_coll) {
+    return NULL;
+  }
+  
+  /* Get the actual JSON value from the collection */
+  json_value_t* coll = db_coll->documents;
+  
+  /* Create a new object with just this collection */
+  json_value_t* result = json_create_object();
+  if (!result) {
+    return NULL;
+  }
+  
+  /* Create a deep copy of the collection */
+  char* coll_str = json_stringify(coll);
+  if (!coll_str) {
+    json_free(result);
+    return NULL;
+  }
+  
+  json_value_t* coll_copy = json_parse(coll_str);
+  free(coll_str);
+  
+  if (!coll_copy) {
+    json_free(result);
     /* No need to free db_coll - it's managed by the database */
-    return result;
+    return NULL;
+  }
+  
+  json_object_set(result, collection, coll_copy);
+  
+  /* No need to free db_coll - it's managed by the database */
+  return result;
 }
 
 /**
@@ -110,23 +110,23 @@ json_value_t* json_export_collection(database_t* db, const char* collection) {
  * @return JSON value containing the exported database, or NULL on error
  */
 json_value_t* json_export_database(database_t* db) {
-    if (!db) {
-        return NULL;
-    }
-    
-    /* Create a deep copy of the collections object */
-    pthread_mutex_lock(&db->lock);
-    char* db_str = json_stringify(db->collections);
-    pthread_mutex_unlock(&db->lock);
-    
-    if (!db_str) {
-        return NULL;
-    }
-    
-    json_value_t* result = json_parse(db_str);
-    free(db_str);
-    
-    return result;
+  if (!db) {
+    return NULL;
+  }
+  
+  /* Create a deep copy of the collections object */
+  pthread_mutex_lock(&db->lock);
+  char* db_str = json_stringify(db->collections);
+  pthread_mutex_unlock(&db->lock);
+  
+  if (!db_str) {
+    return NULL;
+  }
+  
+  json_value_t* result = json_parse(db_str);
+  free(db_str);
+  
+  return result;
 }
 
 /**
@@ -140,89 +140,89 @@ json_value_t* json_export_database(database_t* db) {
  * @return 1 on success, 0 on failure
  */
 int json_import_collection(database_t* db, const char* collection, json_value_t* data, int replace_mode, int* docs_imported) {
-    if (!db || !collection || !data || !docs_imported) {
-        return 0;
+  if (!db || !collection || !data || !docs_imported) {
+    return 0;
+  }
+  
+  *docs_imported = 0;
+  
+  /* Extract the collection data from the import data */
+  json_value_t* coll_data = NULL;
+  
+  if (data->type == JSON_OBJECT) {
+    /* Check if it's a single collection export */
+    coll_data = json_object_get(data, collection);
+    if (!coll_data && json_object_size(data) > 0) {
+      /* If the collection doesn't exist but there are other collections, 
+        we'll treat the whole object as the collection */
+      coll_data = data;
     }
+  } else if (data->type == JSON_ARRAY) {
+    /* If it's an array, use it directly */
+    coll_data = data;
+  }
+  
+  if (!coll_data) {
+    return 0;
+  }
+  
+  /* Import the collection */
+  int result;
+  
+  if (coll_data->type == JSON_ARRAY) {
+    /* Lock database */
+    pthread_mutex_lock(&db->lock);
     
-    *docs_imported = 0;
-    
-    /* Extract the collection data from the import data */
-    json_value_t* coll_data = NULL;
-    
-    if (data->type == JSON_OBJECT) {
-        /* Check if it's a single collection export */
-        coll_data = json_object_get(data, collection);
-        if (!coll_data && json_object_size(data) > 0) {
-            /* If the collection doesn't exist but there are other collections, 
-               we'll treat the whole object as the collection */
-            coll_data = data;
-        }
-    } else if (data->type == JSON_ARRAY) {
-        /* If it's an array, use it directly */
-        coll_data = data;
-    }
-    
-    if (!coll_data) {
-        return 0;
-    }
-    
-    /* Import the collection */
-    int result;
-    
-    if (coll_data->type == JSON_ARRAY) {
-        /* Lock database */
-        pthread_mutex_lock(&db->lock);
-        
-        /* Create the collection if it doesn't exist */
-        json_value_t* existing_coll = json_object_get(db->collections, collection);
-        if (!existing_coll) {
-            json_object_set(db->collections, collection, json_create_array());
-            existing_coll = json_object_get(db->collections, collection);
-            if (!existing_coll) {
-                pthread_mutex_unlock(&db->lock);
-                return 0;
-            }
-        } else if (replace_mode) {
-            /* Replace the collection with an empty array */
-            json_value_t* empty_array = json_create_array();
-            if (!empty_array) {
-                pthread_mutex_unlock(&db->lock);
-                return 0;
-            }
-            json_object_set(db->collections, collection, empty_array);
-            existing_coll = json_object_get(db->collections, collection);
-        }
-        
-        /* Import documents */
-        for (size_t i = 0; i < coll_data->value.array.size; i++) {
-            json_value_t* doc = json_array_get(coll_data, i);
-            if (doc && doc->type == JSON_OBJECT) {
-                /* Create deep copy */
-                char* doc_str = json_stringify(doc);
-                if (doc_str) {
-                    json_value_t* doc_copy = json_parse(doc_str);
-                    free(doc_str);
-                    
-                    if (doc_copy) {
-                        json_array_append(existing_coll, doc_copy);
-                        (*docs_imported)++;
-                    }
-                }
-            }
-        }
-        
-        /* Mark database as modified */
-        db->is_modified = 1;
-        
+    /* Create the collection if it doesn't exist */
+    json_value_t* existing_coll = json_object_get(db->collections, collection);
+    if (!existing_coll) {
+      json_object_set(db->collections, collection, json_create_array());
+      existing_coll = json_object_get(db->collections, collection);
+      if (!existing_coll) {
         pthread_mutex_unlock(&db->lock);
-        
-        /* Save the database */
-        result = db_save(db);
-    } else {
-        result = 0;
+        return 0;
+      }
+    } else if (replace_mode) {
+      /* Replace the collection with an empty array */
+      json_value_t* empty_array = json_create_array();
+      if (!empty_array) {
+        pthread_mutex_unlock(&db->lock);
+        return 0;
+      }
+      json_object_set(db->collections, collection, empty_array);
+      existing_coll = json_object_get(db->collections, collection);
     }
     
-    return result;
+    /* Import documents */
+    for (size_t i = 0; i < coll_data->value.array.size; i++) {
+      json_value_t* doc = json_array_get(coll_data, i);
+      if (doc && doc->type == JSON_OBJECT) {
+        /* Create deep copy */
+        char* doc_str = json_stringify(doc);
+        if (doc_str) {
+          json_value_t* doc_copy = json_parse(doc_str);
+          free(doc_str);
+          
+          if (doc_copy) {
+            json_array_append(existing_coll, doc_copy);
+            (*docs_imported)++;
+          }
+        }
+      }
+    }
+    
+    /* Mark database as modified */
+    db->is_modified = 1;
+    
+    pthread_mutex_unlock(&db->lock);
+    
+    /* Save the database */
+    result = db_save(db);
+  } else {
+    result = 0;
+  }
+  
+  return result;
 }
 
 /**
@@ -235,79 +235,79 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
  * @return 1 on success, 0 on failure
  */
 int json_import_database(database_t* db, json_value_t* data, int replace_mode, int* docs_imported) {
-    if (!db || !data || !docs_imported) {
-        return 0;
+  if (!db || !data || !docs_imported) {
+    return 0;
+  }
+  
+  *docs_imported = 0;
+  
+  /* Ensure the data is an object */
+  if (data->type != JSON_OBJECT) {
+    return 0;
+  }
+  
+  /* Lock database */
+  pthread_mutex_lock(&db->lock);
+  
+  /* If replace mode, clear all collections */
+  if (replace_mode) {
+    json_free(db->collections);
+    db->collections = json_create_object();
+    if (!db->collections) {
+      pthread_mutex_unlock(&db->lock);
+      return 0;
     }
+  }
+  
+  /* Import each collection */
+  for (size_t i = 0; i < data->value.object.size; i++) {
+    const char* coll_name = data->value.object.entries[i].key;
+    json_value_t* coll_data = data->value.object.entries[i].value;
     
-    *docs_imported = 0;
-    
-    /* Ensure the data is an object */
-    if (data->type != JSON_OBJECT) {
-        return 0;
-    }
-    
-    /* Lock database */
-    pthread_mutex_lock(&db->lock);
-    
-    /* If replace mode, clear all collections */
-    if (replace_mode) {
-        json_free(db->collections);
-        db->collections = json_create_object();
-        if (!db->collections) {
-            pthread_mutex_unlock(&db->lock);
-            return 0;
+    if (coll_data && coll_data->type == JSON_ARRAY) {
+      /* Create or get the collection */
+      json_value_t* existing_coll = json_object_get(db->collections, coll_name);
+      if (!existing_coll) {
+        json_object_set(db->collections, coll_name, json_create_array());
+        existing_coll = json_object_get(db->collections, coll_name);
+        if (!existing_coll) {
+          continue;
         }
-    }
-    
-    /* Import each collection */
-    for (size_t i = 0; i < data->value.object.size; i++) {
-        const char* coll_name = data->value.object.entries[i].key;
-        json_value_t* coll_data = data->value.object.entries[i].value;
-        
-        if (coll_data && coll_data->type == JSON_ARRAY) {
-            /* Create or get the collection */
-            json_value_t* existing_coll = json_object_get(db->collections, coll_name);
-            if (!existing_coll) {
-                json_object_set(db->collections, coll_name, json_create_array());
-                existing_coll = json_object_get(db->collections, coll_name);
-                if (!existing_coll) {
-                    continue;
-                }
-            } else if (replace_mode) {
-                /* Replace the collection with an empty array */
-                json_value_t* empty_array = json_create_array();
-                if (!empty_array) {
-                    continue;
-                }
-                json_object_set(db->collections, coll_name, empty_array);
-                existing_coll = json_object_get(db->collections, coll_name);
-            }
+      } else if (replace_mode) {
+        /* Replace the collection with an empty array */
+        json_value_t* empty_array = json_create_array();
+        if (!empty_array) {
+          continue;
+        }
+        json_object_set(db->collections, coll_name, empty_array);
+        existing_coll = json_object_get(db->collections, coll_name);
+      }
+      
+      /* Import documents */
+      for (size_t j = 0; j < coll_data->value.array.size; j++) {
+        json_value_t* doc = json_array_get(coll_data, j);
+        if (doc && doc->type == JSON_OBJECT) {
+          /* Create deep copy */
+          char* doc_str = json_stringify(doc);
+          if (doc_str) {
+            json_value_t* doc_copy = json_parse(doc_str);
+            free(doc_str);
             
-            /* Import documents */
-            for (size_t j = 0; j < coll_data->value.array.size; j++) {
-                json_value_t* doc = json_array_get(coll_data, j);
-                if (doc && doc->type == JSON_OBJECT) {
-                    /* Create deep copy */
-                    char* doc_str = json_stringify(doc);
-                    if (doc_str) {
-                        json_value_t* doc_copy = json_parse(doc_str);
-                        free(doc_str);
-                        
-                        if (doc_copy) {
-                            json_array_append(existing_coll, doc_copy);
-                            (*docs_imported)++;
-                        }
-                    }
-                }
+            if (doc_copy) {
+              json_array_append(existing_coll, doc_copy);
+              (*docs_imported)++;
             }
+          }
         }
+      }
     }
-    
-    /* Mark database as modified */
-    db->is_modified = 1;
-    
-    pthread_mutex_unlock(&db->lock);
-    
-    /* Save the database */
-    return db_save(db);
+  }
+  
+  /* Mark database as modified */
+  db->is_modified = 1;
+  
+  pthread_mutex_unlock(&db->lock);
+  
+  /* Save the database */
+  return db_save(db);
 }

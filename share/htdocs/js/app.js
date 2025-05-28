@@ -572,9 +572,9 @@ async function loadBrowserCollections() {
             }
             // Ensure the object has all required fields
             return {
-                name: item.name || item,
+                name: item.name || (typeof item === 'string' ? item : 'unknown'),
                 documentCount: item.documentCount || 0,
-                isSystem: item.isSystem !== undefined ? item.isSystem : (item.name || item).startsWith('_')
+                isSystem: item.isSystem !== undefined ? item.isSystem : ((item.name || (typeof item === 'string' ? item : '')).startsWith('_'))
             };
         });
         

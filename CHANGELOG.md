@@ -5,6 +5,80 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2025-05-28
+
+### 🐛 Bug Fixes
+
+#### Critical Server Startup Fix
+- **FIXED**: Server hanging during startup with "Collection: (null)" error
+- **CAUSE**: Log statements missing format string arguments throughout codebase
+- **IMPACT**: 30 log statements across 4 files were missing parameters
+- **FILES FIXED**:
+  - `simplified_db.c` - 10 instances
+  - `indexed_document_operations.c` - 7 instances
+  - `simplified_operations.c` - 10 instances
+  - `optimized_db_operations.c` - 3 instances
+
+#### Binary Serialization Crash Fix
+- **FIXED**: Server crash during binary persistence of metrics documents
+- **CAUSE**: Buffer allocation bug - not allocating on first use when size was 0
+- **ADDITIONAL ISSUES**:
+  - Insufficient safety margin (32 bytes) for complex metrics documents
+  - Missing bounds checking for serialized size
+- **SOLUTION**:
+  - Fixed initial buffer allocation check
+  - Increased safety margin to 1024 bytes
+  - Added validation for serialized size vs buffer size
+  - Improved cleanup and error handling
+
+### 🔧 Technical Improvements
+
+#### Logging System Cleanup
+- **COMPLETED**: Comprehensive audit and standardization of all log messages
+- **CHANGES**:
+  - Removed redundant "successfully" from INFO messages
+  - Eliminated "Failed to" prefix from ERROR logs (redundant with level)
+  - Standardized memory errors to "Out of memory"
+  - Simplified operation messages: "Inserted:", "Updated:", "Deleted:"
+  - Adjusted log levels (routine operations moved from INFO to DEBUG)
+  - Fixed all format string issues
+- **RESULT**: Cleaner, more consistent, and accurate logging throughout
+
+#### Documentation
+- **NEW**: `docs/BINARY_SERIALIZATION_CRASH_FIX.md` - Detailed crash analysis
+- **NEW**: `docs/LOG_FORMAT_STRING_FIX.md` - Format string fix documentation
+- **NEW**: `docs/guidelines/LOGGING_STANDARDS.md` - Comprehensive logging guidelines
+
+#### Documentation Audit and Cleanup
+- **COMPLETED**: Comprehensive documentation accuracy audit
+- **FINDINGS**:
+  - Found 154 documentation files with ~40% duplicate content
+  - Incorrect API endpoints (wrong port, RBAC paths)
+  - Missing documentation for session management, metrics history
+  - Obsolete backup/restore endpoints documented but not implemented
+- **ACTIONS**:
+  - Created `API_CORRECTED.md` with accurate endpoint documentation
+  - Updated main docs/README.md as proper documentation index
+  - Created consolidation plan to reduce duplicate files
+  - Added accuracy warnings to guide users
+- **NEW FILES**:
+  - `docs/DOCUMENTATION_ACCURACY_AUDIT.md` - Audit findings
+  - `docs/api/API_CORRECTED.md` - Corrected API reference
+  - `docs/DOCUMENTATION_CONSOLIDATION_PLAN.md` - Cleanup plan
+  - `docs/DOCUMENTATION_AUDIT_SUMMARY.md` - Executive summary
+
+#### Code Cleanup
+- **REMOVED**: 97 backup (.bak) files moved to trash/
+- **REMOVED**: Temporary debug scripts and log cleanup scripts
+- **VERIFIED**: Zero compiler warnings with -Wall -Wextra
+- **UPDATED**: All README files with current version and standards
+- **NEW**: `docs/guidelines/LOGGING_CLEANUP_SUMMARY.md` - Cleanup summary
+
+### 📚 Documentation Improvements
+- **STARTED**: Comprehensive documentation reorganization plan
+- **IDENTIFIED**: 154 documentation files with significant duplication
+- **PLANNED**: Consolidation of duplicate documentation into organized structure
+
 ## [2.0.5] - 2025-05-27
 
 ### 🚀 Performance Improvements

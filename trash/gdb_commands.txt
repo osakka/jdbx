@@ -1,0 +1,5 @@
+set pagination off
+set logging on
+run -c build/var/config.json
+bt full
+quit

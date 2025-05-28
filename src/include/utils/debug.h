@@ -4,16 +4,16 @@
 #include <stdio.h>
 
 /* 
- * Debug macros for conditional debugging output
- * Set DEBUG_MEMORY to 1 to enable memory management debug prints,
- * or to 0 to disable them in production builds.
+ * Debug macros - kept simple to avoid circular dependencies
+ * For production code, use the LOG_* macros from logger.h directly
+ * This is only for legacy compatibility
  */
+
+/* Set DEBUG_MEMORY to 1 to enable debug prints, 0 to disable */
 #define DEBUG_MEMORY 0
 
-#if DEBUG_MEMORY
-    #define DEBUG_PRINT(fmt, ...) printf("DEBUG: " fmt "\n", ##__VA_ARGS__)
-#else
-    #define DEBUG_PRINT(fmt, ...) /* No output in release builds */
-#endif
+/* DEBUG_PRINT is disabled - use LOG_TRACE from logger.h for development debugging */
+#define DEBUG_PRINT(fmt, ...) /* Disabled - use LOG_TRACE instead */
+
 
 #endif /* DEBUG_H */
