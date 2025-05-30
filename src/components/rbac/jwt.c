@@ -1,5 +1,6 @@
 #include "rbac/jwt.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@ static const char base64_chars[] =
 /* Base64 encode a string */
 static char* base64_encode(const unsigned char* input, int length) {
   int encoded_len = ((length + 2) / 3) * 4;
-  char* output = (char*)malloc(encoded_len + 1);
+  char* output = (char*)buffer_pool_alloc(encoded_len + 1);
   if (!output) return NULL;
   
   int i, j;
@@ -51,7 +52,7 @@ static unsigned char* base64_decode(const char* input, int* output_length) {
   if (input[input_len-1] == '=') decoded_len--;
   if (input[input_len-2] == '=') decoded_len--;
   
-  unsigned char* output = (unsigned char*)malloc(decoded_len + 1);
+  unsigned char* output = (unsigned char*)buffer_pool_alloc(decoded_len + 1);
   if (!output) return NULL;
   
   /* Create reverse lookup table */
@@ -105,7 +106,7 @@ static char* base64_url_encode(const unsigned char* input, int length) {
 /* URL-safe version of base64 decoding - ADDED MISSING FUNCTION */
 static unsigned char* base64_url_decode(const char* input, int* output_length) {
   /* Step 1: Make a mutable copy of the input */
-  char* input_copy = strdup(input);
+  char* input_copy = buffer_pool_strdup(input);
   if (!input_copy) return NULL;
   
   /* Step 2: Convert URL-safe characters back to standard base64 */
@@ -118,9 +119,9 @@ static unsigned char* base64_url_decode(const char* input, int* output_length) {
   int len = strlen(input_copy);
   int padding = (4 - (len % 4)) % 4;
   
-  char* padded_input = (char*)malloc(len + padding + 1);
+  char* padded_input = (char*)buffer_pool_alloc(len + padding + 1);
   if (!padded_input) {
-    free(input_copy);
+    buffer_pool_free(input_copy);
     return NULL;
   }
   
@@ -130,11 +131,11 @@ static unsigned char* base64_url_decode(const char* input, int* output_length) {
   }
   padded_input[len + padding] = '\0';
   
-  free(input_copy);
+  buffer_pool_free(input_copy);
   
   /* Step 4: Use regular base64 decode */
   unsigned char* output = base64_decode(padded_input, output_length);
-  free(padded_input);
+  buffer_pool_free(padded_input);
   
   return output;
 }
@@ -258,28 +259,28 @@ static char* jwt_sign(const char* header_payload, const char* secret, const char
 
 /* Create new JWT token */
 jwt_token_t* jwt_create(const char* secret __attribute__((unused))) {
-  jwt_token_t* token = (jwt_token_t*)malloc(sizeof(jwt_token_t));
+  jwt_token_t* token = (jwt_token_t*)buffer_pool_alloc(sizeof(jwt_token_t));
   if (!token) {
     return NULL;
   }
   
   /* Initialize token */
-  token->header = (jwt_header_t*)malloc(sizeof(jwt_header_t));
+  token->header = (jwt_header_t*)buffer_pool_alloc(sizeof(jwt_header_t));
   if (!token->header) {
-    free(token);
+    buffer_pool_free(token);
     return NULL;
   }
   
-  token->payload = (jwt_payload_t*)malloc(sizeof(jwt_payload_t));
+  token->payload = (jwt_payload_t*)buffer_pool_alloc(sizeof(jwt_payload_t));
   if (!token->payload) {
-    free(token->header);
-    free(token);
+    buffer_pool_free(token->header);
+    buffer_pool_free(token);
     return NULL;
   }
   
   /* Set default header values */
-  token->header->alg = strdup("HS256");
-  token->header->typ = strdup("JWT");
+  token->header->alg = buffer_pool_strdup("HS256");
+  token->header->typ = buffer_pool_strdup("JWT");
   
   /* Initialize payload fields */
   token->payload->iss = NULL;
@@ -305,26 +306,26 @@ void jwt_free(jwt_token_t* token) {
   
   /* Free header */
   if (token->header) {
-    if (token->header->alg) free(token->header->alg);
-    if (token->header->typ) free(token->header->typ);
-    free(token->header);
+    if (token->header->alg) buffer_pool_free_safe(token->header->alg);
+    if (token->header->typ) buffer_pool_free_safe(token->header->typ);
+    buffer_pool_free_safe(token->header);
   }
   
   /* Free payload */
   if (token->payload) {
-    if (token->payload->iss) free(token->payload->iss);
-    if (token->payload->sub) free(token->payload->sub);
-    if (token->payload->aud) free(token->payload->aud);
-    if (token->payload->jti) free(token->payload->jti);
+    if (token->payload->iss) buffer_pool_free_safe(token->payload->iss);
+    if (token->payload->sub) buffer_pool_free_safe(token->payload->sub);
+    if (token->payload->aud) buffer_pool_free_safe(token->payload->aud);
+    if (token->payload->jti) buffer_pool_free_safe(token->payload->jti);
     if (token->payload->claims) json_free(token->payload->claims);
-    free(token->payload);
+    buffer_pool_free_safe(token->payload);
   }
   
   /* Free other fields */
-  if (token->signature) free(token->signature);
-  if (token->token_str) free(token->token_str);
+  if (token->signature) buffer_pool_free_safe(token->signature);
+  if (token->token_str) buffer_pool_free_safe(token->token_str);
   
-  free(token);
+  buffer_pool_free_safe(token);
 }
 
 /* Set JWT algorithm */
@@ -347,10 +348,10 @@ void jwt_set_issuer(jwt_token_t* token, const char* iss) {
   }
   
   if (token->payload->iss) {
-    free(token->payload->iss);
+    buffer_pool_free_safe(token->payload->iss);
   }
   
-  token->payload->iss = strdup(iss);
+  token->payload->iss = buffer_pool_strdup(iss);
 }
 
 /* Set JWT subject */
@@ -360,10 +361,10 @@ void jwt_set_subject(jwt_token_t* token, const char* sub) {
   }
   
   if (token->payload->sub) {
-    free(token->payload->sub);
+    buffer_pool_free_safe(token->payload->sub);
   }
   
-  token->payload->sub = strdup(sub);
+  token->payload->sub = buffer_pool_strdup(sub);
 }
 
 /* Set JWT audience */
@@ -373,10 +374,10 @@ void jwt_set_audience(jwt_token_t* token, const char* aud) {
   }
   
   if (token->payload->aud) {
-    free(token->payload->aud);
+    buffer_pool_free_safe(token->payload->aud);
   }
   
-  token->payload->aud = strdup(aud);
+  token->payload->aud = buffer_pool_strdup(aud);
 }
 
 /* Set JWT expiration */
@@ -456,12 +457,17 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   json_free(header_json);
   
   if (!header_str) {
+    LOG_ERROR("JWT: Failed to stringify header JSON");
     return NULL;
   }
   
+  LOG_DEBUG("JWT: Header string created: %s", header_str);
+  
   /* Base64url encode header */
   char* header_enc = base64_url_encode((unsigned char*)header_str, strlen(header_str));
-  free(header_str);
+  buffer_pool_free_safe(header_str);
+  
+  LOG_DEBUG("JWT: Header encoded");
   
   if (!header_enc) {
     return NULL;
@@ -511,7 +517,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
     char* value_str = json_stringify(entry->value);
     if (value_str) {
       json_value_t* value_copy = json_parse(value_str);
-      free(value_str);
+      buffer_pool_free_safe(value_str);
       
       if (value_copy) {
         json_object_set(payload_json, entry->key, value_copy);
@@ -529,18 +535,18 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   
   /* Base64url encode payload */
   char* payload_enc = base64_url_encode((unsigned char*)payload_str, strlen(payload_str));
-  free(payload_str);
+  buffer_pool_free_safe(payload_str);
   
   if (!payload_enc) {
-    free(header_enc);
+    buffer_pool_free(header_enc);
     return NULL;
   }
   
   /* Create header.payload string for signing */
-  char* header_payload = (char*)malloc(strlen(header_enc) + strlen(payload_enc) + 2);
+  char* header_payload = (char*)buffer_pool_alloc(strlen(header_enc) + strlen(payload_enc) + 2);
   if (!header_payload) {
-    free(header_enc);
-    free(payload_enc);
+    buffer_pool_free(header_enc);
+    buffer_pool_free(payload_enc);
     return NULL;
   }
   
@@ -549,19 +555,19 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   /* Sign token */
   char* signature = jwt_sign(header_payload, secret, token->header->alg);
   if (!signature) {
-    free(header_enc);
-    free(payload_enc);
-    free(header_payload);
+    buffer_pool_free(header_enc);
+    buffer_pool_free(payload_enc);
+    buffer_pool_free(header_payload);
     return NULL;
   }
   
   /* Create final token string */
-  char* token_str = (char*)malloc(strlen(header_payload) + strlen(signature) + 2);
+  char* token_str = (char*)buffer_pool_alloc(strlen(header_payload) + strlen(signature) + 2);
   if (!token_str) {
-    free(header_enc);
-    free(payload_enc);
-    free(header_payload);
-    free(signature);
+    buffer_pool_free(header_enc);
+    buffer_pool_free(payload_enc);
+    buffer_pool_free(header_payload);
+    buffer_pool_free(signature);
     return NULL;
   }
   
@@ -579,9 +585,9 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   token->token_str = strdup(token_str);
   
   /* Clean up */
-  free(header_enc);
-  free(payload_enc);
-  free(header_payload);
+  buffer_pool_free(header_enc);
+  buffer_pool_free(payload_enc);
+  buffer_pool_free(header_payload);
   
   return token_str;
 }
@@ -752,7 +758,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
     char* value_str = json_stringify(entry->value);
     if (value_str) {
       json_value_t* value_copy = json_parse(value_str);
-      free(value_str);
+      buffer_pool_free_safe(value_str);
       
       if (value_copy) {
         json_object_set(token->payload->claims, entry->key, value_copy);
@@ -879,17 +885,23 @@ int jwt_verify(const char* token_str, const char* secret) {
 
 /* Create a refresh token */
 jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, time_t expiry) {
+  LOG_DEBUG("JWT_DEBUG: Entering jwt_create_refresh_token");
   if (!secret || !user_id) {
+    LOG_DEBUG("JWT_DEBUG: Invalid parameters for refresh token");
     return NULL;
   }
   
   /* Create new token */
+  LOG_DEBUG("JWT_DEBUG: About to create refresh token structure");
   jwt_token_t* token = jwt_create(secret);
   if (!token) {
+    LOG_DEBUG("JWT_DEBUG: Failed to create refresh token structure");
     return NULL;
   }
+  LOG_DEBUG("JWT_DEBUG: Refresh token structure created successfully");
   
   /* Set token claims */
+  LOG_DEBUG("JWT_DEBUG: Setting refresh token claims");
   jwt_set_subject(token, user_id);
   jwt_set_issuer(token, "jsondb");
   
@@ -900,56 +912,73 @@ jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, t
   jwt_set_expiration(token, expiry);
   
   /* Add refresh token claim */
+  LOG_DEBUG("JWT_DEBUG: About to add refresh token type claim");
   jwt_add_claim(token, "type", json_create_string("refresh"));
+  LOG_DEBUG("JWT_DEBUG: Refresh token creation completed successfully");
   
   return token;
 }
 
 /* Create both access and refresh tokens and return them as a pair */
 char* jwt_create_token_pair(const char* secret, const char* user_id, const char* username, json_value_t** response_json) {
+  LOG_DEBUG("JWT_DEBUG: Entering jwt_create_token_pair");
   if (!secret || !user_id || !username || !response_json) {
+    LOG_DEBUG("JWT_DEBUG: Invalid parameters");
     return NULL;
   }
   
   /* Create access token */
+  LOG_DEBUG("JWT_DEBUG: About to create access token");
   jwt_token_t* access_token = jwt_create(secret);
   if (!access_token) {
+    LOG_DEBUG("JWT_DEBUG: Failed to create access token");
     return NULL;
   }
+  LOG_DEBUG("JWT_DEBUG: Access token created successfully");
   
   /* Set access token claims */
+  LOG_DEBUG("JWT_DEBUG: Setting access token claims");
   jwt_set_subject(access_token, user_id);
   jwt_set_issuer(access_token, "jsondb");
   jwt_set_expiration(access_token, time(NULL) + (30 * 60)); /* 30 minutes */
   jwt_add_claim(access_token, "username", json_create_string(username));
   jwt_add_claim(access_token, "type", json_create_string("access"));
+  LOG_DEBUG("JWT_DEBUG: Access token claims set");
   
   /* Create refresh token */
+  LOG_DEBUG("JWT_DEBUG: About to create refresh token");
   jwt_token_t* refresh_token = jwt_create_refresh_token(secret, user_id, 0); /* Use default expiry */
   if (!refresh_token) {
+    LOG_DEBUG("JWT_DEBUG: Failed to create refresh token");
     jwt_free(access_token);
     return NULL;
   }
+  LOG_DEBUG("JWT_DEBUG: Refresh token created successfully");
   
   /* Encode tokens */
+  LOG_DEBUG("JWT_DEBUG: About to encode access token");
   char* access_token_str = jwt_encode(access_token, secret);
+  LOG_DEBUG("JWT_DEBUG: About to encode refresh token");
   char* refresh_token_str = jwt_encode(refresh_token, secret);
+  LOG_DEBUG("JWT_DEBUG: Both tokens encoded successfully");
   
   /* Free token structures */
+  LOG_DEBUG("JWT_DEBUG: About to free token structures");
   jwt_free(access_token);
   jwt_free(refresh_token);
+  LOG_DEBUG("JWT_DEBUG: Token structures freed");
   
   if (!access_token_str || !refresh_token_str) {
-    if (access_token_str) free(access_token_str);
-    if (refresh_token_str) free(refresh_token_str);
+    if (access_token_str) buffer_pool_free(access_token_str);
+    if (refresh_token_str) buffer_pool_free(refresh_token_str);
     return NULL;
   }
   
   /* Create response JSON */
   json_value_t* response = json_create_object();
   if (!response) {
-    free(access_token_str);
-    free(refresh_token_str);
+    buffer_pool_free(access_token_str);
+    buffer_pool_free(refresh_token_str);
     return NULL;
   }
   
@@ -966,8 +995,8 @@ char* jwt_create_token_pair(const char* secret, const char* user_id, const char*
   *response_json = response;
   
   /* Clean up */
-  free(access_token_str);
-  free(refresh_token_str);
+  buffer_pool_free(access_token_str);
+  buffer_pool_free(refresh_token_str);
   
   return response_str;
 }

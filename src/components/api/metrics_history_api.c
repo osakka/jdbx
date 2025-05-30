@@ -2,6 +2,7 @@
 #include "utils/metrics_persistence.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
@@ -91,7 +92,7 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -229,7 +230,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }

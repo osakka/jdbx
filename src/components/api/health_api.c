@@ -2,6 +2,7 @@
 #include "utils/logger.h"
 #include "utils/metrics.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -218,7 +219,7 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
   http_response_t *response = create_http_response(HTTP_OK, health_json, "application/json");
   
   /* Free resources */
-  free(health_json);
+  buffer_pool_free_safe(health_json);
   json_free(health);
   
   return response;
@@ -532,7 +533,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   /* Clean up JSON objects */
   json_free(response_obj);
   json_free(root);
-  free(metrics_json);
+  buffer_pool_free_safe(metrics_json);
   
   if (!response_json) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -543,7 +544,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   http_response_t* response = create_http_response(HTTP_OK, response_json, "application/json");
   
   /* Free response JSON */
-  free(response_json);
+  buffer_pool_free_safe(response_json);
   
   return response;
 #else

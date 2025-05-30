@@ -6,6 +6,7 @@
 #include "rbac/jwt.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -202,7 +203,7 @@ static http_response_t* create_json_response(json_value_t* json_data, int status
   char* json_str = json_stringify(json_data);
   http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
   if (!response) {
-    free(json_str);
+    buffer_pool_free_safe(json_str);
     return create_error_response("Out of memory", HTTP_INTERNAL_SERVER_ERROR);
   }
   

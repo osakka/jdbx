@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/database.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -296,7 +297,7 @@ http_response_t* api_handle_visualization_collection_stats(api_context_t* ctx, h
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  free(result_str);
+  buffer_pool_free_safe(result_str);
   
   return response;
 }
@@ -361,7 +362,7 @@ http_response_t* api_handle_visualization_document_types(api_context_t* ctx, htt
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  free(result_str);
+  buffer_pool_free_safe(result_str);
   
   return response;
 }
@@ -431,7 +432,7 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  free(result_str);
+  buffer_pool_free_safe(result_str);
   
   return response;
 }

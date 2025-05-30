@@ -9,18 +9,7 @@
 #include <sys/sysinfo.h>
 
 /* Clone a JSON value - temporary until json_deep_copy is added to json utils */
-static json_value_t* json_deep_copy(json_value_t* value) {
-  if (!value) return NULL;
-  
-  /* For now, use stringify and parse as a simple deep copy */
-  char* json_str = json_stringify(value);
-  if (!json_str) return NULL;
-  
-  json_value_t* copy = json_parse(json_str);
-  free(json_str);
-  
-  return copy;
-}
+/* json_deep_copy is now available from json_deep_copy.c */
 
 /* Metrics persistence configuration */
 #define METRICS_COLLECTION_NAME "_system_metrics" /* Collection for new metrics */

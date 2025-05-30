@@ -157,15 +157,18 @@ static int init_rbac_collections(struct database* db) {
   };
   
   for (size_t i = 0; i < sizeof(collections) / sizeof(collections[0]); i++) {
+    LOG_TRACE("RBAC_DB: Checking collection %zu: %s", i, collections[i]);
     if (!db_collection_exists(db, collections[i])) {
       LOG_TRACE("RBAC_DB: Creating collection: %s", collections[i]);
       if (!db_create_collection(db, collections[i])) {
         LOG_ERROR("RBAC_DB: Failed to create collection: %s", collections[i]);
         return 0;
       }
+      LOG_TRACE("RBAC_DB: Collection created: %s", collections[i]);
     } else {
       LOG_TRACE("RBAC_DB: Collection already exists: %s", collections[i]);
     }
+    LOG_TRACE("RBAC_DB: Collection %s processed", collections[i]);
   }
   
   LOG_TRACE("RBAC_DB: All RBAC collections initialized");

@@ -164,28 +164,6 @@ void json_array_set(json_value_t* array, size_t index, json_value_t* value) {
   array->value.array.items[index] = value;
 }
 
-void json_array_remove(json_value_t* array, size_t index) {
-  if (!array || array->type != JSON_ARRAY || index >= array->value.array.size) {
-    return;
-  }
-  
-  /* Free the value being removed */
-  if (array->value.array.items[index]) {
-    json_free(array->value.array.items[index]);
-  }
-  
-  /* Shift remaining elements down */
-  for (size_t i = index; i < array->value.array.size - 1; i++) {
-    array->value.array.items[i] = array->value.array.items[i + 1];
-  }
-  
-  /* Decrease array size */
-  array->value.array.size--;
-  
-  /* Set the last element to NULL (it's been moved) */
-  array->value.array.items[array->value.array.size] = NULL;
-}
-
 /* JSON object operations */
 void json_object_set(json_value_t* object, const char* key, json_value_t* value) {
   if (!object || object->type != JSON_OBJECT || !key || !value) {
@@ -367,7 +345,7 @@ static char* parse_string(const char** json) {
   
   if (**json == '"') {
     size_t length = *json - start;
-    result = (char*)buffer_pool_alloc(length + 1);
+    result = (char*)malloc(length + 1);
     if (result) {
       /* Copy string without the quotes */
       memcpy(result, start, length);
@@ -522,7 +500,7 @@ static json_value_t* parse_value(const char** json) {
     }
     
     json_value_t* value = json_create_string(str);
-    buffer_pool_free_safe(str);
+    free(str);
     return value;
   } else if (**json == 't' && strncmp(*json, "true", 4) == 0) {
     *json += 4;
@@ -727,26 +705,26 @@ static char* stringify_object(json_value_t* object) {
     /* Key */
     char* key = escape_string(object->value.object.entries[i].key);
     if (!key) {
-      buffer_pool_free(result);
+      free(result);
       return NULL;
     }
     
     strcpy(p, key);
     p += strlen(key);
-    buffer_pool_free(key);
+    free(key);
     
     *p++ = ':';
     
     /* Value */
     char* value = stringify_value(object->value.object.entries[i].value);
     if (!value) {
-      buffer_pool_free(result);
+      free(result);
       return NULL;
     }
     
     strcpy(p, value);
     p += strlen(value);
-    buffer_pool_free(value);
+    free(value);
     
     /* Comma */
     if (i < object->value.object.size - 1) {
@@ -767,7 +745,7 @@ static char* stringify_array(json_value_t* array) {
   
   /* Empty array */
   if (array->value.array.size == 0) {
-    return buffer_pool_strdup("[]");
+    return strdup("[]");
   }
   
   /* Calculate size */
@@ -780,7 +758,7 @@ static char* stringify_array(json_value_t* array) {
     }
     
     size += strlen(value);
-    buffer_pool_free(value);
+    free(value);
     
     /* Comma */
     if (i < array->value.array.size - 1) {
@@ -801,13 +779,13 @@ static char* stringify_array(json_value_t* array) {
   for (size_t i = 0; i < array->value.array.size; i++) {
     char* value = stringify_value(array->value.array.items[i]);
     if (!value) {
-      buffer_pool_free(result);
+      free(result);
       return NULL;
     }
     
     strcpy(p, value);
     p += strlen(value);
-    buffer_pool_free(value);
+    free(value);
     
     /* Comma */
     if (i < array->value.array.size - 1) {
@@ -828,14 +806,14 @@ static char* stringify_value(json_value_t* value) {
   
   switch (value->type) {
     case JSON_NULL:
-      return buffer_pool_strdup("null");
+      return strdup("null");
     case JSON_BOOLEAN:
-      return buffer_pool_strdup(value->value.boolean ? "true" : "false");
+      return strdup(value->value.boolean ? "true" : "false");
     case JSON_NUMBER:
       {
         char buffer[64];
         sprintf(buffer, "%g", value->value.number);
-        return buffer_pool_strdup(buffer);
+        return strdup(buffer);
       }
     case JSON_STRING:
       return escape_string(value->value.string);
@@ -847,7 +825,7 @@ static char* stringify_value(json_value_t* value) {
       {
         char buffer[64];
         sprintf(buffer, "%lld", (long long)value->value.integer);
-        return buffer_pool_strdup(buffer);
+        return strdup(buffer);
       }
     default:
       return NULL;
@@ -870,17 +848,48 @@ char* json_stringify(json_value_t* value) {
   return stringify_value(value);
 }
 
+/**
+ * Map to track addresses of objects that were freed to prevent double-free
+ * This is a simple protection mechanism for the current bug
+ */
+#define MAX_FREED_ADDRESSES 1000
+static void* g_freed_addresses[MAX_FREED_ADDRESSES] = {0};
+
+/**
+ * Check if an address has been freed before
+ */
+static int was_freed(void* ptr) {
+  for (int i = 0; i < MAX_FREED_ADDRESSES; i++) {
+    if (g_freed_addresses[i] == ptr) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Add an address to the freed list
+ */
+static void add_to_freed(void* ptr) {
+  for (int i = 0; i < MAX_FREED_ADDRESSES; i++) {
+    if (g_freed_addresses[i] == NULL) {
+      g_freed_addresses[i] = ptr;
+      return;
+    }
+  }
+  /* List is full, in a real implementation we would resize */
+}
 
 void json_free(json_value_t* value) {
   if (!value) {
     return;
   }
   
-  /* Safe free that handles both buffer pool and malloc allocations */
+  /* Simple recursive free with buffer pool support */
   switch (value->type) {
     case JSON_STRING:
       if (value->value.string) {
-        buffer_pool_free_safe(value->value.string);
+        buffer_pool_free(value->value.string);
       }
       break;
       
@@ -891,7 +900,7 @@ void json_free(json_value_t* value) {
             json_free(value->value.array.items[i]);
           }
         }
-        buffer_pool_free_safe(value->value.array.items);
+        buffer_pool_free(value->value.array.items);
       }
       break;
       
@@ -899,13 +908,13 @@ void json_free(json_value_t* value) {
       if (value->value.object.entries) {
         for (size_t i = 0; i < value->value.object.size; i++) {
           if (value->value.object.entries[i].key) {
-            buffer_pool_free_safe(value->value.object.entries[i].key);
+            buffer_pool_free(value->value.object.entries[i].key);
           }
           if (value->value.object.entries[i].value) {
             json_free(value->value.object.entries[i].value);
           }
         }
-        buffer_pool_free_safe(value->value.object.entries);
+        buffer_pool_free(value->value.object.entries);
       }
       break;
       
@@ -914,7 +923,7 @@ void json_free(json_value_t* value) {
       break;
   }
   
-  buffer_pool_free_safe(value);
+  buffer_pool_free(value);
 }
 
 /* Check if two JSON values are equal */

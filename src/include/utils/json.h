@@ -69,12 +69,16 @@ json_value_t* json_create_object();
 void json_array_append(json_value_t* array, json_value_t* value);
 json_value_t* json_array_get(json_value_t* array, size_t index);
 size_t json_array_size(json_value_t* array);
+void json_array_set(json_value_t* array, size_t index, json_value_t* value);
+void json_array_remove(json_value_t* array, size_t index);
 void json_object_set(json_value_t* object, const char* key, json_value_t* value);
 json_value_t* json_object_get(json_value_t* object, const char* key);
 int json_object_has(json_value_t* object, const char* key);
 void json_object_remove(json_value_t* object, const char* key);
 size_t json_object_size(json_value_t* object);
 json_value_t* json_clone(json_value_t* value);
+json_value_t* json_deep_copy(json_value_t* value);
+json_value_t* json_deep_copy_optimized(json_value_t* value);
 void json_array_set(json_value_t* array, size_t index, json_value_t* value);
 int json_equals(json_value_t* value1, json_value_t* value2);
 

@@ -21,40 +21,9 @@
 
 /* Forward declaration for static function - removed since unused */
 
-/* Clone a JSON value (since we're missing json_deep_copy) */
-static json_value_t* json_deep_copy(json_value_t* value) {
-  if (!value) return NULL;
-  
-  /* Use json_stringify and json_parse for deep copy */
-  char* json_str = json_stringify(value);
-  if (!json_str) return NULL;
-  
-  json_value_t* copy = json_parse(json_str);
-  free(json_str);
-  
-  return copy;
-}
+/* json_deep_copy is now available from json_deep_copy.c */
 
 /* Helper function to remove element from array at specific index */
-static int json_array_remove(json_value_t* array, size_t index) {
-  if (!array || array->type != JSON_ARRAY || index >= array->value.array.size) {
-    return 0;
-  }
-  
-  /* Free the value at the specified index */
-  json_free(array->value.array.items[index]);
-  
-  /* Shift all elements after index */
-  for (size_t i = index; i < array->value.array.size - 1; i++) {
-    array->value.array.items[i] = array->value.array.items[i + 1];
-  }
-  
-  /* Decrease array size */
-  array->value.array.size--;
-  
-  return 1;
-}
-
 /* Local helper function to generate a simple ID */
 static char* generate_simple_id() {
   char* id = (char*)malloc(64);
@@ -844,9 +813,8 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
         db->is_modified = 1;
         
         /* Notify persistence thread of document update */
-        char* doc_str = json_stringify(doc_copy);
-        size_t doc_size = doc_str ? strlen(doc_str) : 200; /* Estimate if stringify fails */
-        if (doc_str) free(doc_str);
+        /* TODO: Fix json_stringify hang - temporarily using fixed estimate */
+        size_t doc_size = 300; /* Fixed estimate to avoid stringify hang */
         db_notify_data_change(db, doc_size);
         
         break;
@@ -939,11 +907,12 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
         LOG_DEBUG("Document found, removing from collection");
         
         /* Estimate document size before deletion */
-        char* doc_str = json_stringify(doc);
-        size_t doc_size = doc_str ? strlen(doc_str) : 100; /* Estimate if stringify fails */
-        if (doc_str) free(doc_str);
+        /* TODO: Fix json_stringify hang - temporarily using fixed estimate */
+        size_t doc_size = 250; /* Fixed estimate to avoid stringify hang */
         
+        LOG_DEBUG("About to remove document from array at index %zu", i);
         json_array_remove(collection, i);
+        LOG_DEBUG("Document removed from array successfully");
         
         found = 1;
         db->is_modified = 1;

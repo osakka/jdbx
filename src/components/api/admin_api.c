@@ -3,6 +3,7 @@
 #include "database/database.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

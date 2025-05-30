@@ -11,12 +11,14 @@
 #include <stdint.h>
 #include "utils/logger.h"
 
-/* Buffer pool configuration */
-#define BUFFER_POOL_SIZES 4
-#define POOL_SIZE_SMALL   512
-#define POOL_SIZE_MEDIUM  4096
-#define POOL_SIZE_LARGE   16384
-#define POOL_SIZE_XLARGE  65536
+/* Enhanced buffer pool configuration based on usage analysis */
+#define BUFFER_POOL_SIZES 6
+#define POOL_SIZE_TINY    64      /* JSON field names, small strings */
+#define POOL_SIZE_SMALL   512     /* Small documents, object entries */
+#define POOL_SIZE_MEDIUM  4096    /* Medium documents */
+#define POOL_SIZE_LARGE   16384   /* Large documents */
+#define POOL_SIZE_XLARGE  65536   /* Bulk operations */
+#define POOL_SIZE_HUGE    262144  /* Binary persistence, large arrays */
 
 #define BUFFERS_PER_POOL  32
 #define MAX_FREE_BUFFERS  16
@@ -30,6 +32,14 @@ typedef struct buffer_header {
 } buffer_header_t;
 
 #define BUFFER_MAGIC 0xBEEF3712
+
+/* Check if memory was allocated by buffer pool */
+static int is_buffer_pool_memory(void* ptr) {
+    if (!ptr) return 0;
+    
+    buffer_header_t* header = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
+    return header->magic == BUFFER_MAGIC;
+}
 
 /* Pool for a specific size class */
 typedef struct buffer_pool {
@@ -64,10 +74,12 @@ static struct {
 
 /* Size classes */
 static const size_t pool_sizes[BUFFER_POOL_SIZES] = {
+    POOL_SIZE_TINY,
     POOL_SIZE_SMALL,
     POOL_SIZE_MEDIUM,
     POOL_SIZE_LARGE,
-    POOL_SIZE_XLARGE
+    POOL_SIZE_XLARGE,
+    POOL_SIZE_HUGE
 };
 
 /* Cleanup function for thread exit */
@@ -332,4 +344,15 @@ void buffer_pool_reset_stats(void) {
     global_stats.pool_hits = 0;
     global_stats.pool_misses = 0;
     pthread_mutex_unlock(&global_stats.lock);
+}
+
+/* Safe free function that handles both buffer pool and malloc allocations */
+void buffer_pool_free_safe(void* ptr) {
+    if (!ptr) return;
+    
+    if (is_buffer_pool_memory(ptr)) {
+        buffer_pool_free(ptr);
+    } else {
+        free(ptr);
+    }
 }

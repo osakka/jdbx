@@ -13,7 +13,7 @@
  * 
  * Features:
  * - Thread-local pools (no contention between threads)
- * - Multiple size classes (512B, 4KB, 16KB, 64KB)
+ * - Multiple size classes (64B, 512B, 4KB, 16KB, 64KB, 256KB)
  * - Automatic buffer recycling
  * - Fallback to malloc for large sizes
  * - Statistics tracking
@@ -65,9 +65,17 @@ void buffer_pool_get_stats(uint64_t* total_allocs, uint64_t* pool_hits, uint64_t
  */
 void buffer_pool_reset_stats(void);
 
+/**
+ * Safe free function that handles both buffer pool and malloc allocations
+ * 
+ * @param ptr Pointer to free (can be from buffer pool or malloc)
+ */
+void buffer_pool_free_safe(void* ptr);
+
 /* Convenience macros for common operations */
 #define BUFFER_ALLOC(size) buffer_pool_alloc(size)
 #define BUFFER_FREE(ptr) buffer_pool_free(ptr)
+#define BUFFER_FREE_SAFE(ptr) buffer_pool_free_safe(ptr)
 #define BUFFER_REALLOC(ptr, size) buffer_pool_realloc(ptr, size)
 #define BUFFER_STRDUP(str) buffer_pool_strdup(str)
 

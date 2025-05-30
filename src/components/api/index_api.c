@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/database.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,7 +114,7 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -212,7 +213,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -268,7 +269,7 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -330,7 +331,7 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -405,7 +406,7 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }
@@ -453,7 +454,7 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  free(response_str);
+  buffer_pool_free_safe(response_str);
   
   return http_response;
 }

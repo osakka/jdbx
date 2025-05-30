@@ -5,7 +5,7 @@
 
 /* Check if a collection exists */
 int db_collection_exists(database_t* db, const char* collection_name) {
-  LOG_TRACE("DB: Checking if collection exists: %s");
+  LOG_TRACE("DB: Checking if collection exists: %s", collection_name);
   
   if (!db || !collection_name) {
     LOG_ERROR("DB: Invalid parameters for collection exists check");
@@ -27,7 +27,7 @@ int db_collection_exists(database_t* db, const char* collection_name) {
   
   pthread_mutex_unlock(&db->lock);
   
-  LOG_TRACE("DB: Collection %s %s", exists ? "exists" : "does not exist");
+  LOG_TRACE("DB: Collection %s %s", collection_name, exists ? "exists" : "does not exist");
   return exists;
 }
 
