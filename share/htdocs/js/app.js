@@ -413,6 +413,8 @@ function initializeDashboard() {
     if (!collectionsChart) {
         const ctx = document.getElementById('collectionsChart');
         if (ctx) {
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
             collectionsChart = new Chart(ctx.getContext('2d'), {
                 type: 'pie',
                 data: {
@@ -475,6 +477,8 @@ function initializeDashboard() {
     if (!connectionsChart) {
         const ctx = document.getElementById('connectionsChart');
         if (ctx) {
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
             connectionsChart = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -515,6 +519,8 @@ function initializeDashboard() {
     if (!responseTimesChart) {
         const ctx = document.getElementById('responseTimesChart');
         if (ctx) {
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
             responseTimesChart = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -749,9 +755,15 @@ function updateCollectionsChart(collections) {
     });
     
     // Update chart
-    collectionsChart.data.labels = labels;
-    collectionsChart.data.datasets[0].data = data;
-    collectionsChart.update();
+    try {
+        collectionsChart.data.labels = labels;
+        if (collectionsChart.data.datasets && collectionsChart.data.datasets[0]) {
+            collectionsChart.data.datasets[0].data = data;
+        }
+        collectionsChart.update();
+    } catch (error) {
+        console.error('Error updating collections chart:', error);
+    }
 }
 
 async function loadMetricsData() {
@@ -781,9 +793,15 @@ function updateConnectionsChart(connectionsData) {
         data.push(point.active || point.active_connections || 0);
     });
     
-    connectionsChart.data.labels = labels;
-    connectionsChart.data.datasets[0].data = data;
-    connectionsChart.update();
+    try {
+        connectionsChart.data.labels = labels;
+        if (connectionsChart.data.datasets && connectionsChart.data.datasets[0]) {
+            connectionsChart.data.datasets[0].data = data;
+        }
+        connectionsChart.update();
+    } catch (error) {
+        console.error('Error updating connections chart:', error);
+    }
 }
 
 function updateResponseTimesChart(performanceData) {
@@ -801,9 +819,15 @@ function updateResponseTimesChart(performanceData) {
         avgData.push(point.avg_response_time_ms || 0);
     });
     
-    responseTimesChart.data.labels = labels;
-    responseTimesChart.data.datasets[0].data = avgData; // Average response time
-    responseTimesChart.update();
+    try {
+        responseTimesChart.data.labels = labels;
+        if (responseTimesChart.data.datasets && responseTimesChart.data.datasets[0]) {
+            responseTimesChart.data.datasets[0].data = avgData; // Average response time
+        }
+        responseTimesChart.update();
+    } catch (error) {
+        console.error('Error updating response times chart:', error);
+    }
 }
 
 async function loadDashboardMetrics() {
@@ -1482,22 +1506,27 @@ function initializeMetrics() {
     if (!operationsChart) {
         const ctx = document.getElementById('operationsChart');
         if (ctx) {
-            operationsChart = new Chart(ctx.getContext('2d'), {
+            // Use enhanced chart configuration from metrics-improvements.js
+            const config = window.enhancedChartConfigs ? window.enhancedChartConfigs.operations : {
                 type: 'line',
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Read Ops/sec',
+                        label: 'Read Operations',
                         data: [],
                         borderColor: '#61affe',
                         backgroundColor: 'rgba(97, 175, 254, 0.1)',
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     }, {
-                        label: 'Write Ops/sec',
+                        label: 'Write Operations',
                         data: [],
                         borderColor: '#49cc90',
                         backgroundColor: 'rgba(73, 204, 144, 0.1)',
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
@@ -1505,66 +1534,246 @@ function initializeMetrics() {
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += (window.formatNumber ? window.formatNumber(context.parsed.y) : context.parsed.y) + ' ops/min';
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Operations per Minute',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return window.formatNumber ? window.formatNumber(value) : value;
+                                }
+                            }
                         }
                     }
                 }
-            });
+            };
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
+            operationsChart = new Chart(ctx.getContext('2d'), config);
         }
     }
     
     if (!operationTypesChart) {
         const ctx = document.getElementById('operationTypesChart');
         if (ctx) {
-            operationTypesChart = new Chart(ctx.getContext('2d'), {
+            // Use enhanced chart configuration from metrics-improvements.js
+            const config = window.enhancedChartConfigs ? window.enhancedChartConfigs.operationTypes : {
                 type: 'doughnut',
                 data: {
-                    labels: ['Read', 'Write', 'Delete', 'Query'],
+                    labels: ['Read', 'Write', 'Other'],
                     datasets: [{
-                        data: [45, 30, 15, 10],
-                        backgroundColor: ['#61affe', '#49cc90', '#f93e3e', '#fca130']
+                        data: [45, 30, 25],
+                        backgroundColor: ['#61affe', '#49cc90', '#fca130'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        const dataset = data.datasets[0];
+                                        const total = dataset.data.reduce((a, b) => a + b, 0);
+                                        return data.labels.map((label, i) => {
+                                            const value = dataset.data[i];
+                                            const percentage = total > 0 ? (value / total * 100).toFixed(1) : 0;
+                                            return {
+                                                text: `${label}: ${window.formatNumber ? window.formatNumber(value) : value} (${percentage}%)`,
+                                                fillStyle: dataset.backgroundColor[i],
+                                                strokeStyle: dataset.borderColor,
+                                                lineWidth: dataset.borderWidth,
+                                                hidden: false,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? (value / total * 100).toFixed(1) : 0;
+                                    return `${label}: ${window.formatNumber ? window.formatNumber(value) : value} ops (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
                 }
-            });
+            };
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
+            operationTypesChart = new Chart(ctx.getContext('2d'), config);
         }
     }
     
     if (!cacheHitRateChart) {
         const ctx = document.getElementById('cacheHitRateChart');
         if (ctx) {
-            cacheHitRateChart = new Chart(ctx.getContext('2d'), {
+            // Use enhanced chart configuration from metrics-improvements.js
+            const config = window.enhancedChartConfigs ? window.enhancedChartConfigs.cacheHitRate : {
                 type: 'line',
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Hit Rate (%)',
+                        label: 'Cache Hit Rate',
                         data: [],
-                        borderColor: '#49cc90',
-                        backgroundColor: 'rgba(73, 204, 144, 0.1)',
+                        borderColor: '#17a2b8',
+                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y-hitrate'
+                    }, {
+                        label: 'Cache Size',
+                        data: [],
+                        borderColor: '#6c757d',
+                        backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y-size',
+                        hidden: true
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataset.yAxisID === 'y-hitrate') {
+                                        label += (context.parsed.y * 100).toFixed(1) + '%';
+                                    } else {
+                                        label += window.formatBytes ? window.formatBytes(context.parsed.y) : context.parsed.y + ' bytes';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
                     scales: {
-                        y: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        'y-hitrate': {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Hit Rate (%)'
+                            },
                             beginAtZero: true,
-                            max: 100,
+                            max: 1,
                             ticks: {
                                 callback: function(value) {
-                                    return value + '%';
+                                    return (value * 100).toFixed(0) + '%';
+                                }
+                            }
+                        },
+                        'y-size': {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Cache Size'
+                            },
+                            beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return window.formatBytes ? window.formatBytes(value) : value + ' bytes';
                                 }
                             }
                         }
                     }
                 }
-            });
+            };
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
+            cacheHitRateChart = new Chart(ctx.getContext('2d'), config);
         }
     }
     
@@ -1572,39 +1781,91 @@ function initializeMetrics() {
     if (!memoryUsageChart) {
         const ctx = document.getElementById('memoryUsageChart');
         if (ctx) {
-            memoryUsageChart = new Chart(ctx.getContext('2d'), {
+            // Use enhanced chart configuration from metrics-improvements.js
+            const config = window.enhancedChartConfigs ? window.enhancedChartConfigs.memory : {
                 type: 'line',
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Process Memory (MB)',
+                        label: 'Process Memory',
                         data: [],
-                        borderColor: '#f93e3e',
-                        backgroundColor: 'rgba(249, 62, 62, 0.1)',
+                        borderColor: '#6f42c1',
+                        backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'System Memory Used',
+                        data: [],
+                        borderColor: '#e83e8c',
+                        backgroundColor: 'rgba(232, 62, 140, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        borderDash: [5, 5]
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value + ' MB';
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += window.formatBytes ? window.formatBytes(context.parsed.y * 1024) : (context.parsed.y + ' KB'); // Convert KB to bytes for formatting
+                                    
+                                    // Add percentage for system memory
+                                    if (context.dataset.label === 'System Memory Used') {
+                                        const totalMemory = 32638500 * 1024; // From health endpoint
+                                        const percentage = (context.parsed.y * 1024 / totalMemory * 100).toFixed(1);
+                                        label += ' (' + percentage + '%)';
+                                    }
+                                    return label;
                                 }
                             }
                         }
                     },
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Memory Usage'
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return window.formatBytes ? window.formatBytes(value * 1024) : (value + ' KB');
+                                }
+                            }
                         }
                     }
                 }
-            });
+            };
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
+            memoryUsageChart = new Chart(ctx.getContext('2d'), config);
         }
     }
     
@@ -1612,6 +1873,8 @@ function initializeMetrics() {
     if (!databaseSizeChart) {
         const ctx = document.getElementById('processMemoryChart');
         if (ctx) {
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
             databaseSizeChart = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -1652,6 +1915,8 @@ function initializeMetrics() {
     if (!storageChart) {
         const ctx = document.getElementById('storageChart');
         if (ctx) {
+            // Destroy existing chart if canvas is already in use
+            Chart.getChart(ctx)?.destroy();
             storageChart = new Chart(ctx.getContext('2d'), {
                 type: 'doughnut',
                 data: {
@@ -1936,11 +2201,15 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         if (cacheStats) {
             const size = cacheStats.size || 0;
             const memoryMB = (cacheStats.memory_mb || 0).toFixed(2);
-            document.getElementById('cacheSize').textContent = formatNumber(size);
-            document.getElementById('cacheMemory').textContent = `${memoryMB} MB`;
+            const cacheSizeElement = document.getElementById('cacheSize');
+            const cacheMemoryElement = document.getElementById('cacheMemory');
+            if (cacheSizeElement) cacheSizeElement.textContent = formatNumber(size);
+            if (cacheMemoryElement) cacheMemoryElement.textContent = `${memoryMB} MB`;
         } else {
-            document.getElementById('cacheSize').textContent = '0';
-            document.getElementById('cacheMemory').textContent = '0 MB';
+            const cacheSizeElement = document.getElementById('cacheSize');
+            const cacheMemoryElement = document.getElementById('cacheMemory');
+            if (cacheSizeElement) cacheSizeElement.textContent = '0';
+            if (cacheMemoryElement) cacheMemoryElement.textContent = '0 MB';
         }
         
         // Update cache hit rate with trend
@@ -1959,7 +2228,10 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
         }
         
-        document.getElementById('cacheStats').textContent = `${formatNumber(cacheHits)} hits / ${formatNumber(cacheMisses)} misses`;
+                const cacheStatsElement = document.getElementById('cacheStats');
+        if (cacheStatsElement) {
+            cacheStatsElement.textContent = `${formatNumber(cacheHits)} hits / ${formatNumber(cacheMisses)} misses`;
+        }
         
         // Process historical data for charts
         const labels = [];
@@ -2034,10 +2306,16 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // Update operations chart with real data
         if (operationsChart) {
-            operationsChart.data.labels = labels;
-            operationsChart.data.datasets[0].data = readData;
-            operationsChart.data.datasets[1].data = writeData;
-            operationsChart.update();
+            try {
+                operationsChart.data.labels = labels;
+                if (operationsChart.data.datasets && operationsChart.data.datasets.length >= 2) {
+                    operationsChart.data.datasets[0].data = readData;
+                    operationsChart.data.datasets[1].data = writeData;
+                }
+                operationsChart.update();
+            } catch (error) {
+                console.error('Error updating operations chart:', error);
+            }
         }
         
         // Calculate operation types for pie chart from latest data
@@ -2047,54 +2325,76 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         const currentQueryOps = 0; // TODO: Add query operations tracking
         
         if (operationTypesChart) {
-            const total = currentReadOps + currentWriteOps + currentDeleteOps + currentQueryOps;
-            operationTypesChart.data.datasets[0].data = [
-                currentReadOps,
-                currentWriteOps,
-                currentDeleteOps,
-                currentQueryOps
-            ];
-            
-            // Update labels to show percentages
-            if (total > 0) {
-                operationTypesChart.data.labels = [
-                    `Read (${((currentReadOps/total)*100).toFixed(1)}%)`,
-                    `Write (${((currentWriteOps/total)*100).toFixed(1)}%)`,
-                    `Delete (${((currentDeleteOps/total)*100).toFixed(1)}%)`,
-                    `Query (${((currentQueryOps/total)*100).toFixed(1)}%)`
-                ];
+            try {
+                const total = currentReadOps + currentWriteOps + currentDeleteOps + currentQueryOps;
+                if (operationTypesChart.data.datasets && operationTypesChart.data.datasets[0]) {
+                    operationTypesChart.data.datasets[0].data = [
+                        currentReadOps,
+                        currentWriteOps,
+                        currentDeleteOps,
+                        currentQueryOps
+                    ];
+                }
+                
+                // Update labels to show percentages
+                if (total > 0) {
+                    operationTypesChart.data.labels = [
+                        `Read (${((currentReadOps/total)*100).toFixed(1)}%)`,
+                        `Write (${((currentWriteOps/total)*100).toFixed(1)}%)`,
+                        `Delete (${((currentDeleteOps/total)*100).toFixed(1)}%)`,
+                        `Query (${((currentQueryOps/total)*100).toFixed(1)}%)`
+                    ];
+                }
+                operationTypesChart.update();
+            } catch (error) {
+                console.error('Error updating operation types chart:', error);
             }
-            operationTypesChart.update();
         }
         
         // Process cache hit rate data from time-series
         const cacheHitRateData = [];
+        const cacheSizeData = [];
         if (cacheDoc && cacheDoc.data && cacheDoc.data.length > 0) {
-            // Calculate hit rate for each time point
+            // Calculate hit rate and extract cache size for each time point
             cacheDoc.data.forEach(point => {
                 const hits = point.hits || 0;
                 const misses = point.misses || 0;
                 const total = hits + misses;
-                const hitRate = total > 0 ? (hits / total * 100) : 0;
+                const hitRate = total > 0 ? (hits / total) : 0; // Store as decimal (0-1) for dual Y-axis
+                const sizeBytes = point.size_bytes || 0;
+                
                 cacheHitRateData.push(hitRate);
+                cacheSizeData.push(sizeBytes);
             });
             
             // Ensure cache data matches operations data length
             while (cacheHitRateData.length < labels.length) {
                 cacheHitRateData.push(cacheHitRateData[cacheHitRateData.length - 1] || 0);
+                cacheSizeData.push(cacheSizeData[cacheSizeData.length - 1] || 0);
             }
         } else {
             // Fill with zeros if no data
             for (let i = 0; i < labels.length; i++) {
                 cacheHitRateData.push(0);
+                cacheSizeData.push(0);
             }
         }
         
-        // Update cache hit rate chart
+        // Update cache hit rate chart with dual Y-axis support
         if (cacheHitRateChart) {
-            cacheHitRateChart.data.labels = labels;
-            cacheHitRateChart.data.datasets[0].data = cacheHitRateData;
-            cacheHitRateChart.update();
+            try {
+                cacheHitRateChart.data.labels = labels;
+                if (cacheHitRateChart.data.datasets && cacheHitRateChart.data.datasets[0]) {
+                    cacheHitRateChart.data.datasets[0].data = cacheHitRateData;
+                }
+                // Update cache size data if second dataset exists (dual Y-axis configuration)
+                if (cacheHitRateChart.data.datasets && cacheHitRateChart.data.datasets.length > 1) {
+                    cacheHitRateChart.data.datasets[1].data = cacheSizeData;
+                }
+                cacheHitRateChart.update();
+            } catch (error) {
+                console.error('Error updating cache hit rate chart:', error);
+            }
         }
         
         // Process memory data from time-series
@@ -2127,37 +2427,53 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
         }
         
-        // Update memory usage chart
+        // Update memory usage chart with enhanced dual dataset support
         if (memoryUsageChart) {
-            memoryUsageChart.data.labels = labels;
-            memoryUsageChart.data.datasets[0].data = processMemoryData;
-            memoryUsageChart.update();
+            try {
+                memoryUsageChart.data.labels = labels;
+                if (memoryUsageChart.data.datasets && memoryUsageChart.data.datasets[0]) {
+                    memoryUsageChart.data.datasets[0].data = processMemoryData;
+                }
+                // Update system memory data if second dataset exists (enhanced configuration)
+                if (memoryUsageChart.data.datasets && memoryUsageChart.data.datasets.length > 1) {
+                    memoryUsageChart.data.datasets[1].data = memoryData;
+                }
+                memoryUsageChart.update();
+            } catch (error) {
+                console.error('Error updating memory usage chart:', error);
+            }
         }
         
         // Update database size chart
         if (databaseSizeChart) {
-            // Create database size data from document counts over time
-            const dbSizeData = [];
-            
-            // Calculate database size for each time point based on operations count
-            // Estimate: each operation adds approximately 0.5KB to database
-            if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
-                operationsDoc.data.forEach(point => {
-                    // Estimate database size in MB based on total operations
-                    const estimatedSizeMB = (point.total || 0) * 0.5 / 1024;
-                    dbSizeData.push(Math.round(estimatedSizeMB * 100) / 100);
-                });
-            } else {
-                // If no operations data, use the current estimated size
-                const currentSizeMB = window.estimatedDatabaseSizeKB ? window.estimatedDatabaseSizeKB / 1024 : 0.02;
-                for (let i = 0; i < labels.length; i++) {
-                    dbSizeData.push(currentSizeMB);
+            try {
+                // Create database size data from document counts over time
+                const dbSizeData = [];
+                
+                // Calculate database size for each time point based on operations count
+                // Estimate: each operation adds approximately 0.5KB to database
+                if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
+                    operationsDoc.data.forEach(point => {
+                        // Estimate database size in MB based on total operations
+                        const estimatedSizeMB = (point.total || 0) * 0.5 / 1024;
+                        dbSizeData.push(Math.round(estimatedSizeMB * 100) / 100);
+                    });
+                } else {
+                    // If no operations data, use the current estimated size
+                    const currentSizeMB = window.estimatedDatabaseSizeKB ? window.estimatedDatabaseSizeKB / 1024 : 0.02;
+                    for (let i = 0; i < labels.length; i++) {
+                        dbSizeData.push(currentSizeMB);
+                    }
                 }
+                
+                databaseSizeChart.data.labels = labels;
+                if (databaseSizeChart.data.datasets && databaseSizeChart.data.datasets[0]) {
+                    databaseSizeChart.data.datasets[0].data = dbSizeData;
+                }
+                databaseSizeChart.update();
+            } catch (error) {
+                console.error('Error updating database size chart:', error);
             }
-            
-            databaseSizeChart.data.labels = labels;
-            databaseSizeChart.data.datasets[0].data = dbSizeData;
-            databaseSizeChart.update();
         }
         
         // Update storage chart with collection sizes
@@ -2218,7 +2534,9 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 
                 if (sizeData.length > 0) {
                     storageChart.data.labels = sizeData.map(d => d.label);
-                    storageChart.data.datasets[0].data = sizeData.map(d => d.size);
+                    if (storageChart.data.datasets && storageChart.data.datasets[0]) {
+                        storageChart.data.datasets[0].data = sizeData.map(d => d.size);
+                    }
                     storageChart.update();
                 } else {
                     console.log('No data for storage chart');
@@ -2246,11 +2564,16 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
     } catch (error) {
         console.error('Error loading metrics:', error);
-        // Show N/A on error
-        document.getElementById('totalOps').textContent = 'N/A';
-        document.getElementById('readOps').textContent = 'N/A';
-        document.getElementById('writeOps').textContent = 'N/A';
-        document.getElementById('avgResponseTime').textContent = 'N/A';
+        // Show N/A on error - with null checks
+        const totalOpsElement = document.getElementById('totalOps');
+        const readOpsElement = document.getElementById('readOps');
+        const writeOpsElement = document.getElementById('writeOps');
+        const avgResponseTimeElement = document.getElementById('avgResponseTime');
+        
+        if (totalOpsElement) totalOpsElement.textContent = 'N/A';
+        if (readOpsElement) readOpsElement.textContent = 'N/A';
+        if (writeOpsElement) writeOpsElement.textContent = 'N/A';
+        if (avgResponseTimeElement) avgResponseTimeElement.textContent = 'N/A';
     }
 }
 
@@ -3161,11 +3484,36 @@ function initializeAPI() {
     }
 }
 
+// ===== GLOBAL ERROR HANDLING =====
+// Add global error handler to prevent JavaScript errors from breaking the dashboard
+window.addEventListener('error', function(event) {
+    console.error('Global JavaScript error:', event.error);
+    // Don't prevent default to allow normal error reporting
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    // Don't prevent default to allow normal error reporting
+});
+
 // ===== UTILITY FUNCTIONS =====
 function formatNumber(num) {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
+    // Handle null, undefined, and non-numeric values
+    if (num === null || num === undefined || isNaN(num)) {
+        return '0';
+    }
+    
+    // Convert to number if it's a string
+    const numValue = typeof num === 'string' ? parseFloat(num) : num;
+    
+    // Handle invalid conversions
+    if (isNaN(numValue)) {
+        return '0';
+    }
+    
+    if (numValue >= 1000000) return `${(numValue / 1000000).toFixed(1)}M`;
+    if (numValue >= 1000) return `${(numValue / 1000).toFixed(1)}K`;
+    return numValue.toString();
 }
 
 function formatSize(bytes) {

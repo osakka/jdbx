@@ -5,6 +5,88 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2025-05-30
+
+### 🚀 Major Features
+
+#### Professional Metrics Dashboard Implementation
+- **NEW**: Complete metrics system overhaul with production-ready monitoring
+- **FEATURES**:
+  - Professional charts with legends, units, and interactive tooltips
+  - Dual Y-axis charts for cache metrics (hit rate % vs cache size)
+  - Enhanced formatting with auto-scaling units (KB/MB/GB)
+  - Rate of change calculations in chart tooltips
+  - Proper chart management preventing canvas conflicts
+
+#### Prometheus Integration
+- **NEW**: Industry-standard Prometheus metrics endpoint (`/metrics`)
+- **FORMAT**: Text-based format compatible with Prometheus scraping
+- **METRICS**: Operations, response times, cache performance, memory usage, connections
+- **ACCESS**: No authentication required for monitoring system integration
+
+#### Performance Optimizations
+- **NEW**: JSON deep copy optimization eliminating stringify/parse overhead
+- **NEW**: Thread-local buffer pools (4 size classes: 512B, 4KB, 16KB, 64KB)
+- **NEW**: Zero-copy HTTP request parsing with string views
+- **NEW**: Optimized static file serving with sendfile() and TCP_CORK
+- **RESULT**: Significant performance improvements for high-traffic scenarios
+
+### 🎨 Enhanced UI/UX
+
+#### Metrics Visualization Improvements
+- **ENHANCED**: All charts now display proper legends with positioning
+- **ADDED**: Y-axis labels with appropriate units (ops/min, ms, %, bytes)
+- **NEW**: Interactive tooltips showing exact values with formatted units
+- **IMPROVED**: Memory charts with auto-scaling byte units
+- **FIXED**: Operation types chart with percentages and formatted numbers
+
+#### JavaScript Error Resolution
+- **FIXED**: "Canvas is already in use" errors with proper chart destruction
+- **FIXED**: "formatNumber is undefined" errors with null/undefined value handling
+- **ADDED**: Global error handling for unhandled promise rejections
+- **IMPROVED**: Comprehensive try-catch blocks around all chart operations
+
+### 🔧 Technical Improvements
+
+#### Code Quality and Architecture
+- **VERIFIED**: Clean build with zero compiler warnings using -Wall -Wextra
+- **INTEGRATED**: All performance optimizations into main codebase
+- **REMOVED**: Obsolete code files moved to trash/ directory
+- **ADDED**: Comprehensive metrics improvement plan documentation
+
+#### Infrastructure Enhancements
+- **CREATED**: `docs/METRICS_IMPROVEMENT_PLAN.md` - Complete production readiness analysis
+- **IMPLEMENTED**: Enhanced chart configurations in `share/htdocs/js/metrics-improvements.js`
+- **UPDATED**: Main application JavaScript with robust error handling
+
+### 🐛 Bug Fixes
+
+#### Metrics System Stability
+- **FIXED**: Chart initialization conflicts causing JavaScript errors
+- **RESOLVED**: Undefined formatNumber function crashes
+- **IMPROVED**: Chart data update safety with dataset validation
+- **ENHANCED**: DOM element access safety with null checks
+
+#### Performance and Memory
+- **OPTIMIZED**: HTTP request processing with zero-copy parsing
+- **IMPROVED**: Static file serving performance with kernel-level optimizations
+- **ENHANCED**: Memory allocation patterns with buffer pooling
+
+### 📊 Metrics System Features
+
+#### Professional Chart Types
+- **Operations Chart**: Read/Write/Total operations with ops/min units
+- **Response Time Chart**: Average, P95, and max response times in milliseconds
+- **Cache Performance**: Dual-axis chart with hit rate % and cache size bytes
+- **Memory Usage**: Process vs system memory with auto-scaling units
+- **Connection Metrics**: Active and total connection tracking
+
+#### Production Monitoring Ready
+- **Prometheus Endpoint**: `/metrics` for external monitoring integration
+- **Time-Series Storage**: 15-minute retention with 60-second intervals
+- **Error Tracking**: JavaScript error handling and logging
+- **Performance Metrics**: Response time tracking and optimization
+
 ## [2.0.7] - 2025-05-30
 
 ### ✨ New Features
