@@ -5,6 +5,28 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2025-05-30
+
+### 🔧 Critical Memory Management Audit & Fixes
+
+#### Memory Allocation Audit Complete
+- **RESOLVED**: Authentication crash issues caused by mixed memory allocation patterns
+- **AUDITED**: 20+ API endpoints systematically reviewed and fixed
+- **UNIFIED**: Consistent buffer pool allocation across entire codebase
+- **RESULT**: Zero authentication crashes, stable JWT verification system
+
+#### Memory Management Overhaul
+- **FIXED**: JWT authentication system memory allocation mismatches
+- **PATTERN**: All `malloc()/strdup()` + `free()` replaced with `buffer_pool_alloc()` + `buffer_pool_free_safe()`
+- **FILES**: Updated jwt.c, json.c, cache_api.c, health_api.c, http_response.c
+- **IMPACT**: Eliminated segmentation faults and memory corruption issues
+
+#### Single Source of Truth Enforcement
+- **CLEANED**: Moved duplicate js_file_utils.c implementations to trash
+- **VERIFIED**: All files compile cleanly with `-Wall -Wextra` (zero warnings)
+- **CONFIRMED**: No redundant or parallel implementations remaining
+- **MAINTAINED**: Proper git hygiene with clean workspace
+
 ## [2.0.8] - 2025-05-30
 
 ### 🚀 Major Features

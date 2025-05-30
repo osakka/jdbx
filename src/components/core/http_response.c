@@ -1,4 +1,5 @@
 #include "core/server.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,7 +113,7 @@ http_response_t* http_response_json(json_value_t* json, int status_code) {
   }
   
   http_response_t* response = create_http_response((http_status_t)status_code, json_str, "application/json");
-  free(json_str);
+  buffer_pool_free_safe(json_str);
   
   return response;
 }
@@ -345,7 +346,7 @@ int add_response_header(http_response_t* response, const char* header) {
 /* Free HTTP response */
 void free_http_response(http_response_t* response) {
   if (response) {
-    if (response->body) free(response->body);
+    if (response->body) buffer_pool_free_safe(response->body);
     if (response->content_type) free(response->content_type);
     
     /* Free headers */
