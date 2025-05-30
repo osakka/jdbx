@@ -50,6 +50,65 @@ if (!authToken) {
     window.location.href = '/login.html';
 }
 
+// Session validation check
+let sessionCheckInterval = null;
+
+async function validateSession() {
+    if (!authToken) {
+        console.log('No auth token, redirecting to login');
+        window.location.href = '/login.html';
+        return false;
+    }
+    
+    try {
+        // Make a lightweight request to check if session is valid
+        // Using /api/collections endpoint which requires auth but is lightweight
+        const response = await fetch(`${API_BASE_URL}/api/collections`, {
+            method: 'HEAD',  // Use HEAD to minimize data transfer
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.status === 401) {
+            console.log('Session invalid (401), redirecting to login');
+            // Clear tokens
+            localStorage.removeItem('jsondb_auth_token');
+            localStorage.removeItem('jsondb_refresh_token');
+            // Clear session check interval
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+            }
+            // Redirect to login
+            window.location.href = '/login.html';
+            return false;
+        }
+        
+        // If HEAD method not allowed, it's still a valid session (just not optimal)
+        if (response.status === 405) {
+            return true;
+        }
+        
+        return response.ok;
+    } catch (error) {
+        console.error('Session validation error:', error);
+        // On network error, don't log out immediately
+        return true;
+    }
+}
+
+// Start session validation check - every 30 seconds
+function startSessionValidation() {
+    // Initial check after 5 seconds
+    setTimeout(validateSession, 5000);
+    
+    // Then check every 30 seconds
+    sessionCheckInterval = setInterval(validateSession, 30000);
+}
+
+// Start session validation when page loads
+startSessionValidation();
+
 // Debug: Monitor RBAC view for unexpected changes
 window.addEventListener('DOMContentLoaded', function() {
     const rbacView = document.getElementById('rbac-view');
@@ -306,6 +365,10 @@ async function apiRequest(endpoint, options = {}) {
                 // For other endpoints, kick out
                 localStorage.removeItem('jsondb_auth_token');
                 localStorage.removeItem('jsondb_refresh_token');
+                // Clear session check interval
+                if (sessionCheckInterval) {
+                    clearInterval(sessionCheckInterval);
+                }
                 window.location.href = '/login.html';
                 return;
             }

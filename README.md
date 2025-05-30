@@ -176,12 +176,12 @@ JSONdb provides a comprehensive REST API. Here are some key endpoints:
 | `/api/visualization/transaction-history` | GET | View transaction history |
 | `/api/metrics` | GET | Access system metrics |
 
-For complete API documentation, see the [API Reference](docs/api/API.md).
+For complete API documentation, see the [API Reference](docs/api/api-rest.md).
 
 ## Documentation
 
 - [Binary Format Guide](docs/BINARY_FORMAT.md) - **NEW!** Performance-optimized binary persistence
-- [API Reference](docs/api/API.md)
+- [API Reference](docs/api/api-rest.md)
 - [JavaScript API](docs/api/JAVASCRIPT_API.md)
 - [RBAC System](docs/api/RBAC_API.md)
 - [Transaction Management](docs/reference/TRANSACTIONS.md)

@@ -1,9 +1,11 @@
 # JSON Database Server API Documentation
 
+**DEPRECATED**: This file has been replaced by [api-rest.md](api-rest.md).
+
+Please refer to the consolidated API documentation at [api-rest.md](api-rest.md) for accurate, up-to-date API information.
+
 **Version**: 2.0.6  
 **Last Updated**: January 28, 2025
-
-This document provides accurate details on the REST API endpoints available in the JSON Database Server, verified against the actual codebase implementation.
 
 ## Base URL
 

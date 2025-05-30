@@ -1,6 +1,8 @@
 # JSON Database Server API Documentation
 
-This document provides details on the REST API endpoints available in the JSON Database Server.
+**DEPRECATED**: This file has been replaced by [api-rest.md](api-rest.md).
+
+Please refer to the consolidated API documentation at [api-rest.md](api-rest.md) for accurate, up-to-date API information.
 
 ## Base URL
 
