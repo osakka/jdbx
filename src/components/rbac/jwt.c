@@ -335,10 +335,10 @@ void jwt_set_algorithm(jwt_token_t* token, const char* alg) {
   }
   
   if (token->header->alg) {
-    free(token->header->alg);
+    buffer_pool_free_safe(token->header->alg);
   }
   
-  token->header->alg = strdup(alg);
+  token->header->alg = buffer_pool_strdup(alg);
 }
 
 /* Set JWT issuer */
@@ -810,33 +810,33 @@ int jwt_verify(const char* token_str, const char* secret) {
   }
   
   /* Split token into parts */
-  char* token_copy = strdup(token_str);
+  char* token_copy = buffer_pool_strdup(token_str);
   char* header_b64 = strtok(token_copy, ".");
   if (!header_b64) {
     jwt_free(token);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return 0;
   }
   
   char* payload_b64 = strtok(NULL, ".");
   if (!payload_b64) {
     jwt_free(token);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return 0;
   }
   
   char* signature_b64 = strtok(NULL, ".");
   if (!signature_b64) {
     jwt_free(token);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return 0;
   }
   
   /* Create header.payload string for verification */
-  char* header_payload = (char*)malloc(strlen(header_b64) + strlen(payload_b64) + 2);
+  char* header_payload = (char*)buffer_pool_alloc(strlen(header_b64) + strlen(payload_b64) + 2);
   if (!header_payload) {
     jwt_free(token);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return 0;
   }
   
@@ -846,8 +846,8 @@ int jwt_verify(const char* token_str, const char* secret) {
   char* signature = jwt_sign(header_payload, secret, token->header->alg);
   if (!signature) {
     jwt_free(token);
-    free(token_copy);
-    free(header_payload);
+    buffer_pool_free_safe(token_copy);
+    buffer_pool_free_safe(header_payload);
     return 0;
   }
   
@@ -858,9 +858,9 @@ int jwt_verify(const char* token_str, const char* secret) {
   /* Check signature lengths match */
   if (signature_len != signature_b64_len) {
     jwt_free(token);
-    free(token_copy);
-    free(header_payload);
-    free(signature);
+    buffer_pool_free_safe(token_copy);
+    buffer_pool_free_safe(header_payload);
+    buffer_pool_free_safe(signature);
     return 0;
   }
   
@@ -875,9 +875,9 @@ int jwt_verify(const char* token_str, const char* secret) {
   
   /* Clean up */
   jwt_free(token);
-  free(token_copy);
-  free(header_payload);
-  free(signature);
+  buffer_pool_free_safe(token_copy);
+  buffer_pool_free_safe(header_payload);
+  buffer_pool_free_safe(signature);
   
   LOG_TRACE("JWT: Verification result: %d", result);
   return result;
