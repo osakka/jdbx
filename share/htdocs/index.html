@@ -36,29 +36,14 @@
         /* Browser view styles */
         .browser-layout {
             display: flex;
-            height: calc(100vh - 60px);
-            margin: 0 -12px;
-        }
-        
-        #browser-view {
-            padding: 0 !important;
+            height: calc(100vh - 60px - 3rem);
+            margin: 0 -1.5rem;
+            margin-top: -1.5rem;
+            overflow: hidden;
         }
         
         #browser-view.view-container {
             animation: none;
-        }
-        
-        /* Remove container padding when showing browser */
-        #browser-view.active ~ * {
-            display: none;
-        }
-        
-        body.browser-active {
-            overflow: hidden;
-        }
-        
-        body.browser-active .container-fluid {
-            padding: 0 !important;
         }
         
         /* Compact navigation */
@@ -97,8 +82,6 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            padding-left: 25px;
-            padding-right: 15px;
         }
         
         .documents-panel {
@@ -120,10 +103,6 @@
         
         .panel-header {
             padding: 1rem 1.25rem;
-            margin-left: -25px;
-            margin-right: -15px;
-            padding-left: calc(1.25rem + 25px);
-            padding-right: calc(1.25rem + 15px);
             border-bottom: 1px solid var(--border-color);
             background-color: var(--bg-secondary);
             font-weight: 600;
@@ -208,10 +187,6 @@
         /* Search box */
         .search-box {
             padding: 0.75rem 1.25rem;
-            margin-left: -25px;
-            margin-right: -15px;
-            padding-left: calc(1.25rem + 25px);
-            padding-right: calc(1.25rem + 15px);
             border-bottom: 1px solid var(--border-color);
             background-color: var(--bg-secondary);
         }
@@ -345,6 +320,134 @@
             border: 1px solid rgba(102, 126, 234, 0.2);
         }
         
+        /* Welcome Panel Styles */
+        #welcomePanel {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            border: 1px solid var(--accent-light);
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.1);
+        }
+        
+        #welcomePanel .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--accent-light);
+            color: var(--accent);
+        }
+        
+        #welcomePanel .btn-close {
+            opacity: 0.6;
+        }
+        
+        #welcomePanel .btn-close:hover {
+            opacity: 1;
+        }
+        
+        /* Dark mode adjustments for welcome panel */
+        [data-theme="dark"] #welcomePanel {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+        }
+        
+        [data-theme="dark"] #welcomePanel .card-header {
+            color: var(--accent);
+        }
+        
+        [data-theme="dark"] .markdown-content code {
+            background-color: rgba(102, 126, 234, 0.2);
+        }
+        
+        /* Markdown Content Styles */
+        .markdown-content {
+            line-height: 1.6;
+        }
+        
+        .markdown-content h1, 
+        .markdown-content h2, 
+        .markdown-content h3, 
+        .markdown-content h4, 
+        .markdown-content h5, 
+        .markdown-content h6 {
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .markdown-content h1 { font-size: 2rem; }
+        .markdown-content h2 { font-size: 1.75rem; }
+        .markdown-content h3 { font-size: 1.5rem; }
+        .markdown-content h4 { font-size: 1.25rem; }
+        .markdown-content h5 { font-size: 1.1rem; }
+        .markdown-content h6 { font-size: 1rem; }
+        
+        .markdown-content p {
+            margin-bottom: 1rem;
+        }
+        
+        .markdown-content ul, 
+        .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        
+        .markdown-content li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .markdown-content code {
+            background-color: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--accent);
+        }
+        
+        .markdown-content pre {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--code-border);
+        }
+        
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-primary);
+        }
+        
+        .markdown-content blockquote {
+            border-left: 4px solid var(--accent);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: var(--text-secondary);
+        }
+        
+        .markdown-content a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+        
+        .markdown-content table {
+            width: 100%;
+            margin-bottom: 1rem;
+            border-collapse: collapse;
+        }
+        
+        .markdown-content th,
+        .markdown-content td {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .markdown-content th {
+            background-color: var(--bg-secondary);
+            font-weight: 600;
+        }
+        
         /* Responsive */
         /* Navbar alignment */
         .navbar {
@@ -353,6 +456,10 @@
         
         .navbar-brand {
             margin-right: 0;
+        }
+        
+        .navbar-brand img {
+            height: 46px !important; /* 15% larger than 40px */
         }
         
         @media (max-width: 992px) {
@@ -445,7 +552,7 @@
                 </ul>
             
             <div class="navbar-nav ms-auto">
-                <button class="btn btn-sm btn-outline-danger" onclick="logout()">
+                <button class="btn btn-sm btn-unified-danger" onclick="logout()">
                     <i class="bi bi-box-arrow-right"></i> Logout
                 </button>
             </div>
@@ -471,7 +578,7 @@
                         <div class="stat-icon">
                             <i class="bi bi-collection"></i>
                         </div>
-                        <div class="stat-value" id="totalCollections">0</div>
+                        <div class="stat-value" id="statTotalCollections">0</div>
                         <div class="stat-label">Collections</div>
                     </div>
                 </div>
@@ -489,7 +596,7 @@
                         <div class="stat-icon">
                             <i class="bi bi-hdd"></i>
                         </div>
-                        <div class="stat-value" id="databaseSize">0 KB</div>
+                        <div class="stat-value" id="statDatabaseSize">0 KB</div>
                         <div class="stat-label">Database Size</div>
                     </div>
                 </div>
@@ -504,27 +611,24 @@
                 </div>
             </div>
 
-            <!-- Charts Row -->
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Collections Overview</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="collectionsChart"></canvas>
+            <!-- Dashboard Row with Welcome Panel and System Health -->
+            <div class="row mb-4">
+                <div class="col-lg-8 mb-3">
+                    <div class="card h-100" style="border: none;">
+                        <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                            <div id="welcomeContent" class="markdown-content">
+                                <!-- Markdown content will be rendered here -->
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card">
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
                         <div class="card-header">
                             <h5 class="mb-0">System Health</h5>
                         </div>
-                        <div class="card-body">
-                            <div class="system-health" id="systemHealth">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="system-health w-100" id="systemHealth">
                                 <div class="health-item">
                                     <div class="health-value" id="cpuUsage">0%</div>
                                     <div class="health-label">CPU Usage</div>
@@ -547,6 +651,46 @@
                 </div>
             </div>
 
+            <!-- Charts Row -->
+            <div class="row mb-4">
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">Collections Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 250px;">
+                                <canvas id="collectionsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">Active Connections</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 250px;">
+                                <canvas id="connectionsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">Response Times</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 250px;">
+                                <canvas id="responseTimesChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Browser View -->
@@ -557,10 +701,10 @@
                     <div class="panel-header">
                         <span><i class="bi bi-collection"></i> Collections</span>
                         <div class="btn-group" role="group">
-                            <button class="btn btn-sm btn-outline-primary" onclick="showSchemaManager()" title="Manage Schemas">
+                            <button class="btn btn-sm btn-unified btn-icon-only" onclick="showSchemaManager()" title="Manage Schemas">
                                 <i class="bi bi-file-code"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="refreshCollections()" title="Refresh">
+                            <button class="btn btn-sm btn-unified btn-icon-only" onclick="refreshCollections()" title="Refresh">
                                 <i class="bi bi-arrow-clockwise"></i>
                             </button>
                         </div>
@@ -580,9 +724,11 @@
                 <!-- Documents Panel -->
                 <div class="documents-panel">
                     <div class="panel-header">
-                        <span><i class="bi bi-file-text"></i> <span id="panelTitle">Documents</span></span>
-                        <span class="badge bg-primary" id="documentCount">0</span>
-                        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="toggleQueryBuilder()" title="Query Builder">
+                        <div class="d-flex align-items-center">
+                            <span><i class="bi bi-file-text"></i> <span id="panelTitle">Documents</span></span>
+                            <span class="badge bg-primary ms-2" id="documentCount">0</span>
+                        </div>
+                        <button class="btn btn-sm btn-unified btn-icon-only" onclick="toggleQueryBuilder()" title="Query Builder">
                             <i class="bi bi-funnel"></i>
                         </button>
                     </div>
@@ -651,13 +797,13 @@
                                         <div class="input-group input-group-sm">
                                             <input type="text" class="form-control" placeholder="Field">
                                             <input type="text" class="form-control" placeholder="Value">
-                                            <button class="btn btn-outline-danger" type="button" onclick="removeCondition(this)">
+                                            <button class="btn btn-unified-danger btn-icon-only" type="button" onclick="removeCondition(this)">
                                                 <i class="bi bi-x"></i>
                                             </button>
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn btn-sm btn-outline-primary" onclick="addCondition()">
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="addCondition()">
                                     <i class="bi bi-plus"></i> Add Condition
                                 </button>
                             </div>
@@ -675,10 +821,10 @@
                             
                             <!-- Action Buttons -->
                             <div class="d-grid gap-2">
-                                <button class="btn btn-sm btn-primary" onclick="executeQuery()">
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="executeQuery()">
                                     <i class="bi bi-play"></i> Execute Query
                                 </button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="clearQuery()">
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="clearQuery()">
                                     <i class="bi bi-x-circle"></i> Clear
                                 </button>
                             </div>
@@ -699,14 +845,17 @@
                         <div>
                             <span id="documentTitle" class="fw-bold">No document selected</span>
                         </div>
-                        <div>
-                            <button class="btn btn-sm btn-outline-primary" id="editBtn" onclick="editDocument()" disabled>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-unified btn-icon-text" id="editBtn" onclick="toggleEditMode()" disabled style="display: none;">
                                 <i class="bi bi-pencil"></i> Edit
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" id="deleteBtn" onclick="deleteDocument()" disabled>
+                            <button class="btn btn-sm btn-unified-success btn-icon-text" id="saveBtn" onclick="saveDocument()" style="display: none;">
+                                <i class="bi bi-check-lg"></i> Save
+                            </button>
+                            <button class="btn btn-sm btn-unified-danger btn-icon-text" id="deleteBtn" onclick="deleteDocument()" disabled>
                                 <i class="bi bi-trash"></i> Delete
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard()">
+                            <button class="btn btn-sm btn-unified btn-icon-text" onclick="copyToClipboard()">
                                 <i class="bi bi-clipboard"></i> Copy
                             </button>
                         </div>
@@ -732,10 +881,10 @@
                     </div>
                 </div>
                 <div class="time-range-selector">
-                    <button class="btn btn-sm btn-outline-primary active" onclick="changeTimeRange('1h')">1H</button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('24h')">24H</button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('7d')">7D</button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="changeTimeRange('30d')">30D</button>
+                    <button class="btn btn-sm btn-unified btn-icon-text active" onclick="changeTimeRange('1h')">1H</button>
+                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('24h')">24H</button>
+                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('7d')">7D</button>
+                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('30d')">30D</button>
                 </div>
             </div>
 
@@ -876,8 +1025,8 @@
                 <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0">Process Memory Usage</h5>
-                            <small class="text-muted">JSONdb server memory consumption</small>
+                            <h5 class="mb-0">Database Size Over Time</h5>
+                            <small class="text-muted">JSONdb database growth tracking</small>
                         </div>
                         <div class="card-body">
                             <div class="chart-container">
@@ -915,12 +1064,12 @@
             <!-- RBAC Tabs -->
             <ul class="nav nav-tabs" id="rbacTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
+                    <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
                         <i class="bi bi-people"></i> Users
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles" type="button">
+                    <button class="nav-link" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles" type="button">
                         <i class="bi bi-shield"></i> Roles
                     </button>
                 </li>
@@ -944,10 +1093,10 @@
             <!-- RBAC Content -->
             <div class="tab-content mt-3" id="rbacTabContent">
                 <!-- Users Tab -->
-                <div class="tab-pane fade" id="users" role="tabpanel">
+                <div class="tab-pane fade show active" id="users" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h4>User Management</h4>
-                        <button class="btn btn-primary" onclick="showCreateUserModal()">
+                        <button class="btn btn-unified" onclick="showCreateUserModal()">
                             <i class="bi bi-person-plus"></i> Create User
                         </button>
                     </div>
@@ -975,12 +1124,12 @@
                 </div>
 
                 <!-- Roles Tab -->
-                <div class="tab-pane fade show active" id="roles" role="tabpanel">
+                <div class="tab-pane fade" id="roles" role="tabpanel">
                     <div class="row">
                         <div class="col-md-4">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h4>Roles</h4>
-                                <button class="btn btn-sm btn-primary" onclick="showCreateRoleModal()">
+                                <button class="btn btn-sm btn-unified" onclick="showCreateRoleModal()">
                                     <i class="bi bi-plus"></i> Create
                                 </button>
                             </div>
@@ -1058,12 +1207,17 @@
                 <!-- Sessions Tab -->
                 <div class="tab-pane fade" id="sessions" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4>Active Sessions</h4>
+                        <h4>Sessions</h4>
                         <div>
-                            <button class="btn btn-sm btn-warning me-2" onclick="refreshSessions()">
+                            <select class="form-select form-select-sm me-2" id="sessionFilter" onchange="filterSessions()" style="width: auto; display: inline-block;">
+                                <option value="active" selected>Active Sessions</option>
+                                <option value="expired">Expired Sessions</option>
+                                <option value="all">All Sessions</option>
+                            </select>
+                            <button class="btn btn-sm btn-unified me-2" onclick="refreshSessions()">
                                 <i class="bi bi-arrow-clockwise"></i> Refresh
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="clearAllSessions()">
+                            <button class="btn btn-sm btn-unified-danger" onclick="clearAllSessions()">
                                 <i class="bi bi-trash"></i> Clear All Sessions
                             </button>
                         </div>
@@ -1101,99 +1255,43 @@
             <div class="section-header">
                 <h2>Database Operations</h2>
                 <div class="d-flex justify-content-between align-items-center">
-                    <p class="mb-0">Manage database backups, maintenance, and diagnostic operations</p>
+                    <p class="mb-0">Execute database operations and view results</p>
                     <small class="text-muted last-update"></small>
                 </div>
             </div>
             
-            <div class="row">
-                <!-- Backup Operations -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0"><i class="bi bi-archive me-2"></i>Backup & Restore</h5>
-                            <span class="operation-status badge bg-secondary">Checking...</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-primary" onclick="performBackup()">
-                                    <i class="bi bi-download me-2"></i>Create Backup
-                                </button>
-                                <button class="btn btn-secondary" onclick="showRestoreDialog()">
-                                    <i class="bi bi-upload me-2"></i>Restore from Backup
-                                </button>
-                            </div>
-                            <small class="text-muted d-block mt-3 last-backup-time"></small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Maintenance Operations -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Maintenance</h5>
-                            <span class="operation-status badge bg-secondary">Checking...</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-warning" onclick="compactDatabase()">
-                                    <i class="bi bi-layers me-2"></i>Compact Database
-                                </button>
-                                <button class="btn btn-info" onclick="rebuildIndexes()">
-                                    <i class="bi bi-diagram-3 me-2"></i>Rebuild Indexes
-                                </button>
-                                <button class="btn btn-danger" onclick="clearCache()">
-                                    <i class="bi bi-trash me-2"></i>Clear Cache
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <!-- Operations Taskbar -->
+            <div class="d-flex justify-content-end gap-2 mb-3">
+                <button class="btn btn-sm btn-unified btn-icon-only" onclick="runTerminalCommand('backup')" title="Create Database Backup">
+                    <i class="bi bi-download"></i>
+                </button>
+                <button class="btn btn-sm btn-unified btn-icon-only" onclick="runTerminalCommand('compact')" title="Compact Database">
+                    <i class="bi bi-layers"></i>
+                </button>
+                <button class="btn btn-sm btn-unified btn-icon-only" onclick="runTerminalCommand('test')" title="Test Connection">
+                    <i class="bi bi-check-circle"></i>
+                </button>
+                <button class="btn btn-sm btn-unified btn-icon-only" onclick="runTerminalCommand('export')" title="Export Database">
+                    <i class="bi bi-file-earmark-code"></i>
+                </button>
+                <button class="btn btn-sm btn-unified btn-icon-only" onclick="runTerminalCommand('import')" title="Import Database">
+                    <i class="bi bi-file-earmark-arrow-up"></i>
+                </button>
+                <button class="btn btn-sm btn-unified-danger btn-icon-only" onclick="runTerminalCommand('cache')" title="Clear Cache">
+                    <i class="bi bi-trash"></i>
+                </button>
+                <div class="ms-3"></div>
+                <button class="btn btn-sm btn-unified-danger btn-icon-only" onclick="clearTerminal()" title="Clear Terminal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
             
-            <div class="row">
-                <!-- Testing Operations -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Testing & Diagnostics</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-success" onclick="testConnection()">
-                                    <i class="bi bi-check-circle me-2"></i>Test Connection
-                                </button>
-                                <button class="btn btn-primary" onclick="runPerformanceTest()">
-                                    <i class="bi bi-speedometer me-2"></i>Performance Test
-                                </button>
-                                <button class="btn btn-secondary" onclick="checkDataIntegrity()">
-                                    <i class="bi bi-shield-check me-2"></i>Data Integrity Check
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Import/Export Operations -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Import/Export</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-primary" onclick="exportToJSON()">
-                                    <i class="bi bi-file-earmark-code me-2"></i>Export to JSON
-                                </button>
-                                <button class="btn btn-secondary" onclick="showImportDialog()">
-                                    <i class="bi bi-file-earmark-arrow-up me-2"></i>Import from JSON
-                                </button>
-                                <button class="btn btn-info" onclick="exportToCSV()">
-                                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export to CSV
-                                </button>
-                            </div>
-                        </div>
+            <!-- Terminal Panel -->
+            <div class="terminal-panel">
+                <div class="terminal-content" id="terminalContent">
+                    <div class="terminal-line">
+                        <span class="terminal-prompt">jsondb&gt;</span>
+                        <span class="terminal-text">Welcome to JSONdb Operations Terminal. Click any operation above to execute.</span>
                     </div>
                 </div>
             </div>
@@ -1274,8 +1372,8 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="createUser()">Create User</button>
+                    <button type="button" class="btn btn-unified" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-unified" onclick="createUser()">Create User</button>
                 </div>
             </div>
         </div>
@@ -1295,7 +1393,7 @@
                         <div class="col-md-4">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6>Collection Schemas</h6>
-                                <button class="btn btn-sm btn-primary" onclick="createNewSchema()">
+                                <button class="btn btn-sm btn-unified" onclick="createNewSchema()">
                                     <i class="bi bi-plus"></i> New
                                 </button>
                             </div>
@@ -1310,10 +1408,10 @@
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 id="schemaEditorTitle">Edit Schema</h6>
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-success" onclick="saveSchema()">
+                                        <button class="btn btn-sm btn-unified-success" onclick="saveSchema()">
                                             <i class="bi bi-save"></i> Save
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteSchema()">
+                                        <button class="btn btn-sm btn-unified-danger" onclick="deleteSchema()">
                                             <i class="bi bi-trash"></i> Delete
                                         </button>
                                     </div>
@@ -1368,6 +1466,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="js/rbac_protection.js"></script>
     <script src="js/app.js"></script>
 </body>

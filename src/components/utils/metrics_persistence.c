@@ -241,38 +241,49 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   json_value_t* document_to_save = NULL;
   
   if (existing) {
-    /* Document exists, append new data point and trim old ones */
-    json_value_t* data_array = json_object_get(existing, "data");
-    json_value_t* max_entries_val = json_object_get(existing, "max_entries");
+    /* Document exists - check if values have changed */
+    json_value_t* current_values = json_object_get(existing, "current");
+    int values_changed = !current_values || !json_equals(current_values, current_data);
     
-    int max_entries = (max_entries_val && max_entries_val->type == JSON_INTEGER) ? 
-             json_get_integer(max_entries_val) : 15;
-    
-    if (!data_array || data_array->type != JSON_ARRAY) {
-      data_array = json_create_array();
-      json_object_set(existing, "data", data_array);
-    }
-    
-    /* Append new data point */
-    json_array_append(data_array, data_point);
-    
-    /* Trim old entries (keep only last max_entries) */
-    size_t array_size = json_array_size(data_array);
-    if (array_size > (size_t)max_entries) {
-      /* Create new array with only recent entries */
-      json_value_t* new_array = json_create_array();
-      for (size_t i = array_size - max_entries; i < array_size; i++) {
-        json_value_t* item = json_array_get(data_array, i);
-        if (item) {
-          json_array_append(new_array, json_deep_copy(item));
-        }
-      }
-      json_object_set(existing, "data", new_array);
-    }
-    
-    /* Update current values and timestamp */
-    json_object_set(existing, "current", json_deep_copy(current_data));
+    /* Always update the timestamp */
     json_object_set(existing, "updated_at", json_create_string(iso_time));
+    
+    /* Only append new data point if values have changed */
+    if (values_changed) {
+      json_value_t* data_array = json_object_get(existing, "data");
+      json_value_t* max_entries_val = json_object_get(existing, "max_entries");
+      
+      int max_entries = (max_entries_val && max_entries_val->type == JSON_INTEGER) ? 
+               json_get_integer(max_entries_val) : 15;
+      
+      if (!data_array || data_array->type != JSON_ARRAY) {
+        data_array = json_create_array();
+        json_object_set(existing, "data", data_array);
+      }
+      
+      /* Append new data point */
+      json_array_append(data_array, data_point);
+      
+      /* Trim old entries (keep only last max_entries) */
+      size_t array_size = json_array_size(data_array);
+      if (array_size > (size_t)max_entries) {
+        /* Create new array with only recent entries */
+        json_value_t* new_array = json_create_array();
+        for (size_t i = array_size - max_entries; i < array_size; i++) {
+          json_value_t* item = json_array_get(data_array, i);
+          if (item) {
+            json_array_append(new_array, json_deep_copy(item));
+          }
+        }
+        json_object_set(existing, "data", new_array);
+      }
+      
+      /* Update current values */
+      json_object_set(existing, "current", json_deep_copy(current_data));
+    } else {
+      /* Values haven't changed, free the unused data point */
+      json_free(data_point);
+    }
     
     document_to_save = existing;
   } else {

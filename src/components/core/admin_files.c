@@ -110,7 +110,7 @@ char* read_file_content(const char* filepath, size_t* size) {
   }
   
   /* Allocate buffer */
-  char* buffer = (char*)malloc(file_size + 1);
+  char* buffer = (char*)malloc(file_size);
   if (!buffer) {
     fclose(file);
     if (size) *size = 0;
@@ -126,9 +126,6 @@ char* read_file_content(const char* filepath, size_t* size) {
     if (size) *size = 0;
     return NULL;
   }
-  
-  /* Null-terminate buffer (for text files) */
-  buffer[file_size] = '\0';
   
   if (size) *size = file_size;
   return buffer;
@@ -197,8 +194,8 @@ http_response_t* serve_admin_file(const char* path) {
   const char* extension = get_file_extension(filepath);
   const char* content_type = get_content_type_from_extension(extension);
   
-  /* Create response with file content */
-  http_response_t* response = create_http_response(HTTP_OK, file_content, content_type);
+  /* Create response with file content using binary function to preserve exact size */
+  http_response_t* response = create_http_response_binary(HTTP_OK, file_content, file_size, content_type);
   
   /* Clean up */
   free(file_content);

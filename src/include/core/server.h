@@ -56,6 +56,7 @@ typedef enum {
     HTTP_DELETE,
     HTTP_PATCH,
     HTTP_OPTIONS,
+    HTTP_HEAD,
     HTTP_UNKNOWN
 } http_method_t;
 
@@ -192,9 +193,11 @@ void* handle_client(void* client_data);
 http_request_t* parse_http_request(const char* request_str);
 void free_http_request(http_request_t* request);
 http_response_t* create_http_response(http_status_t status, const char* body, const char* content_type);
+http_response_t* create_http_response_binary(http_status_t status, const char* body, size_t body_size, const char* content_type);
 http_response_t* http_response_error(const char* message, int status_code);
 http_response_t* http_response_json(json_value_t* json, int status_code);
 char* serialize_http_response(http_response_t* response);
+char* serialize_http_response_with_length(http_response_t* response, size_t* length);
 void free_http_response(http_response_t* response);
 int add_response_header(http_response_t* response, const char* header);
 http_method_t parse_http_method(const char* method_str);

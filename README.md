@@ -14,7 +14,7 @@
 
 JSONdb is a lightweight, high-performance document database built specifically for JSON data. Written in C for maximum performance, it combines the simplicity of JSON with the power of a full database system. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a RESTful API.
 
-**Latest Version**: 2.0.6 (January 2025)
+**Latest Version**: 2.0.7 (May 2025)
 
 ## Features
 

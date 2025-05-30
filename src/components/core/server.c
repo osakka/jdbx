@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/syscall.h>
+#include <sys/resource.h>
 
 /* Graceful shutdown flag */
 static volatile int g_shutdown_requested = 0;
@@ -413,7 +414,14 @@ static void* accept_thread_func(void* arg) {
           continue;
         }
         
-        fprintf(stderr, "Error: accept() failed: %s (errno=%d)\n", strerror(errno), errno);
+        /* Log more detailed error information */
+        if (errno == EMFILE) {
+          fprintf(stderr, "Error: accept() failed - too many open files in process\n");
+        } else if (errno == ENFILE) {
+          fprintf(stderr, "Error: accept() failed - too many open files in system\n");
+        } else {
+          fprintf(stderr, "Error: accept() failed: %s (errno=%d)\n", strerror(errno), errno);
+        }
         
         /* Check if the server socket is still valid */
         int error = 0;

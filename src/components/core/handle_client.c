@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 
 /* Handle client connection */
 void* handle_client(void* client_data) {
@@ -44,7 +45,7 @@ void* handle_client(void* client_data) {
     } else {
       fprintf(stderr, "Error: Null client data passed to handle_client\n");
     }
-    return NULL;
+    goto cleanup;
   }
 
   client_conn_t* client = (client_conn_t*)client_data;
@@ -62,7 +63,7 @@ void* handle_client(void* client_data) {
   /* Check for valid file descriptor */
   if (client_fd <= 0) {
     fprintf(stderr, "Error: Invalid client file descriptor: %d\n", client_fd);
-    return NULL;
+    goto cleanup;
   }
 
   /* Verify API context is available */
@@ -70,7 +71,7 @@ void* handle_client(void* client_data) {
     fprintf(stderr, "Error: NULL API context in client handler\n");
     close(client_fd);
     client->client_fd = 0;
-    return NULL;
+    goto cleanup;
   }
 
   char buffer[BUFFER_SIZE] = {0};
@@ -81,7 +82,7 @@ void* handle_client(void* client_data) {
     perror("fcntl get flags failed");
     close(client_fd);
     client->client_fd = 0; /* Clear FD in client struct */
-    return NULL;
+    goto cleanup;
   }
 
   if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
@@ -99,7 +100,7 @@ void* handle_client(void* client_data) {
     perror("setsockopt failed");
     close(client_fd);
     client->client_fd = 0;
-    return NULL;
+    goto cleanup;
   }
 
   /* Read request */
@@ -110,7 +111,7 @@ void* handle_client(void* client_data) {
     }
     close(client_fd);
     client->client_fd = 0;
-    return NULL;
+    goto cleanup;
   }
 
   /* Null-terminate buffer */
@@ -145,7 +146,7 @@ void* handle_client(void* client_data) {
 
     close(client_fd);
     client->client_fd = 0;
-    return NULL;
+    goto cleanup;
   }
   
   /* Set client IP address */
@@ -190,7 +191,7 @@ void* handle_client(void* client_data) {
     free_http_response(response);
     free_http_request(request);
     close(client_fd);
-    return NULL;
+    goto cleanup;
   }
   
   /* Increment request counter */
@@ -218,7 +219,7 @@ void* handle_client(void* client_data) {
   }
 
   /* Check if this is an admin interface route */
-  if (request->method == HTTP_GET && is_admin_route(request->path)) {
+  if ((request->method == HTTP_GET || request->method == HTTP_HEAD) && is_admin_route(request->path)) {
     http_response_t* response = NULL;
 
     if (g_logger) {
@@ -237,7 +238,14 @@ void* handle_client(void* client_data) {
     
     /* Always serve static files without authentication for simplicity */
     response = serve_admin_file(request->path);
-    if (g_logger) LOG_DEBUG("File served: %s", response ? "yes" : "no");
+    if (g_logger) {
+      if (response) {
+        LOG_DEBUG("[FILE_SERVING] File %s served successfully: status=%d, content_length=%zu, content_type=%s", 
+                  request->path, response->status, response->content_length, response->content_type ? response->content_type : "null");
+      } else {
+        LOG_DEBUG("[FILE_SERVING] File %s NOT served (response is NULL)", request->path);
+      }
+    }
 
     /* Print debug info about file path if response wasn't generated */
     if (!response) {
@@ -260,20 +268,97 @@ void* handle_client(void* client_data) {
       response = apply_cors_headers(response, &g_server_config->cors, request->origin);
     }
     
+    /* For HEAD requests, clear the body but keep headers including Content-Length */
+    if (request->method == HTTP_HEAD && response->body) {
+      size_t original_length = response->content_length;
+      free(response->body);
+      response->body = NULL;
+      /* Keep the original content length for HEAD responses */
+      response->content_length = original_length;
+    }
+    
     /* Serialize and send response */
-    char* response_str = serialize_http_response(response);
+    size_t response_len = 0;
+    char* response_str = serialize_http_response_with_length(response, &response_len);
+    if (g_logger) {
+      LOG_DEBUG("[FILE_SERVING] Serializing response for %s: content_length=%zu, total_response_len=%zu, header_bytes=%zu", 
+                request->path, response->content_length, response_len, response_len - response->content_length);
+    }
+    
     if (response_str) {
-      size_t response_len = strlen(response_str); /* Safe now with null-termination */
-      write(client_fd, response_str, response_len);
+      /* Check socket state before writing */
+      int socket_error = 0;
+      socklen_t error_len = sizeof(socket_error);
+      if (getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) == 0) {
+        if (socket_error != 0) {
+          LOG_ERROR("[FILE_SERVING] Socket error detected before write for %s: %s", request->path, strerror(socket_error));
+        }
+      }
+      
+      /* Check if socket is still connected */
+      struct sockaddr_in peer_addr;
+      socklen_t peer_len = sizeof(peer_addr);
+      if (getpeername(client_fd, (struct sockaddr*)&peer_addr, &peer_len) < 0) {
+        LOG_ERROR("[FILE_SERVING] Socket not connected for %s: %s", request->path, strerror(errno));
+      }
+      
+      /* Send response, handling partial writes and errors */
+      size_t bytes_sent = 0;
+      if (g_logger) LOG_DEBUG("[FILE_SERVING] Starting to send %zu bytes for %s", response_len, request->path);
+      while (bytes_sent < response_len) {
+        /* Check for socket readiness before each write */
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(client_fd, &write_fds);
+        struct timeval timeout = {5, 0}; // 5 second timeout
+        
+        int ready = select(client_fd + 1, NULL, &write_fds, NULL, &timeout);
+        if (ready <= 0) {
+          LOG_ERROR("[FILE_SERVING] Socket not ready for write for %s (ready=%d, errno=%s)", 
+                    request->path, ready, ready < 0 ? strerror(errno) : "timeout");
+          break;
+        }
+        
+        ssize_t result = write(client_fd, response_str + bytes_sent, response_len - bytes_sent);
+        if (result < 0) {
+          if (errno == EINTR) {
+            /* Interrupted by signal, retry */
+            if (g_logger) LOG_DEBUG("[FILE_SERVING] Write interrupted by signal, retrying for %s", request->path);
+            continue;
+          } else if (errno == EPIPE || errno == ECONNRESET) {
+            /* Connection closed by client */
+            LOG_ERROR("[FILE_SERVING] Client closed connection during write for %s (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
+            break;
+          } else {
+            /* Other error */
+            LOG_ERROR("[FILE_SERVING] Write error for %s: %s (sent %zu/%zu bytes)", request->path, strerror(errno), bytes_sent, response_len);
+            break;
+          }
+        } else if (result == 0) {
+          /* No bytes written, connection may be closed */
+          LOG_ERROR("[FILE_SERVING] No bytes written for %s, connection may be closed (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
+          break;
+        } else {
+          bytes_sent += result;
+          if (g_logger && (bytes_sent % 16384 == 0 || bytes_sent == response_len)) {
+            LOG_DEBUG("[FILE_SERVING] Progress for %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
+          }
+        }
+      }
+      if (g_logger) LOG_DEBUG("[FILE_SERVING] Completed sending %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
+      
       free(response_str);
     }
 
     /* Cleanup */
     free_http_response(response);
     free_http_request(request);
+    
+    /* Ensure all data is sent before closing */
+    shutdown(client_fd, SHUT_WR);
     close(client_fd);
 
-    return NULL;
+    goto cleanup;
   }
   
   /* Dispatch request to API handler */
@@ -292,16 +377,42 @@ void* handle_client(void* client_data) {
   }
   
   /* Serialize and send response */
-  char* response_str = serialize_http_response(response);
+  size_t response_len = 0;
+  char* response_str = serialize_http_response_with_length(response, &response_len);
   if (response_str) {
-    size_t response_len = strlen(response_str); /* Safe now with null-termination */
-    write(client_fd, response_str, response_len);
+    /* Send response, handling partial writes and errors */
+    size_t bytes_sent = 0;
+    while (bytes_sent < response_len) {
+      ssize_t result = write(client_fd, response_str + bytes_sent, response_len - bytes_sent);
+      if (result < 0) {
+        if (errno == EINTR) {
+          /* Interrupted by signal, retry */
+          continue;
+        } else if (errno == EPIPE || errno == ECONNRESET) {
+          /* Connection closed by client */
+          LOG_DEBUG("Client closed connection during write");
+          break;
+        } else {
+          /* Other error */
+          LOG_ERROR("Write error: %s", strerror(errno));
+          break;
+        }
+      } else if (result == 0) {
+        /* No bytes written, connection may be closed */
+        break;
+      } else {
+        bytes_sent += result;
+      }
+    }
     free(response_str);
   }
 
   /* Cleanup */
   free_http_response(response);
   free_http_request(request);
+  
+  /* Ensure all data is sent before closing */
+  shutdown(client_fd, SHUT_WR);
   close(client_fd);
   
   /* Free client data */
@@ -326,6 +437,7 @@ void* handle_client(void* client_data) {
     metrics_timer_stop(request_timer);
   }
   
+cleanup:
   /* Decrement active connections */
   if (active_connections) {
     metrics_gauge_dec(active_connections, 1.0);

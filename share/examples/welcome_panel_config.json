@@ -1,0 +1,8 @@
+{
+    "_id": "welcome-panel-config",
+    "type": "welcome_panel",
+    "enabled": true,
+    "title": "Welcome to JSONdb",
+    "version": "v1",
+    "content": "# Getting Started with JSONdb\n\nWelcome to your JSONdb instance! This is a high-performance document database designed for modern applications.\n\n## Quick Start\n\n1. **Browse Collections** - Navigate to the Browser tab to explore your data\n2. **Monitor Performance** - Check the Metrics tab for real-time insights\n3. **Manage Security** - Configure users and roles in the RBAC section\n4. **API Documentation** - Find comprehensive API docs in the API tab\n\n## Key Features\n\n- **Document Storage** - Store JSON documents with automatic indexing\n- **Real-time Metrics** - Monitor database performance and usage\n- **Role-Based Access** - Fine-grained permission control\n- **RESTful API** - Simple and intuitive API endpoints\n- **Binary Persistence** - Efficient storage with automatic saves\n\n## Need Help?\n\nCheck out the [API Documentation](/api) or visit our [GitHub repository](https://github.com/your-repo/jsondb).\n\n*You can dismiss this panel by clicking the X button. To re-enable it, update the configuration in the `_config` collection.*"
+}

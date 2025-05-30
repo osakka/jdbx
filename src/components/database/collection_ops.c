@@ -33,7 +33,7 @@ int db_collection_exists(database_t* db, const char* collection_name) {
 
 /* Create a new collection */
 int db_create_collection(database_t* db, const char* collection_name) {
-  LOG_TRACE("DB: Creating collection: %s");
+  LOG_TRACE("DB: Creating collection: %s", collection_name);
   
   if (!db || !collection_name) {
     LOG_ERROR("DB: Invalid parameters for collection creation");
@@ -55,7 +55,7 @@ int db_create_collection(database_t* db, const char* collection_name) {
   
   if (exists) {
     pthread_mutex_unlock(&db->lock);
-    LOG_INFO("DB: Collection already exists: %s");
+    LOG_INFO("DB: Collection already exists: %s", collection_name);
     return 1; /* Success - collection already exists */
   }
   
@@ -78,6 +78,6 @@ int db_create_collection(database_t* db, const char* collection_name) {
   /* Notify persistence thread of data change */
   db_notify_data_change_sync(db, strlen(collection_name) + 10);
   
-  LOG_INFO("DB: Collection created: %s");
+  LOG_INFO("DB: Collection created: %s", collection_name);
   return 1;
 }

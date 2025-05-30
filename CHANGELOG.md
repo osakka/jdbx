@@ -5,6 +5,65 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2025-05-30
+
+### ✨ New Features
+
+#### Welcome Panel Dashboard
+- **ADDED**: Fixed welcome panel that serves as a persistent dashboard
+- **FEATURES**:
+  - Clean, modern design with rounded corners
+  - Shows key system information and quick actions
+  - Always visible on the homepage
+  - Configurable content via API
+
+#### Session Management Enhancement
+- **IMPLEMENTED**: Sliding session timeout with automatic extension
+- **FUNCTIONALITY**:
+  - Sessions extend by 30 minutes on each authenticated request
+  - Prevents sessions from expiring during active use
+  - Updates both `last_seen` and `expires_at` fields
+  - Implemented in `api_auth_sliding.c`
+
+### 🎨 UI/UX Improvements
+
+#### Unified Button Design System
+- **REDESIGNED**: All buttons now use consistent styling
+- **CHANGES**:
+  - Replaced "squircle" buttons with rounded rectangles (0.375rem radius)
+  - Three button variants: default, danger (red), success (green)
+  - Standardized button widths: 2.5rem for icon-only, 5rem minimum for icon+text
+  - Fixed button layout issues with proper flexbox containers
+  - Improved Edit/Save button behavior in document editor
+
+### 🔧 Technical Improvements
+
+#### Code Quality and Cleanup
+- **REMOVED**: 111 redundant files from trash/ directory
+- **CLEANED**: Duplicate fix scripts (9 files) - kept only maintenance/ versions
+- **VERIFIED**: Zero compiler warnings with -Wall -Wextra
+- **CONFIRMED**: All recent changes properly integrated into main codebase
+
+#### Monitoring Infrastructure
+- **ADDED**: Comprehensive server monitoring script
+- **LOCATION**: `/opt/jsondb/scripts/monitor_server.sh`
+- **FEATURES**:
+  - Process health monitoring
+  - Memory usage tracking
+  - Crash detection and log capture
+  - Automatic restart capability
+
+### 🐛 Bug Fixes
+
+#### JavaScript Syntax Errors
+- **FIXED**: Multiple invalid escape sequences in app.js
+- **RESOLVED**: Undefined `collectionName` variable scope issue
+- **CORRECTED**: Undefined `loadOperations` function reference
+
+#### Welcome Panel Content
+- **FIXED**: Excessive backslashes in welcome message making it unreadable
+- **IMPROVED**: Content processing to handle escaped characters properly
+
 ## [2.0.6] - 2025-05-28
 
 ### 🐛 Bug Fixes

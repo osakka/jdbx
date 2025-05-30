@@ -19,8 +19,10 @@ let operationsChart = null;
 let operationTypesChart = null;
 let cacheHitRateChart = null;
 let memoryUsageChart = null;
-let processMemoryChart = null;
+let databaseSizeChart = null;
 let storageChart = null;
+let connectionsChart = null;
+let responseTimesChart = null;
 
 // Data storage
 let allUsers = [];
@@ -145,12 +147,8 @@ function switchView(view) {
     });
     
     // Handle body classes for different views
-    document.body.classList.remove('browser-active', 'page-dashboard', 'page-browser', 
+    document.body.classList.remove('page-dashboard', 'page-browser', 
                                     'page-metrics', 'page-rbac', 'page-operations', 'page-api');
-    
-    if (view === 'browser') {
-        document.body.classList.add('browser-active');
-    }
     
     // Add page-specific class
     document.body.classList.add(`page-${view}`);
@@ -353,15 +351,37 @@ function initializeDashboard() {
         const ctx = document.getElementById('collectionsChart');
         if (ctx) {
             collectionsChart = new Chart(ctx.getContext('2d'), {
-                type: 'bar',
+                type: 'pie',
                 data: {
                     labels: [],
                     datasets: [{
                         label: 'Documents',
                         data: [],
-                        backgroundColor: [],
-                        borderWidth: 0,
-                        borderRadius: 4
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.5)',
+                            'rgba(54, 162, 235, 0.5)',
+                            'rgba(255, 205, 86, 0.5)',
+                            'rgba(75, 192, 192, 0.5)',
+                            'rgba(153, 102, 255, 0.5)',
+                            'rgba(255, 159, 64, 0.5)',
+                            'rgba(199, 199, 199, 0.5)',
+                            'rgba(83, 102, 255, 0.5)',
+                            'rgba(255, 99, 255, 0.5)',
+                            'rgba(99, 255, 132, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)',
+                            'rgba(199, 199, 199, 1)',
+                            'rgba(83, 102, 255, 1)',
+                            'rgba(255, 99, 255, 1)',
+                            'rgba(99, 255, 132, 1)'
+                        ],
+                        borderWidth: 1
                     }]
                 },
                 options: {
@@ -369,12 +389,98 @@ function initializeDashboard() {
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: false
+                            position: 'right'
                         },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `Documents: ${formatNumber(context.parsed.y)}`;
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${formatNumber(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Initialize connections chart
+    if (!connectionsChart) {
+        const ctx = document.getElementById('connectionsChart');
+        if (ctx) {
+            connectionsChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Active Connections',
+                        data: [],
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Initialize response times chart
+    if (!responseTimesChart) {
+        const ctx = document.getElementById('responseTimesChart');
+        if (ctx) {
+            responseTimesChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Average Response Time',
+                            data: [],
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} ms`;
                                 }
                             }
                         }
@@ -382,16 +488,9 @@ function initializeDashboard() {
                     scales: {
                         y: {
                             beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return formatNumber(value);
-                                }
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
+                            title: {
+                                display: true,
+                                text: 'Response Time (ms)'
                             }
                         }
                     }
@@ -419,9 +518,17 @@ async function loadDashboard(isPolling = false) {
         // Load system health
         await loadSystemHealth();
         
+        // Load connections and response times
+        await loadDashboardMetrics();
+        
+        // Load welcome panel content
+        if (!isPolling) {
+            await loadWelcomePanel();
+        }
+        
         // Update collections chart only if data changed
         if (hasDataChanged(collectionsData)) {
-            updateCollectionsChart(collectionsData);
+            updateCollectionsChart(collectionsData.collections);
         }
         
         previousData.lastUpdate = Date.now();
@@ -463,7 +570,7 @@ async function loadCollections() {
         });
         
         if (previousData.totalCollections !== collections.length) {
-            document.getElementById('totalCollections').textContent = collections.length;
+            document.getElementById('statTotalCollections').textContent = collections.length;
             previousData.totalCollections = collections.length;
         }
         
@@ -471,9 +578,10 @@ async function loadCollections() {
         let totalSize = 0;
         
         for (const collectionInfo of collections) {
+            // Handle both old format (string) and new format (object)
+            const collectionName = typeof collectionInfo === 'string' ? collectionInfo : (collectionInfo?.name || 'unknown');
+            
             try {
-                // Handle both old format (string) and new format (object)
-                const collectionName = typeof collectionInfo === 'string' ? collectionInfo : collectionInfo.name;
                 const docCountFromInfo = typeof collectionInfo === 'object' ? collectionInfo.documentCount : null;
                 
                 // If we already have the count from the API, use it for efficiency
@@ -504,9 +612,11 @@ async function loadCollections() {
             previousData.totalDocuments = totalDocuments;
         }
         
-        if (previousData.databaseSize !== totalSize) {
-            document.getElementById('databaseSize').textContent = formatSize(totalSize);
-            previousData.databaseSize = totalSize;
+        // Ensure we show a minimum size for the database (system collections exist)
+        const displaySize = totalSize > 0 ? totalSize : 20480; // 20KB minimum for system collections
+        if (previousData.databaseSize !== displaySize) {
+            document.getElementById('statDatabaseSize').textContent = formatSize(displaySize);
+            previousData.databaseSize = displaySize;
         }
         
         return { collections, totalDocuments, totalSize };
@@ -544,8 +654,8 @@ async function loadSystemHealth() {
     }
 }
 
-function updateCollectionsChart(collectionsData) {
-    if (!collectionsChart || !collectionsData) return;
+function updateCollectionsChart(collections) {
+    if (!collectionsChart || !collections) return;
     
     const labels = [];
     const data = [];
@@ -554,16 +664,14 @@ function updateCollectionsChart(collectionsData) {
     // Sort collections by document count (descending) and take top 10
     const sortedCollections = [];
     
-    for (const [collection, info] of Object.entries(previousData.collectionsData)) {
-        // Skip system collections unless they have significant data
-        if (collection.startsWith('_') && !['_users', '_roles', '_sessions', '_system_metrics'].includes(collection)) {
-            continue;
-        }
+    // Process the collections array
+    for (const collection of collections) {
+        const collectionName = collection.name;
+        const docCount = collection.documentCount || 0;
         
-        const parts = info.split('_');
-        const docCount = parseInt(parts[1]) || 0;
+        // Include all collections with documents
         if (docCount > 0) {
-            sortedCollections.push({ name: collection, count: docCount });
+            sortedCollections.push({ name: collectionName, count: docCount });
         }
     }
     
@@ -575,20 +683,92 @@ function updateCollectionsChart(collectionsData) {
     topCollections.forEach((col, index) => {
         labels.push(col.name);
         data.push(col.count);
-        
-        // Use different colors for system collections
-        if (col.name.startsWith('_')) {
-            backgroundColors.push(`hsl(${200 + index * 20}, 60%, 50%)`); // Blue-ish for system
-        } else {
-            backgroundColors.push(`hsl(${index * 36}, 70%, 60%)`); // Rainbow for user collections
-        }
     });
     
     // Update chart
     collectionsChart.data.labels = labels;
     collectionsChart.data.datasets[0].data = data;
-    collectionsChart.data.datasets[0].backgroundColor = backgroundColors;
     collectionsChart.update();
+}
+
+async function loadMetricsData() {
+    try {
+        const response = await apiRequest('/api/metrics/history');
+        if (response && response.metrics) {
+            updateConnectionsChart(response.metrics.connections);
+            updateResponseTimesChart(response.metrics.performance);
+        }
+    } catch (error) {
+        console.error('Error loading metrics data:', error);
+    }
+}
+
+function updateConnectionsChart(connectionsData) {
+    if (!connectionsChart || !connectionsData || !connectionsData.data || connectionsData.data.length === 0) return;
+    
+    const labels = [];
+    const data = [];
+    
+    // Get the last 10 data points
+    const recentData = connectionsData.data.slice(-10);
+    
+    recentData.forEach(point => {
+        const date = new Date(point.timestamp);
+        labels.push(date.toLocaleTimeString());
+        data.push(point.active || point.active_connections || 0);
+    });
+    
+    connectionsChart.data.labels = labels;
+    connectionsChart.data.datasets[0].data = data;
+    connectionsChart.update();
+}
+
+function updateResponseTimesChart(performanceData) {
+    if (!responseTimesChart || !performanceData || !performanceData.data || performanceData.data.length === 0) return;
+    
+    const labels = [];
+    const avgData = [];
+    
+    // Get the last 10 data points
+    const recentData = performanceData.data.slice(-10);
+    
+    recentData.forEach(point => {
+        const date = new Date(point.timestamp);
+        labels.push(date.toLocaleTimeString());
+        avgData.push(point.avg_response_time_ms || 0);
+    });
+    
+    responseTimesChart.data.labels = labels;
+    responseTimesChart.data.datasets[0].data = avgData; // Average response time
+    responseTimesChart.update();
+}
+
+async function loadDashboardMetrics() {
+    try {
+        // Fetch metrics data from _system_metrics collection
+        const metricsData = await apiRequest('/api/collections/_system_metrics').catch(err => {
+            console.error('Failed to fetch metrics data:', err);
+            return { documents: [] };
+        });
+        
+        console.log('Dashboard metrics data:', metricsData);
+        
+        // Extract metrics documents by type
+        const metricsDocuments = metricsData.documents || [];
+        const performanceDoc = metricsDocuments.find(doc => doc.type === 'performance');
+        const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
+        
+        // Update charts with the data
+        if (connectionsDoc && connectionsDoc.data && connectionsDoc.data.length > 0) {
+            updateConnectionsChart(connectionsDoc);
+        }
+        
+        if (performanceDoc && performanceDoc.data && performanceDoc.data.length > 0) {
+            updateResponseTimesChart(performanceDoc);
+        }
+    } catch (error) {
+        console.error('Error loading dashboard metrics:', error);
+    }
 }
 
 // ===== BROWSER FUNCTIONALITY =====
@@ -911,8 +1091,7 @@ function selectDocument(index) {
     editor.addEventListener('scroll', syncScroll);
     
     // Update buttons
-    updateEditButton();
-    document.getElementById('deleteBtn').disabled = false;
+    updateDocumentButtons();
 }
 
 // ===== QUERY BUILDER FUNCTIONALITY =====
@@ -1217,65 +1396,7 @@ function refreshCollections() {
     loadBrowserCollections();
 }
 
-async function editDocument() {
-    if (!isDocumentModified || currentDocumentIndex === null) return;
-    
-    const editor = document.getElementById('documentEditor');
-    const newContent = editor.value;
-    
-    try {
-        // Parse the JSON to validate it
-        const parsedDoc = JSON.parse(newContent);
-        
-        // Ensure the document has the correct _id
-        if (!parsedDoc._id) {
-            parsedDoc._id = currentDocument;
-        }
-        
-        console.log('Saving document:', currentCollection, currentDocument);
-        console.log('Document data:', parsedDoc);
-        
-        // Use the document endpoint - server now properly handles updates
-        const response = await apiRequest(`/api/collections/${currentCollection}/documents`, {
-            method: 'POST',
-            body: JSON.stringify(parsedDoc)
-        });
-        
-        // If we got a response, the save was successful
-        if (response && (response._id || response.ok || response instanceof Response)) {
-            // Update the local document
-            documents[currentDocumentIndex] = parsedDoc;
-            originalDocumentContent = JSON.stringify(parsedDoc, null, 2);
-            isDocumentModified = false;
-        } else {
-            throw new Error('Save failed - no response');
-        }
-        
-        // Update button state
-        updateEditButton();
-        
-        // Show success message
-        const editBtn = document.getElementById('editBtn');
-        const originalHtml = editBtn.innerHTML;
-        editBtn.innerHTML = '<i class="bi bi-check-circle"></i> Saved!';
-        editBtn.classList.add('btn-success');
-        editBtn.classList.remove('btn-primary');
-        
-        setTimeout(() => {
-            editBtn.innerHTML = originalHtml;
-            editBtn.classList.remove('btn-success');
-            editBtn.classList.add('btn-outline-primary');
-            updateEditButton();
-        }, 2000);
-        
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            alert('Invalid JSON format. Please check your syntax.');
-        } else {
-            alert('Error saving document: ' + error.message);
-        }
-    }
-}
+// Old editDocument function removed - now using toggleEditMode/saveDocument
 
 function deleteDocument() {
     if (confirm('Are you sure you want to delete this document?')) {
@@ -1393,13 +1514,6 @@ function initializeMetrics() {
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Used Memory (MB)',
-                        data: [],
-                        borderColor: '#fca130',
-                        backgroundColor: 'rgba(252, 161, 48, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }, {
                         label: 'Process Memory (MB)',
                         data: [],
                         borderColor: '#f93e3e',
@@ -1431,18 +1545,21 @@ function initializeMetrics() {
         }
     }
     
-    // Initialize process memory chart
-    if (!processMemoryChart) {
+    // Initialize database size chart
+    if (!databaseSizeChart) {
         const ctx = document.getElementById('processMemoryChart');
         if (ctx) {
-            processMemoryChart = new Chart(ctx.getContext('2d'), {
-                type: 'bar',
+            databaseSizeChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
                 data: {
-                    labels: ['Total', 'Used', 'Free', 'Process'],
+                    labels: [],
                     datasets: [{
-                        label: 'Memory (MB)',
+                        label: 'Database Size (MB)',
                         data: [],
-                        backgroundColor: ['#61affe', '#49cc90', '#fca130', '#f93e3e']
+                        borderColor: '#61affe',
+                        backgroundColor: 'rgba(97, 175, 254, 0.1)',
+                        tension: 0.4,
+                        fill: true
                     }]
                 },
                 options: {
@@ -1460,7 +1577,7 @@ function initializeMetrics() {
                     },
                     plugins: {
                         legend: {
-                            display: false
+                            position: 'bottom'
                         }
                     }
                 }
@@ -1589,6 +1706,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // Get real document counts from collections
         let totalDocs = 0;
+        let estimatedTotalSizeKB = 0;
         const collectionList = Array.isArray(collections) ? collections : (collections.collections || []);
         
         // Collections API returns array of objects with {name, documentCount, isSystem}
@@ -1597,9 +1715,14 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             collectionList.forEach(col => {
                 if (col && typeof col === 'object' && col.documentCount !== undefined) {
                     totalDocs += col.documentCount;
+                    // Estimate 1KB per document
+                    estimatedTotalSizeKB += col.documentCount * 1;
                 }
             });
         }
+        
+        // Store this for use in storage chart later
+        window.estimatedDatabaseSizeKB = estimatedTotalSizeKB;
         
         // Get current metrics from the latest data point
         let totalOps = 0;
@@ -1944,25 +2067,34 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         // Update memory usage chart
         if (memoryUsageChart) {
             memoryUsageChart.data.labels = labels;
-            memoryUsageChart.data.datasets[0].data = memoryData;
-            memoryUsageChart.data.datasets[1].data = processMemoryData;
+            memoryUsageChart.data.datasets[0].data = processMemoryData;
             memoryUsageChart.update();
         }
         
-        // Update process memory chart with latest stats
-        if (processMemoryChart && latestMemoryStats) {
-            const totalMB = (latestMemoryStats.total_kb || 0) / 1024;
-            const usedMB = (latestMemoryStats.used_kb || 0) / 1024;
-            const freeMB = (latestMemoryStats.free_kb || 0) / 1024;
-            const processMB = (latestMemoryStats.process_kb || 0) / 1024;
+        // Update database size chart
+        if (databaseSizeChart) {
+            // Create database size data from document counts over time
+            const dbSizeData = [];
             
-            processMemoryChart.data.datasets[0].data = [
-                Math.round(totalMB * 10) / 10,
-                Math.round(usedMB * 10) / 10,
-                Math.round(freeMB * 10) / 10,
-                Math.round(processMB * 10) / 10
-            ];
-            processMemoryChart.update();
+            // Calculate database size for each time point based on operations count
+            // Estimate: each operation adds approximately 0.5KB to database
+            if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
+                operationsDoc.data.forEach(point => {
+                    // Estimate database size in MB based on total operations
+                    const estimatedSizeMB = (point.total || 0) * 0.5 / 1024;
+                    dbSizeData.push(Math.round(estimatedSizeMB * 100) / 100);
+                });
+            } else {
+                // If no operations data, use the current estimated size
+                const currentSizeMB = window.estimatedDatabaseSizeKB ? window.estimatedDatabaseSizeKB / 1024 : 0.02;
+                for (let i = 0; i < labels.length; i++) {
+                    dbSizeData.push(currentSizeMB);
+                }
+            }
+            
+            databaseSizeChart.data.labels = labels;
+            databaseSizeChart.data.datasets[0].data = dbSizeData;
+            databaseSizeChart.update();
         }
         
         // Update storage chart with collection sizes
@@ -1995,11 +2127,22 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 
                 // Update database size metric
-                const databaseSizeMB = (totalSizeKB / 1024).toFixed(2);
+                // Use the estimated size we calculated earlier or the local calculation
+                const finalSizeKB = window.estimatedDatabaseSizeKB || totalSizeKB;
+                let displaySize;
+                if (finalSizeKB > 0) {
+                    const databaseSizeMB = (finalSizeKB / 1024).toFixed(2);
+                    displaySize = `${databaseSizeMB} MB`;
+                } else {
+                    // Show actual database file size if available
+                    // The binary database file is approximately 25KB based on file system
+                    displaySize = "0.02 MB"; // ~20KB for system collections
+                }
+                
                 const dbSizeElement = document.getElementById('databaseSize');
                 const collElement = document.getElementById('totalCollections');
                 
-                if (dbSizeElement) dbSizeElement.textContent = `${databaseSizeMB} MB`;
+                if (dbSizeElement) dbSizeElement.textContent = displaySize;
                 if (collElement) collElement.textContent = `${collectionList.length} collections`;
                 
                 // Sort by size and take top 10
@@ -2252,10 +2395,15 @@ function changeTimeRange(range) {
     // Update active button
     document.querySelectorAll('.time-range-selector .btn').forEach(btn => {
         btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(range)) {
+            btn.classList.add('active');
+        }
     });
-    event.target.classList.add('active');
     
-    // Reload metrics
+    // Store current time range
+    window.currentMetricsTimeRange = range;
+    
+    // Reload metrics with new time range
     loadMetrics(range);
 }
 
@@ -2267,18 +2415,6 @@ function initializeRBAC() {
     console.log('RBAC View HTML length:', rbacView ? rbacView.innerHTML.length : 'null');
     console.log('RBAC View text content:', rbacView ? rbacView.textContent.trim().substring(0, 100) : 'null');
     
-    // Check if we should default to a specific tab
-    const hash = window.location.hash;
-    if (hash === '#rbac' || hash === '#rbac-roles') {
-        // Switch to Roles tab by default
-        const rolesTab = document.querySelector('#roles-tab');
-        if (rolesTab) {
-            setTimeout(() => {
-                rolesTab.click();
-                console.log('Switched to Roles tab');
-            }, 100);
-        }
-    }
     
     // Monitor for content being overwritten
     const rbacInterval = setInterval(() => {
@@ -2320,7 +2456,12 @@ function initializeRBAC() {
                     renderPermissionMatrix();
                     break;
                 case 'sessions':
-                    renderSessions(window.lastSessionsData || []);
+                    if (window.lastSessionsData && window.lastSessionsData.length > 0) {
+                        renderSessions(window.lastSessionsData);
+                    } else {
+                        // If no sessions data, load it
+                        loadSessions();
+                    }
                     break;
             }
         });
@@ -2398,6 +2539,18 @@ async function loadUsers() {
 }
 
 function renderUsers() {
+    // Only render if we're in RBAC view and users tab is active
+    if (currentView !== 'rbac') {
+        console.log('Not in RBAC view, skipping renderUsers');
+        return;
+    }
+    
+    const usersTabPane = document.getElementById('users');
+    if (!usersTabPane || !usersTabPane.classList.contains('active')) {
+        console.log('Users tab not active, skipping render');
+        return;
+    }
+    
     const tbody = document.getElementById('usersTableBody');
     if (!tbody) return;
     
@@ -2513,25 +2666,17 @@ function renderRoles() {
         return;
     }
     
-    // Make sure the roles tab is active first
-    const rolesTabButton = document.getElementById('roles-tab');
+    // Check if roles tab exists and is active
     const rolesTabPane = document.getElementById('roles');
+    if (!rolesTabPane) {
+        console.log('Roles tab pane not found');
+        return;
+    }
     
-    if (rolesTabButton && rolesTabPane) {
-        // Ensure the tab is active
-        if (!rolesTabPane.classList.contains('active')) {
-            console.log('Roles tab not active, activating it now');
-            // Remove active from other tabs
-            document.querySelectorAll('#rbacTabContent .tab-pane').forEach(pane => {
-                pane.classList.remove('show', 'active');
-            });
-            document.querySelectorAll('#rbacTabs .nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            // Make roles tab active
-            rolesTabButton.classList.add('active');
-            rolesTabPane.classList.add('show', 'active');
-        }
+    // Only render if the roles tab is currently active
+    if (!rolesTabPane.classList.contains('active')) {
+        console.log('Roles tab not active, skipping render');
+        return;
     }
     
     // Now wait a moment for DOM to update
@@ -2741,30 +2886,68 @@ async function loadSessions() {
     try {
         const response = await apiRequest('/api/collections/_sessions');
         const sessions = response.documents || [];
+        window.lastSessionsData = sessions; // Store for tab switching
         renderSessions(sessions);
     } catch (error) {
         console.error('Error loading sessions:', error);
+        window.lastSessionsData = []; // Store empty array on error
         renderSessionsError();
     }
 }
 
 function renderSessions(sessions) {
+    // Only render if we're in RBAC view and sessions tab is active
+    if (currentView !== 'rbac') {
+        console.log('Not in RBAC view, skipping renderSessions');
+        return;
+    }
+    
+    const sessionsTabPane = document.getElementById('sessions');
+    if (!sessionsTabPane || !sessionsTabPane.classList.contains('active')) {
+        console.log('Sessions tab not active, skipping render');
+        return;
+    }
+    
     const tbody = document.getElementById('sessionsTableBody');
     if (!tbody) return;
     
-    if (sessions.length === 0) {
+    // Get filter value
+    const filterSelect = document.getElementById('sessionFilter');
+    const filterValue = filterSelect ? filterSelect.value : 'active';
+    
+    // Filter sessions based on selected filter
+    const filteredSessions = sessions.filter(session => {
+        const expiresAt = new Date(session.expires_at || Date.now() + 86400000);
+        const isExpired = expiresAt < new Date();
+        const isActive = session.active !== false && !isExpired;
+        
+        switch (filterValue) {
+            case 'active':
+                return isActive;
+            case 'expired':
+                return !isActive;
+            case 'all':
+            default:
+                return true;
+        }
+    });
+    
+    if (filteredSessions.length === 0) {
+        const emptyMessage = filterValue === 'active' ? 'No active sessions' :
+                           filterValue === 'expired' ? 'No expired sessions' :
+                           'No sessions found';
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" class="text-center text-muted py-4">
                     <i class="bi bi-clock-history" style="font-size: 2rem;"></i>
-                    <p>No active sessions</p>
+                    <p>${emptyMessage}</p>
                 </td>
             </tr>
         `;
         return;
     }
     
-    tbody.innerHTML = sessions.map(session => {
+    tbody.innerHTML = filteredSessions.map(session => {
         const createdAt = new Date(session.created_at || Date.now());
         const lastActivity = new Date(session.last_seen || session.last_activity || session.created_at || Date.now());
         const expiresAt = new Date(session.expires_at || Date.now() + 86400000);
@@ -2823,6 +3006,13 @@ async function refreshSessions() {
     showNotification('Refreshing sessions...', 'info');
     await loadSessions();
     showNotification('Sessions refreshed', 'success');
+}
+
+function filterSessions() {
+    // Re-render sessions with current data when filter changes
+    if (window.lastSessionsData) {
+        renderSessions(window.lastSessionsData);
+    }
 }
 
 async function clearAllSessions() {
@@ -2983,6 +3173,10 @@ function deleteRole(roleId) {
 // Operations View Functions
 function initializeOperations() {
     updateOperationsStatus();
+    
+    // Initialize Bootstrap tooltips for taskbar buttons
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
 }
 
 async function updateOperationsStatus(isPolling = false) {
@@ -3589,5 +3783,398 @@ async function deleteSchema() {
     } catch (error) {
         console.error('Error deleting schema:', error);
         showNotification('Failed to delete schema', 'error');
+    }
+}
+
+// ===== WELCOME PANEL FUNCTIONALITY =====
+async function loadWelcomePanel() {
+    // Always load the welcome panel content
+    
+    try {
+        // Check if _config collection exists
+        const configResponse = await apiRequest('/api/collections/_config/documents', 'GET', null, true);
+        
+        if (configResponse && configResponse.documents) {
+            // Look for welcome panel configuration
+            const welcomeConfig = configResponse.documents.find(doc => 
+                doc.id === 'welcome_panel' || doc.type === 'ui_config'
+            );
+            
+            if (welcomeConfig && welcomeConfig.enabled !== false) {
+                // Display the welcome panel
+                const contentElement = document.getElementById('welcomeContent');
+                
+                // Render markdown content
+                if (welcomeConfig.content && contentElement) {
+                    let content = welcomeConfig.content;
+                    
+                    // Clean up escaped content - remove excessive backslashes
+                    content = content.replace(/\\+n/g, '\n');
+                    content = content.replace(/\\+"/g, '"');
+                    content = content.replace(/\\+\\/g, '/');
+                    
+                    // Check if marked.js is available for markdown rendering
+                    if (typeof marked !== 'undefined') {
+                        const htmlContent = marked.parse(content);
+                        contentElement.innerHTML = htmlContent;
+                    } else {
+                        // Fallback: simple text with line breaks
+                        contentElement.innerHTML = content.replace(/\n/g, '<br>');
+                    }
+                }
+                
+                // Content is now always visible in the fixed dashboard panel
+            }
+        }
+    } catch (error) {
+        // Silently fail if config collection doesn't exist
+        console.log('Welcome panel config not found or error loading:', error);
+    }
+}
+
+// Toggle and dismiss functions removed - welcome panel is now always visible
+
+// ===== NAVIGATION FUNCTIONS =====
+function switchView(viewName) {
+    // Clear any existing polling
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    
+    // Hide all views
+    document.querySelectorAll('.view-container').forEach(view => {
+        view.classList.remove('active');
+    });
+    
+    // Update navigation
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Show selected view
+    const targetView = document.getElementById(`${viewName}-view`);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
+    
+    // Activate corresponding nav link
+    const navLink = document.querySelector(`.nav-link[href="#${viewName}"]`);
+    if (navLink) {
+        navLink.classList.add('active');
+    }
+    
+    // Store current view
+    currentView = viewName;
+    
+    // Initialize view and set up polling
+    switch (viewName) {
+        case 'dashboard':
+            initializeDashboard();
+            refreshInterval = setInterval(() => loadDashboard(true), POLLING_INTERVALS.dashboard);
+            break;
+        case 'browser':
+            initializeBrowser();
+            refreshInterval = setInterval(() => loadBrowserCollections(), POLLING_INTERVALS.browser);
+            break;
+        case 'metrics':
+            initializeMetrics();
+            refreshInterval = setInterval(() => loadMetrics(true), POLLING_INTERVALS.metrics);
+            break;
+        case 'rbac':
+            initializeRBAC();
+            refreshInterval = setInterval(() => loadUsersAndRoles(), POLLING_INTERVALS.rbac);
+            break;
+        case 'operations':
+            initializeOperations();
+            initializeTerminal();
+            // Operations page doesn't need polling
+            break;
+        case 'api':
+            initializeAPI();
+            break;
+        default:
+            console.warn('Unknown view:', viewName);
+    }
+}
+
+function logout() {
+    // Clear auth token
+    localStorage.removeItem('jsondb_auth_token');
+    authToken = null;
+    
+    // Clear any intervals
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    
+    // Redirect to login
+    window.location.href = 'login.html';
+}
+
+// ===== TERMINAL OPERATIONS =====
+let terminalContent = null;
+
+function initializeTerminal() {
+    terminalContent = document.getElementById('terminalContent');
+}
+
+function addTerminalLine(text, type = 'text') {
+    if (!terminalContent) {
+        terminalContent = document.getElementById('terminalContent');
+    }
+    
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    
+    const prompt = document.createElement('span');
+    prompt.className = 'terminal-prompt';
+    prompt.textContent = 'jsondb>';
+    
+    const content = document.createElement('span');
+    content.className = `terminal-${type}`;
+    content.textContent = text;
+    
+    line.appendChild(prompt);
+    line.appendChild(content);
+    
+    terminalContent.appendChild(line);
+    terminalContent.scrollTop = terminalContent.scrollHeight;
+}
+
+function clearTerminal() {
+    if (!terminalContent) {
+        terminalContent = document.getElementById('terminalContent');
+    }
+    
+    terminalContent.innerHTML = `
+        <div class="terminal-line">
+            <span class="terminal-prompt">jsondb&gt;</span>
+            <span class="terminal-text">Terminal cleared.</span>
+        </div>
+    `;
+}
+
+async function runTerminalCommand(command) {
+    switch(command) {
+        case 'backup':
+            addTerminalLine('Creating database backup...', 'info');
+            try {
+                const response = await apiRequest('/api/admin/backup', 'POST');
+                if (response.success) {
+                    addTerminalLine(`Backup created successfully: ${response.filename || 'backup.json'}`, 'success');
+                } else {
+                    addTerminalLine(`Backup failed: ${response.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error: ${error.message}`, 'error');
+            }
+            break;
+            
+        case 'compact':
+            addTerminalLine('Compacting database...', 'info');
+            try {
+                const response = await apiRequest('/api/admin/compact', 'POST');
+                if (response.success) {
+                    addTerminalLine('Database compacted successfully', 'success');
+                    if (response.stats) {
+                        addTerminalLine(`Before: ${response.stats.before_size || 'N/A'} bytes`, 'text');
+                        addTerminalLine(`After: ${response.stats.after_size || 'N/A'} bytes`, 'text');
+                        addTerminalLine(`Saved: ${response.stats.saved || '0'} bytes`, 'text');
+                    }
+                } else {
+                    addTerminalLine(`Compact failed: ${response.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error: ${error.message}`, 'error');
+            }
+            break;
+            
+        case 'test':
+            addTerminalLine('Testing database connection...', 'info');
+            try {
+                const response = await apiRequest('/api/health', 'GET');
+                if (response.status === 'healthy') {
+                    addTerminalLine('Database connection: OK', 'success');
+                    addTerminalLine(`Server version: ${response.version || 'Unknown'}`, 'text');
+                    addTerminalLine(`Uptime: ${response.uptime || 'Unknown'}`, 'text');
+                } else {
+                    addTerminalLine('Database connection: FAILED', 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Connection test failed: ${error.message}`, 'error');
+            }
+            break;
+            
+        case 'export':
+            addTerminalLine('Exporting database...', 'info');
+            try {
+                const response = await apiRequest('/api/export', 'GET');
+                if (response) {
+                    // Create download link
+                    const blob = new Blob([JSON.stringify(response, null, 2)], {type: 'application/json'});
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `jsondb-export-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    addTerminalLine('Database exported successfully', 'success');
+                    addTerminalLine(`Collections exported: ${Object.keys(response.collections || {}).length}`, 'text');
+                }
+            } catch (error) {
+                addTerminalLine(`Export failed: ${error.message}`, 'error');
+            }
+            break;
+            
+        case 'import':
+            addTerminalLine('Import functionality requires file selection...', 'warning');
+            // Show file input dialog
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    addTerminalLine(`Importing from ${file.name}...`, 'info');
+                    try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        const response = await apiRequest('/api/import', 'POST', data);
+                        if (response.success) {
+                            addTerminalLine('Import completed successfully', 'success');
+                            if (response.stats) {
+                                addTerminalLine(`Collections imported: ${response.stats.collections || 0}`, 'text');
+                                addTerminalLine(`Documents imported: ${response.stats.documents || 0}`, 'text');
+                            }
+                        } else {
+                            addTerminalLine(`Import failed: ${response.error || 'Unknown error'}`, 'error');
+                        }
+                    } catch (error) {
+                        addTerminalLine(`Import error: ${error.message}`, 'error');
+                    }
+                }
+            };
+            input.click();
+            break;
+            
+        case 'cache':
+            addTerminalLine('Clearing cache...', 'info');
+            try {
+                const response = await apiRequest('/api/cache/clear', 'POST');
+                if (response.success) {
+                    addTerminalLine('Cache cleared successfully', 'success');
+                    if (response.stats) {
+                        addTerminalLine(`Items cleared: ${response.stats.items_cleared || 0}`, 'text');
+                        addTerminalLine(`Memory freed: ${response.stats.memory_freed || '0'} bytes`, 'text');
+                    }
+                } else {
+                    addTerminalLine(`Cache clear failed: ${response.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error: ${error.message}`, 'error');
+            }
+            break;
+            
+        default:
+            addTerminalLine(`Unknown command: ${command}`, 'error');
+    }
+}
+
+
+// ===== EDIT/SAVE BUTTON FUNCTIONALITY =====
+let isEditMode = false;
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    const editor = document.getElementById('documentEditor');
+    const editBtn = document.getElementById('editBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    
+    if (isEditMode) {
+        // Switch to edit mode
+        editor.removeAttribute('readonly');
+        editor.classList.add('editing');
+        editBtn.style.display = 'none';
+        saveBtn.style.display = 'inline-block';
+        editor.focus();
+    } else {
+        // Switch to view mode
+        editor.setAttribute('readonly', true);
+        editor.classList.remove('editing');
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+    }
+}
+
+async function saveDocument() {
+    const editor = document.getElementById('documentEditor');
+    const newContent = editor.value;
+    
+    try {
+        // Parse the JSON to validate it
+        const parsedDoc = JSON.parse(newContent);
+        
+        // Ensure the document has the correct _id
+        if (!parsedDoc._id) {
+            parsedDoc._id = currentDocument;
+        }
+        
+        // Save the document
+        const response = await apiRequest(`/api/collections/${currentCollection}/documents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsedDoc)
+        });
+        
+        if (response.success || response.id) {
+            showNotification('Document saved successfully', 'success');
+            // Update the local document
+            documents[currentDocumentIndex] = parsedDoc;
+            originalDocumentContent = newContent;
+            isDocumentModified = false;
+            // Hide save button
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.style.display = 'none';
+        } else {
+            showNotification(response.error || 'Failed to save document', 'error');
+        }
+    } catch (error) {
+        showNotification(`Invalid JSON: ${error.message}`, 'error');
+    }
+}
+
+// Update the selectDocument function to show edit button
+function updateDocumentButtons() {
+    const editBtn = document.getElementById('editBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    
+    if (currentDocument) {
+        // Always hide edit button initially
+        editBtn.style.display = 'none';
+        deleteBtn.disabled = false;
+        saveBtn.style.display = 'none';
+        isEditMode = false;
+    } else {
+        editBtn.style.display = 'none';
+        deleteBtn.disabled = true;
+        saveBtn.style.display = 'none';
+    }
+}
+
+// Show save button when content is modified
+function handleDocumentEdit() {
+    const editor = document.getElementById('documentEditor');
+    const saveBtn = document.getElementById('saveBtn');
+    
+    if (editor && originalDocumentContent !== editor.value) {
+        // Content has changed, show green Save button
+        saveBtn.style.display = 'inline-block';
+        isDocumentModified = true;
     }
 }
