@@ -599,22 +599,22 @@ jwt_token_t* jwt_decode(const char* token_str) {
   }
   
   /* Split token into parts */
-  char* token_copy = strdup(token_str);
+  char* token_copy = buffer_pool_strdup(token_str);
   char* header_b64 = strtok(token_copy, ".");
   if (!header_b64) {
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   char* payload_b64 = strtok(NULL, ".");
   if (!payload_b64) {
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   char* signature_b64 = strtok(NULL, ".");
   if (!signature_b64) {
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
@@ -622,17 +622,17 @@ jwt_token_t* jwt_decode(const char* token_str) {
   int header_len;
   unsigned char* header_json = base64_url_decode(header_b64, &header_len);
   if (!header_json) {
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   /* Parse header JSON */
   json_value_t* header = json_parse((const char*)header_json);
-  free(header_json);
+  buffer_pool_free_safe(header_json);
   
   if (!header || header->type != JSON_OBJECT) {
     if (header) json_free(header);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
@@ -641,18 +641,18 @@ jwt_token_t* jwt_decode(const char* token_str) {
   unsigned char* payload_json = base64_url_decode(payload_b64, &payload_len);
   if (!payload_json) {
     json_free(header);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   /* Parse payload JSON */
   json_value_t* payload = json_parse((const char*)payload_json);
-  free(payload_json);
+  buffer_pool_free_safe(payload_json);
   
   if (!payload || payload->type != JSON_OBJECT) {
     json_free(header);
     if (payload) json_free(payload);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
@@ -661,7 +661,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   if (!token) {
     json_free(header);
     json_free(payload);
-    free(token_copy);
+    buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
@@ -669,42 +669,42 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* alg = json_object_get(header, "alg");
   if (alg && alg->type == JSON_STRING) {
     if (token->header->alg) {
-      free(token->header->alg);
+      buffer_pool_free_safe(token->header->alg);
     }
-    token->header->alg = strdup(alg->value.string);
+    token->header->alg = buffer_pool_strdup(alg->value.string);
   }
   
   json_value_t* typ = json_object_get(header, "typ");
   if (typ && typ->type == JSON_STRING) {
     if (token->header->typ) {
-      free(token->header->typ);
+      buffer_pool_free_safe(token->header->typ);
     }
-    token->header->typ = strdup(typ->value.string);
+    token->header->typ = buffer_pool_strdup(typ->value.string);
   }
   
   /* Set payload values */
   json_value_t* iss = json_object_get(payload, "iss");
   if (iss && iss->type == JSON_STRING) {
     if (token->payload->iss) {
-      free(token->payload->iss);
+      buffer_pool_free_safe(token->payload->iss);
     }
-    token->payload->iss = strdup(iss->value.string);
+    token->payload->iss = buffer_pool_strdup(iss->value.string);
   }
   
   json_value_t* sub = json_object_get(payload, "sub");
   if (sub && sub->type == JSON_STRING) {
     if (token->payload->sub) {
-      free(token->payload->sub);
+      buffer_pool_free_safe(token->payload->sub);
     }
-    token->payload->sub = strdup(sub->value.string);
+    token->payload->sub = buffer_pool_strdup(sub->value.string);
   }
   
   json_value_t* aud = json_object_get(payload, "aud");
   if (aud && aud->type == JSON_STRING) {
     if (token->payload->aud) {
-      free(token->payload->aud);
+      buffer_pool_free_safe(token->payload->aud);
     }
-    token->payload->aud = strdup(aud->value.string);
+    token->payload->aud = buffer_pool_strdup(aud->value.string);
   }
   
   json_value_t* exp = json_object_get(payload, "exp");
@@ -737,9 +737,9 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* jti = json_object_get(payload, "jti");
   if (jti && jti->type == JSON_STRING) {
     if (token->payload->jti) {
-      free(token->payload->jti);
+      buffer_pool_free_safe(token->payload->jti);
     }
-    token->payload->jti = strdup(jti->value.string);
+    token->payload->jti = buffer_pool_strdup(jti->value.string);
   }
   
   /* Add all other claims */
@@ -767,13 +767,13 @@ jwt_token_t* jwt_decode(const char* token_str) {
   }
   
   /* Set signature and token string */
-  token->signature = strdup(signature_b64);
-  token->token_str = strdup(token_str);
+  token->signature = buffer_pool_strdup(signature_b64);
+  token->token_str = buffer_pool_strdup(token_str);
   
   /* Clean up */
   json_free(header);
   json_free(payload);
-  free(token_copy);
+  buffer_pool_free_safe(token_copy);
   
   return token;
 }
