@@ -655,7 +655,8 @@ static int verify_password(const char* password, const char* password_hash) {
     unsigned int hash_value = 5381;
     
     /* DJB2 hash algorithm as used in the old method */
-    for (size_t i = 0; i < strlen(password); i++) {
+    size_t password_len = strlen(password);
+    for (size_t i = 0; i < password_len; i++) {
       hash_value = ((hash_value << 5) + hash_value) + password[i];
     }
     

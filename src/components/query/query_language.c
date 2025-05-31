@@ -6,50 +6,109 @@
 #include <ctype.h>
 #include <errno.h>
 
-/* Operator name mapping */
-static struct {
-  const char* name;
-  query_operator_t op;
-} operator_map[] = {
-  {"$eq", OP_EQ},
-  {"$ne", OP_NE},
-  {"$gt", OP_GT},
-  {"$gte", OP_GTE},
-  {"$lt", OP_LT},
-  {"$lte", OP_LTE},
-  {"$in", OP_IN},
-  {"$nin", OP_NIN},
-  {"$and", OP_AND},
-  {"$or", OP_OR},
-  {"$not", OP_NOT},
-  {"$nor", OP_NOR},
-  {"$all", OP_ALL},
-  {"$elemMatch", OP_ELEM_MATCH},
-  {"$size", OP_SIZE},
-  {"$exists", OP_EXISTS},
-  {"$type", OP_TYPE},
-  {NULL, 0} /* Sentinel */
-};
+/* Hash table for O(1) operator lookup */
+#define OPERATOR_HASH_SIZE 32
+static query_operator_t operator_hash_table[OPERATOR_HASH_SIZE];
+static const char* operator_names[OPERATOR_HASH_SIZE];
+static int hash_table_initialized = 0;
 
-/* Get operator name string from type */
+/* Simple hash function for operator names */
+static unsigned int hash_operator_name(const char* name) {
+  unsigned int hash = 5381;
+  int c;
+  while ((c = *name++)) {
+    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+  }
+  return hash % OPERATOR_HASH_SIZE;
+}
+
+/* Initialize the operator hash table */
+static void init_operator_hash_table(void) {
+  if (hash_table_initialized) return;
+  
+  /* Initialize all entries to OP_FIELD (default) */
+  for (int i = 0; i < OPERATOR_HASH_SIZE; i++) {
+    operator_hash_table[i] = OP_FIELD;
+    operator_names[i] = NULL;
+  }
+  
+  /* Populate hash table with known operators */
+  static struct {
+    const char* name;
+    query_operator_t op;
+  } operators[] = {
+    {"$eq", OP_EQ},
+    {"$ne", OP_NE},
+    {"$gt", OP_GT},
+    {"$gte", OP_GTE},
+    {"$lt", OP_LT},
+    {"$lte", OP_LTE},
+    {"$in", OP_IN},
+    {"$nin", OP_NIN},
+    {"$and", OP_AND},
+    {"$or", OP_OR},
+    {"$not", OP_NOT},
+    {"$nor", OP_NOR},
+    {"$all", OP_ALL},
+    {"$elemMatch", OP_ELEM_MATCH},
+    {"$size", OP_SIZE},
+    {"$exists", OP_EXISTS},
+    {"$type", OP_TYPE}
+  };
+  
+  for (size_t i = 0; i < sizeof(operators) / sizeof(operators[0]); i++) {
+    unsigned int hash = hash_operator_name(operators[i].name);
+    /* Handle collisions with linear probing */
+    while (operator_names[hash] != NULL) {
+      hash = (hash + 1) % OPERATOR_HASH_SIZE;
+    }
+    operator_hash_table[hash] = operators[i].op;
+    operator_names[hash] = operators[i].name;
+  }
+  
+  hash_table_initialized = 1;
+}
+
+/* Old operator_map array replaced with hash table above for O(1) lookup */
+
+/* Get operator name string from type using optimized lookup */
 const char* query_operator_name(query_operator_t op) {
-  for (int i = 0; operator_map[i].name != NULL; i++) {
-    if (operator_map[i].op == op) {
-      return operator_map[i].name;
+  /* Initialize hash table on first use */
+  if (!hash_table_initialized) {
+    init_operator_hash_table();
+  }
+  
+  /* Linear search through hash table entries (reverse lookup) */
+  for (int i = 0; i < OPERATOR_HASH_SIZE; i++) {
+    if (operator_names[i] != NULL && operator_hash_table[i] == op) {
+      return operator_names[i];
     }
   }
   return "unknown";
 }
 
-/* Parse operator type from name */
+/* Parse operator type from name using O(1) hash table lookup */
 query_operator_t query_parse_operator(const char* op_name) {
   if (!op_name) {
     return OP_FIELD; /* Default to field comparison */
   }
   
-  for (int i = 0; operator_map[i].name != NULL; i++) {
-    if (strcmp(operator_map[i].name, op_name) == 0) {
-      return operator_map[i].op;
+  /* Initialize hash table on first use */
+  if (!hash_table_initialized) {
+    init_operator_hash_table();
+  }
+  
+  /* Hash table lookup with linear probing for collision resolution */
+  unsigned int hash = hash_operator_name(op_name);
+  for (int probe = 0; probe < OPERATOR_HASH_SIZE; probe++) {
+    unsigned int index = (hash + probe) % OPERATOR_HASH_SIZE;
+    if (operator_names[index] == NULL) {
+      /* Not found */
+      break;
+    }
+    if (strcmp(operator_names[index], op_name) == 0) {
+      /* Found */
+      return operator_hash_table[index];
     }
   }
   

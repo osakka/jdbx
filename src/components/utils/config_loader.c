@@ -2,6 +2,8 @@
 #include "utils/config_defaults.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
+#include "utils/config_string_pool.h"
 #include "core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -537,7 +539,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             free(config->db_path);
           }
           
-          config->db_path = strdup(path_val->value.string);
+          config->db_path = buffer_pool_strdup(path_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
             

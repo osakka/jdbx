@@ -95,9 +95,13 @@ CUSTOM_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CUSTOM_DB_SRCS))
 # Use only the binary format implementation
 FINAL_DB_OBJS = $(CUSTOM_DB_OBJS)
 
+# Performance optimization components (Phase 2 & 3)
+OPTIMIZATION_SRCS = $(SRC_DIR)/components/core/epoll_server.c $(SRC_DIR)/components/core/server_selector.c
+OPTIMIZATION_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(OPTIMIZATION_SRCS))
+
 # Define all optimized objects
 OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/authentication_handler.o $(API_OBJS) $(FINAL_DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(INIT_OBJS)
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(OPTIMIZATION_OBJS) $(INIT_OBJS)
 
 # List of objects for Makefile dependencies
 ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS)) \

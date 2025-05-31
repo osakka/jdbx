@@ -17,6 +17,9 @@
 #include "utils/config_defaults.h"
 #include "core/thread_pool.h"
 
+/* Forward declarations to avoid circular dependencies */
+typedef struct api_context api_context_t;
+
 /* Server configuration */
 #define DEFAULT_PORT 5000
 #define MAX_CONNECTIONS 100
@@ -237,5 +240,10 @@ int is_cors_allowed_origin(cors_config_t* cors, const char* origin);
 http_response_t* apply_cors_headers(http_response_t* response, 
                                    cors_config_t* cors, 
                                    const char* origin);
+
+/* Enhanced server modes for performance optimization */
+server_status_t run_server_auto(server_config_t* config, api_context_t* api_ctx);
+server_status_t run_server_epoll(server_config_t* config, api_context_t* api_ctx);
+server_status_t run_server_standard(server_config_t* config, api_context_t* api_ctx);
 
 #endif /* SERVER_H */

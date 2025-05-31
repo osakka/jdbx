@@ -387,10 +387,11 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
   
   /* Special handling for admin tokens from admin_api.c */
   /* Admin tokens are hex encoded strings starting with the hex representation of 'admin' */
-  if (token && strlen(token) > 16) {
+  size_t token_len = token ? strlen(token) : 0;
+  if (token && token_len > 16) {
     /* Check if it's a hex-encoded token */
     int is_hex = 1;
-    for (size_t i = 0; i < strlen(token); i++) {
+    for (size_t i = 0; i < token_len; i++) {
       if (!isxdigit((unsigned char)token[i])) {
         is_hex = 0;
         break;

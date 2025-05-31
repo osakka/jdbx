@@ -284,7 +284,8 @@ void* binary_deserialize_index(void* buffer, size_t size) {
     
     /* Calculate hash bucket */
     uint32_t hash = 0;
-    for (size_t j = 0; j < strlen(key_value); j++) {
+    size_t key_len = strlen(key_value);
+    for (size_t j = 0; j < key_len; j++) {
       hash = hash * 31 + key_value[j];
     }
     

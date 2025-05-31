@@ -22,7 +22,8 @@ char* generate_admin_auth_token(const char* username) {
   }
   
   /* Simple encoding (not secure, but sufficient for demo) */
-  for (size_t i = 0; i < strlen(token); i++) {
+  size_t token_len = strlen(token);
+  for (size_t i = 0; i < token_len; i++) {
     sprintf(encoded + (i * 2), "%02x", (unsigned char)token[i]);
   }
   

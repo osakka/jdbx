@@ -81,16 +81,8 @@ json_value_t* json_export_collection(database_t* db, const char* collection) {
     return NULL;
   }
   
-  /* Create a deep copy of the collection */
-  char* coll_str = json_stringify(coll);
-  if (!coll_str) {
-    json_free(result);
-    return NULL;
-  }
-  
-  json_value_t* coll_copy = json_parse(coll_str);
-  free(coll_str);
-  
+  /* Create a deep copy of the collection using optimized structural copy */
+  json_value_t* coll_copy = json_clone(coll);
   if (!coll_copy) {
     json_free(result);
     /* No need to free db_coll - it's managed by the database */
@@ -114,17 +106,14 @@ json_value_t* json_export_database(database_t* db) {
     return NULL;
   }
   
-  /* Create a deep copy of the collections object */
+  /* Create a deep copy of the collections object using optimized structural copy */
   pthread_mutex_lock(&db->lock);
-  char* db_str = json_stringify(db->collections);
+  json_value_t* result = json_clone(db->collections);
   pthread_mutex_unlock(&db->lock);
   
-  if (!db_str) {
+  if (!result) {
     return NULL;
   }
-  
-  json_value_t* result = json_parse(db_str);
-  free(db_str);
   
   return result;
 }
@@ -197,11 +186,9 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
     for (size_t i = 0; i < coll_data->value.array.size; i++) {
       json_value_t* doc = json_array_get(coll_data, i);
       if (doc && doc->type == JSON_OBJECT) {
-        /* Create deep copy */
-        char* doc_str = json_stringify(doc);
-        if (doc_str) {
-          json_value_t* doc_copy = json_parse(doc_str);
-          free(doc_str);
+        /* Create deep copy using optimized structural copy */
+        json_value_t* doc_copy = json_clone(doc);
+        if (doc_copy) {
           
           if (doc_copy) {
             json_array_append(existing_coll, doc_copy);
@@ -287,11 +274,9 @@ int json_import_database(database_t* db, json_value_t* data, int replace_mode, i
       for (size_t j = 0; j < coll_data->value.array.size; j++) {
         json_value_t* doc = json_array_get(coll_data, j);
         if (doc && doc->type == JSON_OBJECT) {
-          /* Create deep copy */
-          char* doc_str = json_stringify(doc);
-          if (doc_str) {
-            json_value_t* doc_copy = json_parse(doc_str);
-            free(doc_str);
+          /* Create deep copy using optimized structural copy */
+          json_value_t* doc_copy = json_clone(doc);
+          if (doc_copy) {
             
             if (doc_copy) {
               json_array_append(existing_coll, doc_copy);
