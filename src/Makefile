@@ -147,9 +147,9 @@ verify-organization:
 		exit 1; \
 	fi
 	@# Check for implementation files in wrong locations
-	@if find . -type f -name "*.c" | grep -v "./components/" | grep -q .; then \
-		echo "ERROR: Implementation files found outside components directory"; \
-		find . -type f -name "*.c" | grep -v "./components/"; \
+	@if find . -type f -name "*.c" | grep -v "./components/" | grep -v "./initialize/" | grep -q .; then \
+		echo "ERROR: Implementation files found outside components or initialize directories"; \
+		find . -type f -name "*.c" | grep -v "./components/" | grep -v "./initialize/"; \
 		exit 1; \
 	fi
 	@# Check for header files in wrong locations
