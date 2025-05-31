@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: May 31, 2025 (v2.0.11)
+**Last Updated**: May 31, 2025 (v2.0.9)
 
 ## Core Principles
 
