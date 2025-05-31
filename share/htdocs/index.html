@@ -701,6 +701,9 @@
                     <div class="panel-header">
                         <span><i class="bi bi-collection"></i> Collections</span>
                         <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-unified btn-icon-only" onclick="createNewCollection()" title="Create Collection">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
                             <button class="btn btn-sm btn-unified btn-icon-only" onclick="showSchemaManager()" title="Manage Schemas">
                                 <i class="bi bi-file-code"></i>
                             </button>
@@ -728,9 +731,14 @@
                             <span><i class="bi bi-file-text"></i> <span id="panelTitle">Documents</span></span>
                             <span class="badge bg-primary ms-2" id="documentCount">0</span>
                         </div>
-                        <button class="btn btn-sm btn-unified btn-icon-only" onclick="toggleQueryBuilder()" title="Query Builder">
-                            <i class="bi bi-funnel"></i>
-                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-unified btn-icon-only" onclick="createNewDocument()" title="Create New Document">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                            <button class="btn btn-sm btn-unified btn-icon-only" onclick="toggleQueryBuilder()" title="Query Builder">
+                                <i class="bi bi-funnel"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="search-box" id="documentsSearchBox">
                         <input type="text" id="documentSearch" placeholder="Search documents..." onkeyup="filterDocuments()">

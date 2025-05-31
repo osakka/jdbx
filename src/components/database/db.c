@@ -42,15 +42,15 @@ static char* generate_simple_id() {
  */
 database_t* db_init(const char* path) {
   if (!path) {
-    LOG_ERROR("initialize database: path is NULL");
+    LOG_ERROR("Database initialization failed: path parameter is NULL");
     return NULL;
   }
 
-  LOG_INFO("Binary format: %s", path);
+  TRACE_DB("Initializing database with path: %s", path);
 
   database_t* db = (database_t*)malloc(sizeof(database_t));
   if (!db) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Database initialization failed: %s", strerror(errno));
     return NULL;
   }
 
@@ -65,11 +65,11 @@ database_t* db_init(const char* path) {
   db->persistence = NULL;
   db->is_bootstrap_mode = 0;
 
-  LOG_DEBUG("Initialized");
+  TRACE_DB("Database structure initialized");
 
   /* Load database if file exists */
   if (access(path, F_OK) != -1) {
-    LOG_INFO("Loading from: %s", path);
+    LOG_DEBUG("Loading existing database from: %s", path);
     
     /* Try to load as binary format */
     database_t* loaded_db = (database_t*)binary_deserialize_database(path);
@@ -84,18 +84,18 @@ database_t* db_init(const char* path) {
       pthread_mutex_destroy(&loaded_db->lock);
       free(loaded_db);
       
-      LOG_INFO("Load successful");
+      LOG_DEBUG("Database loaded successfully");
     } else {
-      LOG_WARNING("Load failed, creating new database");
+      LOG_WARNING("Database load failed, creating new database");
     }
   } else {
-    LOG_INFO("Creating new database: %s", path);
+    LOG_DEBUG("Creating new database: %s", path);
   }
 
   /* NOTE: Persistence thread will be started after daemonization to ensure it survives fork() */
-  LOG_INFO("Persistence thread will be started after server initialization");
+  TRACE_DB("Persistence thread will be started after server initialization");
 
-  LOG_INFO("Initialization complete");
+  LOG_INFO("Database initialized: %s", path);
   return db;
 }
 
@@ -445,7 +445,7 @@ json_value_t* db_list_collections_with_info(database_t* db) {
  * Insert document - Binary format optimized
  */
 json_value_t* db_insert_document(database_t* db, const char* collection_name, json_value_t* document) {
-  LOG_INFO("document insertion for collection '%s'" ? collection_name : "NULL");
+  TRACE_DB("Processing document insertion for collection: %s", collection_name ? collection_name : "NULL");
   
   /* Start operation timer */
   timer_context_t* op_timer = NULL;
@@ -467,43 +467,43 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   }
   
   if (!db || !collection_name || !document || document->type != JSON_OBJECT) {
-    LOG_ERROR("Invalid parameters");
+    LOG_ERROR("Document insertion failed: invalid parameters (db=%p, collection=%s, document=%p)", db, collection_name, document);
     if (op_timer) {
       metrics_timer_stop(op_timer);
     }
     return NULL;
   }
   
-  LOG_DEBUG("Creating document copy");
+  TRACE_DB("Creating document copy");
   json_value_t* doc_copy = json_deep_copy(document);
   if (!doc_copy) {
-    LOG_ERROR("create document copy");
+    LOG_ERROR("Document insertion failed: unable to create document copy");
     if (op_timer) {
       metrics_timer_stop(op_timer);
     }
     return NULL;
   }
   
-  LOG_DEBUG("Checking for existing document ID");
+  TRACE_DB("Checking for existing document ID");
   json_value_t* existing_id = json_object_get(doc_copy, "_id");
   
   if (!existing_id || existing_id->type != JSON_STRING || strlen(json_get_string(existing_id)) == 0) {
     /* No valid existing ID, generate a new one */
-    LOG_DEBUG("No valid existing ID found, generating new one");
+    TRACE_DB("No valid existing ID found, generating new one");
     char* generated_id = generate_simple_id();
     if (generated_id) {
-      LOG_DEBUG("Generated new ID: %s", generated_id);
+      TRACE_DB("Generated new ID: %s", generated_id);
       json_object_set(doc_copy, "_id", json_create_string(generated_id));
       free(generated_id);
     } else {
-      LOG_ERROR("generate ID for document");
+      LOG_ERROR("Document insertion failed: unable to generate document ID");
       json_free(doc_copy);
       return NULL;
     }
   } else {
     /* Use the provided ID */
     const char* provided_id = json_get_string(existing_id);
-    LOG_DEBUG("Using provided ID: %s", provided_id);
+    TRACE_DB("Using provided ID: %s", provided_id);
     
     /* Check if this ID already exists in the collection */
     pthread_mutex_lock(&db->lock);
@@ -591,12 +591,11 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     return NULL;
   }
   
-  LOG_DEBUG("Adding document to collection");
+  TRACE_DB("Adding document to collection");
   json_array_append(collection, doc_copy);
   db->is_modified = 1;
   
-  /* Debug: Log collection size after append */
-  LOG_DEBUG("Collection size: %zu", collection->value.array.size);
+  TRACE_DB("Collection size after insert: %zu", collection->value.array.size);
   
   /* Notify persistence thread of document insertion */
   char* doc_str = json_stringify(doc_copy);
@@ -604,10 +603,10 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   if (doc_str) buffer_pool_free(doc_str);
   db_notify_data_change(db, doc_size);
   
-  LOG_DEBUG("Releasing lock");
+  TRACE_DB("Releasing database lock");
   pthread_mutex_unlock(&db->lock);
   
-  LOG_INFO("Inserted: %s", id_str);
+  LOG_DEBUG("Document inserted with ID: %s", id_str);
   
   /* Stop operation timer */
   if (op_timer) {
@@ -621,7 +620,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
  * Get document by ID - Binary format optimized
  */
 json_value_t* db_get_document(database_t* db, const char* collection_name, const char* id) {
-  LOG_INFO("document retrieval for collection '%s', ID '%s'", 
+  TRACE_DB("Retrieving document from collection '%s', ID '%s'", 
        collection_name ? collection_name : "NULL", 
        id ? id : "NULL");
   

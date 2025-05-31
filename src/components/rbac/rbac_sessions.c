@@ -2,6 +2,7 @@
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +75,14 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   
   /* Get the actual session ID from result */
   const char* actual_id = json_get_string(json_object_get(result, "_id"));
-  char* session_id_copy = actual_id ? strdup(actual_id) : NULL;
+  char* session_id_copy = NULL;
+  if (actual_id) {
+    size_t len = strlen(actual_id) + 1;
+    session_id_copy = (char*)buffer_pool_alloc(len);
+    if (session_id_copy) {
+      memcpy(session_id_copy, actual_id, len);
+    }
+  }
   json_free(result);
   
   if (!session_id_copy) {
@@ -129,7 +137,11 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   json_value_t* user_id_val = json_object_get(session, "user_id");
   char* user_id = NULL;
   if (user_id_val && user_id_val->type == JSON_STRING) {
-    user_id = strdup(user_id_val->value.string);
+    size_t len = strlen(user_id_val->value.string) + 1;
+    user_id = (char*)buffer_pool_alloc(len);
+    if (user_id) {
+      memcpy(user_id, user_id_val->value.string, len);
+    }
   }
   
   /* Update last seen */

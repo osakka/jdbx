@@ -79,6 +79,8 @@ api_route_t routes[] = {
   
   /* System info routes */
   {"/api/system/info", HTTP_GET, api_handle_system_info, 1},
+  {"/api/system/log-control", HTTP_GET, api_handle_log_control, 1},
+  {"/api/system/log-control", HTTP_POST, api_handle_log_control, 1},
   
   /* OpenAPI specification route */
   {"/api/openapi.json", HTTP_GET, api_handle_openapi_spec, 0},
@@ -599,7 +601,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
 
 /* Authentication handlers */
 
-/* Login handler - moved to api_login_fix.c */
+/* Login handler - implemented in authentication_handler.c */
 #if 0
 http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request || !request->body) {

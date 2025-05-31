@@ -1,5 +1,5 @@
-#ifndef RBAC_ENHANCED_H
-#define RBAC_ENHANCED_H
+#ifndef RBAC_PERMISSIONS_H
+#define RBAC_PERMISSIONS_H
 
 #include "rbac/rbac.h"
 #include "database/database.h"
@@ -16,7 +16,7 @@
  * @param path Path to RBAC file (ignored, no longer used)
  * @return Initialized RBAC system or NULL on failure
  */
-rbac_system_t* rbac_enhanced_init(database_t* db, const char* path);
+rbac_system_t* rbac_permissions_init(database_t* db, const char* path);
 
 /**
  * Database-only RBAC save function
@@ -26,6 +26,6 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path);
  * @param path Path to RBAC file (ignored, no longer used)
  * @return 1 on success, 0 on failure
  */
-int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path);
+int rbac_permissions_save(database_t* db, rbac_system_t* rbac, const char* path);
 
-#endif /* RBAC_ENHANCED_H */
+#endif /* RBAC_PERMISSIONS_H */

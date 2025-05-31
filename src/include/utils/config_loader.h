@@ -61,4 +61,19 @@ void config_free(server_config_t* config);
  */
 void config_init_defaults(server_config_t* config);
 
+/**
+ * Load configuration overrides from database
+ * This provides the highest priority configuration (after defaults, env, flags)
+ * @param config Pointer to the configuration structure
+ * @return 1 on success, 0 on failure (non-fatal - database config is optional)
+ */
+int config_load_from_database(server_config_t* config);
+
+/**
+ * Save configuration changes to database
+ * @param config Pointer to the configuration structure  
+ * @return 1 on success, 0 on failure
+ */
+int config_save_to_database(const server_config_t* config);
+
 #endif /* CONFIG_LOADER_H */

@@ -879,29 +879,29 @@ int jwt_verify(const char* token_str, const char* secret) {
   buffer_pool_free_safe(header_payload);
   buffer_pool_free_safe(signature);
   
-  LOG_TRACE("JWT: Verification result: %d", result);
+  TRACE_AUTH("JWT verification result: %d", result);
   return result;
 }
 
 /* Create a refresh token */
 jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, time_t expiry) {
-  LOG_DEBUG("JWT_DEBUG: Entering jwt_create_refresh_token");
+  TRACE_AUTH("Creating refresh token for user: %s", user_id ? user_id : "NULL");
   if (!secret || !user_id) {
-    LOG_DEBUG("JWT_DEBUG: Invalid parameters for refresh token");
+    LOG_ERROR("Refresh token creation failed: invalid parameters");
     return NULL;
   }
   
   /* Create new token */
-  LOG_DEBUG("JWT_DEBUG: About to create refresh token structure");
+  TRACE_AUTH("Creating refresh token structure");
   jwt_token_t* token = jwt_create(secret);
   if (!token) {
-    LOG_DEBUG("JWT_DEBUG: Failed to create refresh token structure");
+    LOG_ERROR("Refresh token creation failed: unable to create token structure");
     return NULL;
   }
-  LOG_DEBUG("JWT_DEBUG: Refresh token structure created successfully");
+  TRACE_AUTH("Refresh token structure created");
   
   /* Set token claims */
-  LOG_DEBUG("JWT_DEBUG: Setting refresh token claims");
+  TRACE_AUTH("Setting refresh token claims");
   jwt_set_subject(token, user_id);
   jwt_set_issuer(token, "jsondb");
   
@@ -912,61 +912,61 @@ jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, t
   jwt_set_expiration(token, expiry);
   
   /* Add refresh token claim */
-  LOG_DEBUG("JWT_DEBUG: About to add refresh token type claim");
+  TRACE_AUTH("Adding refresh token type claim");
   jwt_add_claim(token, "type", json_create_string("refresh"));
-  LOG_DEBUG("JWT_DEBUG: Refresh token creation completed successfully");
+  TRACE_AUTH("Refresh token creation completed");
   
   return token;
 }
 
 /* Create both access and refresh tokens and return them as a pair */
 char* jwt_create_token_pair(const char* secret, const char* user_id, const char* username, json_value_t** response_json) {
-  LOG_DEBUG("JWT_DEBUG: Entering jwt_create_token_pair");
+  TRACE_AUTH("Creating token pair for user: %s", username ? username : "NULL");
   if (!secret || !user_id || !username || !response_json) {
-    LOG_DEBUG("JWT_DEBUG: Invalid parameters");
+    LOG_ERROR("Token pair creation failed: invalid parameters");
     return NULL;
   }
   
   /* Create access token */
-  LOG_DEBUG("JWT_DEBUG: About to create access token");
+  TRACE_AUTH("Creating access token");
   jwt_token_t* access_token = jwt_create(secret);
   if (!access_token) {
-    LOG_DEBUG("JWT_DEBUG: Failed to create access token");
+    LOG_ERROR("Token pair creation failed: unable to create access token");
     return NULL;
   }
-  LOG_DEBUG("JWT_DEBUG: Access token created successfully");
+  TRACE_AUTH("Access token created");
   
   /* Set access token claims */
-  LOG_DEBUG("JWT_DEBUG: Setting access token claims");
+  TRACE_AUTH("Setting access token claims");
   jwt_set_subject(access_token, user_id);
   jwt_set_issuer(access_token, "jsondb");
   jwt_set_expiration(access_token, time(NULL) + (30 * 60)); /* 30 minutes */
   jwt_add_claim(access_token, "username", json_create_string(username));
   jwt_add_claim(access_token, "type", json_create_string("access"));
-  LOG_DEBUG("JWT_DEBUG: Access token claims set");
+  TRACE_AUTH("Access token claims set");
   
   /* Create refresh token */
-  LOG_DEBUG("JWT_DEBUG: About to create refresh token");
+  TRACE_AUTH("Creating refresh token");
   jwt_token_t* refresh_token = jwt_create_refresh_token(secret, user_id, 0); /* Use default expiry */
   if (!refresh_token) {
-    LOG_DEBUG("JWT_DEBUG: Failed to create refresh token");
+    LOG_ERROR("Token pair creation failed: unable to create refresh token");
     jwt_free(access_token);
     return NULL;
   }
-  LOG_DEBUG("JWT_DEBUG: Refresh token created successfully");
+  TRACE_AUTH("Refresh token created");
   
   /* Encode tokens */
-  LOG_DEBUG("JWT_DEBUG: About to encode access token");
+  TRACE_AUTH("Encoding access token");
   char* access_token_str = jwt_encode(access_token, secret);
-  LOG_DEBUG("JWT_DEBUG: About to encode refresh token");
+  TRACE_AUTH("Encoding refresh token");
   char* refresh_token_str = jwt_encode(refresh_token, secret);
-  LOG_DEBUG("JWT_DEBUG: Both tokens encoded successfully");
+  TRACE_AUTH("Both tokens encoded successfully");
   
   /* Free token structures */
-  LOG_DEBUG("JWT_DEBUG: About to free token structures");
+  TRACE_AUTH("Freeing token structures");
   jwt_free(access_token);
   jwt_free(refresh_token);
-  LOG_DEBUG("JWT_DEBUG: Token structures freed");
+  TRACE_AUTH("Token structures freed");
   
   if (!access_token_str || !refresh_token_str) {
     if (access_token_str) buffer_pool_free(access_token_str);
@@ -1036,11 +1036,13 @@ int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char
   }
   
   /* Set the output parameter */
-  *user_id = strdup(token->payload->sub);
+  size_t len = strlen(token->payload->sub) + 1;
+  *user_id = (char*)buffer_pool_alloc(len);
   if (!*user_id) {
     jwt_free(token);
     return 0;
   }
+  memcpy(*user_id, token->payload->sub, len);
   
   /* Clean up */
   jwt_free(token);

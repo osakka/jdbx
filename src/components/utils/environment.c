@@ -1,4 +1,5 @@
 #include "utils/environment.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -268,6 +269,21 @@ int load_environment_config(server_config_t* config) {
   const char* use_ssl = getenv("JSONDB_USE_SSL");
   if (use_ssl) {
     config->use_ssl = (strcmp(use_ssl, "true") == 0 || strcmp(use_ssl, "1") == 0);
+  }
+  
+  /* Apply log configuration to active logger if it exists */
+  if (g_logger) {
+    const char* runtime_log_level = getenv("JSONDB_LOG_LEVEL");
+    if (runtime_log_level) {
+      log_level_t level = logger_parse_level(runtime_log_level);
+      logger_set_level(level);
+    }
+    
+    const char* trace_categories = getenv("JSONDB_TRACE_CATEGORIES");
+    if (trace_categories) {
+      trace_category_t mask = logger_parse_trace(trace_categories);
+      logger_set_trace_mask(mask);
+    }
   }
   
   /* Normalize all paths to absolute */

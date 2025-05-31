@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: January 28, 2025 (v2.0.6)
+**Last Updated**: May 31, 2025 (v2.0.11)
 
 ## Core Principles
 
@@ -25,6 +25,28 @@
  18. Maintain consistent logging format - avoid redundant prefixes since file/function/line are in log format
  19. Clean workspace regularly - move backup files and temporary scripts to trash/
  20. Verify all changes compile cleanly before committing
+ 21. Follow three-tier configuration priority: env file (lowest) → binary flags (medium) → database config (highest)
+ 22. Never hardcode paths, hostnames, or configuration values - all must be configurable
+ 23. Use production-ready defaults (e.g., 0.0.0.0 for host, not development hostnames)
+
+## Configuration Management Guidelines
+
+The JSONdb server implements a comprehensive three-tier configuration system:
+
+1. **Environment File** (Lowest Priority): `/opt/jsondb/share/config/jsondb.env`
+2. **Binary Flags** (Medium Priority): Command-line arguments to jsondb_server
+3. **Database Config** (Highest Priority): `_system_config` collection for runtime changes
+
+### Configuration Principles:
+- **NO HARDCODED VALUES**: All paths, hostnames, ports, and settings must be configurable
+- **PRODUCTION READY**: Use 0.0.0.0 for host binding, not development-specific hostnames
+- **RUNTIME FLEXIBILITY**: Database configuration overrides allow live configuration changes
+- **SINGLE SOURCE**: Configuration defaults centralized in `src/include/utils/config_defaults.h`
+
+### Thread Pool Configuration:
+- **CONFIGURABLE**: Thread pool min/max, queue size, and idle timeout are all configurable
+- **DEFAULTS**: Reasonable defaults (4-16 threads) suitable for most deployments
+- **SCALABLE**: Can be adjusted per deployment size and resource requirements
 
 ## Build and Run Guidelines
 

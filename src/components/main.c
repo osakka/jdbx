@@ -27,6 +27,7 @@ static void print_usage(const char* program_name) {
   printf(" -t, --terminate        Terminate running server instance\n");
   printf(" -V, --verbose         Enable verbose logging\n");
   printf(" -l, --log-level=LEVEL     Set log level (error, warn, info, debug, trace)\n");
+  printf(" -x, --trace-categories=CATS Set trace categories (database,rbac,api,auth,transaction,binary,javascript,network,metrics,memory,all)\n");
   printf(" -b, --db-dir=DIRECTORY    Set database directory\n");
   printf(" -r, --rbac-file=FILE     Set RBAC file path\n");
   printf(" -i, --pid-file=FILE      Set PID file path\n");

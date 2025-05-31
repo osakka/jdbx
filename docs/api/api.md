@@ -1,51 +1,51 @@
 # JSONdb REST API Documentation
 
-**Version**: 2.0.6  
-**Last Updated**: January 30, 2025
+Complete REST API reference for JSONdb server.
 
-This document provides comprehensive details on the REST API endpoints available in the JSON Database Server.
+**Version**: 2.0.8  
+**Last Updated**: May 31, 2025  
+**Base URL**: `http://localhost:5000`
 
 ## Table of Contents
-
-- [Base URL](#base-url)
-- [Authentication](#authentication)
-- [Authentication Endpoints](#authentication-endpoints)
-- [Session Management](#session-management)
-- [Collections](#collections)
-- [Documents](#documents)
-- [User Management](#user-management)
-- [Role Management](#role-management)
-- [RBAC API](#rbac-api)
-- [Metrics](#metrics)
-- [System Information](#system-information)
-- [Health Check](#health-check)
-- [Configuration](#configuration)
-- [Schema Validation](#schema-validation)
-- [Import/Export](#importexport)
-- [Indexes](#indexes)
-- [JavaScript Extensions](#javascript-extensions)
-- [Transactions](#transactions)
-- [Cache Management](#cache-management)
-- [OpenAPI Specification](#openapi-specification)
-- [Error Responses](#error-responses)
-
-## Base URL
-
-All API endpoints are relative to the base URL of the server:
-
-```
-http://localhost:5000
-```
+1. [Authentication](#authentication)
+2. [Authentication Endpoints](#authentication-endpoints)
+3. [Session Management](#session-management)
+4. [Collections](#collections)
+5. [Documents](#documents)
+6. [User Management](#user-management)
+7. [Role Management](#role-management)
+8. [RBAC API](#rbac-api)
+9. [Metrics](#metrics)
+10. [System Information](#system-information)
+11. [Health Check](#health-check)
+12. [Configuration](#configuration)
+13. [Schema Validation](#schema-validation)
+14. [Import/Export](#importexport)
+15. [Indexes](#indexes)
+16. [JavaScript Extensions](#javascript-extensions)
+17. [Transactions](#transactions)
+18. [Cache Management](#cache-management)
+19. [OpenAPI Specification](#openapi-specification)
+20. [Error Responses](#error-responses)
+21. [Examples](#examples)
 
 ## Authentication
 
-The API uses JWT (JSON Web Token) for authentication. Most endpoints require a valid token to be included in the `Authorization` header:
+The JSONdb API uses JWT (JSON Web Token) for authentication. Include the token in the `Authorization` header:
 
 ```
 Authorization: Bearer <your-jwt-token>
 ```
 
-**Note**: Some collection and document endpoints currently have authentication disabled for testing purposes. These are marked in the endpoint descriptions.
+**Session Management:**
+- Access tokens expire after 30 minutes of inactivity
+- Sessions are automatically refreshed on activity
+- Maximum 5 concurrent sessions per user (configurable)
+
+**API Tokens:**
+- Long-lived tokens for programmatic access
+- Default expiration: 1 year (configurable)
+- Can be revoked manually through admin interface
 
 ## Authentication Endpoints
 
@@ -170,7 +170,7 @@ Returns all active sessions (admin only).
 
 - **URL**: `/api/sessions`
 - **Method**: `GET`
-- **Auth Required**: Yes
+- **Auth Required**: Yes (admin)
 - **Success Response**: `200 OK`
   ```json
   {
@@ -179,9 +179,10 @@ Returns all active sessions (admin only).
         "id": "string",
         "user_id": "string",
         "username": "string",
-        "created_at": "number",
-        "last_accessed": "number",
-        "expires_at": "number",
+        "created_at": "ISO8601 timestamp",
+        "last_seen": "ISO8601 timestamp",
+        "expires_at": "ISO8601 timestamp",
+        "active": true,
         "ip_address": "string",
         "user_agent": "string"
       }
@@ -191,7 +192,7 @@ Returns all active sessions (admin only).
 
 ### Get Active Sessions
 
-Returns currently active sessions.
+Returns currently active sessions for the authenticated user.
 
 - **URL**: `/api/sessions/active`
 - **Method**: `GET`
@@ -204,11 +205,10 @@ Returns currently active sessions.
         "id": "string",
         "user_id": "string",
         "username": "string",
-        "created_at": "number",
-        "last_accessed": "number",
-        "expires_at": "number",
-        "ip_address": "string",
-        "user_agent": "string"
+        "created_at": "ISO8601 timestamp",
+        "last_seen": "ISO8601 timestamp",
+        "expires_at": "ISO8601 timestamp",
+        "active": true
       }
     ]
   }
@@ -218,7 +218,7 @@ Returns currently active sessions.
 
 Terminates a specific session.
 
-- **URL**: `/api/sessions/`
+- **URL**: `/api/sessions/terminate`
 - **Method**: `POST`
 - **Auth Required**: Yes
 - **Request Body**:
@@ -237,19 +237,17 @@ Terminates a specific session.
 
 ## Collections
 
-**Note**: Collection endpoints currently have authentication disabled for testing purposes.
-
 ### List Collections
 
 Returns all collections in the database.
 
 - **URL**: `/api/collections`
 - **Method**: `GET`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Success Response**: `200 OK`
   ```json
   {
-    "collections": ["collection1", "collection2", "..."]
+    "collections": ["users", "posts", "products"]
   }
   ```
 
@@ -259,7 +257,7 @@ Creates a new collection.
 
 - **URL**: `/api/collections`
 - **Method**: `POST`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Request Body**:
   ```json
   {
@@ -282,7 +280,7 @@ Deletes a collection and all its documents.
 
 - **URL**: `/api/collections/{collection_name}`
 - **Method**: `DELETE`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Success Response**: `204 No Content`
 - **Error Responses**:
   - `404 Not Found`: Collection not found
@@ -290,15 +288,13 @@ Deletes a collection and all its documents.
 
 ## Documents
 
-**Note**: Document endpoints currently have authentication disabled for testing purposes.
-
 ### Query Documents
 
 Queries documents in a collection with optional filters and pagination.
 
 - **URL**: `/api/collections/{collection_name}/documents`
 - **Method**: `GET`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Query Parameters**: 
   - `query` - JSON query object (see Query Language documentation)
   - `page` - Page number (for offset pagination)
@@ -320,8 +316,6 @@ Queries documents in a collection with optional filters and pagination.
       "page": 1,
       "page_size": 10,
       "total_pages": 10,
-      "total_count": 100,
-      "page_count": 10,
       "has_next_page": true,
       "has_prev_page": false,
       "next_cursor": "string",
@@ -336,7 +330,7 @@ Retrieves a specific document by ID.
 
 - **URL**: `/api/collections/{collection_name}/documents/{document_id}`
 - **Method**: `GET`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Success Response**: `200 OK`
   ```json
   {
@@ -354,7 +348,7 @@ Creates a new document in a collection.
 
 - **URL**: `/api/collections/{collection_name}/documents`
 - **Method**: `POST`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Request Body**: JSON document
 - **Success Response**: `201 Created`
   ```json
@@ -373,7 +367,7 @@ Updates an existing document (complete replacement).
 
 - **URL**: `/api/collections/{collection_name}/documents/{document_id}`
 - **Method**: `PUT`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Request Body**: Complete JSON document
 - **Success Response**: `200 OK`
   ```json
@@ -392,7 +386,7 @@ Deletes a document from a collection.
 
 - **URL**: `/api/collections/{collection_name}/documents/{document_id}`
 - **Method**: `DELETE`
-- **Auth Required**: No (temporarily disabled)
+- **Auth Required**: Yes
 - **Success Response**: `204 No Content`
 - **Error Responses**:
   - `404 Not Found`: Document or collection not found
@@ -413,7 +407,11 @@ Returns all users (admin only).
     "users": [
       {
         "id": "string",
-        "username": "string"
+        "username": "string",
+        "cn": "string",
+        "email": "string",
+        "active": true,
+        "roles": ["string"]
       }
     ]
   }
@@ -431,7 +429,12 @@ Returns details for a specific user.
   {
     "id": "string",
     "username": "string",
-    "roles": ["string"]
+    "cn": "string",
+    "email": "string",
+    "active": true,
+    "roles": ["string"],
+    "created_at": "ISO8601 timestamp",
+    "updated_at": "ISO8601 timestamp"
   }
   ```
 
@@ -446,14 +449,19 @@ Creates a new user (admin only).
   ```json
   {
     "username": "string",
-    "password": "string"
+    "cn": "string",
+    "email": "string",
+    "password": "string",
+    "roles": ["string"]
   }
   ```
 - **Success Response**: `201 Created`
   ```json
   {
     "id": "string",
-    "username": "string"
+    "username": "string",
+    "cn": "string",
+    "email": "string"
   }
   ```
 
@@ -467,17 +475,13 @@ Updates user information.
 - **Request Body**:
   ```json
   {
-    "username": "string",
-    "password": "string"
+    "cn": "string",
+    "email": "string",
+    "password": "string",
+    "roles": ["string"]
   }
   ```
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "id": "string",
-    "username": "string"
-  }
-  ```
 
 ### Delete User
 
@@ -504,6 +508,8 @@ Returns all roles.
       {
         "id": "string",
         "name": "string",
+        "cn": "string",
+        "description": "string",
         "permissions": {}
       }
     ]
@@ -522,7 +528,14 @@ Returns details for a specific role.
   {
     "id": "string",
     "name": "string",
-    "permissions": {}
+    "cn": "string",
+    "description": "string",
+    "permissions": {
+      "collections": {
+        "collection_name": ["CREATE", "READ", "UPDATE", "DELETE"]
+      },
+      "system": ["string"]
+    }
   }
   ```
 
@@ -536,16 +549,13 @@ Creates a new role (admin only).
 - **Request Body**:
   ```json
   {
-    "name": "string"
+    "name": "string",
+    "cn": "string",
+    "description": "string",
+    "permissions": {}
   }
   ```
 - **Success Response**: `201 Created`
-  ```json
-  {
-    "id": "string",
-    "name": "string"
-  }
-  ```
 
 ### Update Role
 
@@ -558,6 +568,8 @@ Updates role information (admin only).
   ```json
   {
     "name": "string",
+    "cn": "string", 
+    "description": "string",
     "permissions": {}
   }
   ```
@@ -574,13 +586,109 @@ Deletes a role (admin only).
 
 ## RBAC API
 
-The RBAC system includes additional endpoints registered through the RBAC API module. See the [RBAC API documentation](RBAC_API.md) for complete details on:
+Enhanced RBAC endpoints for comprehensive user and role management.
 
-- `/api/rbac/roles` - Enhanced role management
-- `/api/rbac/users` - Enhanced user management  
-- `/api/rbac/permissions` - Permission management
-- `/api/rbac/roles/{id}/permissions` - Role permission assignment
-- `/api/rbac/roles/{id}/users` - Role user assignment
+### Enhanced User Management
+
+#### Get All Users
+- **URL**: `/api/rbac/users`
+- **Method**: `GET`
+- **Auth Required**: Yes (admin)
+- **Success Response**: Array of user objects
+
+#### Create User with RBAC
+- **URL**: `/api/rbac/users`
+- **Method**: `POST`
+- **Auth Required**: Yes (admin)
+- **Request Body**:
+  ```json
+  {
+    "username": "string",
+    "cn": "string",
+    "email": "string",
+    "password": "string",
+    "roles": ["role_id"]
+  }
+  ```
+
+#### Update User Password
+- **URL**: `/api/rbac/users/{user_id}/password`
+- **Method**: `PUT`
+- **Auth Required**: Yes (admin or owner)
+- **Request Body**:
+  ```json
+  {
+    "current_password": "string",
+    "new_password": "string"
+  }
+  ```
+
+### Enhanced Role Management
+
+#### Get All Roles
+- **URL**: `/api/rbac/roles`
+- **Method**: `GET`
+- **Auth Required**: Yes (admin)
+
+#### Grant Permission to Role
+- **URL**: `/api/rbac/roles/{role_id}/permissions`
+- **Method**: `POST`
+- **Auth Required**: Yes (admin)
+- **Request Body**:
+  ```json
+  {
+    "resource_type": "COLLECTION",
+    "resource_id": "collection_name",
+    "permission": "READ"
+  }
+  ```
+
+#### Revoke Permission from Role
+- **URL**: `/api/rbac/roles/{role_id}/permissions`
+- **Method**: `DELETE`
+- **Auth Required**: Yes (admin)
+
+#### Add User to Role
+- **URL**: `/api/rbac/roles/{role_id}/users/{user_id}`
+- **Method**: `POST`
+- **Auth Required**: Yes (admin)
+
+#### Remove User from Role
+- **URL**: `/api/rbac/roles/{role_id}/users/{user_id}`
+- **Method**: `DELETE`
+- **Auth Required**: Yes (admin)
+
+### API Token Management
+
+#### Generate API Token
+- **URL**: `/api/rbac/tokens`
+- **Method**: `POST`
+- **Auth Required**: Yes
+- **Request Body**:
+  ```json
+  {
+    "name": "string",
+    "expires_at": "ISO8601 timestamp"
+  }
+  ```
+- **Success Response**: `201 Created`
+  ```json
+  {
+    "token": "string",
+    "token_id": "string",
+    "expires_at": "ISO8601 timestamp"
+  }
+  ```
+
+#### List API Tokens
+- **URL**: `/api/rbac/tokens`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+#### Revoke API Token
+- **URL**: `/api/rbac/tokens/{token_id}`
+- **Method**: `DELETE`
+- **Auth Required**: Yes
 
 ## Metrics
 
@@ -642,7 +750,7 @@ Returns historical metrics data.
     "type": "operations",
     "data": [
       {
-        "timestamp": "2025-01-30T10:00:00Z",
+        "timestamp": "ISO8601 timestamp",
         "total": 100,
         "database": 40,
         "read": 60,
@@ -652,22 +760,22 @@ Returns historical metrics data.
   }
   ```
 
-### Get Aggregated Metrics
-
-Returns aggregated metrics over a time period.
-
-- **URL**: `/api/metrics/aggregate`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Success Response**: `200 OK`
-
 ### Export Metrics
 
-Exports metrics data.
+Exports metrics data in various formats.
 
 - **URL**: `/api/metrics/export`
 - **Method**: `POST`
 - **Auth Required**: Yes
+- **Request Body**:
+  ```json
+  {
+    "format": "json",
+    "type": "operations",
+    "start_date": "ISO8601 timestamp",
+    "end_date": "ISO8601 timestamp"
+  }
+  ```
 - **Success Response**: `200 OK`
 
 ## System Information
@@ -682,7 +790,7 @@ Returns system information and statistics.
 - **Success Response**: `200 OK`
   ```json
   {
-    "version": "2.0.6",
+    "version": "2.0.8",
     "uptime": 3600,
     "memory_usage": {
       "total": 8388608,
@@ -710,7 +818,7 @@ Simple endpoint to verify server is running.
   ```json
   {
     "status": "healthy",
-    "timestamp": 1706478000
+    "timestamp": 1748692471
   }
   ```
 
@@ -722,6 +830,11 @@ Lists available metric types.
 - **Method**: `GET`
 - **Auth Required**: No
 - **Success Response**: `200 OK`
+  ```json
+  {
+    "metrics": ["operations", "performance", "cache", "memory", "connections"]
+  }
+  ```
 
 ## Configuration
 
@@ -762,7 +875,7 @@ Returns all registered schemas.
 
 - **URL**: `/api/schemas`
 - **Method**: `GET`
-- **Auth Required**: No
+- **Auth Required**: Yes
 - **Success Response**: `200 OK`
   ```json
   {
@@ -782,7 +895,7 @@ Creates a new validation schema.
 
 - **URL**: `/api/schemas`
 - **Method**: `POST`
-- **Auth Required**: No
+- **Auth Required**: Yes (admin)
 - **Request Body**:
   ```json
   {
@@ -806,7 +919,7 @@ Returns a specific schema.
 
 - **URL**: `/api/schemas/{collection}`
 - **Method**: `GET`
-- **Auth Required**: No
+- **Auth Required**: Yes
 - **Success Response**: `200 OK`
 
 ### Update Schema
@@ -815,7 +928,7 @@ Updates an existing schema.
 
 - **URL**: `/api/schemas/{collection}`
 - **Method**: `PUT`
-- **Auth Required**: No
+- **Auth Required**: Yes (admin)
 - **Success Response**: `200 OK`
 
 ### Delete Schema
@@ -824,7 +937,7 @@ Deletes a schema.
 
 - **URL**: `/api/schemas/{collection}`
 - **Method**: `DELETE`
-- **Auth Required**: No
+- **Auth Required**: Yes (admin)
 - **Success Response**: `204 No Content`
 
 ### Validate Document
@@ -864,7 +977,7 @@ Exports database data.
 
 - **URL**: `/api/export`
 - **Method**: `POST`
-- **Auth Required**: Yes
+- **Auth Required**: Yes (admin)
 - **Request Body**:
   ```json
   {
@@ -873,7 +986,6 @@ Exports database data.
   }
   ```
 - **Success Response**: `200 OK`
-  Returns exported data as JSON
 
 ### Import Data
 
@@ -881,7 +993,7 @@ Imports data into the database.
 
 - **URL**: `/api/import`
 - **Method**: `POST`
-- **Auth Required**: Yes
+- **Auth Required**: Yes (admin)
 - **Request Body**: JSON data to import
 - **Success Response**: `200 OK`
   ```json
@@ -931,16 +1043,6 @@ Creates a new index on a field.
   }
   ```
 - **Success Response**: `201 Created`
-  ```json
-  {
-    "success": true,
-    "message": "Index created successfully",
-    "collection": "users",
-    "name": "email_index",
-    "field": "email",
-    "type": "unique"
-  }
-  ```
 
 ### Get Index
 
@@ -950,22 +1052,6 @@ Returns details about a specific index.
 - **Method**: `GET`
 - **Auth Required**: Yes
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "name": "email_index",
-    "field": "email",
-    "type": "unique",
-    "entries": 150,
-    "buckets": 100,
-    "collection": "users",
-    "sample_entries": [
-      {
-        "document_id": "doc-123",
-        "value": "user@example.com"
-      }
-    ]
-  }
-  ```
 
 ### Delete Index
 
@@ -975,47 +1061,6 @@ Deletes an index.
 - **Method**: `DELETE`
 - **Auth Required**: Yes
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "success": true,
-    "message": "Index dropped successfully",
-    "collection": "users",
-    "name": "email_index"
-  }
-  ```
-
-### Rebuild Index
-
-Rebuilds an index or all indexes in a collection.
-
-- **URL**: `/api/indexes/rebuild/{collection}/{index_name}`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Note**: If `index_name` is omitted, all indexes in the collection are rebuilt
-- **Success Response**: `200 OK`
-
-### Get Index Statistics
-
-Returns detailed statistics for an index.
-
-- **URL**: `/api/indexes/stats/{collection}/{index_name}`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Success Response**: `200 OK`
-  ```json
-  {
-    "name": "email_index",
-    "field": "email",
-    "type": "unique",
-    "entries": 150,
-    "buckets": 100,
-    "empty_buckets": 20,
-    "min_bucket_size": 0,
-    "max_bucket_size": 5,
-    "avg_bucket_size": 1.5,
-    "collection": "users"
-  }
-  ```
 
 ### Query Using Index
 
@@ -1029,46 +1074,6 @@ Queries documents using an index.
   {
     "field": "email",
     "value": "user@example.com",
-    "limit": 10,
-    "skip": 0
-  }
-  ```
-- **Success Response**: `200 OK`
-  ```json
-  {
-    "documents": [
-      {
-        "id": "doc-123",
-        "_id": "doc-123",
-        "email": "user@example.com",
-        "...": "other fields"
-      }
-    ],
-    "count": 1
-  }
-  ```
-
-### Compound Query Using Indexes
-
-Performs compound queries using multiple indexes.
-
-- **URL**: `/api/indexes/compound/{collection}`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Request Body**:
-  ```json
-  {
-    "operation": "AND",
-    "queries": [
-      {
-        "field": "role",
-        "value": "admin"
-      },
-      {
-        "field": "status",
-        "value": "active"
-      }
-    ],
     "limit": 10,
     "skip": 0
   }
@@ -1092,36 +1097,6 @@ Executes a JavaScript query on a collection.
   }
   ```
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "result": [
-      {
-        "_id": "doc-123",
-        "...": "document fields"
-      }
-    ]
-  }
-  ```
-
-### Evaluate JavaScript Code
-
-Evaluates arbitrary JavaScript code.
-
-- **URL**: `/api/js/eval`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Request Body**:
-  ```json
-  {
-    "code": "2 + 2"
-  }
-  ```
-- **Success Response**: `200 OK`
-  ```json
-  {
-    "result": 4
-  }
-  ```
 
 ### Register JavaScript Function
 
@@ -1139,26 +1114,6 @@ Registers a reusable JavaScript function.
   ```
 - **Success Response**: `201 Created`
 
-### Execute JavaScript Function
-
-Executes a registered JavaScript function.
-
-- **URL**: `/api/js/functions/{function_name}`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Request Body**:
-  ```json
-  {
-    "params": [1990]
-  }
-  ```
-- **Success Response**: `200 OK`
-  ```json
-  {
-    "result": 35
-  }
-  ```
-
 ### Register Document Validator
 
 Registers a JavaScript validator for a collection.
@@ -1171,22 +1126,6 @@ Registers a JavaScript validator for a collection.
   {
     "collection": "users",
     "code": "function(doc) { return doc.email && doc.email.includes('@'); }"
-  }
-  ```
-- **Success Response**: `201 Created`
-
-### Register Document Transformer
-
-Registers a JavaScript transformer for a collection.
-
-- **URL**: `/api/js/transformers`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Request Body**:
-  ```json
-  {
-    "collection": "users",
-    "code": "function(doc) { doc.fullName = doc.firstName + ' ' + doc.lastName; return doc; }"
   }
   ```
 - **Success Response**: `201 Created`
@@ -1206,13 +1145,12 @@ Starts a new transaction.
     "isolation_level": "read_committed"
   }
   ```
-  Valid isolation levels: `read_uncommitted`, `read_committed`, `serializable`
 - **Success Response**: `201 Created`
   ```json
   {
     "id": "txn-123",
     "state": "active",
-    "start_time": 1706478000,
+    "start_time": 1748692471,
     "isolation_level": "read_committed",
     "user_id": "user-123"
   }
@@ -1226,13 +1164,6 @@ Commits a transaction.
 - **Method**: `POST`
 - **Auth Required**: Yes
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "transaction_id": "txn-123",
-    "status": "committed",
-    "commit_time": 1706478100
-  }
-  ```
 
 ### Rollback Transaction
 
@@ -1242,50 +1173,15 @@ Rolls back a transaction.
 - **Method**: `DELETE`
 - **Auth Required**: Yes
 - **Success Response**: `200 OK`
-  ```json
-  {
-    "transaction_id": "txn-123",
-    "status": "aborted",
-    "abort_time": 1706478100
-  }
-  ```
 
 ### Transaction Operations
 
-Transactions support all document operations (query, create, update, delete) within the transaction context:
+All document operations can be performed within a transaction context by prefixing URLs with `/api/transactions/{txn_id}`:
 
 - **Query**: `GET /api/transactions/{txn_id}/collections/{collection}/documents`
 - **Create**: `POST /api/transactions/{txn_id}/collections/{collection}/documents`
 - **Update**: `PUT /api/transactions/{txn_id}/collections/{collection}/documents/{doc_id}`
 - **Delete**: `DELETE /api/transactions/{txn_id}/collections/{collection}/documents/{doc_id}`
-
-### Transaction Metrics
-
-Returns transaction performance metrics.
-
-- **URL**: `/api/transactions/metrics`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Success Response**: `200 OK`
-
-### Transaction Status
-
-Returns the status of a specific transaction.
-
-- **URL**: `/api/transactions/{transaction_id}`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Success Response**: `200 OK`
-
-### Transaction Logs
-
-Various endpoints for transaction logging and audit trails:
-
-- **Get Logs**: `GET /api/transactions/logs`
-- **Configure Logging**: `POST /api/transactions/logs/configure`
-- **Archive Logs**: `POST /api/transactions/logs/archive`
-- **Generate Report**: `GET /api/transactions/logs/report`
-- **Document History**: `GET /api/transactions/logs/document-history`
 
 ## Cache Management
 
@@ -1319,7 +1215,7 @@ Updates cache configuration.
 
 - **URL**: `/api/cache/configure`
 - **Method**: `POST`
-- **Auth Required**: Yes
+- **Auth Required**: Yes (admin)
 - **Request Body**:
   ```json
   {
@@ -1338,29 +1234,7 @@ Clears all cached entries.
 
 - **URL**: `/api/cache/clear`
 - **Method**: `POST`
-- **Auth Required**: Yes
-- **Success Response**: `200 OK`
-  ```json
-  {
-    "success": true,
-    "message": "Cache cleared successfully"
-  }
-  ```
-
-### Invalidate Cache
-
-Invalidates specific cache entries.
-
-- **URL**: `/api/cache/invalidate`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Request Body**:
-  ```json
-  {
-    "collection": "users",
-    "document_id": "doc-123"
-  }
-  ```
+- **Auth Required**: Yes (admin)
 - **Success Response**: `200 OK`
 
 ## OpenAPI Specification
@@ -1385,7 +1259,7 @@ All API endpoints follow a consistent error response format:
 }
 ```
 
-Common HTTP status codes:
+**Common HTTP Status Codes:**
 - `400 Bad Request` - The request was malformed or invalid
 - `401 Unauthorized` - Authentication is required or token is invalid
 - `403 Forbidden` - The authenticated user doesn't have sufficient permissions
@@ -1418,24 +1292,64 @@ curl -X GET http://localhost:5000/api/users \
 ```bash
 # Create a collection
 curl -X POST http://localhost:5000/api/collections \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "products"}'
 
 # Insert a document
 curl -X POST http://localhost:5000/api/collections/products/documents \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Widget", "price": 19.99, "category": "tools"}'
 
 # Query documents
-curl -X GET 'http://localhost:5000/api/collections/products/documents?query={"category":"tools"}'
+curl -X GET 'http://localhost:5000/api/collections/products/documents?query={"category":"tools"}' \
+  -H "Authorization: Bearer <token>"
 
 # Update a document
 curl -X PUT http://localhost:5000/api/collections/products/documents/doc-123 \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Super Widget", "price": 24.99, "category": "tools"}'
 
 # Delete a document
-curl -X DELETE http://localhost:5000/api/collections/products/documents/doc-123
+curl -X DELETE http://localhost:5000/api/collections/products/documents/doc-123 \
+  -H "Authorization: Bearer <token>"
+```
+
+### RBAC Operations
+
+```bash
+# Create a new role
+curl -X POST http://localhost:5000/api/rbac/roles \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "editor",
+    "cn": "Content Editor",
+    "description": "Can create and edit content"
+  }'
+
+# Create a user with roles
+curl -X POST http://localhost:5000/api/rbac/users \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "editor1",
+    "cn": "John Editor",
+    "email": "john@example.com",
+    "password": "secure_password",
+    "roles": ["editor"]
+  }'
+
+# Generate API token
+curl -X POST http://localhost:5000/api/rbac/tokens \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "API Access Token",
+    "expires_at": "2025-12-31T23:59:59Z"
+  }'
 ```
 
 ### Using Indexes
@@ -1476,8 +1390,16 @@ curl -X POST http://localhost:5000/api/transactions/txn-123/commit \
 
 ## Notes
 
-1. **Binary persistence** is automatic - the database is saved to disk periodically and on shutdown
-2. **Metrics** are stored in the `_system_metrics` collection with automatic retention management
-3. **Sessions** have sliding timeouts that extend on activity
-4. **Backup/Restore endpoints** shown in some documentation are not yet implemented
-5. Collection and document endpoints currently have authentication disabled for testing - this will be re-enabled in production
+1. **Binary Persistence**: Database is automatically saved to `/opt/jsondb/build/var/database.jdb`
+2. **Metrics Storage**: Metrics are stored in the `_system_metrics` collection with automatic retention
+3. **Session Management**: Sessions have sliding timeouts that extend on activity (default: 30 minutes)
+4. **RBAC Collections**: User data is stored in system collections: `_users`, `_roles`, `_sessions`
+5. **Authentication**: Collection and document endpoints require proper authentication and authorization
+6. **Rate Limiting**: API requests are rate limited (default: 1000 requests per hour per user)
+
+## Related Documentation
+
+- [RBAC Setup Guide](../guides/rbac-setup.md)
+- [RBAC Technical Reference](../reference/rbac.md)
+- [Authentication Guide](../guides/authentication-guide.md)
+- [Query Language Reference](../reference/query-language.md)

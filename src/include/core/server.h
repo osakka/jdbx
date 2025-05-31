@@ -112,6 +112,12 @@ typedef struct {
     cors_config_t cors;          /* CORS configuration */
     char* config_file;           /* Config file path if loaded from a file */
 
+    /* Thread pool configuration */
+    int thread_pool_min;         /* Minimum number of threads */
+    int thread_pool_max;         /* Maximum number of threads */
+    int thread_pool_queue_size;  /* Thread pool queue size */
+    int thread_pool_idle_timeout;/* Thread idle timeout in seconds */
+
     /* References */
     struct api_context* api_ctx;  /* API context */
     struct metrics_registry* metrics; /* Metrics registry */

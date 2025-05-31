@@ -15,6 +15,7 @@ int db_is_system_collection(const char* collection_name) {
     SYSTEM_PERMISSIONS_COLLECTION,
     SYSTEM_SESSIONS_COLLECTION,
     SYSTEM_METRICS_COLLECTION,
+    SYSTEM_CONFIG_COLLECTION,
     "_collections",
     "_permission_cache",
     "_system"

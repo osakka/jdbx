@@ -61,7 +61,7 @@ void init_cleanup(void) {
   if (g_rbac_ref && g_database && g_rbac) {
     INIT_LOG_PROGRESS("CORE", "Saving RBAC configuration");
     /* Use database-only RBAC save */
-    rbac_enhanced_save(g_database, g_rbac, NULL);
+    rbac_permissions_save(g_database, g_rbac, NULL);
   }
 
   /* Clean up in a safe order to avoid double-free issues */

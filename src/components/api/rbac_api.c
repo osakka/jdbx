@@ -2,7 +2,7 @@
 #include "api/rbac_api.h"
 #include "rbac/rbac.h"
 #include "rbac/rbac_db.h"
-#include "rbac/rbac_enhanced.h"
+#include "rbac/rbac_permissions.h"
 #include "rbac/jwt.h"
 #include "utils/json.h"
 #include "utils/logger.h"

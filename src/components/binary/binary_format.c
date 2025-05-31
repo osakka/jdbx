@@ -1,6 +1,9 @@
 #include "binary/binary_format.h"
 #include "database/database.h"
 #include "utils/logger.h"
+#include "utils/memory_debug.h"
+
+/* Memory debugging - using normal TRACE_MEMORY system */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,12 +99,15 @@ void binary_free(void* ptr) {
 int binary_resize_buffer(void** buffer, size_t current_size, size_t new_size) {
   if (!buffer) return 0;
   
+  TRACE_MEMORY("Resizing buffer from %p (size=%zu) to size=%zu", *buffer, current_size, new_size);
   void* new_buffer = realloc(*buffer, new_size);
   if (!new_buffer) {
     LOG_ERROR("resize buffer from %zu to %zu bytes", current_size, new_size);
+    TRACE_MEMORY("Failed to resize buffer %p from %zu to %zu bytes", *buffer, current_size, new_size);
     return 0;
   }
   
+  TRACE_MEMORY("Successfully resized buffer from %p to %p (size=%zu)", *buffer, new_buffer, new_size);
   *buffer = new_buffer;
   return 1;
 }
@@ -529,9 +535,15 @@ int binary_serialize_database(const char* path, void* db) {
   LOG_TRACE("Found %zu collections to serialize", coll_count);
   
   for (size_t i = 0; i < coll_count; i++) {
+    TRACE_MEMORY("Starting collection iteration %zu/%zu: temp_buffer=%p, temp_size=%zu", 
+                 i, coll_count, temp_buffer, temp_size);
+                 
     json_object_entry_t* entry = &database->collections->value.object.entries[i];
     const char* collection_name = entry->key;
     json_value_t* collection_data = entry->value;
+    
+    TRACE_MEMORY("Collection %zu: name='%s', entry=%p, collection_data=%p", 
+                 i, collection_name, entry, collection_data);
     
     collection_count++;
     
@@ -568,32 +580,60 @@ int binary_serialize_database(const char* path, void* db) {
     current_offset += coll_header.name_length;
     
     /* Write documents */
-    for (size_t j = 0; j < json_array_size(collection_data); j++) {
+    size_t collection_array_size = json_array_size(collection_data);
+    TRACE_MEMORY("Starting document loop: collection_data=%p, size=%zu", collection_data, collection_array_size);
+    
+    for (size_t j = 0; j < collection_array_size; j++) {
+      TRACE_MEMORY("Loop iteration start: j=%zu, collection_array_size=%zu", j, collection_array_size);
+      TRACE_MEMORY("Document loop iteration %zu/%zu: accessing document", j, collection_array_size);
       json_value_t* document = json_array_get(collection_data, j);
+      TRACE_MEMORY("Document loop iteration %zu: document=%p", j, document);
+      
+      if (!document) {
+        LOG_ERROR("NULL document at index %zu in collection %s", j, collection_name);
+        TRACE_MEMORY("NULL document detected at index %zu", j);
+        continue;
+      }
       
       /* Estimate document size for buffer allocation */
       size_t estimated_size = get_json_binary_size(document) + 1024; /* Increased safety margin for complex documents */
       
       /* Ensure temp buffer is allocated and large enough */
       if (!temp_buffer || estimated_size > temp_size) {
+        /* CRITICAL FIX: Save old pointer before realloc to avoid use-after-free */
+        void* old_temp_buffer = temp_buffer;
+        size_t old_temp_size = temp_size;
+        
+        TRACE_MEMORY("Reallocating temp_buffer from %p (size=%zu) to size=%zu", 
+                     old_temp_buffer, old_temp_size, estimated_size);
         void* new_buffer = realloc(temp_buffer, estimated_size);
         if (!new_buffer) {
           LOG_ERROR("allocate document serialization buffer (size=%zu)", estimated_size);
-          if (temp_buffer) free(temp_buffer);
+          TRACE_MEMORY("Failed to reallocate temp_buffer %p to size %zu", old_temp_buffer, estimated_size);
+          if (temp_buffer) {
+            TRACE_MEMORY("Freeing failed temp_buffer %p (size=%zu)", temp_buffer, temp_size);
+            free(temp_buffer);
+          }
           close(fd);
           return 0;
         }
+        /* Use new_buffer pointer to avoid use-after-free warning */
+        TRACE_MEMORY("Successfully reallocated temp_buffer to %p (size=%zu)", 
+                     new_buffer, estimated_size);
         temp_buffer = new_buffer;
         temp_size = estimated_size;
         LOG_TRACE("Buffer allocated/resized to %zu bytes", temp_size);
       }
       
       /* Serialize document and get actual size */
+      TRACE_MEMORY("About to serialize document using temp_buffer %p (size=%zu)", temp_buffer, temp_size);
       size_t doc_size = serialize_json_value(document, temp_buffer, 0);
+      TRACE_MEMORY("Document serialized to %zu bytes in temp_buffer %p", doc_size, temp_buffer);
       
       /* Validate serialized size doesn't exceed buffer */
       if (doc_size > temp_size) {
         LOG_ERROR("Serialized document size (%zu) exceeds buffer size (%zu)", doc_size, temp_size);
+        TRACE_MEMORY("Buffer overflow detected: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
         free(temp_buffer);
         close(fd);
         return 0;
@@ -616,30 +656,92 @@ int binary_serialize_database(const char* path, void* db) {
            collection_name, j, doc_size, doc_header->size, current_offset);
       
       /* Write document */
+      TRACE_MEMORY("About to write %zu bytes from temp_buffer %p to file", doc_size, temp_buffer);
       if (write(fd, temp_buffer, doc_size) != (ssize_t)doc_size) {
         LOG_ERROR("write document: %s", strerror(errno));
+        TRACE_MEMORY("Write failed: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
         free(temp_buffer);
         close(fd);
         return 0;
       }
+      TRACE_MEMORY("Successfully wrote %zu bytes from temp_buffer %p", doc_size, temp_buffer);
       
       current_offset += doc_size;
       LOG_TRACE("After writing document %zu, current_offset=%zu", j, current_offset);
+      TRACE_MEMORY("Document write complete, temp_buffer %p still valid", temp_buffer);
+      
+      /* CRITICAL MEMORY VALIDATION - Check buffer integrity after write */
+      TRACE_MEMORY("Memory validation: temp_buffer=%p, temp_size=%zu, doc_size=%zu", 
+                   temp_buffer, temp_size, doc_size);
+      TRACE_MEMORY("Memory validation: current_offset=%zu, j=%zu", current_offset, j);
+      
+      /* Validate buffer pointers are still valid */
+      if (temp_buffer) {
+        TRACE_MEMORY("Buffer validation: accessing first byte of temp_buffer %p", temp_buffer);
+        volatile char first_byte = ((char*)temp_buffer)[0];
+        TRACE_MEMORY("Buffer validation: first_byte=0x%02x, buffer accessible", (unsigned char)first_byte);
+        
+        if (temp_size > 0) {
+          TRACE_MEMORY("Buffer validation: accessing last byte of temp_buffer %p at offset %zu", 
+                       temp_buffer, temp_size - 1);
+          volatile char last_byte = ((char*)temp_buffer)[temp_size - 1];
+          TRACE_MEMORY("Buffer validation: last_byte=0x%02x, full buffer accessible", (unsigned char)last_byte);
+        }
+      } else {
+        TRACE_MEMORY("CRITICAL ERROR: temp_buffer is NULL after document write!");
+      }
+      
+      /* End of loop iteration validation */
+      TRACE_MEMORY("End of document %zu iteration: temp_buffer=%p, temp_size=%zu", j, temp_buffer, temp_size);
+      TRACE_MEMORY("End of document %zu iteration: current_offset=%zu", j, current_offset);
+      
+      /* Check if we're about to access next iteration */
+      if (j + 1 < collection_array_size) {
+        TRACE_MEMORY("Preparing for next document iteration %zu", j + 1);
+        TRACE_MEMORY("Collection data still valid: %p", collection_data);
+        TRACE_MEMORY("About to continue loop to j=%zu", j + 1);
+      } else {
+        TRACE_MEMORY("This was the last document in collection %s", collection_name);
+        TRACE_MEMORY("About to exit document loop - validating state");
+        TRACE_MEMORY("collection_name=%p, collection_data=%p", collection_name, collection_data);
+        TRACE_MEMORY("temp_buffer=%p, temp_size=%zu", temp_buffer, temp_size);
+        TRACE_MEMORY("Document loop exit validation complete");
+        TRACE_MEMORY("About to increment j=%zu to %zu and exit loop", j, j + 1);
+      }
+      
+      TRACE_MEMORY("About to complete iteration j=%zu (continue or exit)", j);
     }
     
-    LOG_TRACE("Finished collection '%s', final offset=%zu", current_offset);
+    TRACE_MEMORY("Exited document loop for collection '%s'", collection_name);
+    TRACE_MEMORY("About to log collection completion");
+    LOG_TRACE("Finished collection '%s', final offset=%zu", collection_name, current_offset);
+    TRACE_MEMORY("Collection '%s' complete: temp_buffer=%p, temp_size=%zu, current_offset=%zu", 
+                 collection_name, temp_buffer, temp_size, current_offset);
+    
+    /* Validate temp_buffer state after collection completion */
+    if (temp_buffer) {
+      TRACE_MEMORY("Post-collection buffer validation: accessing temp_buffer %p", temp_buffer);
+      volatile char validation_byte = ((char*)temp_buffer)[0];
+      TRACE_MEMORY("Post-collection buffer validation: first byte=0x%02x, still accessible", 
+                   (unsigned char)validation_byte);
+    }
     
     /* Calculate next collection header position */
     /* After all documents are read, position should be at next collection header */
     /* Use current_offset to seek to next collection (if any) */
+    TRACE_MEMORY("About to exit collection '%s' processing, moving to next collection or cleanup", collection_name);
   }
+  
+  TRACE_MEMORY("All collections processed: temp_buffer=%p, temp_size=%zu", temp_buffer, temp_size);
   
   /* Free temp buffer */
   if (temp_buffer) {
+    TRACE_MEMORY("About to free temp_buffer %p (size=%zu)", temp_buffer, temp_size);
     LOG_TRACE("Freeing buffer at %p (size=%zu)", temp_buffer, temp_size);
     free(temp_buffer);
     temp_buffer = NULL;
     temp_size = 0;
+    TRACE_MEMORY("temp_buffer freed successfully");
     LOG_TRACE("Buffer freed successfully");
   }
   

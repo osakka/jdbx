@@ -7,17 +7,16 @@
 #include <string.h>
 
 /**
- * Enhanced fixed implementation of rbac_db_save that avoids hanging
- * This version adds extensive debugging and error tracking to identify
- * exactly where any hang or error might occur.
+ * RBAC database persistence implementation with comprehensive error handling
+ * Saves RBAC system state to database with detailed logging and error tracking
  * 
  * @param db Database instance
  * @param rbac RBAC system to save
  * @return 1 on success, 0 on failure
  */
-int rbac_db_save_fixed(database_t* db, rbac_system_t* rbac) {
+int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   if (!db || !rbac) {
-    LOG_ERROR("NULL database or RBAC system passed to rbac_db_save_fixed");
+    LOG_ERROR("NULL database or RBAC system passed to rbac_database_persist");
     return 0;
   }
   

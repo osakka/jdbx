@@ -60,7 +60,7 @@ int rbac_db_save(struct database* db, rbac_system_t* rbac);
  * @param rbac RBAC system to save
  * @return 1 on success, 0 on failure
  */
-int rbac_db_save_fixed(struct database* db, rbac_system_t* rbac);
+int rbac_database_persist(struct database* db, rbac_system_t* rbac);
 
 /**
  * Check if RBAC system exists in database

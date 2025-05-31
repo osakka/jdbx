@@ -21,7 +21,7 @@ static int db_collections_initialized = 0;
  * @param path Path to RBAC file (used for legacy compatibility)
  * @return Initialized RBAC system
  */
-rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
+rbac_system_t* rbac_permissions_init(database_t* db, const char* path) {
   /* Path parameter is for legacy compatibility and is unused */
   (void)path; /* Mark as unused to prevent compiler warning */
   rbac_system_t* rbac = NULL;
@@ -102,7 +102,7 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
     LOG_INFO("Saving new RBAC system to database");
     
     /* Use fixed implementation to avoid hanging */
-    int save_result = rbac_db_save_fixed(db, rbac);
+    int save_result = rbac_database_persist(db, rbac);
     
     if (save_result) {
       LOG_INFO("Successfully saved RBAC to database");
@@ -128,7 +128,7 @@ rbac_system_t* rbac_enhanced_init(database_t* db, const char* path) {
  * @param path Path to RBAC file (used for legacy compatibility)
  * @return 1 on success, 0 on failure
  */
-int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path) {
+int rbac_permissions_save(database_t* db, rbac_system_t* rbac, const char* path) {
   /* Path parameter is for legacy compatibility and is unused */
   (void)path; /* Mark as unused to prevent compiler warning */
   /* Static flag to prevent recursive save operations */
@@ -176,7 +176,7 @@ int rbac_enhanced_save(database_t* db, rbac_system_t* rbac, const char* path) {
   }
   
   /* Try to save RBAC to database using the enhanced fixed implementation */
-  int result = rbac_db_save_fixed(db, rbac);
+  int result = rbac_database_persist(db, rbac);
   
   if (result) {
     LOG_INFO("Successfully saved RBAC to database using fixed implementation");

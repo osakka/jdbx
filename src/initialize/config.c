@@ -22,6 +22,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int terminate_server = 0;
   int show_version = 0;
   char* log_level_str = NULL;
+  char* trace_categories_str = NULL;
   char* db_dir = NULL;
   char* pid_file = NULL;
   char* log_file = NULL;
@@ -59,6 +60,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"daemon",     no_argument,    0, 'd'},
     {"terminate",   no_argument,    0, 't'},
     {"log-level",   required_argument, 0, 'l'},
+    {"trace-categories", required_argument, 0, 'x'},
     {"db-dir",     required_argument, 0, 'b'},
     {"rbac-file",   required_argument, 0, 'r'},
     {"pid-file",    required_argument, 0, 'i'}, 
@@ -81,7 +83,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int option_index = 0;
   
   optind = 1; /* Reset getopt index */
-  while ((opt = getopt_long(argc, argv, "hdtl:b:r:i:o:w:c:vVj:p:H:Q:T:M:", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hdtl:x:b:r:i:o:w:c:vVj:p:H:Q:T:M:", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
         show_help = 1;
@@ -97,6 +99,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 'l':
         log_level_str = optarg;
+        break;
+      case 'x':
+        trace_categories_str = optarg;
         break;
       case 'b':
         db_dir = optarg;
@@ -193,6 +198,21 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     log_level_t level = parse_log_level(log_level_str);
     heap_config->log_level = level;
     INIT_LOG_PROGRESS("CONFIG", "Log level set to %s", log_level_str);
+    
+    /* Apply immediately to active logger if it exists */
+    if (g_logger) {
+      logger_set_level(level);
+    }
+  }
+  
+  if (trace_categories_str) {
+    INIT_LOG_PROGRESS("CONFIG", "Trace categories set to %s", trace_categories_str);
+    
+    /* Apply immediately to active logger if it exists */
+    if (g_logger) {
+      trace_category_t mask = logger_parse_trace(trace_categories_str);
+      logger_set_trace_mask(mask);
+    }
   }
   
   if (db_dir) {
@@ -449,6 +469,6 @@ log_level_t parse_log_level(const char* level_str) {
     return LOG_LEVEL_TRACE;
   }
   
-  fprintf(stderr, "Warning: Unknown log level '%s', using default (info)\n", level_str);
+  LOG_WARNING("Unknown log level '%s', using default (info)", level_str);
   return DEFAULT_LOG_LEVEL;
 }

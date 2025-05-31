@@ -1483,6 +1483,64 @@ function refreshCollections() {
     loadBrowserCollections();
 }
 
+// Create new collection function
+async function createNewCollection() {
+    // Prompt user for collection name
+    const collectionName = prompt('Enter collection name:');
+    
+    if (!collectionName) {
+        return; // User cancelled
+    }
+    
+    // Validate collection name
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(collectionName)) {
+        showNotification('Invalid collection name. Use only letters, numbers, and underscores. Must start with letter or underscore.', 'error');
+        return;
+    }
+    
+    // Check if collection already exists
+    if (collections.find(col => col.name === collectionName)) {
+        showNotification('Collection already exists', 'warning');
+        return;
+    }
+    
+    try {
+        // Create collection by inserting a document into it
+        // JSONdb typically creates collections implicitly when first document is added
+        const initialDocument = {
+            _id: 'welcome-doc',
+            name: 'Welcome Document',
+            message: `Welcome to the ${collectionName} collection!`,
+            created_at: new Date().toISOString(),
+            collection_info: {
+                created_by: 'Admin UI',
+                description: `Initial document for ${collectionName} collection`
+            }
+        };
+        
+        const response = await apiRequest(`/api/collections/${collectionName}/documents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(initialDocument)
+        });
+        
+        if (response.success || response.id) {
+            showNotification(`Collection "${collectionName}" created successfully`, 'success');
+            
+            // Refresh collections to show the new one
+            await loadBrowserCollections();
+            
+            // Auto-select the new collection
+            setTimeout(() => selectCollection(collectionName), 100);
+        } else {
+            showNotification(response.error || 'Failed to create collection', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating collection:', error);
+        showNotification(`Failed to create collection: ${error.message}`, 'error');
+    }
+}
+
 // Old editDocument function removed - now using toggleEditMode/saveDocument
 
 function deleteDocument() {
@@ -4588,4 +4646,43 @@ function handleDocumentEdit() {
         saveBtn.style.display = 'inline-block';
         isDocumentModified = true;
     }
+}
+
+// Create new document function
+function createNewDocument() {
+    if (!currentCollection) {
+        showNotification('Please select a collection first', 'warning');
+        return;
+    }
+    
+    // Generate a new document ID
+    const newId = 'doc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+    
+    // Create a template document
+    const templateDocument = {
+        _id: newId,
+        name: "New Document",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        // Add some example fields
+        content: "Enter your content here",
+        status: "draft"
+    };
+    
+    // Add to documents array
+    documents.unshift(templateDocument); // Add at beginning
+    
+    // Update UI
+    renderDocuments();
+    document.getElementById('documentCount').textContent = documents.length;
+    
+    // Select the new document (index 0 since we added it at the beginning)
+    selectDocument(0);
+    
+    // Show save button immediately since this is a new document
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.style.display = 'inline-block';
+    isDocumentModified = true;
+    
+    showNotification('New document created. Edit and save to persist.', 'info');
 }

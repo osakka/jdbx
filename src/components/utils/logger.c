@@ -2,6 +2,9 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <libgen.h> /* For dirname() */
+#include <unistd.h> /* For getpid() */
+#include <sys/syscall.h> /* For gettid() */
+#include <strings.h> /* For strcasecmp() */
 
 /* Global logger instance */
 logger_config_t* g_logger = NULL;
@@ -14,6 +17,24 @@ static const char* log_level_strings[] = {
   "INFO",
   "DEBUG",
   "TRACE"
+};
+
+/* String representations of trace categories */
+static const struct {
+  trace_category_t flag;
+  const char* name;
+} trace_categories[] = {
+  {TRACE_DATABASE, "database"},
+  {TRACE_RBAC, "rbac"},
+  {TRACE_API, "api"},
+  {TRACE_AUTH, "auth"},
+  {TRACE_TRANSACTION, "transaction"},
+  {TRACE_BINARY, "binary"},
+  {TRACE_JAVASCRIPT, "javascript"},
+  {TRACE_NETWORK, "network"},
+  {TRACE_METRICS, "metrics"},
+  {TRACE_MEMORY, "memory"},
+  {TRACE_ALL, "all"}
 };
 
 /* Create directory if it doesn't exist */
@@ -69,6 +90,8 @@ int logger_init(const char* log_file_path, log_level_t level) {
   g_logger->include_timestamp = 1;
   g_logger->include_level = 1;
   g_logger->include_source = 1;
+  g_logger->include_process_info = 1;
+  g_logger->trace_mask = TRACE_NONE;
   
   /* Check if we should use console logging (stdout/stderr) */
   if (log_file_path == NULL) {
@@ -127,6 +150,97 @@ void logger_set_level(log_level_t level) {
          "Log level changed from %s to %s", 
          log_level_strings[old_level], log_level_strings[level]);
   }
+}
+
+/* Set trace categories */
+void logger_set_trace_mask(trace_category_t mask) {
+  if (g_logger) {
+    pthread_mutex_lock(&g_logger->lock);
+    g_logger->trace_mask = mask;
+    pthread_mutex_unlock(&g_logger->lock);
+    
+    logger_log(LOG_LEVEL_INFO, __FILE__, __LINE__, __func__, 
+         "Trace mask updated to 0x%04x", mask);
+  }
+}
+
+/* Get current log level */
+log_level_t logger_get_level() {
+  if (!g_logger) return LOG_LEVEL_NONE;
+  
+  pthread_mutex_lock(&g_logger->lock);
+  log_level_t level = g_logger->log_level;
+  pthread_mutex_unlock(&g_logger->lock);
+  
+  return level;
+}
+
+/* Get current trace mask */
+trace_category_t logger_get_trace_mask() {
+  if (!g_logger) return TRACE_NONE;
+  
+  pthread_mutex_lock(&g_logger->lock);
+  trace_category_t mask = g_logger->trace_mask;
+  pthread_mutex_unlock(&g_logger->lock);
+  
+  return mask;
+}
+
+/* Parse log level from string */
+log_level_t logger_parse_level(const char* level_str) {
+  if (!level_str) return LOG_LEVEL_INFO;
+  
+  for (size_t i = 0; i < sizeof(log_level_strings) / sizeof(log_level_strings[0]); i++) {
+    if (strcasecmp(level_str, log_level_strings[i]) == 0) {
+      return (log_level_t)i;
+    }
+  }
+  return LOG_LEVEL_INFO; /* Default fallback */
+}
+
+/* Parse trace categories from string */
+trace_category_t logger_parse_trace(const char* trace_str) {
+  if (!trace_str) return TRACE_NONE;
+  
+  trace_category_t mask = TRACE_NONE;
+  char* str_copy = strdup(trace_str);
+  char* token = strtok(str_copy, ",|");
+  
+  while (token) {
+    /* Trim whitespace */
+    while (*token == ' ' || *token == '\t') token++;
+    
+    for (size_t i = 0; i < sizeof(trace_categories) / sizeof(trace_categories[0]); i++) {
+      if (strcasecmp(token, trace_categories[i].name) == 0) {
+        mask |= trace_categories[i].flag;
+        break;
+      }
+    }
+    token = strtok(NULL, ",|");
+  }
+  
+  free(str_copy);
+  return mask;
+}
+
+/* Get log level string */
+const char* logger_level_string(log_level_t level) {
+  if (level < sizeof(log_level_strings) / sizeof(log_level_strings[0])) {
+    return log_level_strings[level];
+  }
+  return "UNKNOWN";
+}
+
+/* Check if trace category is enabled */
+int logger_trace_enabled(trace_category_t category) {
+  if (!g_logger) return 0;
+  
+  pthread_mutex_lock(&g_logger->lock);
+  int enabled = (g_logger->log_level >= LOG_LEVEL_TRACE) && 
+                ((g_logger->trace_mask & category) != 0);
+  pthread_mutex_unlock(&g_logger->lock);
+  
+  return enabled;
 }
 
 /* Free logger resources */
@@ -188,7 +302,82 @@ void logger_log(log_level_t level, const char* file, int line,
     }
   }
   
+  /* Format: timestamp [processid:threadid] [level] functionname.filename(without extension) line_num: short message */
+  
   /* Add timestamp if enabled */
+  if (g_logger->include_timestamp) {
+    time_t now;
+    struct tm* time_info;
+    char timestamp[30];
+    
+    time(&now);
+    time_info = localtime(&now);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", time_info);
+    
+    fprintf(output, "%s ", timestamp);
+  }
+  
+  /* Add process information if enabled */
+  if (g_logger->include_process_info) {
+    pid_t pid = getpid();
+    long tid = syscall(SYS_gettid);
+    fprintf(output, "[%d:%ld] ", pid, tid);
+  }
+  
+  /* Add log level if enabled */
+  if (g_logger->include_level) {
+    fprintf(output, "[%s] ", log_level_strings[level]);
+  }
+  
+  /* Add source information if enabled - functionname.filename line_num: */
+  if (g_logger->include_source) {
+    const char* filename = get_filename(file);
+    /* Remove .c extension for cleaner output */
+    char clean_filename[64];
+    strncpy(clean_filename, filename, sizeof(clean_filename) - 1);
+    clean_filename[sizeof(clean_filename) - 1] = '\0';
+    char* ext = strrchr(clean_filename, '.');
+    if (ext && strcmp(ext, ".c") == 0) {
+      *ext = '\0';
+    }
+    fprintf(output, "%s.%s %d: ", function, clean_filename, line);
+  }
+  
+  /* Format and write the actual log message */
+  va_list args;
+  va_start(args, format);
+  vfprintf(output, format, args);
+  va_end(args);
+  
+  /* Add newline if not already present */
+  if (format[0] == '\0' || format[strlen(format) - 1] != '\n') {
+    fprintf(output, "\n");
+  }
+  
+  /* Flush to ensure log is written immediately */
+  fflush(output);
+  
+  pthread_mutex_unlock(&g_logger->lock);
+}
+
+/* Log a trace message with category */
+void logger_trace(trace_category_t category, const char* file, int line,
+                  const char* function, const char* format, ...) {
+  /* Check if logger is initialized and trace is enabled for this category */
+  if (!g_logger || g_logger->log_level < LOG_LEVEL_TRACE || 
+      (g_logger->trace_mask & category) == 0) {
+    return;
+  }
+  
+  pthread_mutex_lock(&g_logger->lock);
+  
+  /* Determine output stream */
+  FILE* output = g_logger->log_file;
+  if (g_logger->log_file_path[0] == '\0') { /* Console mode */
+    output = stdout;
+  }
+  
+  /* Add timestamp */
   if (g_logger->include_timestamp) {
     time_t now;
     struct tm* time_info;
@@ -201,15 +390,27 @@ void logger_log(log_level_t level, const char* file, int line,
     fprintf(output, "[%s] ", timestamp);
   }
   
-  /* Add log level if enabled */
-  if (g_logger->include_level) {
-    fprintf(output, "[%s] ", log_level_strings[level]);
+  /* Add trace level */
+  fprintf(output, "[TRACE] ");
+  
+  /* Add process information */
+  if (g_logger->include_process_info) {
+    pid_t pid = getpid();
+    long tid = syscall(SYS_gettid);
+    fprintf(output, "[%d:%ld] ", pid, tid);
   }
   
-  /* Add source information if enabled */
+  /* Add source information */
   if (g_logger->include_source) {
-    fprintf(output, "[%s:%d:%s] ", 
-        get_filename(file), line, function);
+    const char* filename = get_filename(file);
+    char clean_filename[64];
+    strncpy(clean_filename, filename, sizeof(clean_filename) - 1);
+    clean_filename[sizeof(clean_filename) - 1] = '\0';
+    char* ext = strrchr(clean_filename, '.');
+    if (ext && strcmp(ext, ".c") == 0) {
+      *ext = '\0';
+    }
+    fprintf(output, "[%s:%d:%s] ", clean_filename, line, function);
   }
   
   /* Format and write the actual log message */

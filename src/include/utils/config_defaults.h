@@ -19,8 +19,8 @@
 /** Default server port */
 #define DEFAULT_PORT 5000
 
-/** Default host to bind to */
-#define DEFAULT_HOST "claude-code.uk.home.arpa"
+/** Default host to bind to (0.0.0.0 for all interfaces) */
+#define DEFAULT_HOST "0.0.0.0"
 
 /** Default maximum number of simultaneous connections */
 #define DEFAULT_MAX_CONNECTIONS 100
@@ -88,6 +88,22 @@
 
 /** Default cache entry TTL in seconds */
 #define DEFAULT_CACHE_TTL 300  /* 5 minutes */
+
+/*==============================================================================
+ * Thread Pool Defaults
+ *============================================================================*/
+
+/** Default minimum threads */
+#define DEFAULT_THREAD_POOL_MIN 4
+
+/** Default maximum threads */
+#define DEFAULT_THREAD_POOL_MAX 16
+
+/** Default thread pool queue size */
+#define DEFAULT_THREAD_POOL_QUEUE_SIZE 1024
+
+/** Default thread idle timeout in seconds */
+#define DEFAULT_THREAD_POOL_IDLE_TIMEOUT 60
 
 /*==============================================================================
  * Component-specific Defaults

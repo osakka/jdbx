@@ -1,7 +1,7 @@
 #include "init.h"
 #include "rbac/rbac.h"
 #include "rbac/rbac_database.h"
-#include "rbac/rbac_enhanced.h"
+#include "rbac/rbac_permissions.h"
 #include "rbac/rbac.h"
 #include "rbac/rbac_refcount.h"
 #include "database/database.h"

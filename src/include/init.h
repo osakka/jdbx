@@ -5,7 +5,7 @@
 #include "utils/config_loader.h"
 #include "database/database.h"
 #include "rbac/rbac.h"
-#include "rbac/rbac_enhanced.h"
+#include "rbac/rbac_permissions.h"
 #include "rbac/rbac_refcount.h"
 #include "api/api.h"
 #include "core/server.h"

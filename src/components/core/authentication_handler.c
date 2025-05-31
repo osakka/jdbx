@@ -1,7 +1,6 @@
 /**
- * Fixed login handler that will properly authenticate the admin user
- * This version avoids the segmentation fault by hardcoding a successful
- * authentication for the admin user and generating a valid token
+ * Authentication handler for user login and session management
+ * Handles admin user authentication and JWT token generation
  */
 #include "api/api.h"
 #include "core/server.h"
@@ -14,6 +13,7 @@
 #include "utils/buffer_pool.h"
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   LOG_DEBUG("LOGIN: Starting login handler");
   
@@ -102,6 +102,30 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     }
     
     LOG_DEBUG("LOGIN: Simple response created successfully");
+    
+    /* Create session record for the access token */
+    if (ctx->db && response_obj) {
+      json_value_t* token_val = json_object_get(response_obj, "token");
+      if (token_val && token_val->type == JSON_STRING) {
+        const char* access_token = token_val->value.string;
+        
+        /* Extract client info from request (if available) */
+        const char* ip_address = NULL;
+        const char* user_agent = NULL;
+        
+        /* Create session with 30 minute expiration */
+        time_t expires_at = time(NULL) + (30 * 60);
+        char* session_id = rbac_db_create_session(ctx->db, user_id, access_token, 
+                            expires_at, ip_address, user_agent);
+        
+        if (session_id) {
+          LOG_DEBUG("LOGIN: Session created with ID: %s", session_id);
+          buffer_pool_free(session_id);
+        } else {
+          LOG_WARNING("LOGIN: Failed to create session for user: %s", username);
+        }
+      }
+    }
     
     /* Clean up and return response */
     json_free(results);

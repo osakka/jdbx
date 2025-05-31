@@ -2,6 +2,7 @@
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -220,6 +221,104 @@ http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* requ
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
+  buffer_pool_free_safe(result_str);
+  
+  return response;
+}
+
+/* Handle log level control request */
+http_response_t* api_handle_log_control(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  json_value_t* result = json_create_object();
+  
+  /* Handle GET request - return current log configuration */
+  if (request->method == HTTP_GET) {
+    log_level_t current_level = logger_get_level();
+    trace_category_t current_trace = logger_get_trace_mask();
+    
+    json_object_set(result, "log_level", json_create_string(logger_level_string(current_level)));
+    json_object_set(result, "log_level_numeric", json_create_integer(current_level));
+    json_object_set(result, "trace_mask", json_create_integer(current_trace));
+    json_object_set(result, "trace_enabled", json_create_boolean(current_level >= LOG_LEVEL_TRACE));
+    
+    /* Add available log levels */
+    json_value_t* levels = json_create_array();
+    json_array_append(levels, json_create_string("ERROR"));
+    json_array_append(levels, json_create_string("WARNING"));
+    json_array_append(levels, json_create_string("INFO"));
+    json_array_append(levels, json_create_string("DEBUG"));
+    json_array_append(levels, json_create_string("TRACE"));
+    json_object_set(result, "available_levels", levels);
+    
+    /* Add available trace categories */
+    json_value_t* categories = json_create_array();
+    json_array_append(categories, json_create_string("database"));
+    json_array_append(categories, json_create_string("rbac"));
+    json_array_append(categories, json_create_string("api"));
+    json_array_append(categories, json_create_string("auth"));
+    json_array_append(categories, json_create_string("transaction"));
+    json_array_append(categories, json_create_string("binary"));
+    json_array_append(categories, json_create_string("javascript"));
+    json_array_append(categories, json_create_string("network"));
+    json_array_append(categories, json_create_string("metrics"));
+    json_array_append(categories, json_create_string("memory"));
+    json_array_append(categories, json_create_string("all"));
+    json_object_set(result, "available_trace_categories", categories);
+  }
+  /* Handle POST request - update log configuration */
+  else if (request->method == HTTP_POST) {
+    if (!request->body) {
+      json_object_set(result, "error", json_create_string("Request body required"));
+    } else {
+      /* Parse request body */
+      json_value_t* body = json_parse(request->body);
+      if (!body || body->type != JSON_OBJECT) {
+        json_object_set(result, "error", json_create_string("Invalid JSON body"));
+      } else {
+        int changed = 0;
+        
+        /* Handle log level change */
+        json_value_t* level_val = json_object_get(body, "log_level");
+        if (level_val && level_val->type == JSON_STRING) {
+          log_level_t new_level = logger_parse_level(level_val->value.string);
+          logger_set_level(new_level);
+          json_object_set(result, "log_level_set", json_create_string(logger_level_string(new_level)));
+          changed = 1;
+        }
+        
+        /* Handle trace categories change */
+        json_value_t* trace_val = json_object_get(body, "trace_categories");
+        if (trace_val && trace_val->type == JSON_STRING) {
+          trace_category_t new_trace = logger_parse_trace(trace_val->value.string);
+          logger_set_trace_mask(new_trace);
+          json_object_set(result, "trace_mask_set", json_create_integer(new_trace));
+          changed = 1;
+        }
+        
+        if (!changed) {
+          json_object_set(result, "error", json_create_string("No valid log_level or trace_categories provided"));
+        } else {
+          json_object_set(result, "success", json_create_boolean(1));
+          json_object_set(result, "message", json_create_string("Log configuration updated"));
+        }
+        
+        json_free(body);
+      }
+    }
+  } else {
+    json_object_set(result, "error", json_create_string("Method not supported"));
+  }
+  
+  /* Serialize result */
+  char* result_str = json_stringify(result);
+  json_free(result);
+  
+  /* Create HTTP response */
+  http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   buffer_pool_free_safe(result_str);
   
   return response;

@@ -563,7 +563,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             config->db_path = resolved_path;
             LOG_DEBUG("Resolved default database path to: %s", config->db_path);
           } else {
-            LOG_ERROR("Failed to resolve default database path");
+            LOG_ERROR("resolve default database path");
             config->db_path = strdup(DEFAULT_DB_PATH);
           }
         }
@@ -584,7 +584,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         config->db_path = resolved_path;
         LOG_DEBUG("Resolved default database path to: %s", config->db_path);
       } else {
-        LOG_ERROR("Failed to resolve default database path");
+        LOG_ERROR("resolve default database path");
         config->db_path = strdup(DEFAULT_DB_PATH);
       }
     }
@@ -645,7 +645,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             config->rbac_path = resolved_path;
             LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
           } else {
-            LOG_ERROR("Failed to resolve default RBAC path");
+            LOG_ERROR("resolve default RBAC path");
             config->rbac_path = strdup(DEFAULT_RBAC_PATH);
           }
         }
@@ -666,7 +666,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         config->rbac_path = resolved_path;
         LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
       } else {
-        LOG_ERROR("Failed to resolve default RBAC path");
+        LOG_ERROR("resolve default RBAC path");
         config->rbac_path = strdup(DEFAULT_RBAC_PATH);
       }
     }
@@ -875,7 +875,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             config->log_file = resolved_path;
             LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
           } else {
-            LOG_ERROR("Failed to resolve default log file path");
+            LOG_ERROR("resolve default log file path");
             config->log_file = strdup(DEFAULT_LOG_FILE);
           }
         }
@@ -896,7 +896,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_ERROR("Failed to resolve default log file path");
+          LOG_ERROR("resolve default log file path");
         }
         config->log_file = strdup(DEFAULT_LOG_FILE);
       }
@@ -912,7 +912,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         config->log_file = resolved_path;
         LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
       } else {
-        LOG_ERROR("Failed to resolve default log file path");
+        LOG_ERROR("resolve default log file path");
         config->log_file = strdup(DEFAULT_LOG_FILE);
       }
     }
@@ -973,7 +973,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_ERROR("Failed to resolve default PID file path");
+          LOG_ERROR("resolve default PID file path");
         }
         config->pid_file = strdup(DEFAULT_PID_FILE);
       }
@@ -988,7 +988,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
         config->pid_file = resolved_path;
         LOG_DEBUG("Resolved default PID file path to: %s", config->pid_file);
       } else {
-        LOG_ERROR("Failed to resolve default PID file path");
+        LOG_ERROR("resolve default PID file path");
         config->pid_file = strdup(DEFAULT_PID_FILE);
       }
     }
@@ -1606,12 +1606,6 @@ void config_init_defaults(server_config_t* config) {
   /* Initialize CORS configuration */
   init_cors_config(&config->cors);
   
-  /* Thread pool settings */
-  config->thread_pool_min = DEFAULT_THREAD_POOL_MIN;
-  config->thread_pool_max = DEFAULT_THREAD_POOL_MAX;
-  config->thread_pool_queue_size = DEFAULT_THREAD_POOL_QUEUE_SIZE;
-  config->thread_pool_idle_timeout = DEFAULT_THREAD_POOL_IDLE_TIMEOUT;
-
   /* Additional settings */
   config->cors.enabled = DEFAULT_CORS_ENABLED;
   config->cors.allow_credentials = DEFAULT_CORS_ALLOW_CREDENTIALS;
@@ -1637,39 +1631,4 @@ void config_init_defaults(server_config_t* config) {
     
     LOG_TRACE("Exiting config_init_defaults() - success");
   }
-}
-
-/* Load configuration overrides from database */
-int config_load_from_database(server_config_t* config) {
-  if (!config) {
-    LOG_ERROR("Invalid configuration pointer");
-    return 0;
-  }
-  
-  /* Database configuration is optional - don't fail if database is not available */
-  LOG_DEBUG("Loading configuration overrides from database");
-  
-  /* TODO: This requires database access which creates a circular dependency
-   * For now, return success (no database config found) 
-   * This will be implemented in Phase 2 after core hardcoded values are fixed */
-  LOG_INFO("Database configuration system not yet implemented - using file/env config only");
-  
-  return 1; /* Success - no database config to load */
-}
-
-/* Save configuration changes to database */
-int config_save_to_database(const server_config_t* config) {
-  if (!config) {
-    LOG_ERROR("Invalid configuration pointer");
-    return 0;
-  }
-  
-  LOG_DEBUG("Saving configuration to database");
-  
-  /* TODO: This requires database access which creates a circular dependency
-   * For now, return success (nothing saved)
-   * This will be implemented in Phase 2 after core hardcoded values are fixed */
-  LOG_INFO("Database configuration system not yet implemented - no config saved");
-  
-  return 1; /* Success - nothing to save */
 }
