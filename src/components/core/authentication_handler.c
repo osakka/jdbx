@@ -109,9 +109,9 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
       if (token_val && token_val->type == JSON_STRING) {
         const char* access_token = token_val->value.string;
         
-        /* Extract client info from request (if available) */
-        const char* ip_address = NULL;
-        const char* user_agent = NULL;
+        /* Extract client info from request */
+        const char* ip_address = request->remote_addr;
+        const char* user_agent = request->user_agent;
         
         /* Create session with 30 minute expiration */
         time_t expires_at = time(NULL) + (30 * 60);
