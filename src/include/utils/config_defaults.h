@@ -77,7 +77,13 @@
 #define DEFAULT_JS_ENABLED 1
 
 /** Default SSL enabled flag */
-#define DEFAULT_SSL_ENABLED 0
+#define DEFAULT_SSL_ENABLED 1
+
+/** Default SSL certificate file path */
+#define DEFAULT_SSL_CERT_PATH "/etc/ssl/certs/server.pem"
+
+/** Default SSL private key file path */
+#define DEFAULT_SSL_KEY_PATH "/etc/ssl/private/server.key"
 
 /*==============================================================================
  * Performance Defaults

@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: May 31, 2025 (v2.0.9)
+**Last Updated**: June 1, 2025 (v2.0.10)
 
 ## Core Principles
 
@@ -174,6 +174,28 @@ The project follows strict logging standards:
    LOG_INFO("Server started on port %d", port);
    LOG_DEBUG("Processing request from %s", client_ip);
    ```
+
+## SSL/TLS Implementation (v2.0.10)
+
+The JSONdb server includes complete SSL/TLS support with production-ready security:
+
+1. **SSL Configuration**: Three-tier configuration support (env → CLI → database)
+2. **Default Security**: SSL enabled by default on port 5000
+3. **Certificate Management**: Supports standard certificate paths (/etc/ssl/certs/, /etc/ssl/private/)
+4. **Runtime Selection**: Can be enabled/disabled via environment, CLI flags, or database config
+5. **Secure by Default**: HTTP connections rejected when SSL is enabled
+6. **TLS Version Support**: Modern TLS 1.3 with backward compatibility
+7. **Integration**: Seamlessly integrated with existing authentication and RBAC systems
+
+### SSL Configuration Options:
+- Environment: `JSONDB_USE_SSL=true`, `JSONDB_SSL_CERT=/path/to/cert.pem`, `JSONDB_SSL_KEY=/path/to/key.pem`
+- CLI Flags: `--ssl`, `--ssl-cert=/path/to/cert.pem`, `--ssl-key=/path/to/key.pem`
+- Runtime: Via runtime script or direct binary execution
+
+### Key Implementation Files:
+- `src/components/utils/ssl.c` - SSL context management and TLS operations
+- `src/initialize/socket.c` - SSL socket initialization and integration
+- `src/include/utils/ssl.h` - SSL interface definitions and error handling
 
 ## Code Audit Process
 

@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "utils/daemonize.h"
 #include "utils/logger.h"
+#include "utils/ssl.h"
 #include "init.h" /* For init_socket and INIT_OK */
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,8 +26,13 @@ static volatile int g_shutdown_requested = 0;
 /* Signal pipe for safe shutdown */
 static int g_signal_pipe[2] = {-1, -1};
 
+/* SSL context for the server */
+static ssl_context_t* g_ssl_context = NULL;
+
 /* Forward declarations */
 static int initialize_thread_pool(server_config_t* config);
+static int initialize_ssl(server_config_t* config);
+static void cleanup_ssl(void);
 static void* accept_thread_func(void* arg);
 static void handle_signals(void);
 static void signal_handler(int sig);
@@ -153,6 +159,30 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     }
   }
   
+  /* Initialize SSL if enabled */
+  if (config->use_ssl) {
+    if (g_logger) {
+      LOG_INFO("Initializing SSL context");
+    }
+    
+    if (initialize_ssl(config) != 0) {
+      if (g_logger) {
+        LOG_ERROR("initialize SSL context");
+      } else {
+        fprintf(stderr, "Error: Failed to initialize SSL context\n");
+      }
+      return SERVER_ERROR;
+    }
+    
+    if (g_logger) {
+      LOG_INFO("SSL context initialized successfully");
+    }
+  } else {
+    if (g_logger) {
+      LOG_INFO("SSL disabled - running in plain HTTP mode");
+    }
+  }
+  
   /* Initialize thread pool */
   if (g_logger) {
     LOG_INFO("Initializing thread pool");
@@ -202,6 +232,14 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     }
     thread_pool_destroy(config->thread_pool);
     config->thread_pool = NULL;
+  }
+  
+  /* Clean up SSL context */
+  if (config->use_ssl) {
+    if (g_logger) {
+      LOG_DEBUG("Cleaning up SSL context");
+    }
+    cleanup_ssl();
   }
   
   /* Close signal pipe */
@@ -453,6 +491,10 @@ static void* accept_thread_func(void* arg) {
       client->address = client_addr;
       client->api_ctx = config->api_ctx;
       
+      /* Initialize SSL fields */
+      client->use_ssl = config->use_ssl;
+      client->ssl_conn = NULL;
+      
       /* Add client to thread pool using our adapter function */
       if (thread_pool_add_work(config->thread_pool, handle_client_adapter, client) != 0) {
         fprintf(stderr, "Error: Failed to add client to thread pool\n");
@@ -545,6 +587,104 @@ void server_request_shutdown(void) {
 }
 
 /* Removed unused function set_socket_non_blocking */
+
+/**
+ * Initialize SSL context for the server
+ * @param config Server configuration containing SSL settings
+ * @return 0 on success, -1 on failure
+ */
+static int initialize_ssl(server_config_t* config) {
+  if (!config) {
+    if (g_logger) {
+      LOG_ERROR("NULL server configuration provided to initialize_ssl");
+    }
+    return -1;
+  }
+  
+  /* Initialize SSL library */
+  ssl_error_t error = ssl_library_init();
+  if (error != SSL_SUCCESS) {
+    if (g_logger) {
+      LOG_ERROR("Failed to initialize SSL library: %s", ssl_error_string(error));
+    }
+    return -1;
+  }
+  
+  if (g_logger) {
+    LOG_DEBUG("SSL library initialized successfully");
+  }
+  
+  /* Create SSL configuration */
+  ssl_config_t ssl_config = {
+    .cert_file = config->cert_path,
+    .key_file = config->key_path,
+    .ca_file = NULL,  /* Optional */
+    .cipher_list = NULL,  /* Use default cipher list */
+    .verify_peer = 0,  /* Don't verify peer certificates for server mode */
+    .verify_depth = 0
+  };
+  
+  /* Validate certificate and key file paths */
+  if (!ssl_config.cert_file || !ssl_config.key_file) {
+    if (g_logger) {
+      LOG_ERROR("SSL certificate or key file path not configured");
+      LOG_ERROR("Certificate: %s", ssl_config.cert_file ? ssl_config.cert_file : "(not set)");
+      LOG_ERROR("Private key: %s", ssl_config.key_file ? ssl_config.key_file : "(not set)");
+    }
+    return -1;
+  }
+  
+  if (g_logger) {
+    LOG_DEBUG("SSL configuration: cert=%s, key=%s", ssl_config.cert_file, ssl_config.key_file);
+  }
+  
+  /* Create SSL context */
+  error = ssl_context_create(&ssl_config, &g_ssl_context);
+  if (error != SSL_SUCCESS) {
+    if (g_logger) {
+      LOG_ERROR("Failed to create SSL context: %s", ssl_error_string(error));
+    }
+    ssl_library_cleanup();
+    return -1;
+  }
+  
+  if (g_logger) {
+    LOG_INFO("SSL context created successfully");
+    LOG_INFO("Server will use SSL/TLS for secure connections");
+  }
+  
+  return 0;
+}
+
+/**
+ * Clean up SSL context and library
+ */
+static void cleanup_ssl(void) {
+  if (g_ssl_context) {
+    if (g_logger) {
+      LOG_DEBUG("Freeing SSL context");
+    }
+    ssl_context_free(g_ssl_context);
+    g_ssl_context = NULL;
+  }
+  
+  if (g_logger) {
+    LOG_DEBUG("Cleaning up SSL library");
+  }
+  ssl_library_cleanup();
+  
+  if (g_logger) {
+    LOG_DEBUG("SSL cleanup complete");
+  }
+}
+
+/**
+ * Get the global SSL context for use by client handlers
+ * @return SSL context or NULL if SSL is disabled
+ */
+ssl_context_t* server_get_ssl_context(void) {
+  return g_ssl_context;
+}
 
 /*
  * Legacy compatibility functions (deprecated)

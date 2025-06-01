@@ -175,8 +175,8 @@ int load_environment_config(server_config_t* config) {
   const char* validators_dir = getenv("JSONDB_VALIDATORS_DIR");
   const char* transforms_dir = getenv("JSONDB_TRANSFORMS_DIR");
   const char* metrics_dir = getenv("JSONDB_METRICS_DIR");
-  const char* ssl_cert_file = getenv("JSONDB_SSL_CERT_FILE");
-  const char* ssl_key_file = getenv("JSONDB_SSL_KEY_FILE");
+  const char* ssl_cert_file = getenv("JSONDB_SSL_CERT");
+  const char* ssl_key_file = getenv("JSONDB_SSL_KEY");
   
   /* Update config with environment variables if they exist */
   if (db_dir) {

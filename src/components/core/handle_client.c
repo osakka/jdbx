@@ -1,6 +1,7 @@
 #include "core/server.h"
 #include "api/api.h"
 #include "utils/metrics.h"
+#include "utils/ssl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,134 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+
+/* Forward declarations for SSL support */
+static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_size);
+static int client_write_data(client_conn_t* client, const char* data, size_t data_len);
+static int client_setup_ssl(client_conn_t* client);
+static void client_cleanup_ssl(client_conn_t* client);
+
+/**
+ * Read data from client connection (SSL or plain socket)
+ * @param client Client connection
+ * @param buffer Buffer to store data
+ * @param buffer_size Size of buffer
+ * @return Number of bytes read, or -1 on error
+ */
+static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_size) {
+  if (!client || !buffer || buffer_size == 0) {
+    return -1;
+  }
+  
+  if (client->use_ssl && client->ssl_conn) {
+    /* SSL read */
+    size_t bytes_read = 0;
+    ssl_error_t error = ssl_read(client->ssl_conn, buffer, buffer_size - 1, &bytes_read);
+    
+    if (error != SSL_SUCCESS) {
+      if (g_logger) {
+        LOG_ERROR("SSL read failed: %s", ssl_error_string(error));
+      }
+      return -1;
+    }
+    
+    return (int)bytes_read;
+  } else {
+    /* Plain socket read */
+    return read(client->client_fd, buffer, buffer_size - 1);
+  }
+}
+
+/**
+ * Write data to client connection (SSL or plain socket)
+ * @param client Client connection
+ * @param data Data to write
+ * @param data_len Length of data
+ * @return Number of bytes written, or -1 on error
+ */
+static int client_write_data(client_conn_t* client, const char* data, size_t data_len) {
+  if (!client || !data || data_len == 0) {
+    return -1;
+  }
+  
+  if (client->use_ssl && client->ssl_conn) {
+    /* SSL write */
+    size_t bytes_written = 0;
+    ssl_error_t error = ssl_write(client->ssl_conn, data, data_len, &bytes_written);
+    
+    if (error != SSL_SUCCESS) {
+      if (g_logger) {
+        LOG_ERROR("SSL write failed: %s", ssl_error_string(error));
+      }
+      return -1;
+    }
+    
+    return (int)bytes_written;
+  } else {
+    /* Plain socket write */
+    return write(client->client_fd, data, data_len);
+  }
+}
+
+/**
+ * Set up SSL connection for client
+ * @param client Client connection
+ * @return 0 on success, -1 on failure
+ */
+static int client_setup_ssl(client_conn_t* client) {
+  if (!client) {
+    return -1;
+  }
+  
+  /* Get SSL context from server */
+  ssl_context_t* ssl_ctx = server_get_ssl_context();
+  if (!ssl_ctx) {
+    if (g_logger) {
+      LOG_ERROR("No SSL context available for client connection");
+    }
+    return -1;
+  }
+  
+  /* Create SSL connection */
+  ssl_error_t error = ssl_connection_create(ssl_ctx, client->client_fd, &client->ssl_conn);
+  if (error != SSL_SUCCESS) {
+    if (g_logger) {
+      LOG_ERROR("Failed to create SSL connection: %s", ssl_error_string(error));
+    }
+    return -1;
+  }
+  
+  /* Perform SSL handshake */
+  error = ssl_handshake(client->ssl_conn);
+  if (error != SSL_SUCCESS) {
+    if (g_logger) {
+      LOG_ERROR("SSL handshake failed: %s", ssl_error_string(error));
+    }
+    ssl_connection_free(client->ssl_conn);
+    client->ssl_conn = NULL;
+    return -1;
+  }
+  
+  if (g_logger) {
+    LOG_DEBUG("SSL connection established for client fd=%d", client->client_fd);
+  }
+  
+  return 0;
+}
+
+/**
+ * Clean up SSL connection for client
+ * @param client Client connection
+ */
+static void client_cleanup_ssl(client_conn_t* client) {
+  if (client && client->ssl_conn) {
+    if (g_logger) {
+      LOG_DEBUG("Cleaning up SSL connection for client fd=%d", client->client_fd);
+    }
+    ssl_connection_free(client->ssl_conn);
+    client->ssl_conn = NULL;
+  }
+}
 
 /* Handle client connection */
 void* handle_client(void* client_data) {
@@ -75,6 +204,26 @@ void* handle_client(void* client_data) {
   }
 
   char buffer[BUFFER_SIZE] = {0};
+  
+  /* Set up SSL connection if needed */
+  if (client->use_ssl) {
+    if (g_logger) {
+      LOG_DEBUG("Setting up SSL connection for client fd=%d", client_fd);
+    }
+    
+    if (client_setup_ssl(client) != 0) {
+      if (g_logger) {
+        LOG_ERROR("Failed to set up SSL connection for client fd=%d", client_fd);
+      }
+      close(client_fd);
+      client->client_fd = 0;
+      goto cleanup;
+    }
+    
+    if (g_logger) {
+      LOG_INFO("SSL connection established for client fd=%d", client_fd);
+    }
+  }
 
   /* Set socket to non-blocking */
   int flags = fcntl(client_fd, F_GETFL);
@@ -104,7 +253,7 @@ void* handle_client(void* client_data) {
   }
 
   /* Read request */
-  int bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1);
+  int bytes_read = client_read_data(client, buffer, BUFFER_SIZE);
   if (bytes_read <= 0) {
     if (bytes_read < 0) {
       perror("read failed");
@@ -135,7 +284,7 @@ void* handle_client(void* client_data) {
 
       if (response_str) {
         size_t response_len = strlen(response_str); /* Safe now with null-termination */
-        if (write(client_fd, response_str, response_len) < 0) {
+        if (client_write_data(client, response_str, response_len) < 0) {
           perror("write failed");
         }
         free(response_str);
@@ -184,7 +333,7 @@ void* handle_client(void* client_data) {
     char* response_str = serialize_http_response(response);
     if (response_str) {
       size_t response_len = strlen(response_str); /* Safe now with null-termination */
-      write(client_fd, response_str, response_len);
+      client_write_data(client, response_str, response_len);
       free(response_str);
     }
 
@@ -319,7 +468,7 @@ void* handle_client(void* client_data) {
           break;
         }
         
-        ssize_t result = write(client_fd, response_str + bytes_sent, response_len - bytes_sent);
+        ssize_t result = client_write_data(client, response_str + bytes_sent, response_len - bytes_sent);
         if (result < 0) {
           if (errno == EINTR) {
             /* Interrupted by signal, retry */
@@ -383,7 +532,7 @@ void* handle_client(void* client_data) {
     /* Send response, handling partial writes and errors */
     size_t bytes_sent = 0;
     while (bytes_sent < response_len) {
-      ssize_t result = write(client_fd, response_str + bytes_sent, response_len - bytes_sent);
+      ssize_t result = client_write_data(client, response_str + bytes_sent, response_len - bytes_sent);
       if (result < 0) {
         if (errno == EINTR) {
           /* Interrupted by signal, retry */
@@ -410,6 +559,11 @@ void* handle_client(void* client_data) {
   /* Cleanup */
   free_http_response(response);
   free_http_request(request);
+  
+  /* Clean up SSL connection if needed */
+  if (client->use_ssl) {
+    client_cleanup_ssl(client);
+  }
   
   /* Ensure all data is sent before closing */
   shutdown(client_fd, SHUT_WR);

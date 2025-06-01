@@ -35,6 +35,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   char* validators_dir = NULL;
   char* transforms_dir = NULL;
   char* metrics_dir = NULL;
+  int use_ssl = -1;  /* -1 = not set, 0 = disabled, 1 = enabled */
+  char* ssl_cert = NULL;
+  char* ssl_key = NULL;
   
   /* Initialize binary directory for path resolution */
   config_init_binary_dir();
@@ -75,6 +78,10 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"validators-dir", required_argument, 0, 'Q'},
     {"transforms-dir", required_argument, 0, 'T'},
     {"metrics-dir",  required_argument, 0, 'M'},
+    {"ssl",      no_argument,    0, 'S'},
+    {"no-ssl",     no_argument,    0, 'N'},
+    {"ssl-cert",    required_argument, 0, 'C'},
+    {"ssl-key",    required_argument, 0, 'K'},
     {0, 0, 0, 0}
   };
   
@@ -83,7 +90,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int option_index = 0;
   
   optind = 1; /* Reset getopt index */
-  while ((opt = getopt_long(argc, argv, "hdtl:x:b:r:i:o:w:c:vVj:p:H:Q:T:M:", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hdtl:x:b:r:i:o:w:c:vVj:p:H:Q:T:M:SNC:K:", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
         show_help = 1;
@@ -142,6 +149,18 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
       case 'M':
         metrics_dir = optarg;
         break;
+      case 'S':
+        use_ssl = 1;
+        break;
+      case 'N':
+        use_ssl = 0;
+        break;
+      case 'C':
+        ssl_cert = optarg;
+        break;
+      case 'K':
+        ssl_key = optarg;
+        break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
         free(heap_config);
@@ -184,8 +203,12 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     }
     INIT_LOG_SUCCESS("CONFIG", "Configuration loaded from '%s'", config_file);
   }
+
+  /* Load configuration from environment variables (lowest priority) */
+  INIT_LOG_PROGRESS("CONFIG", "Loading settings from environment variables");
+  load_environment_config(heap_config);
   
-  /* Override configuration with command line arguments */
+  /* Override configuration with command line arguments (medium priority) */
   /* Default to daemon mode (verbose_mode=0) unless verbose (-V) is explicitly set */
   heap_config->verbose_mode = 0;
   
@@ -312,6 +335,30 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_PROGRESS("CONFIG", "Metrics directory set to %s", metrics_dir);
   }
   
+  /* Process SSL arguments */
+  if (use_ssl != -1) {
+    heap_config->use_ssl = use_ssl;
+    INIT_LOG_PROGRESS("CONFIG", "SSL %s via command line", use_ssl ? "enabled" : "disabled");
+  }
+  
+  if (ssl_cert) {
+    /* Free previous value if allocated */
+    if (heap_config->cert_path) {
+      free(heap_config->cert_path);
+    }
+    heap_config->cert_path = strdup(ssl_cert);
+    INIT_LOG_PROGRESS("CONFIG", "SSL certificate set to %s", ssl_cert);
+  }
+  
+  if (ssl_key) {
+    /* Free previous value if allocated */
+    if (heap_config->key_path) {
+      free(heap_config->key_path);
+    }
+    heap_config->key_path = strdup(ssl_key);
+    INIT_LOG_PROGRESS("CONFIG", "SSL private key set to %s", ssl_key);
+  }
+
   /* Process JavaScript file argument */
   if (js_file) {
     /* Store in js_enabled field to indicate JavaScript execution mode */
@@ -328,12 +375,13 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     return status;
   }
 
-  /* Load configuration from environment variables */
-  INIT_LOG_PROGRESS("CONFIG", "Loading settings from environment variables");
-  load_environment_config(heap_config);
-  
-  /* Paths are already normalized by load_environment_config */
-  INIT_LOG_PROGRESS("CONFIG", "Paths normalized to absolute");
+  /* Normalize paths to absolute paths */
+  INIT_LOG_PROGRESS("CONFIG", "Normalizing paths to absolute");
+  if (!normalize_config_paths(heap_config, config_get_binary_dir())) {
+    INIT_LOG_FAILURE("CONFIG", "Failed to normalize configuration paths");
+    free(heap_config);
+    return INIT_CONFIG_ERROR;
+  }
   
   /* Log all configuration values for debugging */
   INIT_LOG_DEBUG("CONFIG", "Final configuration settings:");
@@ -347,6 +395,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_DEBUG("CONFIG", " Validators dir: %s", heap_config->validators_dir ? heap_config->validators_dir : "(null)");
   INIT_LOG_DEBUG("CONFIG", " Transforms dir: %s", heap_config->transforms_dir ? heap_config->transforms_dir : "(null)");
   INIT_LOG_DEBUG("CONFIG", " Metrics dir: %s", heap_config->metrics_dir ? heap_config->metrics_dir : "(null)");
+  INIT_LOG_DEBUG("CONFIG", " SSL enabled: %s", heap_config->use_ssl ? "yes" : "no");
+  INIT_LOG_DEBUG("CONFIG", " SSL certificate: %s", heap_config->cert_path ? heap_config->cert_path : "(null)");
+  INIT_LOG_DEBUG("CONFIG", " SSL private key: %s", heap_config->key_path ? heap_config->key_path : "(null)");
   
   /* Set the output parameter */
   *config_out = heap_config;

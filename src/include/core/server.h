@@ -19,6 +19,7 @@
 
 /* Forward declarations to avoid circular dependencies */
 typedef struct api_context api_context_t;
+typedef struct ssl_context_t ssl_context_t;
 
 /* Server configuration */
 #define DEFAULT_PORT 5000
@@ -88,11 +89,6 @@ typedef struct {
     int socket_fd;
     char* host;                  /* Binding host address */
 
-    /* SSL settings */
-    int use_ssl;
-    char* cert_path;
-    char* key_path;
-
     /* File paths */
     char* db_path;
     char* rbac_path;
@@ -126,9 +122,23 @@ typedef struct {
     struct metrics_registry* metrics; /* Metrics registry */
     thread_pool_t* thread_pool;   /* Thread pool for handling client connections */
 
+    /* SSL settings - ADDED AT END TO AVOID FIELD MISALIGNMENT */
+    int use_ssl;
+    char* cert_path;
+    char* key_path;
+    ssl_context_t* ssl_context; /* SSL context for TLS connections */
+
     /* Status */
     int error;                   /* Error code */
 } server_config_t;
+
+/* Compile-time checks to prevent field misalignment issues */
+#include <stddef.h>
+/* Verify critical field offsets to catch struct corruption early */
+_Static_assert(offsetof(server_config_t, pid_file) != offsetof(server_config_t, rbac_path), 
+               "pid_file and rbac_path fields must have different offsets");
+_Static_assert(offsetof(server_config_t, log_file) != offsetof(server_config_t, pid_file), 
+               "log_file and pid_file fields must have different offsets");
 
 /* Cookie struct */
 typedef struct cookie {
@@ -168,6 +178,10 @@ typedef struct {
     int client_fd;
     struct sockaddr_in address;
     struct api_context *api_ctx;  /* Reference to the API context */
+    
+    /* SSL connection information */
+    int use_ssl;                   /* Whether this connection uses SSL */
+    struct ssl_connection_t *ssl_conn;  /* SSL connection if SSL is enabled */
 } client_conn_t;
 
 /* Server initialization and control functions */
@@ -245,5 +259,9 @@ http_response_t* apply_cors_headers(http_response_t* response,
 server_status_t run_server_auto(server_config_t* config, api_context_t* api_ctx);
 server_status_t run_server_epoll(server_config_t* config, api_context_t* api_ctx);
 server_status_t run_server_standard(server_config_t* config, api_context_t* api_ctx);
+
+/* SSL functions */
+struct ssl_context_t; /* Forward declaration */
+struct ssl_context_t* server_get_ssl_context(void);
 
 #endif /* SERVER_H */

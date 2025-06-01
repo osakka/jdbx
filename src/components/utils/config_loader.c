@@ -4,6 +4,7 @@
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
 #include "utils/config_string_pool.h"
+#include "utils/ssl.h"
 #include "core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -748,6 +749,142 @@ int config_load_json(const char* filepath, server_config_t* config) {
     }
   }
   
+  /* Parse SSL section */
+  if (g_logger) {
+    LOG_DEBUG("Processing 'ssl' section");
+    LOG_TRACE("Looking for 'ssl' object in configuration");
+  }
+  
+  json_value_t* ssl_section = json_object_get(json, "ssl");
+  if (ssl_section) {
+    if (ssl_section->type == JSON_OBJECT) {
+      if (g_logger) {
+        LOG_TRACE("Found 'ssl' section with %zu properties", json_object_size(ssl_section));
+      }
+      
+      /* Process SSL enabled setting */
+      if (g_logger) {
+        LOG_TRACE("Looking for 'enabled' property in SSL section");
+      }
+      
+      json_value_t* enabled_val = json_object_get(ssl_section, "enabled");
+      if (enabled_val) {
+        int old_ssl = config->use_ssl;
+        
+        if (enabled_val->type == JSON_BOOLEAN) {
+          config->use_ssl = enabled_val->value.boolean;
+        } else if (enabled_val->type == JSON_INTEGER) {
+          config->use_ssl = (enabled_val->value.integer != 0);
+        } else if (enabled_val->type == JSON_STRING) {
+          config->use_ssl = parse_bool(enabled_val->value.string);
+        } else {
+          if (g_logger) {
+            LOG_WARNING("Invalid type for 'enabled' in SSL section (expected boolean, integer, or string, got %s), using default: %d", 
+                  json_type_name(enabled_val->type), DEFAULT_SSL_ENABLED);
+          }
+          config->use_ssl = DEFAULT_SSL_ENABLED;
+        }
+        
+        if (g_logger) {
+          LOG_DEBUG("Config: Set SSL enabled from %d to %d", old_ssl, config->use_ssl);
+          
+          if (config->use_ssl) {
+            LOG_INFO("SSL support enabled");
+          } else {
+            LOG_INFO("SSL support disabled");
+          }
+        }
+      } else {
+        if (g_logger) {
+          LOG_DEBUG("No SSL enabled setting specified, using default: %d", DEFAULT_SSL_ENABLED);
+          config->use_ssl = DEFAULT_SSL_ENABLED;
+        }
+      }
+      
+      /* Process SSL certificate file setting */
+      if (g_logger) {
+        LOG_TRACE("Looking for 'cert_file' property in SSL section");
+      }
+      
+      json_value_t* cert_val = json_object_get(ssl_section, "cert_file");
+      if (cert_val) {
+        if (cert_val->type == JSON_STRING) {
+          /* Free existing cert path if it exists */
+          if (config->cert_path) {
+            if (g_logger) {
+              LOG_TRACE("Freeing existing cert_path: '%s'", config->cert_path);
+            }
+            free(config->cert_path);
+          }
+          
+          config->cert_path = strdup(cert_val->value.string);
+          if (g_logger) {
+            LOG_DEBUG("Config: Set SSL certificate file to '%s'", config->cert_path);
+          }
+        } else {
+          if (g_logger) {
+            LOG_WARNING("Invalid type for 'cert_file' in SSL section (expected string, got %s)", 
+                  json_type_name(cert_val->type));
+          }
+        }
+      } else {
+        if (g_logger) {
+          LOG_DEBUG("No SSL certificate file specified, using default: %s", DEFAULT_SSL_CERT_PATH);
+        }
+      }
+      
+      /* Process SSL private key file setting */
+      if (g_logger) {
+        LOG_TRACE("Looking for 'key_file' property in SSL section");
+      }
+      
+      json_value_t* key_val = json_object_get(ssl_section, "key_file");
+      if (key_val) {
+        if (key_val->type == JSON_STRING) {
+          /* Free existing key path if it exists */
+          if (config->key_path) {
+            if (g_logger) {
+              LOG_TRACE("Freeing existing key_path: '%s'", config->key_path);
+            }
+            free(config->key_path);
+          }
+          
+          config->key_path = strdup(key_val->value.string);
+          if (g_logger) {
+            LOG_DEBUG("Config: Set SSL private key file to '%s'", config->key_path);
+          }
+        } else {
+          if (g_logger) {
+            LOG_WARNING("Invalid type for 'key_file' in SSL section (expected string, got %s)", 
+                  json_type_name(key_val->type));
+          }
+        }
+      } else {
+        if (g_logger) {
+          LOG_DEBUG("No SSL private key file specified, using default: %s", DEFAULT_SSL_KEY_PATH);
+        }
+      }
+    } else {
+      if (g_logger) {
+        LOG_WARNING("'ssl' section is not an object (found %s), using defaults", 
+              json_type_name(ssl_section->type));
+      }
+      
+      config->use_ssl = DEFAULT_SSL_ENABLED;
+      if (config->cert_path) free(config->cert_path);
+      config->cert_path = strdup(DEFAULT_SSL_CERT_PATH);
+      if (config->key_path) free(config->key_path);
+      config->key_path = strdup(DEFAULT_SSL_KEY_PATH);
+    }
+  } else {
+    if (g_logger) {
+      LOG_INFO("No 'ssl' section found in config, using defaults");
+      LOG_DEBUG("Default SSL enabled: %d", config->use_ssl);
+      LOG_DEBUG("Default SSL certificate: %s", config->cert_path);
+      LOG_DEBUG("Default SSL private key: %s", config->key_path);
+    }
+  }
+  
   /* Parse logging section */
   if (g_logger) {
     LOG_DEBUG("Processing 'logging' section");
@@ -1437,6 +1574,23 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
       if (g_logger) {
         LOG_DEBUG("Config: Set js_enabled to %d", config->js_enabled);
       }
+    } else if (strcasecmp(key, "use_ssl") == 0 || strcasecmp(key, "ssl_enabled") == 0) {
+      config->use_ssl = parse_bool(value);
+      if (g_logger) {
+        LOG_DEBUG("Config: Set use_ssl to %d", config->use_ssl);
+      }
+    } else if (strcasecmp(key, "cert_path") == 0 || strcasecmp(key, "ssl_cert") == 0) {
+      if (config->cert_path) free(config->cert_path);
+      config->cert_path = strdup(value);
+      if (g_logger) {
+        LOG_DEBUG("Config: Set cert_path to '%s'", config->cert_path);
+      }
+    } else if (strcasecmp(key, "key_path") == 0 || strcasecmp(key, "ssl_key") == 0) {
+      if (config->key_path) free(config->key_path);
+      config->key_path = strdup(value);
+      if (g_logger) {
+        LOG_DEBUG("Config: Set key_path to '%s'", config->key_path);
+      }
     }
     /* CORS settings could be handled here but would require more complex parsing */
   }
@@ -1527,6 +1681,14 @@ void config_free(server_config_t* config) {
   if (config->transforms_dir) free(config->transforms_dir);
   if (config->metrics_dir) free(config->metrics_dir);
   
+  /* Free SSL resources */
+  if (config->cert_path) free(config->cert_path);
+  if (config->key_path) free(config->key_path);
+  if (config->ssl_context) {
+    ssl_context_free(config->ssl_context);
+    config->ssl_context = NULL;
+  }
+  
   /* Free CORS configuration */
   if (config->cors.allowed_origins) {
     for (int i = 0; i < config->cors.allowed_origins_count; i++) {
@@ -1590,7 +1752,6 @@ void config_init_defaults(server_config_t* config) {
   config->verbose_mode = 0; /* Default to non-verbose mode */
   config->log_level = DEFAULT_LOG_LEVEL;
   config->js_enabled = DEFAULT_JS_ENABLED;
-  config->use_ssl = DEFAULT_SSL_ENABLED;
   
   /* File paths (resolved relative to binary directory) */
   config->db_path = resolve_path(DEFAULT_DB_PATH);
@@ -1614,6 +1775,12 @@ void config_init_defaults(server_config_t* config) {
   config->thread_pool_queue_size = DEFAULT_THREAD_POOL_QUEUE_SIZE;
   config->thread_pool_idle_timeout = DEFAULT_THREAD_POOL_IDLE_TIMEOUT;
 
+  /* SSL settings - MATCH EXACT STRUCT FIELD ORDER */
+  config->use_ssl = DEFAULT_SSL_ENABLED;
+  config->cert_path = strdup(DEFAULT_SSL_CERT_PATH);
+  config->key_path = strdup(DEFAULT_SSL_KEY_PATH);
+  config->ssl_context = NULL;
+
   /* Additional settings */
   config->cors.enabled = DEFAULT_CORS_ENABLED;
   config->cors.allow_credentials = DEFAULT_CORS_ALLOW_CREDENTIALS;
@@ -1636,6 +1803,8 @@ void config_init_defaults(server_config_t* config) {
     LOG_TRACE("Default JWT secret length: %zu", strlen(config->jwt_secret));
     LOG_TRACE("Default CORS enabled: %d", config->cors.enabled);
     LOG_TRACE("Default SSL enabled: %d", config->use_ssl);
+    LOG_DEBUG("Default SSL certificate: %s", config->cert_path);
+    LOG_DEBUG("Default SSL private key: %s", config->key_path);
     
     LOG_TRACE("Exiting config_init_defaults() - success");
   }

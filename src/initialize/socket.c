@@ -1,5 +1,6 @@
 #include "init.h"
 #include "core/server.h"
+#include "utils/ssl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -203,11 +204,48 @@ init_status_t init_socket(server_config_t* config) {
     close(client_temp);
   }
 
+  /* Initialize SSL context if SSL is enabled */
+  if (config->use_ssl) {
+    INIT_LOG_PROGRESS("SOCKET", "SSL enabled, initializing SSL context");
+    
+    /* Initialize SSL library if not already done */
+    ssl_error_t ssl_result = ssl_library_init();
+    if (ssl_result != SSL_SUCCESS) {
+      INIT_LOG_FAILURE("SOCKET", "Failed to initialize SSL library");
+      close(socket_fd);
+      return INIT_SOCKET_ERROR;
+    }
+    
+    /* Create SSL configuration */
+    ssl_config_t ssl_config = {0};
+    ssl_config.cert_file = config->cert_path;
+    ssl_config.key_file = config->key_path;
+    ssl_config.verify_peer = 0;  /* Default to no client verification */
+    ssl_config.verify_depth = 0; /* Default depth */
+    
+    /* Create SSL context */
+    ssl_result = ssl_context_create(&ssl_config, &config->ssl_context);
+    if (ssl_result != SSL_SUCCESS) {
+      INIT_LOG_FAILURE("SOCKET", "Failed to create SSL context (cert: %s, key: %s)", 
+              config->cert_path ? config->cert_path : "none",
+              config->key_path ? config->key_path : "none");
+      close(socket_fd);
+      return INIT_SOCKET_ERROR;
+    }
+    
+    INIT_LOG_SUCCESS("SOCKET", "SSL context created successfully");
+    INIT_LOG_SUCCESS("SOCKET", "Using SSL certificate: %s", config->cert_path);
+    INIT_LOG_SUCCESS("SOCKET", "Using SSL private key: %s", config->key_path);
+  } else {
+    INIT_LOG_SUCCESS("SOCKET", "SSL disabled, running in non-SSL mode");
+    config->ssl_context = NULL;
+  }
+
   /* Store socket descriptor in config */
   config->socket_fd = socket_fd;
 
-  INIT_LOG_SUCCESS("SOCKET", "Socket initialization complete (socket_fd=%d, port=%d)", 
-          socket_fd, config->port);
+  INIT_LOG_SUCCESS("SOCKET", "Socket initialization complete (socket_fd=%d, port=%d, SSL=%s)", 
+          socket_fd, config->port, config->use_ssl ? "enabled" : "disabled");
 
   return INIT_OK;
 }

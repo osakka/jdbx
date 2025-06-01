@@ -27,6 +27,11 @@ done
 : ${JSONDB_HOST:="0.0.0.0"}
 : ${JSONDB_LOG_LEVEL:="info"}
 
+# SSL configuration
+: ${JSONDB_USE_SSL:="true"}
+: ${JSONDB_SSL_CERT:="/etc/ssl/certs/server.pem"}
+: ${JSONDB_SSL_KEY:="/etc/ssl/private/server.key"}
+
 # Use v2.0.0 binary format with .jdb extension
 : ${JSONDB_BASE_DIR:="/opt/jsondb"}
 : ${JSONDB_BUILD_DIR:="${JSONDB_BASE_DIR}/build"}
@@ -51,6 +56,11 @@ echo "  Log file: $JSONDB_LOG_FILE"
 echo "  PID file: $JSONDB_PID_FILE"
 echo "  Host: $JSONDB_HOST"
 echo "  Port: $JSONDB_PORT"
+echo "  SSL enabled: $JSONDB_USE_SSL"
+if [ "$JSONDB_USE_SSL" = "true" ]; then
+    echo "  SSL certificate: $JSONDB_SSL_CERT"
+    echo "  SSL private key: $JSONDB_SSL_KEY"
+fi
 
 # QuickJS library path
 if [ -d "/opt/qjs/lib/quickjs" ]; then
@@ -116,20 +126,31 @@ start_server() {
         lsof -ti:$JSONDB_PORT | xargs -r kill 2>/dev/null || true
     fi
 
+    # Prepare SSL arguments if SSL is enabled
+    SSL_ARGS=""
+    if [ "$JSONDB_USE_SSL" = "true" ]; then
+        SSL_ARGS="--ssl --ssl-cert=\"$JSONDB_SSL_CERT\" --ssl-key=\"$JSONDB_SSL_KEY\""
+        echo "SSL enabled: Certificate at $JSONDB_SSL_CERT, Key at $JSONDB_SSL_KEY"
+    else
+        SSL_ARGS="--no-ssl"
+        echo "SSL disabled: Server will run in non-SSL mode"
+    fi
+
     # Start the server
-    ./bin/jsondb_server \
+    eval "./bin/jsondb_server \
         --daemon \
-        --log-level="$JSONDB_LOG_LEVEL" \
-        --db-dir="$JSONDB_DB_DIR" \
-        --rbac-file="$JSONDB_RBAC_FILE" \
-        --log-file="$JSONDB_LOG_FILE" \
-        --pid-file="$JSONDB_PID_FILE" \
-        --web-root="$JSONDB_WEB_ROOT" \
-        --port="$JSONDB_PORT" \
-        --host="$JSONDB_HOST" \
-        --validators-dir="$JSONDB_VALIDATORS_DIR" \
-        --transforms-dir="$JSONDB_TRANSFORMS_DIR" \
-        --metrics-dir="$JSONDB_METRICS_DIR"
+        --log-level=\"$JSONDB_LOG_LEVEL\" \
+        --db-dir=\"$JSONDB_DB_DIR\" \
+        --rbac-file=\"$JSONDB_RBAC_FILE\" \
+        --log-file=\"$JSONDB_LOG_FILE\" \
+        --pid-file=\"$JSONDB_PID_FILE\" \
+        --web-root=\"$JSONDB_WEB_ROOT\" \
+        --port=\"$JSONDB_PORT\" \
+        --host=\"$JSONDB_HOST\" \
+        --validators-dir=\"$JSONDB_VALIDATORS_DIR\" \
+        --transforms-dir=\"$JSONDB_TRANSFORMS_DIR\" \
+        --metrics-dir=\"$JSONDB_METRICS_DIR\" \
+        $SSL_ARGS"
 
     # Wait for server to start (simplified)
     echo "Waiting up to 30 seconds for server to start..."

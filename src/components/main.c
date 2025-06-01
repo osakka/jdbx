@@ -39,6 +39,10 @@ static void print_usage(const char* program_name) {
   printf(" -T, --transforms-dir=DIR   Set transforms directory\n");
   printf(" -M, --metrics-dir=DIR     Set metrics directory\n");
   printf(" -c, --config=FILE       Load configuration from file\n");
+  printf(" -S, --ssl           Enable SSL/TLS encryption\n");
+  printf(" -N, --no-ssl          Disable SSL/TLS encryption\n");
+  printf(" -C, --ssl-cert=FILE      Set SSL certificate file path\n");
+  printf(" -K, --ssl-key=FILE       Set SSL private key file path\n");
   printf(" -v, --version         Display version information and exit\n");
   printf(" -j, --js-file=FILE      Execute JavaScript file and exit\n");
   printf("\n");
@@ -154,6 +158,11 @@ int main(int argc, char** argv) {
   printf("Validators directory: %s\n", config->validators_dir ? config->validators_dir : "not set");
   printf("Transforms directory: %s\n", config->transforms_dir ? config->transforms_dir : "not set");
   printf("Metrics directory: %s\n", config->metrics_dir ? config->metrics_dir : "not set");
+  printf("SSL enabled: %s\n", config->use_ssl ? "yes" : "no");
+  if (config->use_ssl) {
+    printf("SSL certificate: %s\n", config->cert_path ? config->cert_path : "not set");
+    printf("SSL private key: %s\n", config->key_path ? config->key_path : "not set");
+  }
   printf("Foreground mode: %s\n", config->verbose_mode ? "yes" : "no");
   
   /* Initialize logger */
