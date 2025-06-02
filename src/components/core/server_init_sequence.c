@@ -53,7 +53,7 @@ static void simple_handle_client(int client_fd, struct api_context *api_ctx);
 extern init_status_t init_socket(server_config_t* config);
 
 /* External handle_client definition from server.h */
-extern void* handle_client(void* client_data);
+extern void handle_client(void* client_data);
 
 /**
  * Improved server initialization and running sequence

@@ -212,7 +212,7 @@ server_status_t server_start(server_config_t* config) __attribute__((deprecated)
 void* server_accept_loop(void* config_ptr) __attribute__((deprecated));
 void server_stop(server_config_t* config) __attribute__((deprecated));
 void server_request_shutdown(void);
-void* handle_client(void* client_data);
+void handle_client(void* client_data);
 http_request_t* parse_http_request(const char* request_str);
 void free_http_request(http_request_t* request);
 http_response_t* create_http_response(http_status_t status, const char* body, const char* content_type);

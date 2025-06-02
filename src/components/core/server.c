@@ -42,8 +42,22 @@ extern init_status_t init_socket(server_config_t* config);
 
 /* Adapter function for thread pool compatibility */
 static void handle_client_adapter(void* client_data) {
-  /* Call the original handle_client function but discard its return value */
+  /* Get thread information for debugging */
+  pthread_t thread_id = pthread_self();
+  pid_t system_tid = (pid_t)syscall(SYS_gettid);
+  
+  if (g_logger) {
+    LOG_TRACE("ADAPTER_START: client_data=%p, thread=%lu, tid=%d", 
+        client_data, (unsigned long)thread_id, system_tid);
+  }
+  
+  /* Call the handle_client function - now with matching void signature */
   handle_client(client_data);
+  
+  if (g_logger) {
+    LOG_TRACE("ADAPTER_COMPLETE: client_data=%p, thread=%lu, tid=%d", 
+        client_data, (unsigned long)thread_id, system_tid);
+  }
 }
 
 /**
@@ -478,7 +492,7 @@ static void* accept_thread_func(void* arg) {
       printf("Accepted connection #%d from %s:%d\n", 
           connection_count, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
       
-      /* Create client connection structure */
+      /* Create client connection structure with enhanced safety */
       client_conn_t* client = (client_conn_t*)malloc(sizeof(client_conn_t));
       if (!client) {
         fprintf(stderr, "Error: Failed to allocate memory for client connection\n");
@@ -486,7 +500,8 @@ static void* accept_thread_func(void* arg) {
         continue;
       }
       
-      /* Initialize client connection */
+      /* Initialize client connection with memory safety */
+      memset(client, 0, sizeof(client_conn_t)); /* Zero entire structure */
       client->client_fd = client_fd;
       client->address = client_addr;
       client->api_ctx = config->api_ctx;
@@ -494,6 +509,12 @@ static void* accept_thread_func(void* arg) {
       /* Initialize SSL fields */
       client->use_ssl = config->use_ssl;
       client->ssl_conn = NULL;
+      
+      /* Log client allocation for debugging */
+      if (g_logger) {
+        LOG_TRACE("CLIENT_ALLOC: allocated client=%p, fd=%d, api_ctx=%p", 
+             (void*)client, client_fd, (void*)config->api_ctx);
+      }
       
       /* Add client to thread pool using our adapter function */
       if (thread_pool_add_work(config->thread_pool, handle_client_adapter, client) != 0) {

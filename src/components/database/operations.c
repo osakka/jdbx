@@ -323,69 +323,242 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
 }
 
 /**
- * Simplified Implementation for Document Deletion
+ * Enhanced Implementation for Document Deletion with Crash Detection
  * 
- * This implementation avoids cache operations entirely and uses
- * a single lock for thread safety.
+ * This implementation includes comprehensive logging and safety checks
+ * to investigate crashes when deleting documents.
  */
 int db_delete_document(database_t* db, const char* collection_name, const char* id) {
-  LOG_INFO("Collection '%s', ID '%s'", 
-       collection_name ? collection_name : "NULL", 
-       id ? id : "NULL");
+  /* Get thread information for debugging */
+  pthread_t thread_id = pthread_self();
+  
+  if (g_logger) {
+    LOG_INFO("DELETE_START: collection='%s', id='%s', thread=%lu", 
+         collection_name ? collection_name : "NULL", 
+         id ? id : "NULL", (unsigned long)thread_id);
+    LOG_TRACE("DELETE_PARAMS: db=%p, db->collections=%p, db->lock=%p", 
+         (void*)db, db ? (void*)db->collections : NULL, 
+         db ? (void*)&db->lock : NULL);
+  }
   
   if (!db || !collection_name || !id) {
-    LOG_ERROR("Invalid parameters");
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Invalid parameters - db=%p, collection_name=%p, id=%p", 
+           (void*)db, (void*)collection_name, (void*)id);
+    }
     return 0;
   }
   
-  LOG_DEBUG("Acquiring lock");
-  pthread_mutex_lock(&db->lock);
+  /* Validate database structure before proceeding */
+  if (!db->collections) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Database collections is NULL - db=%p", (void*)db);
+    }
+    return 0;
+  }
   
-  LOG_DEBUG("Collection: %s", collection_name);
-  json_value_t* collection = json_object_get(db->collections, collection_name);
-  if (!collection || collection->type != JSON_ARRAY) {
-    LOG_ERROR("Collection not found: %s", collection_name);
+  /* Pre-lock validation */
+  if (g_logger) {
+    LOG_TRACE("DELETE_PRE_LOCK: attempting to acquire database lock, thread=%lu", 
+         (unsigned long)thread_id);
+  }
+  
+  /* Acquire lock with enhanced error handling */
+  int lock_result = pthread_mutex_lock(&db->lock);
+  if (lock_result != 0) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Unable to acquire database lock - error=%d, thread=%lu", 
+           lock_result, (unsigned long)thread_id);
+    }
+    return 0;
+  }
+  
+  if (g_logger) {
+    LOG_TRACE("DELETE_LOCK_ACQUIRED: database lock acquired successfully, thread=%lu", 
+         (unsigned long)thread_id);
+  }
+  
+  /* Validate collections structure under lock */
+  if (!db->collections || db->collections->type != JSON_OBJECT) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Invalid collections structure - collections=%p, type=%d", 
+           (void*)db->collections, db->collections ? db->collections->type : -1);
+    }
     pthread_mutex_unlock(&db->lock);
     return 0;
   }
   
-  LOG_DEBUG("Finding document by ID: %s", id);
-  int found = 0;
+  if (g_logger) {
+    LOG_DEBUG("DELETE_COLLECTION_LOOKUP: searching for collection '%s'", collection_name);
+  }
   
-  for (size_t i = 0; i < collection->value.array.size; i++) {
-    json_value_t* doc = collection->value.array.items[i];
-    if (doc && doc->type == JSON_OBJECT) {
-      json_value_t* doc_id = json_object_get(doc, "_id");
-      if (doc_id && doc_id->type == JSON_STRING &&
-        strcmp(doc_id->value.string, id) == 0) {
-        
-        LOG_DEBUG("Document found, removing from collection");
-        json_free(doc);
-        
-        /* Move remaining documents */
-        for (size_t j = i; j < collection->value.array.size - 1; j++) {
-          collection->value.array.items[j] = collection->value.array.items[j + 1];
-        }
-        
-        collection->value.array.size--;
-        
-        found = 1;
-        db->is_modified = 1;
-        break;
+  json_value_t* collection = json_object_get(db->collections, collection_name);
+  if (!collection || collection->type != JSON_ARRAY) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Collection not found or invalid - collection='%s', found=%p, type=%d", 
+           collection_name, (void*)collection, collection ? collection->type : -1);
+    }
+    pthread_mutex_unlock(&db->lock);
+    return 0;
+  }
+  
+  size_t collection_size = collection->value.array.size;
+  if (g_logger) {
+    LOG_DEBUG("DELETE_COLLECTION_FOUND: collection='%s', size=%zu, items=%p", 
+         collection_name, collection_size, (void*)collection->value.array.items);
+  }
+  
+  /* Validate collection array structure */
+  if (collection_size > 0 && !collection->value.array.items) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Collection has size but no items array - size=%zu, items=%p", 
+           collection_size, (void*)collection->value.array.items);
+    }
+    pthread_mutex_unlock(&db->lock);
+    return 0;
+  }
+  
+  if (g_logger) {
+    LOG_DEBUG("DELETE_SEARCH_START: searching %zu documents for id='%s'", collection_size, id);
+  }
+  
+  int found = 0;
+  size_t found_index = 0;
+  
+  /* Enhanced document search with bounds checking */
+  for (size_t i = 0; i < collection_size; i++) {
+    if (g_logger) {
+      LOG_TRACE("DELETE_SEARCH_ITEM: checking document %zu/%zu", i + 1, collection_size);
+    }
+    
+    /* Validate array bounds */
+    if (i >= collection->value.array.size) {
+      if (g_logger) {
+        LOG_ERROR("DELETE_FAILED: Array index out of bounds - i=%zu, size=%zu", 
+             i, collection->value.array.size);
       }
+      break;
+    }
+    
+    json_value_t* doc = collection->value.array.items[i];
+    if (!doc) {
+      if (g_logger) {
+        LOG_TRACE("DELETE_SEARCH_ITEM: document %zu is NULL, skipping", i);
+      }
+      continue;
+    }
+    
+    if (doc->type != JSON_OBJECT) {
+      if (g_logger) {
+        LOG_WARNING("DELETE_SEARCH_ITEM: document %zu is not an object (type=%d), skipping", i, doc->type);
+      }
+      continue;
+    }
+    
+    json_value_t* doc_id = json_object_get(doc, "_id");
+    if (!doc_id || doc_id->type != JSON_STRING) {
+      if (g_logger) {
+        LOG_TRACE("DELETE_SEARCH_ITEM: document %zu has no valid _id field", i);
+      }
+      continue;
+    }
+    
+    if (strcmp(doc_id->value.string, id) == 0) {
+      if (g_logger) {
+        LOG_INFO("DELETE_DOCUMENT_FOUND: found document at index %zu, id='%s'", i, id);
+      }
+      found = 1;
+      found_index = i;
+      break;
     }
   }
   
-  LOG_DEBUG("Releasing lock");
-  pthread_mutex_unlock(&db->lock);
-  
-  if (found) {
-    LOG_INFO("Deleted");
-  } else {
-    LOG_WARNING("Document with ID '%s' not found in collection '%s'", id, collection_name);
+  if (!found) {
+    if (g_logger) {
+      LOG_WARNING("DELETE_NOT_FOUND: document with id='%s' not found in collection '%s'", id, collection_name);
+    }
+    pthread_mutex_unlock(&db->lock);
+    return 0;
   }
   
-  return found;
+  /* Enhanced document removal with safety checks */
+  if (g_logger) {
+    LOG_INFO("DELETE_REMOVING: removing document at index %zu from collection '%s'", found_index, collection_name);
+  }
+  
+  /* Validate the document pointer before freeing */
+  json_value_t* doc_to_delete = collection->value.array.items[found_index];
+  if (!doc_to_delete) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Document pointer is NULL at found index %zu", found_index);
+    }
+    pthread_mutex_unlock(&db->lock);
+    return 0;
+  }
+  
+  if (g_logger) {
+    LOG_TRACE("DELETE_FREEING: freeing document structure at %p", (void*)doc_to_delete);
+  }
+  
+  /* Free the document with error handling */
+  json_free(doc_to_delete);
+  
+  if (g_logger) {
+    LOG_TRACE("DELETE_SHIFTING: shifting remaining documents, from_index=%zu, total_size=%zu", 
+         found_index, collection_size);
+  }
+  
+  /* Enhanced array shifting with bounds checking */
+  for (size_t j = found_index; j < collection_size - 1; j++) {
+    if (j + 1 >= collection->value.array.size) {
+      if (g_logger) {
+        LOG_ERROR("DELETE_FAILED: Array shift out of bounds - j+1=%zu, size=%zu", 
+             j + 1, collection->value.array.size);
+      }
+      break;
+    }
+    collection->value.array.items[j] = collection->value.array.items[j + 1];
+  }
+  
+  /* Update collection size with validation */
+  if (collection->value.array.size == 0) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_FAILED: Cannot decrease array size from 0");
+    }
+    pthread_mutex_unlock(&db->lock);
+    return 0;
+  }
+  
+  collection->value.array.size--;
+  
+  /* Set null terminator in the array to prevent access to freed memory */
+  if (collection->value.array.size < collection_size) {
+    collection->value.array.items[collection->value.array.size] = NULL;
+  }
+  
+  /* Mark database as modified */
+  db->is_modified = 1;
+  
+  if (g_logger) {
+    LOG_INFO("DELETE_SUCCESS: document removed, new_collection_size=%zu", collection->value.array.size);
+    LOG_TRACE("DELETE_RELEASING_LOCK: releasing database lock, thread=%lu", (unsigned long)thread_id);
+  }
+  
+  /* Release lock */
+  int unlock_result = pthread_mutex_unlock(&db->lock);
+  if (unlock_result != 0) {
+    if (g_logger) {
+      LOG_ERROR("DELETE_WARNING: Failed to release database lock - error=%d, thread=%lu", 
+           unlock_result, (unsigned long)thread_id);
+    }
+  }
+  
+  if (g_logger) {
+    LOG_INFO("DELETE_COMPLETE: successfully deleted document id='%s' from collection '%s', thread=%lu", 
+         id, collection_name, (unsigned long)thread_id);
+  }
+  
+  return 1;
 }
 
 /**
