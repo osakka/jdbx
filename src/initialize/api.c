@@ -44,6 +44,18 @@ init_status_t init_api(server_config_t* config, database_t* database,
   /* Initialize JavaScript API */
   INIT_LOG_PROGRESS("API", "Initializing JavaScript engine");
   js_api_init(database);
+
+  /* Register native JavaScript API routes */
+  INIT_LOG_PROGRESS("API", "Registering native JavaScript API routes");
+  if (api_ctx) {
+    int routes_before = api_ctx->num_routes;
+    api_ctx->num_routes = register_js_native_api_routes(api_ctx->routes, api_ctx->num_routes);
+    int routes_added = api_ctx->num_routes - routes_before;
+    INIT_LOG_SUCCESS("API", "Native JavaScript API routes registered successfully - added %d routes (total: %d)", 
+            routes_added, api_ctx->num_routes);
+  } else {
+    INIT_LOG_FAILURE("API", "Cannot register native JavaScript API routes - NULL context");
+  }
   
   /* Register RBAC API routes */
   INIT_LOG_PROGRESS("API", "Registering RBAC API routes");

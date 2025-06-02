@@ -177,4 +177,12 @@ validation_error_t validate_collection_name(const char* name);
  */
 validation_error_t validate_document_id(const char* id);
 
+/**
+ * @brief Validate a collection pattern (allows wildcards like '*')
+ *
+ * @param pattern Collection pattern to validate
+ * @return VALIDATION_SUCCESS on success, error code otherwise
+ */
+validation_error_t validate_collection_pattern(const char* pattern);
+
 #endif /* JSONDB_INPUT_VALIDATION_H */

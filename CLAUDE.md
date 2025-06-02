@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 1, 2025 (v2.0.10)
+**Last Updated**: June 2, 2025 (v2.0.10)
 
 ## Core Principles
 
@@ -196,6 +196,122 @@ The JSONdb server includes complete SSL/TLS support with production-ready securi
 - `src/components/utils/ssl.c` - SSL context management and TLS operations
 - `src/initialize/socket.c` - SSL socket initialization and integration
 - `src/include/utils/ssl.h` - SSL interface definitions and error handling
+
+## JavaScript Integration System (v2.0.10)
+
+The JSONdb server features a comprehensive JavaScript integration system with enterprise-grade management capabilities:
+
+### Core JavaScript Components
+
+1. **Script Management**:
+   - Native JavaScript storage with QuickJS integration
+   - Three script types: validators, transformers, custom functions
+   - Collections: `_validators`, `_transformers`, `_functions`
+   - Error handling with detailed validation and recovery
+
+2. **Version Control System**:
+   - Semantic versioning (major.minor.patch) for all scripts
+   - Complete version history storage in `_script_versions` collection
+   - Rollback capabilities with automatic backup creation
+   - Version comparison with code diff generation
+   - Change type classification (major/minor/patch changes)
+
+3. **Performance Monitoring**:
+   - Real-time execution metrics (execution time, memory usage)
+   - Performance history tracking with configurable retention
+   - Script optimization recommendations
+   - Bottleneck identification and analysis
+
+4. **Batch Operations**:
+   - Bulk enable/disable operations across multiple scripts
+   - Batch version creation with progress tracking
+   - Import/export functionality with version history preservation
+   - Bulk delete operations with confirmation workflows
+
+### JavaScript Development Guidelines
+
+1. **Script Structure**:
+   ```javascript
+   // All scripts should include proper error handling
+   function validateDocument(doc) {
+     try {
+       // Validation logic with detailed error reporting
+       if (!doc.email || !validateEmail(doc.email)) {
+         addError('email', 'Invalid email format');
+       }
+       return isValid;
+     } catch (error) {
+       logError('Validation failed', error);
+       return false;
+     }
+   }
+   ```
+
+2. **Performance Best Practices**:
+   - Use `performance.now()` for timing critical operations
+   - Implement proper memory management
+   - Avoid blocking operations in script execution
+   - Leverage built-in optimization hints
+
+3. **Version Management Workflow**:
+   - Create versions before making significant changes
+   - Use semantic versioning appropriately:
+     - Patch (x.x.+1): Bug fixes, minor improvements
+     - Minor (x.+1.0): New features, backward compatible
+     - Major (+1.0.0): Breaking changes, API modifications
+   - Include descriptive change descriptions
+   - Test rollback procedures regularly
+
+4. **Error Handling Standards**:
+   - Always provide meaningful error messages
+   - Use structured error reporting with `addError(field, message)`
+   - Include context information in error logs
+   - Implement graceful degradation for non-critical failures
+
+### Key Implementation Files
+
+#### Core JavaScript Integration:
+- `src/components/js/js_engine.c` - QuickJS engine management
+- `src/components/js/js_api.c` - JavaScript API bindings
+- `src/components/js/js_native_storage.c` - Native storage integration
+- `src/components/database/js_integration.c` - Database integration layer
+- `src/components/api/js_native_api.c` - REST API endpoints
+
+#### Browser Interface:
+- `share/htdocs/js/app.js` - Complete JavaScript management system
+- `share/htdocs/index.html` - UI components and modals
+- `docs/guides/javascript-development-guide.md` - Development documentation
+
+#### Examples and Documentation:
+- `share/examples/js-examples/` - Comprehensive script examples
+- `share/examples/js-examples/comprehensive_examples.js` - Production-ready examples
+- `share/examples/js-examples/comprehensive_test.js` - Testing framework integration
+
+### JavaScript Integration Workflow
+
+1. **Development Phase**:
+   - Write scripts using provided examples and templates
+   - Test scripts in development environment
+   - Use performance monitoring to optimize execution
+   - Document script functionality and dependencies
+
+2. **Version Management**:
+   - Create initial version (1.0.0) for new scripts
+   - Use appropriate version increments for changes
+   - Maintain detailed change descriptions
+   - Test rollback procedures
+
+3. **Production Deployment**:
+   - Use batch operations for multiple script updates
+   - Monitor performance metrics after deployment
+   - Implement gradual rollout for critical scripts
+   - Maintain backup versions for quick recovery
+
+4. **Maintenance**:
+   - Regular performance analysis and optimization
+   - Periodic cleanup of old versions (configurable retention)
+   - Security audits of script content
+   - Documentation updates for API changes
 
 ## Code Audit Process
 

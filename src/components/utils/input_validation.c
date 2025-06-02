@@ -548,3 +548,31 @@ validation_error_t validate_document_id(const char* id) {
   
   return VALIDATION_SUCCESS;
 }
+
+/* Validate a collection pattern (allows wildcards like '*') */
+validation_error_t validate_collection_pattern(const char* pattern) {
+  if (!pattern) {
+    return VALIDATION_ERROR_NULL_INPUT;
+  }
+  
+  size_t len = strlen(pattern);
+  
+  if (len == 0) {
+    return VALIDATION_ERROR_EMPTY_INPUT;
+  }
+  
+  if (len > MAX_COLLECTION_NAME_LENGTH) {
+    return VALIDATION_ERROR_TOO_LONG;
+  }
+  
+  /* Allow alphanumeric, underscore, wildcard, and pattern characters */
+  static const char* allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_*?[].-";
+  
+  for (size_t i = 0; i < len; i++) {
+    if (!char_in_string(pattern[i], allowed_chars)) {
+      return VALIDATION_ERROR_INVALID_CHARS;
+    }
+  }
+  
+  return VALIDATION_SUCCESS;
+}

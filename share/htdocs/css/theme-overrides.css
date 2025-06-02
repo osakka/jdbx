@@ -335,3 +335,724 @@
 [data-theme="dark"] .token.variable {
     color: #d16969;
 }
+
+/* Real-time Validation Feedback Styles */
+.validation-feedback {
+    border-top: 1px solid var(--border-color);
+    padding: 10px;
+    font-size: 0.875rem;
+    background-color: var(--bg-primary);
+    margin-top: 5px;
+}
+
+.validation-feedback.valid {
+    border-top-color: var(--success);
+    background-color: rgba(40, 167, 69, 0.05);
+}
+
+.validation-feedback.invalid {
+    border-top-color: var(--danger);
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
+.validation-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.validation-icon i {
+    font-size: 1rem;
+}
+
+.validation-message {
+    margin: 0;
+}
+
+.validation-details {
+    margin-top: 8px;
+}
+
+.validation-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0;
+    font-size: 0.8rem;
+}
+
+.validation-item i {
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.validation-errors,
+.validation-warnings,
+.validation-success {
+    margin-bottom: 8px;
+}
+
+.validation-errors small,
+.validation-warnings small,
+.validation-success small {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Dark theme variations */
+[data-theme="dark"] .validation-feedback {
+    background-color: var(--bg-secondary);
+    border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .validation-feedback.valid {
+    background-color: rgba(40, 167, 69, 0.1);
+    border-top-color: var(--success);
+}
+
+[data-theme="dark"] .validation-feedback.invalid {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-top-color: var(--danger);
+}
+
+/* JSON Editor container enhancements */
+.json-editor-container {
+    position: relative;
+    display: flex;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.json-editor-container .line-numbers {
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    padding: 10px 8px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    user-select: none;
+    min-width: 40px;
+    text-align: right;
+}
+
+.json-editor {
+    flex: 1;
+    border: none;
+    background-color: transparent;
+    color: var(--text-primary);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    padding: 10px;
+    resize: none;
+    outline: none;
+}
+
+.json-editor:focus {
+    box-shadow: none;
+}
+
+/* Transformation Preview Layout */
+.transformation-preview-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 1rem;
+}
+
+.preview-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    gap: 10px;
+}
+
+.preview-header h6 {
+    margin: 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.preview-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+}
+
+.json-preview {
+    flex: 1;
+    padding: 10px;
+    background-color: transparent;
+    color: var(--text-primary);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    border: none;
+    outline: none;
+}
+
+.transformation-details {
+    padding: 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.transformation-details h6 {
+    margin: 0 0 8px 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.transformation-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.875rem;
+}
+
+.transformation-step.success {
+    color: var(--success);
+}
+
+.transformation-step.error {
+    color: var(--danger);
+}
+
+.transformer-name {
+    font-weight: 500;
+}
+
+.error-message {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-left: 4px;
+}
+
+/* Dark theme variations for preview */
+[data-theme="dark"] .preview-header {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .json-preview {
+    background-color: transparent;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .transformation-details {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+}
+
+/* Responsive preview layout */
+@media (min-width: 992px) {
+    .transformation-preview-container {
+        flex-direction: row;
+        align-items: stretch;
+    }
+    
+    .preview-section {
+        flex: 1;
+        min-height: auto;
+    }
+    
+    .preview-divider {
+        flex-direction: column;
+        width: 40px;
+        padding: 0 8px;
+    }
+    
+    .transformation-details {
+        margin-top: 0;
+        margin-left: 1rem;
+        flex: 0 0 300px;
+        align-self: flex-start;
+    }
+}
+
+/* Enhanced Validation Display Styles */
+.validation-metrics {
+    background-color: rgba(13, 202, 240, 0.1);
+    border: 1px solid rgba(13, 202, 240, 0.3);
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.validation-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.metric-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--bs-info);
+}
+
+.metric-item i {
+    font-size: 0.7rem;
+}
+
+.error-group {
+    margin-bottom: 8px;
+}
+
+.error-type-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--bs-danger);
+    margin-bottom: 4px;
+    padding: 2px 6px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border-left: 3px solid var(--bs-danger);
+    border-radius: 3px;
+}
+
+.error-suggestion {
+    font-size: 0.7rem;
+    margin-top: 4px;
+    padding-left: 16px;
+    border-left: 2px solid rgba(108, 117, 125, 0.3);
+}
+
+.error-suggestion i {
+    color: var(--bs-warning);
+    margin-right: 4px;
+}
+
+.validation-results .validation-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.validation-results .validation-item strong {
+    flex-grow: 1;
+}
+
+/* Dark theme adjustments for enhanced validation */
+[data-theme="dark"] .validation-metrics {
+    background-color: rgba(13, 202, 240, 0.15);
+    border-color: rgba(13, 202, 240, 0.4);
+}
+
+[data-theme="dark"] .error-type-header {
+    background-color: rgba(220, 53, 69, 0.2);
+    color: #f8d7da;
+}
+
+[data-theme="dark"] .error-suggestion {
+    border-left-color: rgba(108, 117, 125, 0.5);
+    color: #adb5bd;
+}
+
+[data-theme="dark"] .metric-item {
+    color: #9ec5fe;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .validation-feedback {
+        padding: 8px;
+        font-size: 0.8rem;
+    }
+    
+    .validation-item {
+        font-size: 0.75rem;
+    }
+    
+    .transformation-preview-container {
+        gap: 0.5rem;
+    }
+    
+    .preview-header {
+        padding: 6px 8px;
+        font-size: 0.875rem;
+    }
+    
+    .transformation-details {
+        padding: 8px;
+    }
+    
+    .validation-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    
+    .metric-item {
+        font-size: 0.7rem;
+    }
+    
+    .error-type-header {
+        font-size: 0.75rem;
+    }
+}
+
+/* Performance Dashboard Styles */
+.performance-health-card {
+    background: linear-gradient(135deg, rgba(13, 202, 240, 0.1), rgba(13, 202, 240, 0.05));
+    border: 1px solid rgba(13, 202, 240, 0.3);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    height: 100%;
+}
+
+.health-score-container {
+    margin-bottom: 15px;
+}
+
+.health-score-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 8px solid;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    position: relative;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+}
+
+.health-score-circle.excellent {
+    border-color: #198754;
+    color: #198754;
+}
+
+.health-score-circle.good {
+    border-color: #20c997;
+    color: #20c997;
+}
+
+.health-score-circle.fair {
+    border-color: #fd7e14;
+    color: #fd7e14;
+}
+
+.health-score-circle.poor {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.health-score-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.health-score-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.health-status {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.performance-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 4px solid transparent;
+}
+
+.summary-label {
+    font-weight: 500;
+}
+
+.summary-value {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.summary-value.critical {
+    color: var(--bs-danger);
+}
+
+.summary-value.warning {
+    color: var(--bs-warning);
+}
+
+.summary-value.info {
+    color: var(--bs-info);
+}
+
+.performance-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.performance-type-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+    height: 100%;
+}
+
+.type-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.type-header h6 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.type-stats {
+    margin-bottom: 12px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+}
+
+.stat-label {
+    opacity: 0.8;
+}
+
+.stat-value {
+    font-weight: 600;
+}
+
+.type-suggestions {
+    min-height: 40px;
+}
+
+.type-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-bottom: 4px;
+}
+
+.type-suggestion.critical {
+    background: rgba(220, 53, 69, 0.15);
+    color: #f8d7da;
+}
+
+.type-suggestion.warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #fff3cd;
+}
+
+.type-suggestion.success {
+    background: rgba(25, 135, 84, 0.15);
+    color: #d1e7dd;
+}
+
+.optimization-suggestions {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.optimization-suggestions h6 {
+    margin-bottom: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.suggestions-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 12px;
+    transition: all 0.2s ease;
+}
+
+.suggestion-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.suggestion-item.critical {
+    border-left: 4px solid var(--bs-danger);
+}
+
+.suggestion-item.warning {
+    border-left: 4px solid var(--bs-warning);
+}
+
+.suggestion-item.info {
+    border-left: 4px solid var(--bs-info);
+}
+
+.suggestion-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.suggestion-icon {
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.suggestion-content {
+    flex-grow: 1;
+}
+
+.suggestion-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+}
+
+.suggestion-text {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    line-height: 1.4;
+}
+
+.suggestion-category {
+    flex-shrink: 0;
+}
+
+.no-suggestions {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+.performance-report {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Dark theme adjustments for performance dashboard */
+[data-theme="dark"] .performance-health-card {
+    background: linear-gradient(135deg, rgba(13, 202, 240, 0.15), rgba(13, 202, 240, 0.08));
+    border-color: rgba(13, 202, 240, 0.4);
+}
+
+[data-theme="dark"] .performance-type-card {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .optimization-suggestions {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .suggestion-item {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .suggestion-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* Responsive adjustments for performance dashboard */
+@media (max-width: 768px) {
+    .performance-summary {
+        gap: 8px;
+    }
+    
+    .summary-item {
+        padding: 6px 8px;
+    }
+    
+    .performance-actions {
+        flex-direction: column;
+    }
+    
+    .health-score-circle {
+        width: 80px;
+        height: 80px;
+        border-width: 6px;
+    }
+    
+    .health-score-value {
+        font-size: 1.5rem;
+    }
+    
+    .health-score-label {
+        font-size: 0.6rem;
+    }
+    
+    .suggestion-header {
+        gap: 8px;
+    }
+    
+    .suggestion-title {
+        font-size: 0.85rem;
+    }
+    
+    .suggestion-text {
+        font-size: 0.75rem;
+    }
+}

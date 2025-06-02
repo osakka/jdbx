@@ -23,6 +23,7 @@ let databaseSizeChart = null;
 let storageChart = null;
 let connectionsChart = null;
 let responseTimesChart = null;
+let scriptPerformanceChart = null;
 
 // Data storage
 let allUsers = [];
@@ -207,7 +208,7 @@ function switchView(view) {
     
     // Handle body classes for different views
     document.body.classList.remove('page-dashboard', 'page-browser', 
-                                    'page-metrics', 'page-rbac', 'page-operations', 'page-api');
+                                    'page-metrics', 'page-rbac', 'page-operations', 'page-scripts', 'page-api');
     
     // Add page-specific class
     document.body.classList.add(`page-${view}`);
@@ -290,6 +291,10 @@ function switchView(view) {
                 if (POLLING_INTERVALS.operations) {
                     refreshInterval = setInterval(() => updateOperationsStatus(true), POLLING_INTERVALS.operations);
                 }
+                break;
+            case 'scripts':
+                initializeScripts();
+                // Set up polling for scripts (no regular polling needed)
                 break;
         }
         
@@ -858,6 +863,8 @@ async function loadDashboardMetrics() {
     }
 }
 
+// ===== JAVASCRIPT SCRIPT INTEGRATION =====
+
 // ===== BROWSER FUNCTIONALITY =====
 function initializeBrowser() {
     loadBrowserCollections();
@@ -962,6 +969,7 @@ async function renderCollections() {
                     const name = typeof collectionInfo === 'string' ? collectionInfo : collectionInfo.name;
                     const count = typeof collectionInfo === 'object' ? collectionInfo.documentCount : 0;
                     const hasSchema = schemas && schemas.some(s => s.collection === name);
+                    const hasJavaScript = name === '_validators' || name === '_transformers' || name === '_functions';
                     return `
                         <div class="collection-item ${currentCollection === name ? 'active' : ''}" 
                              data-collection="${name}" 
@@ -969,6 +977,7 @@ async function renderCollections() {
                             <i class="bi bi-gear-fill me-2" style="font-size: 0.875rem;"></i>
                             <span class="collection-name">${name}</span>
                             ${hasSchema ? '<i class="bi bi-shield-check text-success ms-1" title="Schema defined"></i>' : ''}
+                            ${hasJavaScript ? '<i class="bi bi-code-slash text-warning ms-1" title="Contains JavaScript Scripts"></i>' : ''}
                             <span class="badge bg-secondary ms-auto">${count}</span>
                         </div>
                     `;
@@ -1145,6 +1154,9 @@ function renderDocuments() {
 let currentDocumentIndex = null;
 let originalDocumentContent = null;
 let isDocumentModified = false;
+let transformPreviewMode = false;
+let currentTransformers = [];
+let transformedContent = null;
 
 function selectDocument(index) {
     const doc = documents[index];
@@ -1169,6 +1181,13 @@ function selectDocument(index) {
                 ${lineNumbers}
             </div>
             <textarea id="documentEditor" class="json-editor" spellcheck="false">${originalDocumentContent}</textarea>
+            <div id="validationFeedback" class="validation-feedback">
+                <div class="validation-status">
+                    <span class="validation-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                    <span class="validation-message">Document is valid</span>
+                </div>
+                <div class="validation-details" id="validationDetails"></div>
+            </div>
         </div>
     `;
     
@@ -1177,8 +1196,16 @@ function selectDocument(index) {
     editor.addEventListener('input', handleDocumentEdit);
     editor.addEventListener('scroll', syncScroll);
     
-    // Update buttons
-    updateDocumentButtons();
+    // Initialize validation
+    setTimeout(() => validateDocumentRealtime(originalDocumentContent), 100);
+    
+    // Check for transformers and update buttons
+    checkTransformersAvailable().then(() => {
+        updateDocumentButtons();
+        
+        // Update version controls for JavaScript scripts
+        updateVersionControls();
+    });
 }
 
 // ===== QUERY BUILDER FUNCTIONALITY =====
@@ -1414,6 +1441,12 @@ function handleDocumentEdit() {
     const lineNumbers = lines.map((_, i) => `<span class="line-number">${i + 1}</span>`).join('\n');
     lineNumbersContainer.innerHTML = lineNumbers;
     
+    // Perform real-time validation
+    clearTimeout(window.validationTimeout);
+    window.validationTimeout = setTimeout(() => {
+        validateDocumentRealtime(currentContent);
+    }, 500); // Debounce validation by 500ms
+    
     // Update button state
     updateEditButton();
 }
@@ -1438,6 +1471,2521 @@ function updateEditButton() {
         editBtn.classList.remove('btn-primary');
         editBtn.classList.add('btn-outline-primary');
         editBtn.disabled = true;
+    }
+}
+
+// ===== REAL-TIME VALIDATION SYSTEM =====
+
+async function validateDocumentRealtime(content) {
+    if (!currentCollection) {
+        return;
+    }
+    
+    // First validate JSON syntax
+    let jsonValid = true;
+    let parsedDoc = null;
+    
+    try {
+        parsedDoc = JSON.parse(content);
+    } catch (e) {
+        jsonValid = false;
+        updateValidationDisplay({
+            valid: false,
+            error: 'JSON Syntax Error',
+            message: e.message,
+            type: 'syntax'
+        });
+        return;
+    }
+    
+    // If JSON is valid, check for JavaScript validators
+    try {
+        const validators = await getCollectionValidators(currentCollection);
+        if (validators.length === 0) {
+            // No validators, just show JSON is valid
+            updateValidationDisplay({
+                valid: true,
+                message: 'Document is valid JSON'
+            });
+            return;
+        }
+        
+        // Run validators
+        const validationResults = await runValidators(parsedDoc, validators);
+        updateValidationDisplay(validationResults);
+        
+    } catch (error) {
+        console.error('Validation error:', error);
+        updateValidationDisplay({
+            valid: false,
+            error: 'Validation Error',
+            message: 'Failed to run validation scripts',
+            type: 'system'
+        });
+    }
+}
+
+async function getCollectionValidators(collection) {
+    try {
+        const response = await apiRequest('/api/collections/_validators/documents');
+        if (response && response.documents) {
+            // Filter validators for this collection or global validators
+            return response.documents.filter(script => {
+                const tags = script.tags || [];
+                return tags.includes(collection) || tags.includes('*') || tags.includes('global');
+            });
+        }
+        return [];
+    } catch (error) {
+        console.error('Failed to get validators:', error);
+        return [];
+    }
+}
+
+async function runValidators(document, validators) {
+    const results = {
+        valid: true,
+        errors: [],
+        warnings: [],
+        validatorResults: [],
+        executionMetrics: {
+            totalTime: 0,
+            validatorCount: validators.length,
+            successCount: 0,
+            errorCount: 0
+        }
+    };
+    
+    const startTime = performance.now();
+    
+    for (const validator of validators) {
+        const validatorStartTime = performance.now();
+        
+        try {
+            // Validate the validator document structure first
+            const validationResult = validateScriptDocument(validator, 'validator');
+            if (!validationResult.valid) {
+                results.valid = false;
+                results.errors.push({
+                    validator: validator.name || 'Unknown Validator',
+                    message: `Script validation failed: ${validationResult.errors.join(', ')}`,
+                    type: 'script_validation_error'
+                });
+                results.executionMetrics.errorCount++;
+                continue;
+            }
+            
+            const response = await apiRequest('/api/js/native/execute', {
+                method: 'POST',
+                body: JSON.stringify({
+                    script_id: validator.id,
+                    input_data: document,
+                    context: {
+                        collection: currentCollection,
+                        operation: 'validate',
+                        realtime: true
+                    }
+                })
+            });
+            
+            const validatorTime = performance.now() - validatorStartTime;
+            
+            results.validatorResults.push({
+                name: validator.name || 'Unknown Validator',
+                result: response.result,
+                success: response.success,
+                executionTime: Math.round(validatorTime),
+                scriptVersion: validator.version || '1.0.0'
+            });
+            
+            if (!response.success) {
+                results.valid = false;
+                const errorMessage = parseExecutionError(response.error) || 'Validation failed';
+                results.errors.push({
+                    validator: validator.name || 'Unknown Validator',
+                    message: errorMessage,
+                    type: 'execution_error',
+                    details: response.error
+                });
+                results.executionMetrics.errorCount++;
+            } else {
+                results.executionMetrics.successCount++;
+                
+                // Handle validation result
+                if (response.result) {
+                    if (response.result.valid === false) {
+                        results.valid = false;
+                        const errors = response.result.errors || [];
+                        errors.forEach(error => {
+                            results.errors.push({
+                                validator: validator.name || 'Unknown Validator',
+                                message: error,
+                                type: 'validation_rule_error'
+                            });
+                        });
+                    }
+                    
+                    if (response.result.warnings) {
+                        response.result.warnings.forEach(warning => {
+                            results.warnings.push({
+                                validator: validator.name || 'Unknown Validator',
+                                message: warning,
+                                type: 'validation_warning'
+                            });
+                        });
+                    }
+                }
+            }
+            
+        } catch (error) {
+            results.valid = false;
+            results.executionMetrics.errorCount++;
+            
+            let errorMessage = 'Unknown execution error';
+            let errorType = 'network_error';
+            
+            if (error.message) {
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error: Unable to connect to server';
+                    errorType = 'network_error';
+                } else if (error.message.includes('Unauthorized')) {
+                    errorMessage = 'Authorization error: Insufficient permissions to execute validator';
+                    errorType = 'auth_error';
+                } else if (error.message.includes('timeout')) {
+                    errorMessage = 'Timeout error: Validator execution took too long';
+                    errorType = 'timeout_error';
+                } else {
+                    errorMessage = `Execution error: ${error.message}`;
+                    errorType = 'execution_error';
+                }
+            }
+            
+            results.errors.push({
+                validator: validator.name || 'Unknown Validator',
+                message: errorMessage,
+                type: errorType,
+                details: error.stack || error.message
+            });
+        }
+    }
+    
+    results.executionMetrics.totalTime = Math.round(performance.now() - startTime);
+    
+    // Add performance analysis
+    if (results.executionMetrics.totalTime > 1000) {
+        results.warnings.push({
+            message: `Slow validation detected: ${results.executionMetrics.totalTime}ms total execution time`,
+            type: 'performance',
+            suggestion: 'Consider optimizing validators or reducing validation complexity'
+        });
+    }
+    
+    if (results.validatorResults.length > 10) {
+        results.warnings.push({
+            message: `High validator count: ${results.validatorResults.length} validators executed`,
+            type: 'performance', 
+            suggestion: 'Consider consolidating validators or using more specific tags'
+        });
+    }
+    
+    // Record performance metrics for analysis
+    recordScriptPerformanceMetrics({
+        operation: 'validation',
+        totalTime: results.executionMetrics.totalTime,
+        scriptCount: results.executionMetrics.validatorCount,
+        successCount: results.executionMetrics.successCount,
+        errorCount: results.executionMetrics.errorCount,
+        collection: currentCollection || 'unknown',
+        timestamp: new Date().toISOString()
+    });
+    
+    return results;
+}
+
+// Helper function to validate script document structure
+function validateScriptDocument(script, expectedType) {
+    const errors = [];
+    
+    // Required fields validation
+    if (!script.name || typeof script.name !== 'string') {
+        errors.push('Script name is required and must be a string');
+    }
+    
+    if (!script.type || script.type !== expectedType) {
+        errors.push(`Script type must be '${expectedType}'`);
+    }
+    
+    if (!script.code || typeof script.code !== 'string') {
+        errors.push('Script code is required and must be a string');
+    }
+    
+    if (!Array.isArray(script.tags)) {
+        errors.push('Script tags must be an array');
+    }
+    
+    if (script.enabled !== undefined && typeof script.enabled !== 'boolean') {
+        errors.push('Script enabled flag must be a boolean');
+    }
+    
+    // JavaScript syntax validation
+    if (script.code) {
+        try {
+            // Basic syntax check using Function constructor
+            new Function(script.code);
+            
+            // Check for required function patterns based on script type
+            if (expectedType === 'validator') {
+                if (!script.code.includes('function validate') && 
+                    !script.code.includes('function(document, context)') &&
+                    !script.code.includes('(document, context) =>')) {
+                    errors.push('Validator scripts should contain a validate function with (document, context) parameters');
+                }
+            } else if (expectedType === 'transformer') {
+                if (!script.code.includes('function transform') && 
+                    !script.code.includes('function(document, context)') &&
+                    !script.code.includes('(document, context) =>')) {
+                    errors.push('Transformer scripts should contain a transform function with (document, context) parameters');
+                }
+            } else if (expectedType === 'function') {
+                if (!script.code.includes('function execute') && 
+                    !script.code.includes('function(input, context)') &&
+                    !script.code.includes('(input, context) =>')) {
+                    errors.push('Function scripts should contain an execute function with (input, context) parameters');
+                }
+            }
+        } catch (syntaxError) {
+            errors.push(`JavaScript syntax error: ${syntaxError.message}`);
+        }
+    }
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
+// Helper function to parse execution errors and provide better error messages
+function parseExecutionError(error) {
+    if (!error) return null;
+    
+    const errorString = typeof error === 'string' ? error : JSON.stringify(error);
+    
+    // Common JavaScript errors
+    if (errorString.includes('ReferenceError')) {
+        const match = errorString.match(/ReferenceError: (\w+) is not defined/);
+        if (match) {
+            return `Variable '${match[1]}' is not defined. Check your script for typos or missing variable declarations.`;
+        }
+        return 'Reference error: Variable or function not found';
+    }
+    
+    if (errorString.includes('TypeError')) {
+        if (errorString.includes('undefined')) {
+            return 'Type error: Attempting to access property of undefined value';
+        }
+        if (errorString.includes('null')) {
+            return 'Type error: Attempting to access property of null value';  
+        }
+        return 'Type error: Invalid operation on value type';
+    }
+    
+    if (errorString.includes('SyntaxError')) {
+        return 'Syntax error: Invalid JavaScript syntax in script code';
+    }
+    
+    if (errorString.includes('timeout')) {
+        return 'Execution timeout: Script took too long to execute (max 5 seconds)';
+    }
+    
+    if (errorString.includes('memory')) {
+        return 'Memory error: Script exceeded memory limit (max 64MB)';
+    }
+    
+    if (errorString.includes('permission')) {
+        return 'Permission error: Script attempted unauthorized operation';
+    }
+    
+    return errorString;
+}
+
+function updateValidationDisplay(validation) {
+    const feedbackContainer = document.getElementById('validationFeedback');
+    const detailsContainer = document.getElementById('validationDetails');
+    
+    if (!feedbackContainer) return;
+    
+    // Update main status
+    const statusElement = feedbackContainer.querySelector('.validation-status');
+    const iconElement = statusElement.querySelector('.validation-icon');
+    const messageElement = statusElement.querySelector('.validation-message');
+    
+    if (validation.valid) {
+        iconElement.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
+        messageElement.textContent = validation.message || 'Document is valid';
+        messageElement.className = 'validation-message text-success';
+        feedbackContainer.className = 'validation-feedback valid';
+    } else {
+        iconElement.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i>';
+        messageElement.textContent = validation.error || validation.message || 'Document validation failed';
+        messageElement.className = 'validation-message text-danger';
+        feedbackContainer.className = 'validation-feedback invalid';
+    }
+    
+    // Clear previous details
+    detailsContainer.innerHTML = '';
+    
+    // Show execution metrics if available
+    if (validation.executionMetrics) {
+        const metricsDiv = document.createElement('div');
+        metricsDiv.className = 'validation-metrics mt-2';
+        metricsDiv.innerHTML = `
+            <small class="text-info fw-bold">Execution Metrics:</small>
+            <div class="validation-metrics-grid">
+                <div class="metric-item">
+                    <i class="bi bi-clock"></i> 
+                    <span>Time: ${validation.executionMetrics.totalTime || 0}ms</span>
+                </div>
+                <div class="metric-item">
+                    <i class="bi bi-gear"></i> 
+                    <span>Validators: ${validation.executionMetrics.validatorCount || 0}</span>
+                </div>
+                <div class="metric-item">
+                    <i class="bi bi-check-circle"></i> 
+                    <span>Success: ${validation.executionMetrics.successCount || 0}</span>
+                </div>
+                <div class="metric-item">
+                    <i class="bi bi-x-circle"></i> 
+                    <span>Errors: ${validation.executionMetrics.errorCount || 0}</span>
+                </div>
+            </div>
+        `;
+        detailsContainer.appendChild(metricsDiv);
+    }
+    
+    // Show validation details with enhanced error information
+    if (validation.errors && validation.errors.length > 0) {
+        const errorsDiv = document.createElement('div');
+        errorsDiv.className = 'validation-errors mt-2';
+        
+        // Group errors by type for better organization
+        const groupedErrors = {};
+        validation.errors.forEach(error => {
+            const errorType = error.type || 'validation';
+            if (!groupedErrors[errorType]) {
+                groupedErrors[errorType] = [];
+            }
+            groupedErrors[errorType].push(error);
+        });
+        
+        let errorsHtml = '<small class="text-danger fw-bold">Errors:</small>';
+        
+        Object.keys(groupedErrors).forEach(errorType => {
+            const typeIcon = {
+                'syntax': 'bi-code-slash',
+                'execution': 'bi-exclamation-octagon',
+                'timeout': 'bi-clock',
+                'permission': 'bi-shield-exclamation',
+                'validation': 'bi-x-circle'
+            }[errorType] || 'bi-x-circle';
+            
+            const typeLabel = {
+                'syntax': 'Syntax Error',
+                'execution': 'Execution Error', 
+                'timeout': 'Timeout Error',
+                'permission': 'Permission Error',
+                'validation': 'Validation Error'
+            }[errorType] || 'Error';
+            
+            errorsHtml += `<div class="error-group mt-1">`;
+            if (Object.keys(groupedErrors).length > 1) {
+                errorsHtml += `<div class="error-type-header"><i class="bi ${typeIcon}"></i> ${typeLabel}</div>`;
+            }
+            
+            groupedErrors[errorType].forEach(error => {
+                const errorMessage = typeof error === 'string' ? error : (error.message || error.toString());
+                const validatorName = error.validator || error.script_name;
+                const suggestion = error.suggestion || '';
+                
+                errorsHtml += `
+                    <div class="validation-item text-danger">
+                        <i class="bi ${typeIcon}"></i> 
+                        ${validatorName ? `<strong>[${validatorName}]</strong> ` : ''}
+                        ${errorMessage}
+                        ${suggestion ? `<div class="error-suggestion text-muted"><i class="bi bi-lightbulb"></i> ${suggestion}</div>` : ''}
+                    </div>
+                `;
+            });
+            errorsHtml += `</div>`;
+        });
+        
+        errorsDiv.innerHTML = errorsHtml;
+        detailsContainer.appendChild(errorsDiv);
+    }
+    
+    if (validation.warnings && validation.warnings.length > 0) {
+        const warningsDiv = document.createElement('div');
+        warningsDiv.className = 'validation-warnings mt-2';
+        warningsDiv.innerHTML = `
+            <small class="text-warning fw-bold">Warnings:</small>
+            ${validation.warnings.map(warning => {
+                const warningMessage = typeof warning === 'string' ? warning : (warning.message || warning.toString());
+                const validatorName = warning.validator || warning.script_name;
+                return `<div class="validation-item text-warning">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    ${validatorName ? `<strong>[${validatorName}]</strong> ` : ''}
+                    ${warningMessage}
+                </div>`;
+            }).join('')}
+        `;
+        detailsContainer.appendChild(warningsDiv);
+    }
+    
+    if (validation.validatorResults && validation.validatorResults.length > 0) {
+        const resultsDiv = document.createElement('div');
+        resultsDiv.className = 'validation-results mt-2';
+        
+        const successfulValidators = validation.validatorResults.filter(r => r.success);
+        const failedValidators = validation.validatorResults.filter(r => !r.success);
+        
+        if (successfulValidators.length > 0) {
+            resultsDiv.innerHTML += `
+                <small class="text-success fw-bold">Validators passed (${successfulValidators.length}):</small>
+                ${successfulValidators.map(result => `
+                    <div class="validation-item text-success">
+                        <i class="bi bi-check-circle"></i> 
+                        <strong>${result.name}</strong>
+                        ${result.executionTime ? `<span class="text-muted ms-2">(${result.executionTime}ms)</span>` : ''}
+                    </div>`
+                ).join('')}
+            `;
+        }
+        
+        if (failedValidators.length > 0) {
+            resultsDiv.innerHTML += `
+                <small class="text-danger fw-bold mt-2 d-block">Validators failed (${failedValidators.length}):</small>
+                ${failedValidators.map(result => `
+                    <div class="validation-item text-danger">
+                        <i class="bi bi-x-circle"></i> 
+                        <strong>${result.name}</strong>
+                        ${result.error ? `<div class="ms-3 text-muted">${result.error}</div>` : ''}
+                        ${result.executionTime ? `<span class="text-muted ms-2">(${result.executionTime}ms)</span>` : ''}
+                    </div>`
+                ).join('')}
+            `;
+        }
+        
+        detailsContainer.appendChild(resultsDiv);
+    }
+}
+
+// ===== PERFORMANCE MONITORING SYSTEM =====
+
+// Performance metrics storage
+let performanceMetrics = {
+    validation: [],
+    transformation: [],
+    function_execution: []
+};
+
+// Performance thresholds (configurable)
+const PERFORMANCE_THRESHOLDS = {
+    validation: {
+        slow: 500,     // ms
+        verySlow: 1000 // ms
+    },
+    transformation: {
+        slow: 300,
+        verySlow: 800
+    },
+    function_execution: {
+        slow: 1000,
+        verySlow: 3000
+    }
+};
+
+// Record performance metrics
+function recordScriptPerformanceMetrics(metrics) {
+    const operationType = metrics.operation;
+    
+    // Add to local storage
+    if (!performanceMetrics[operationType]) {
+        performanceMetrics[operationType] = [];
+    }
+    
+    performanceMetrics[operationType].push({
+        ...metrics,
+        id: Date.now() + Math.random(),
+        timestamp: new Date().toISOString()
+    });
+    
+    // Keep only last 100 entries per operation type
+    if (performanceMetrics[operationType].length > 100) {
+        performanceMetrics[operationType] = performanceMetrics[operationType].slice(-100);
+    }
+    
+    // Store in localStorage for persistence
+    try {
+        localStorage.setItem('jsondb_performance_metrics', JSON.stringify(performanceMetrics));
+    } catch (e) {
+        console.warn('Failed to store performance metrics:', e);
+    }
+    
+    // Send to server for permanent storage (async, don't block UI)
+    sendPerformanceMetricsToServer(metrics).catch(err => {
+        console.warn('Failed to send performance metrics to server:', err);
+    });
+}
+
+// Send performance metrics to server
+async function sendPerformanceMetricsToServer(metrics) {
+    try {
+        const response = await fetch('/api/js/performance/metrics', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify(metrics)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+    } catch (error) {
+        // Silently fail - performance metrics are nice-to-have
+        console.debug('Performance metrics not sent to server:', error.message);
+    }
+}
+
+// Load performance metrics from localStorage
+function loadPerformanceMetrics() {
+    try {
+        const stored = localStorage.getItem('jsondb_performance_metrics');
+        if (stored) {
+            performanceMetrics = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.warn('Failed to load performance metrics:', e);
+        performanceMetrics = {
+            validation: [],
+            transformation: [],
+            function_execution: []
+        };
+    }
+}
+
+// Analyze performance and generate optimization suggestions
+function analyzePerformance(operationType, recentCount = 10) {
+    const metrics = performanceMetrics[operationType] || [];
+    const recent = metrics.slice(-recentCount);
+    
+    if (recent.length === 0) {
+        return { suggestions: [], stats: null };
+    }
+    
+    // Calculate statistics
+    const times = recent.map(m => m.totalTime);
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+    const maxTime = Math.max(...times);
+    const minTime = Math.min(...times);
+    
+    const scriptCounts = recent.map(m => m.scriptCount || 0);
+    const avgScriptCount = scriptCounts.reduce((a, b) => a + b, 0) / scriptCounts.length;
+    
+    const errorRates = recent.map(m => {
+        const total = (m.successCount || 0) + (m.errorCount || 0);
+        return total > 0 ? (m.errorCount || 0) / total : 0;
+    });
+    const avgErrorRate = errorRates.reduce((a, b) => a + b, 0) / errorRates.length;
+    
+    const stats = {
+        avgTime: Math.round(avgTime),
+        maxTime,
+        minTime,
+        avgScriptCount: Math.round(avgScriptCount * 10) / 10,
+        avgErrorRate: Math.round(avgErrorRate * 100),
+        sampleSize: recent.length
+    };
+    
+    // Generate suggestions
+    const suggestions = [];
+    const thresholds = PERFORMANCE_THRESHOLDS[operationType];
+    
+    if (avgTime > thresholds.verySlow) {
+        suggestions.push({
+            type: 'critical',
+            category: 'performance',
+            message: `Very slow ${operationType} performance (${stats.avgTime}ms average)`,
+            suggestion: 'Consider optimizing script logic, reducing complexity, or using more specific tags',
+            priority: 'high'
+        });
+    } else if (avgTime > thresholds.slow) {
+        suggestions.push({
+            type: 'warning',
+            category: 'performance', 
+            message: `Slow ${operationType} performance (${stats.avgTime}ms average)`,
+            suggestion: 'Review script efficiency and consider optimizations',
+            priority: 'medium'
+        });
+    }
+    
+    if (avgScriptCount > 8) {
+        suggestions.push({
+            type: 'warning',
+            category: 'efficiency',
+            message: `High script count (${stats.avgScriptCount} scripts average)`,
+            suggestion: 'Consider consolidating scripts or using more specific collection tags',
+            priority: 'medium'
+        });
+    }
+    
+    if (avgErrorRate > 0.1) {
+        suggestions.push({
+            type: 'warning',
+            category: 'reliability',
+            message: `High error rate (${stats.avgErrorRate}%)`,
+            suggestion: 'Review script error handling and input validation',
+            priority: 'high'
+        });
+    }
+    
+    // Collection-specific suggestions
+    const collections = [...new Set(recent.map(m => m.collection))];
+    if (collections.length > 5) {
+        suggestions.push({
+            type: 'info',
+            category: 'organization',
+            message: `Scripts running on many collections (${collections.length})`,
+            suggestion: 'Consider using collection-specific scripts instead of global ones',
+            priority: 'low'
+        });
+    }
+    
+    return { suggestions, stats };
+}
+
+// Get performance dashboard data
+function getPerformanceDashboardData() {
+    const data = {
+        validation: analyzePerformance('validation'),
+        transformation: analyzePerformance('transformation'), 
+        function_execution: analyzePerformance('function_execution')
+    };
+    
+    // Overall health score
+    const allSuggestions = [
+        ...data.validation.suggestions,
+        ...data.transformation.suggestions,
+        ...data.function_execution.suggestions
+    ];
+    
+    const criticalCount = allSuggestions.filter(s => s.type === 'critical').length;
+    const warningCount = allSuggestions.filter(s => s.type === 'warning').length;
+    
+    let healthScore = 100;
+    healthScore -= criticalCount * 25;
+    healthScore -= warningCount * 10;
+    healthScore = Math.max(0, healthScore);
+    
+    data.overall = {
+        healthScore,
+        criticalIssues: criticalCount,
+        warnings: warningCount,
+        totalSuggestions: allSuggestions.length
+    };
+    
+    return data;
+}
+
+// Initialize performance monitoring
+function initializePerformanceMonitoring() {
+    loadPerformanceMetrics();
+    
+    // Clean up old metrics (older than 24 hours)
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    Object.keys(performanceMetrics).forEach(type => {
+        performanceMetrics[type] = performanceMetrics[type].filter(
+            metric => metric.timestamp > cutoff
+        );
+    });
+    
+    console.log('Performance monitoring initialized');
+}
+
+// ===== SCRIPT VERSIONING SYSTEM =====
+
+// Script version tracking
+let scriptVersions = {};
+
+// Version comparison cache
+let versionComparisonCache = {};
+
+// Generate version number for a script
+function generateVersionNumber(existingVersions = []) {
+    if (existingVersions.length === 0) {
+        return '1.0.0';
+    }
+    
+    // Find the latest version and increment patch number
+    const latest = existingVersions
+        .map(v => v.split('.').map(n => parseInt(n)))
+        .sort((a, b) => {
+            for (let i = 0; i < 3; i++) {
+                if (a[i] !== b[i]) return b[i] - a[i];
+            }
+            return 0;
+        })[0];
+    
+    return `${latest[0]}.${latest[1]}.${latest[2] + 1}`;
+}
+
+// Create a new version of a script
+async function createScriptVersion(scriptDocument, changeType = 'patch', changeDescription = '') {
+    try {
+        const scriptId = scriptDocument._id;
+        const scriptType = scriptDocument.type;
+        
+        // Load existing versions
+        const versions = await loadScriptVersions(scriptId);
+        
+        // Generate new version number based on change type
+        let newVersion;
+        if (versions.length === 0) {
+            newVersion = '1.0.0';
+        } else {
+            const latest = versions[0].version.split('.').map(n => parseInt(n));
+            switch (changeType) {
+                case 'major':
+                    newVersion = `${latest[0] + 1}.0.0`;
+                    break;
+                case 'minor':
+                    newVersion = `${latest[0]}.${latest[1] + 1}.0`;
+                    break;
+                case 'patch':
+                default:
+                    newVersion = `${latest[0]}.${latest[1]}.${latest[2] + 1}`;
+                    break;
+            }
+        }
+        
+        // Create version document
+        const versionDocument = {
+            script_id: scriptId,
+            version: newVersion,
+            script_type: scriptType,
+            change_type: changeType,
+            change_description: changeDescription || `${changeType} update`,
+            script_data: {
+                name: scriptDocument.name,
+                description: scriptDocument.description,
+                code: scriptDocument.code,
+                tags: scriptDocument.tags,
+                enabled: scriptDocument.enabled,
+                author: scriptDocument.author
+            },
+            metadata: {
+                created_at: new Date().toISOString(),
+                created_by: getCurrentUser(),
+                file_size: new Blob([scriptDocument.code]).size,
+                code_lines: scriptDocument.code.split('\n').length,
+                dependencies: extractDependencies(scriptDocument.code)
+            },
+            performance_data: getScriptPerformanceData(scriptId),
+            previous_version: versions.length > 0 ? versions[0].version : null
+        };
+        
+        // Store version in _script_versions collection
+        const response = await apiRequest('/api/collections/_script_versions', {
+            method: 'POST',
+            body: JSON.stringify(versionDocument)
+        });
+        
+        if (response.success) {
+            // Update the main script document with latest version info
+            const updatedScript = {
+                ...scriptDocument,
+                version: newVersion,
+                version_history: {
+                    current_version: newVersion,
+                    version_count: versions.length + 1,
+                    last_updated: new Date().toISOString(),
+                    last_updated_by: getCurrentUser()
+                }
+            };
+            
+            // Cache the version locally
+            if (!scriptVersions[scriptId]) {
+                scriptVersions[scriptId] = [];
+            }
+            scriptVersions[scriptId].unshift(versionDocument);
+            
+            return {
+                success: true,
+                version: newVersion,
+                versionId: response.id,
+                updatedScript
+            };
+        }
+        
+        throw new Error(response.error || 'Failed to create version');
+        
+    } catch (error) {
+        console.error('Error creating script version:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Load all versions for a script
+async function loadScriptVersions(scriptId) {
+    try {
+        // Check cache first
+        if (scriptVersions[scriptId]) {
+            return scriptVersions[scriptId];
+        }
+        
+        // Query _script_versions collection
+        const response = await apiRequest(`/api/collections/_script_versions?script_id=${scriptId}`);
+        
+        if (response.success && response.documents) {
+            // Sort by version number (latest first)
+            const versions = response.documents.sort((a, b) => {
+                const aVer = a.version.split('.').map(n => parseInt(n));
+                const bVer = b.version.split('.').map(n => parseInt(n));
+                
+                for (let i = 0; i < 3; i++) {
+                    if (aVer[i] !== bVer[i]) return bVer[i] - aVer[i];
+                }
+                return 0;
+            });
+            
+            // Cache the versions
+            scriptVersions[scriptId] = versions;
+            return versions;
+        }
+        
+        return [];
+        
+    } catch (error) {
+        console.error('Error loading script versions:', error);
+        return [];
+    }
+}
+
+// Rollback script to a specific version
+async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
+    try {
+        const versions = await loadScriptVersions(scriptId);
+        const targetVersionDoc = versions.find(v => v.version === targetVersion);
+        
+        if (!targetVersionDoc) {
+            throw new Error(`Version ${targetVersion} not found`);
+        }
+        
+        // Get current script document
+        const scriptType = targetVersionDoc.script_type;
+        const collectionName = getCollectionNameForScriptType(scriptType);
+        const currentScript = await apiRequest(`/api/collections/${collectionName}/${scriptId}`);
+        
+        if (!currentScript.success) {
+            throw new Error('Failed to load current script');
+        }
+        
+        // Create a new version with current state before rollback
+        await createScriptVersion(
+            currentScript.document, 
+            'patch', 
+            `Pre-rollback backup to ${targetVersion}`
+        );
+        
+        // Update script with target version data
+        const rolledBackScript = {
+            ...currentScript.document,
+            ...targetVersionDoc.script_data,
+            version: generateVersionNumber(versions.map(v => v.version)),
+            rollback_info: {
+                rolled_back_from: currentScript.document.version,
+                rolled_back_to: targetVersion,
+                rollback_reason: rollbackReason,
+                rollback_date: new Date().toISOString(),
+                rollback_by: getCurrentUser()
+            },
+            updated_at: new Date().toISOString()
+        };
+        
+        // Save the rolled back script
+        const updateResponse = await apiRequest(`/api/collections/${collectionName}/${scriptId}`, {
+            method: 'PUT',
+            body: JSON.stringify(rolledBackScript)
+        });
+        
+        if (updateResponse.success) {
+            // Create version entry for the rollback
+            await createScriptVersion(
+                rolledBackScript,
+                'patch',
+                `Rollback to version ${targetVersion}: ${rollbackReason}`
+            );
+            
+            // Clear cache to force reload
+            delete scriptVersions[scriptId];
+            
+            return {
+                success: true,
+                message: `Successfully rolled back to version ${targetVersion}`,
+                newVersion: rolledBackScript.version
+            };
+        }
+        
+        throw new Error(updateResponse.error || 'Failed to save rolled back script');
+        
+    } catch (error) {
+        console.error('Error during rollback:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Compare two versions of a script
+function compareVersions(version1Data, version2Data) {
+    const comparison = {
+        metadata: {
+            version1: version1Data.version,
+            version2: version2Data.version,
+            compared_at: new Date().toISOString()
+        },
+        differences: {
+            name: version1Data.script_data.name !== version2Data.script_data.name,
+            description: version1Data.script_data.description !== version2Data.script_data.description,
+            code: version1Data.script_data.code !== version2Data.script_data.code,
+            tags: JSON.stringify(version1Data.script_data.tags) !== JSON.stringify(version2Data.script_data.tags),
+            enabled: version1Data.script_data.enabled !== version2Data.script_data.enabled
+        },
+        code_diff: generateCodeDiff(version1Data.script_data.code, version2Data.script_data.code),
+        size_change: version1Data.metadata.file_size - version2Data.metadata.file_size,
+        lines_change: version1Data.metadata.code_lines - version2Data.metadata.code_lines
+    };
+    
+    comparison.has_changes = Object.values(comparison.differences).some(diff => diff);
+    
+    return comparison;
+}
+
+// Generate simple code diff
+function generateCodeDiff(code1, code2) {
+    const lines1 = code1.split('\n');
+    const lines2 = code2.split('\n');
+    
+    const diff = [];
+    const maxLines = Math.max(lines1.length, lines2.length);
+    
+    for (let i = 0; i < maxLines; i++) {
+        const line1 = lines1[i] || '';
+        const line2 = lines2[i] || '';
+        
+        if (line1 !== line2) {
+            if (line1 && !line2) {
+                diff.push({ type: 'removed', line: i + 1, content: line1 });
+            } else if (!line1 && line2) {
+                diff.push({ type: 'added', line: i + 1, content: line2 });
+            } else {
+                diff.push({ type: 'modified', line: i + 1, old: line1, new: line2 });
+            }
+        }
+    }
+    
+    return diff;
+}
+
+// Extract dependencies from code (simple regex-based)
+function extractDependencies(code) {
+    const dependencies = new Set();
+    
+    // Look for common patterns
+    const patterns = [
+        /require\(['"`]([^'"`]+)['"`]\)/g,
+        /import\s+.*\s+from\s+['"`]([^'"`]+)['"`]/g,
+        /import\(['"`]([^'"`]+)['"`]\)/g
+    ];
+    
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(code)) !== null) {
+            dependencies.add(match[1]);
+        }
+    });
+    
+    return Array.from(dependencies);
+}
+
+// Get collection name for script type
+function getCollectionNameForScriptType(scriptType) {
+    switch (scriptType) {
+        case 'validator': return '_validators';
+        case 'transformer': return '_transformers';
+        case 'function': return '_functions';
+        default: return '_validators';
+    }
+}
+
+// Get current user (placeholder - would integrate with actual auth)
+function getCurrentUser() {
+    return 'current_user'; // This would be replaced with actual user from session
+}
+
+// Get performance data for a script
+function getScriptPerformanceData(scriptId) {
+    // This would integrate with the performance monitoring system
+    // to get recent performance metrics for the script
+    return {
+        avg_execution_time: 0,
+        success_rate: 100,
+        last_executed: null,
+        execution_count: 0
+    };
+}
+
+// Initialize versioning system
+function initializeVersioningSystem() {
+    console.log('Script versioning system initialized');
+    
+    // Load any cached version data
+    try {
+        const cached = localStorage.getItem('jsondb_script_versions');
+        if (cached) {
+            scriptVersions = JSON.parse(cached);
+        }
+    } catch (e) {
+        console.warn('Failed to load cached version data:', e);
+        scriptVersions = {};
+    }
+}
+
+// UI Functions for Version Management
+
+// Show version history for a script
+async function showVersionHistory(scriptId) {
+    try {
+        const versions = await loadScriptVersions(scriptId);
+        
+        if (versions.length === 0) {
+            showOperationResult(false, 'No version history found for this script');
+            return;
+        }
+        
+        // Create version history modal
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-clock-history"></i> Version History</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="version-history-container">
+                            ${renderVersionHistory(versions)}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-unified" onclick="exportVersionHistory('${scriptId}')">
+                            <i class="bi bi-download"></i> Export History
+                        </button>
+                        <button type="button" class="btn btn-unified-primary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        
+        // Clean up modal when closed
+        modal.addEventListener('hidden.bs.modal', () => {
+            document.body.removeChild(modal);
+        });
+        
+    } catch (error) {
+        showOperationResult(false, 'Failed to load version history', { error: error.message });
+    }
+}
+
+// Render version history HTML
+function renderVersionHistory(versions) {
+    return `
+        <div class="version-timeline">
+            ${versions.map((version, index) => `
+                <div class="version-item ${index === 0 ? 'current' : ''}">
+                    <div class="version-marker">
+                        <div class="version-number">${version.version}</div>
+                        ${index === 0 ? '<div class="current-badge">Current</div>' : ''}
+                    </div>
+                    <div class="version-content">
+                        <div class="version-header">
+                            <div class="version-info">
+                                <span class="version-title">${version.change_description}</span>
+                                <span class="version-type badge bg-${getChangeTypeBadgeColor(version.change_type)}">${version.change_type}</span>
+                            </div>
+                            <div class="version-meta">
+                                <small class="text-muted">
+                                    ${formatDateTime(version.metadata.created_at)} by ${version.metadata.created_by}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="version-details">
+                            <div class="version-stats">
+                                <span class="stat-item">
+                                    <i class="bi bi-file-earmark-code"></i> ${version.metadata.code_lines} lines
+                                </span>
+                                <span class="stat-item">
+                                    <i class="bi bi-hdd"></i> ${formatFileSize(version.metadata.file_size)}
+                                </span>
+                                ${version.metadata.dependencies.length > 0 ? 
+                                    `<span class="stat-item">
+                                        <i class="bi bi-link-45deg"></i> ${version.metadata.dependencies.length} deps
+                                    </span>` : ''
+                                }
+                            </div>
+                            <div class="version-actions">
+                                <button class="btn btn-sm btn-unified" onclick="viewVersionCode('${version._id}')">
+                                    <i class="bi bi-eye"></i> View Code
+                                </button>
+                                ${index > 0 ? `
+                                    <button class="btn btn-sm btn-unified" onclick="compareWithCurrent('${version.script_id}', '${version.version}')">
+                                        <i class="bi bi-arrow-left-right"></i> Compare
+                                    </button>
+                                    <button class="btn btn-sm btn-unified-warning" onclick="rollbackToVersionWithConfirm('${version.script_id}', '${version.version}')">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Rollback
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                        ${version.rollback_info ? `
+                            <div class="rollback-info">
+                                <i class="bi bi-info-circle"></i>
+                                Rollback from ${version.rollback_info.rolled_back_from} to ${version.rollback_info.rolled_back_to}
+                                ${version.rollback_info.rollback_reason ? `: ${version.rollback_info.rollback_reason}` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// Show version comparison
+async function compareWithCurrent(scriptId, targetVersion) {
+    try {
+        const versions = await loadScriptVersions(scriptId);
+        const currentVersion = versions[0];
+        const targetVersionDoc = versions.find(v => v.version === targetVersion);
+        
+        if (!targetVersionDoc) {
+            showOperationResult(false, `Version ${targetVersion} not found`);
+            return;
+        }
+        
+        const comparison = compareVersions(currentVersion, targetVersionDoc);
+        showVersionComparison(comparison, currentVersion, targetVersionDoc);
+        
+    } catch (error) {
+        showOperationResult(false, 'Failed to compare versions', { error: error.message });
+    }
+}
+
+// Show version comparison modal
+function showVersionComparison(comparison, version1, version2) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-arrow-left-right"></i> 
+                        Compare Versions: ${version1.version} ↔ ${version2.version}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="version-comparison">
+                        ${renderVersionComparison(comparison, version1, version2)}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-unified" onclick="exportComparison()">
+                        <i class="bi bi-download"></i> Export Comparison
+                    </button>
+                    <button type="button" class="btn btn-unified-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    // Clean up modal when closed
+    modal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(modal);
+    });
+}
+
+// Render version comparison
+function renderVersionComparison(comparison, version1, version2) {
+    return `
+        <div class="comparison-header">
+            <div class="comparison-summary">
+                ${comparison.has_changes ? 
+                    `<div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Found differences between versions
+                    </div>` :
+                    `<div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i> 
+                        No differences found between versions
+                    </div>`
+                }
+            </div>
+            <div class="comparison-stats">
+                <div class="stat-card">
+                    <div class="stat-value">${comparison.size_change > 0 ? '+' : ''}${comparison.size_change}</div>
+                    <div class="stat-label">Size Change (bytes)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${comparison.lines_change > 0 ? '+' : ''}${comparison.lines_change}</div>
+                    <div class="stat-label">Lines Change</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${comparison.code_diff.length}</div>
+                    <div class="stat-label">Code Changes</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="comparison-details">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="version-panel">
+                        <h6><i class="bi bi-tag"></i> Version ${version1.version} (Current)</h6>
+                        <div class="version-metadata">
+                            <div><strong>Created:</strong> ${formatDateTime(version1.metadata.created_at)}</div>
+                            <div><strong>Author:</strong> ${version1.metadata.created_by}</div>
+                            <div><strong>Size:</strong> ${formatFileSize(version1.metadata.file_size)}</div>
+                            <div><strong>Lines:</strong> ${version1.metadata.code_lines}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="version-panel">
+                        <h6><i class="bi bi-tag"></i> Version ${version2.version}</h6>
+                        <div class="version-metadata">
+                            <div><strong>Created:</strong> ${formatDateTime(version2.metadata.created_at)}</div>
+                            <div><strong>Author:</strong> ${version2.metadata.created_by}</div>
+                            <div><strong>Size:</strong> ${formatFileSize(version2.metadata.file_size)}</div>
+                            <div><strong>Lines:</strong> ${version2.metadata.code_lines}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        ${comparison.code_diff.length > 0 ? `
+            <div class="code-diff-section">
+                <h6><i class="bi bi-code-slash"></i> Code Differences</h6>
+                <div class="code-diff">
+                    ${renderCodeDiff(comparison.code_diff)}
+                </div>
+            </div>
+        ` : ''}
+    `;
+}
+
+// Render code diff
+function renderCodeDiff(diff) {
+    return diff.map(change => {
+        const typeClass = change.type === 'added' ? 'diff-added' : 
+                         change.type === 'removed' ? 'diff-removed' : 'diff-modified';
+        
+        if (change.type === 'modified') {
+            return `
+                <div class="diff-line ${typeClass}">
+                    <div class="line-number">${change.line}</div>
+                    <div class="diff-content">
+                        <div class="diff-old">- ${escapeHtml(change.old)}</div>
+                        <div class="diff-new">+ ${escapeHtml(change.new)}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="diff-line ${typeClass}">
+                    <div class="line-number">${change.line}</div>
+                    <div class="diff-content">
+                        <div class="diff-${change.type}">
+                            ${change.type === 'added' ? '+' : '-'} ${escapeHtml(change.content)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }).join('');
+}
+
+// Rollback with confirmation
+function rollbackToVersionWithConfirm(scriptId, targetVersion) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle text-warning"></i> 
+                        Confirm Rollback
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to rollback to version <strong>${targetVersion}</strong>?</p>
+                    <p class="text-muted">This action will:</p>
+                    <ul class="text-muted">
+                        <li>Create a backup of the current version</li>
+                        <li>Restore the script to version ${targetVersion}</li>
+                        <li>Create a new version entry for the rollback</li>
+                    </ul>
+                    <div class="form-group mt-3">
+                        <label for="rollbackReason" class="form-label">Rollback Reason (optional):</label>
+                        <input type="text" class="form-control" id="rollbackReason" 
+                               placeholder="Reason for rollback...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-unified" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-unified-warning" onclick="performRollback('${scriptId}', '${targetVersion}')">
+                        <i class="bi bi-arrow-counterclockwise"></i> Rollback
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    // Clean up modal when closed
+    modal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(modal);
+    });
+}
+
+// Perform the actual rollback
+async function performRollback(scriptId, targetVersion) {
+    const reasonInput = document.getElementById('rollbackReason');
+    const reason = reasonInput ? reasonInput.value : '';
+    
+    // Close the confirmation modal
+    const modal = document.querySelector('.modal.show');
+    if (modal) {
+        const bootstrapModal = bootstrap.Modal.getInstance(modal);
+        bootstrapModal.hide();
+    }
+    
+    try {
+        showOperationResult(null, 'Rolling back...', null, true);
+        
+        const result = await rollbackToVersion(scriptId, targetVersion, reason);
+        
+        if (result.success) {
+            showOperationResult(true, result.message);
+            
+            // Refresh the current view if we're looking at this script
+            if (currentDocumentId === scriptId) {
+                loadDocument(scriptId);
+            }
+        } else {
+            showOperationResult(false, 'Rollback failed', { error: result.error });
+        }
+        
+    } catch (error) {
+        showOperationResult(false, 'Rollback failed', { error: error.message });
+    }
+}
+
+// Helper functions
+function getChangeTypeBadgeColor(changeType) {
+    switch (changeType) {
+        case 'major': return 'danger';
+        case 'minor': return 'warning';
+        case 'patch': return 'info';
+        default: return 'secondary';
+    }
+}
+
+function formatDateTime(dateString) {
+    return new Date(dateString).toLocaleString();
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ===== VERSION CONTROL INTEGRATION =====
+
+function updateVersionControls() {
+    const versionControls = document.getElementById('versionControls');
+    const currentVersionLabel = document.getElementById('currentVersionLabel');
+    
+    // Check if current document is a JavaScript script
+    if (currentDocument && isJavaScriptScript()) {
+        versionControls.style.display = 'flex';
+        
+        // Load and display current version
+        loadCurrentVersion();
+    } else {
+        versionControls.style.display = 'none';
+        currentVersionLabel.style.display = 'none';
+    }
+}
+
+function isJavaScriptScript() {
+    return currentCollection && ['_validators', '_transformers', '_functions'].includes(currentCollection);
+}
+
+async function loadCurrentVersion() {
+    try {
+        const versions = await loadScriptVersions(currentDocument);
+        const currentVersionLabel = document.getElementById('currentVersionLabel');
+        
+        if (versions.length > 0) {
+            const latestVersion = versions[0];
+            currentVersionLabel.textContent = `v${latestVersion.version}`;
+            currentVersionLabel.style.display = 'inline';
+        } else {
+            currentVersionLabel.textContent = 'No versions';
+            currentVersionLabel.style.display = 'inline';
+        }
+    } catch (error) {
+        console.error('Error loading current version:', error);
+        const currentVersionLabel = document.getElementById('currentVersionLabel');
+        currentVersionLabel.style.display = 'none';
+    }
+}
+
+function showCreateVersionModal() {
+    if (!currentDocument || !isJavaScriptScript()) {
+        showMessage('Version management is only available for JavaScript scripts.', 'warning');
+        return;
+    }
+    
+    // Reset form
+    document.getElementById('createVersionForm').reset();
+    document.getElementById('changeType').value = 'patch';
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('createVersionModal'));
+    modal.show();
+}
+
+async function createVersionFromModal() {
+    try {
+        const changeType = document.getElementById('changeType').value;
+        const changeDescription = document.getElementById('changeDescription').value;
+        const versionTags = document.getElementById('versionTags').value;
+        
+        if (!changeDescription.trim()) {
+            showMessage('Please provide a change description.', 'warning');
+            return;
+        }
+        
+        // Get current document data
+        const currentDoc = documents[currentDocumentIndex];
+        if (!currentDoc) {
+            showMessage('No document selected.', 'error');
+            return;
+        }
+        
+        // Parse tags
+        const tags = versionTags ? versionTags.split(',').map(t => t.trim()).filter(t => t) : [];
+        
+        // Create version
+        const versionDoc = await createScriptVersion(currentDoc, changeType, changeDescription);
+        
+        // Add tags if provided
+        if (tags.length > 0) {
+            versionDoc.tags = [...(versionDoc.tags || []), ...tags];
+            await apiRequest(`/api/collections/_script_versions/${versionDoc._id}`, 'PUT', versionDoc);
+        }
+        
+        showMessage(`Version ${versionDoc.version} created successfully!`, 'success');
+        
+        // Update version display
+        loadCurrentVersion();
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('createVersionModal')).hide();
+        
+    } catch (error) {
+        console.error('Error creating version:', error);
+        showMessage('Failed to create version: ' + error.message, 'error');
+    }
+}
+
+async function showVersionHistory() {
+    if (!currentDocument || !isJavaScriptScript()) {
+        showMessage('Version management is only available for JavaScript scripts.', 'warning');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('versionHistoryModal'));
+    const content = document.getElementById('versionHistoryContent');
+    
+    // Show loading
+    content.innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    try {
+        const versions = await loadScriptVersions(currentDocument);
+        content.innerHTML = renderVersionHistory(versions);
+    } catch (error) {
+        console.error('Error loading version history:', error);
+        content.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                Failed to load version history: ${error.message}
+            </div>
+        `;
+    }
+}
+
+// Global variable to store rollback target for confirmation modal
+let rollbackTarget = null;
+
+function rollbackToVersionWithConfirm(scriptId, version) {
+    rollbackTarget = { scriptId, version };
+    
+    const modal = new bootstrap.Modal(document.getElementById('rollbackConfirmModal'));
+    const details = document.getElementById('rollbackDetails');
+    const reasonField = document.getElementById('rollbackReason');
+    const confirmBtn = document.getElementById('confirmRollbackBtn');
+    
+    details.textContent = `This will rollback the script to version ${version}. The current version will be backed up automatically.`;
+    reasonField.value = '';
+    
+    // Set up confirm button handler
+    confirmBtn.onclick = async () => {
+        const reason = reasonField.value.trim();
+        if (!reason) {
+            showMessage('Please provide a reason for the rollback.', 'warning');
+            return;
+        }
+        
+        try {
+            await rollbackToVersion(rollbackTarget.scriptId, rollbackTarget.version, reason);
+            showMessage(`Successfully rolled back to version ${rollbackTarget.version}`, 'success');
+            
+            // Reload current document to show changes
+            if (currentCollection) {
+                loadDocuments(currentCollection);
+            }
+            
+            // Update version display
+            loadCurrentVersion();
+            
+            bootstrap.Modal.getInstance(document.getElementById('rollbackConfirmModal')).hide();
+            bootstrap.Modal.getInstance(document.getElementById('versionHistoryModal')).hide();
+            
+        } catch (error) {
+            console.error('Error during rollback:', error);
+            showMessage('Rollback failed: ' + error.message, 'error');
+        }
+    };
+    
+    modal.show();
+}
+
+// ===== BATCH SCRIPT OPERATIONS SYSTEM =====
+
+// Global state for batch operations
+let batchMode = false;
+let selectedScripts = new Set();
+
+function toggleBatchMode() {
+    batchMode = !batchMode;
+    selectedScripts.clear();
+    
+    const batchControls = document.getElementById('batchControls');
+    const batchToggleBtn = document.getElementById('batchToggleBtn');
+    
+    if (batchMode) {
+        batchControls.style.display = 'flex';
+        batchToggleBtn.innerHTML = '<i class="bi bi-x-circle"></i> Exit Batch';
+        batchToggleBtn.classList.remove('btn-unified');
+        batchToggleBtn.classList.add('btn-unified-danger');
+        
+        // Add checkboxes to documents
+        renderDocumentsWithBatchSelection();
+    } else {
+        batchControls.style.display = 'none';
+        batchToggleBtn.innerHTML = '<i class="bi bi-check2-square"></i> Batch Mode';
+        batchToggleBtn.classList.remove('btn-unified-danger');
+        batchToggleBtn.classList.add('btn-unified');
+        
+        // Remove checkboxes from documents
+        renderDocuments();
+    }
+    
+    updateBatchControls();
+}
+
+function renderDocumentsWithBatchSelection() {
+    if (!batchMode) {
+        renderDocuments();
+        return;
+    }
+    
+    const documentsContainer = document.getElementById('documentsList');
+    
+    if (!documents || documents.length === 0) {
+        documentsContainer.innerHTML = '<div class="text-muted text-center p-3">No documents found</div>';
+        return;
+    }
+    
+    const documentsHTML = documents.map((doc, index) => {
+        const docId = doc._id || doc.id;
+        const isSelected = selectedScripts.has(docId);
+        const docName = doc.name || docId || `Document ${index + 1}`;
+        const docType = getDocumentType(doc);
+        
+        return `
+            <div class="list-group-item list-group-item-action d-flex align-items-center ${currentDocument === docId ? 'active' : ''}" 
+                 onclick="selectDocument(${index})">
+                <div class="form-check me-2" onclick="event.stopPropagation();">
+                    <input class="form-check-input" type="checkbox" 
+                           id="batch_${docId}" 
+                           ${isSelected ? 'checked' : ''}
+                           onchange="toggleScriptSelection('${docId}')">
+                </div>
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">${docName}</span>
+                        <small class="text-muted">${docType}</small>
+                    </div>
+                    ${doc.description ? `<small class="text-muted">${doc.description}</small>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    documentsContainer.innerHTML = documentsHTML;
+}
+
+function toggleScriptSelection(scriptId) {
+    if (selectedScripts.has(scriptId)) {
+        selectedScripts.delete(scriptId);
+    } else {
+        selectedScripts.add(scriptId);
+    }
+    updateBatchControls();
+}
+
+function selectAllScripts() {
+    documents.forEach(doc => {
+        const docId = doc._id || doc.id;
+        selectedScripts.add(docId);
+    });
+    renderDocumentsWithBatchSelection();
+    updateBatchControls();
+}
+
+function clearScriptSelection() {
+    selectedScripts.clear();
+    renderDocumentsWithBatchSelection();
+    updateBatchControls();
+}
+
+function updateBatchControls() {
+    const count = selectedScripts.size;
+    const batchCount = document.getElementById('batchCount');
+    const batchActions = document.getElementById('batchActions');
+    
+    if (batchCount) {
+        batchCount.textContent = `${count} selected`;
+    }
+    
+    if (batchActions) {
+        batchActions.style.display = count > 0 ? 'block' : 'none';
+    }
+}
+
+async function batchEnableScripts() {
+    if (selectedScripts.size === 0) return;
+    
+    const confirmation = confirm(`Enable ${selectedScripts.size} selected scripts?`);
+    if (!confirmation) return;
+    
+    try {
+        const results = await processBatchOperation(selectedScripts, async (scriptId) => {
+            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            if (doc) {
+                doc.enabled = true;
+                await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
+                return { success: true, scriptId };
+            }
+            return { success: false, scriptId, error: 'Document not found' };
+        });
+        
+        showBatchResults('Enable Scripts', results);
+        loadDocuments(currentCollection);
+    } catch (error) {
+        showMessage('Batch enable failed: ' + error.message, 'error');
+    }
+}
+
+async function batchDisableScripts() {
+    if (selectedScripts.size === 0) return;
+    
+    const confirmation = confirm(`Disable ${selectedScripts.size} selected scripts?`);
+    if (!confirmation) return;
+    
+    try {
+        const results = await processBatchOperation(selectedScripts, async (scriptId) => {
+            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            if (doc) {
+                doc.enabled = false;
+                await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
+                return { success: true, scriptId };
+            }
+            return { success: false, scriptId, error: 'Document not found' };
+        });
+        
+        showBatchResults('Disable Scripts', results);
+        loadDocuments(currentCollection);
+    } catch (error) {
+        showMessage('Batch disable failed: ' + error.message, 'error');
+    }
+}
+
+async function batchDeleteScripts() {
+    if (selectedScripts.size === 0) return;
+    
+    const confirmation = confirm(`Delete ${selectedScripts.size} selected scripts? This action cannot be undone.`);
+    if (!confirmation) return;
+    
+    try {
+        const results = await processBatchOperation(selectedScripts, async (scriptId) => {
+            await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'DELETE');
+            return { success: true, scriptId };
+        });
+        
+        showBatchResults('Delete Scripts', results);
+        selectedScripts.clear();
+        loadDocuments(currentCollection);
+    } catch (error) {
+        showMessage('Batch delete failed: ' + error.message, 'error');
+    }
+}
+
+async function batchCreateVersions() {
+    if (selectedScripts.size === 0) return;
+    
+    const changeType = prompt('Enter change type (patch/minor/major):', 'patch');
+    if (!changeType || !['patch', 'minor', 'major'].includes(changeType)) {
+        showMessage('Please enter a valid change type: patch, minor, or major', 'warning');
+        return;
+    }
+    
+    const changeDescription = prompt('Enter change description:');
+    if (!changeDescription || !changeDescription.trim()) {
+        showMessage('Please provide a change description', 'warning');
+        return;
+    }
+    
+    try {
+        const results = await processBatchOperation(selectedScripts, async (scriptId) => {
+            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            if (doc) {
+                const versionDoc = await createScriptVersion(doc, changeType, changeDescription.trim());
+                return { success: true, scriptId, version: versionDoc.version };
+            }
+            return { success: false, scriptId, error: 'Document not found' };
+        });
+        
+        showBatchResults('Create Versions', results);
+    } catch (error) {
+        showMessage('Batch version creation failed: ' + error.message, 'error');
+    }
+}
+
+async function batchExportScripts() {
+    if (selectedScripts.size === 0) return;
+    
+    try {
+        const exportData = {
+            export_type: 'javascript_scripts',
+            export_date: new Date().toISOString(),
+            collection: currentCollection,
+            scripts: []
+        };
+        
+        for (const scriptId of selectedScripts) {
+            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            if (doc) {
+                // Include version history if available
+                try {
+                    const versions = await loadScriptVersions(scriptId);
+                    exportData.scripts.push({
+                        document: doc,
+                        versions: versions
+                    });
+                } catch (error) {
+                    // Include document without versions if version loading fails
+                    exportData.scripts.push({
+                        document: doc,
+                        versions: []
+                    });
+                }
+            }
+        }
+        
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentCollection}_scripts_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showMessage(`Exported ${selectedScripts.size} scripts successfully`, 'success');
+    } catch (error) {
+        showMessage('Export failed: ' + error.message, 'error');
+    }
+}
+
+function showImportScriptsModal() {
+    const modal = new bootstrap.Modal(document.getElementById('importScriptsModal'));
+    
+    // Reset form
+    document.getElementById('importScriptsForm').reset();
+    document.getElementById('importPreview').innerHTML = '';
+    document.getElementById('importActions').style.display = 'none';
+    document.getElementById('executeImportBtn').style.display = 'none';
+    
+    modal.show();
+}
+
+async function handleImportFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        // Validate import data structure
+        if (!importData.export_type || importData.export_type !== 'javascript_scripts') {
+            throw new Error('Invalid export file format');
+        }
+        
+        if (!importData.scripts || !Array.isArray(importData.scripts)) {
+            throw new Error('No scripts found in export file');
+        }
+        
+        // Show preview
+        renderImportPreview(importData);
+        document.getElementById('importActions').style.display = 'block';
+        document.getElementById('executeImportBtn').style.display = 'inline-block';
+        
+    } catch (error) {
+        showMessage('Failed to parse import file: ' + error.message, 'error');
+        event.target.value = '';
+    }
+}
+
+function renderImportPreview(importData) {
+    const preview = document.getElementById('importPreview');
+    const scripts = importData.scripts;
+    
+    const html = `
+        <div class="alert alert-info">
+            <h6>Import Preview</h6>
+            <p>Found ${scripts.length} scripts from collection: ${importData.collection}</p>
+            <p>Export date: ${new Date(importData.export_date).toLocaleDateString()}</p>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Versions</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${scripts.map(script => {
+                        const doc = script.document;
+                        const versions = script.versions || [];
+                        return `
+                            <tr>
+                                <td>${doc.name || doc._id || 'Unnamed'}</td>
+                                <td>${getDocumentType(doc)}</td>
+                                <td>${versions.length} versions</td>
+                                <td>
+                                    <span class="badge ${doc.enabled ? 'bg-success' : 'bg-secondary'}">
+                                        ${doc.enabled ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    preview.innerHTML = html;
+    
+    // Store import data for processing
+    window.pendingImportData = importData;
+}
+
+async function executeImportScripts() {
+    if (!window.pendingImportData) {
+        showMessage('No import data available', 'error');
+        return;
+    }
+    
+    const importVersions = document.getElementById('importVersions').checked;
+    const overwriteExisting = document.getElementById('overwriteExisting').checked;
+    const importData = window.pendingImportData;
+    
+    try {
+        const results = [];
+        const total = importData.scripts.length;
+        
+        // Show progress
+        const progressModal = showProgressModal('Importing scripts...', total);
+        
+        for (let i = 0; i < importData.scripts.length; i++) {
+            const scriptData = importData.scripts[i];
+            const doc = scriptData.document;
+            const versions = scriptData.versions || [];
+            
+            try {
+                // Check if script already exists
+                const existingDocs = await apiRequest(`/api/collections/${currentCollection}`);
+                const existing = existingDocs.find(d => d.name === doc.name || d._id === doc._id);
+                
+                if (existing && !overwriteExisting) {
+                    results.push({ 
+                        success: false, 
+                        scriptName: doc.name || doc._id, 
+                        error: 'Script already exists (use overwrite option)' 
+                    });
+                    continue;
+                }
+                
+                // Import the script document
+                let importedDoc;
+                if (existing && overwriteExisting) {
+                    // Update existing document
+                    const updateData = { ...doc };
+                    delete updateData._id; // Remove _id to avoid conflicts
+                    importedDoc = await apiRequest(`/api/collections/${currentCollection}/${existing._id}`, 'PUT', updateData);
+                } else {
+                    // Create new document
+                    const createData = { ...doc };
+                    delete createData._id; // Let server assign new ID
+                    importedDoc = await apiRequest(`/api/collections/${currentCollection}`, 'POST', createData);
+                }
+                
+                // Import version history if requested
+                if (importVersions && versions.length > 0) {
+                    for (const version of versions) {
+                        try {
+                            const versionData = { ...version };
+                            versionData.script_id = importedDoc._id || importedDoc.id;
+                            delete versionData._id; // Let server assign new ID
+                            
+                            await apiRequest('/api/collections/_script_versions', 'POST', versionData);
+                        } catch (versionError) {
+                            console.warn(`Failed to import version ${version.version}:`, versionError);
+                        }
+                    }
+                }
+                
+                results.push({ 
+                    success: true, 
+                    scriptName: doc.name || doc._id,
+                    versionsImported: importVersions ? versions.length : 0
+                });
+                
+            } catch (error) {
+                results.push({ 
+                    success: false, 
+                    scriptName: doc.name || doc._id, 
+                    error: error.message 
+                });
+            }
+            
+            updateProgressModal(progressModal, i + 1, total);
+        }
+        
+        hideProgressModal(progressModal);
+        showImportResults(results);
+        
+        // Refresh the current collection
+        if (currentCollection) {
+            loadDocuments(currentCollection);
+        }
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('importScriptsModal')).hide();
+        
+    } catch (error) {
+        showMessage('Import failed: ' + error.message, 'error');
+    }
+}
+
+function showImportResults(results) {
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    let message = `Import completed: ${successful} scripts imported`;
+    if (failed > 0) {
+        message += `, ${failed} failed`;
+    }
+    
+    const type = failed > 0 ? 'warning' : 'success';
+    showMessage(message, type);
+    
+    // Show detailed results
+    console.group('Import Results');
+    results.forEach(result => {
+        if (result.success) {
+            console.log(`✓ ${result.scriptName} (${result.versionsImported} versions)`);
+        } else {
+            console.error(`✗ ${result.scriptName}: ${result.error}`);
+        }
+    });
+    console.groupEnd();
+}
+
+async function processBatchOperation(scriptIds, operation) {
+    const results = [];
+    const total = scriptIds.size;
+    let completed = 0;
+    
+    // Show progress
+    const progressModal = showProgressModal('Processing batch operation...', total);
+    
+    try {
+        for (const scriptId of scriptIds) {
+            try {
+                const result = await operation(scriptId);
+                results.push(result);
+            } catch (error) {
+                results.push({ success: false, scriptId, error: error.message });
+            }
+            
+            completed++;
+            updateProgressModal(progressModal, completed, total);
+        }
+    } finally {
+        hideProgressModal(progressModal);
+    }
+    
+    return results;
+}
+
+function showBatchResults(operation, results) {
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    let message = `${operation} completed: ${successful} successful`;
+    if (failed > 0) {
+        message += `, ${failed} failed`;
+    }
+    
+    const type = failed > 0 ? 'warning' : 'success';
+    showMessage(message, type);
+    
+    // Show detailed results if there were failures
+    if (failed > 0) {
+        console.group(`${operation} - Detailed Results`);
+        results.forEach(result => {
+            if (!result.success) {
+                console.error(`Failed: ${result.scriptId} - ${result.error}`);
+            }
+        });
+        console.groupEnd();
+    }
+}
+
+function showProgressModal(title, total) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">${title}</h5>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="progress mb-3">
+                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text">0 / ${total}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    return { element: modal, bootstrap: bootstrapModal };
+}
+
+function updateProgressModal(progressModal, completed, total) {
+    const percent = (completed / total) * 100;
+    const progressBar = progressModal.element.querySelector('.progress-bar');
+    const progressText = progressModal.element.querySelector('.progress-text');
+    
+    progressBar.style.width = `${percent}%`;
+    progressText.textContent = `${completed} / ${total}`;
+}
+
+function hideProgressModal(progressModal) {
+    progressModal.bootstrap.hide();
+    setTimeout(() => {
+        document.body.removeChild(progressModal.element);
+    }, 300);
+}
+
+function getDocumentType(doc) {
+    if (doc.type) return doc.type;
+    if (currentCollection === '_validators') return 'validator';
+    if (currentCollection === '_transformers') return 'transformer';
+    if (currentCollection === '_functions') return 'function';
+    return 'document';
+}
+
+// ===== TRANSFORMATION PREVIEW SYSTEM =====
+
+async function checkTransformersAvailable() {
+    await loadTransformersForPreview();
+    return currentTransformers.length > 0;
+}
+
+async function toggleTransformPreview() {
+    transformPreviewMode = !transformPreviewMode;
+    const previewBtn = document.getElementById('transformPreviewBtn');
+    
+    if (transformPreviewMode) {
+        previewBtn.innerHTML = '<i class="bi bi-eye-slash"></i> Hide Preview';
+        previewBtn.classList.remove('btn-unified');
+        previewBtn.classList.add('btn-primary');
+        
+        // Load and run transformers
+        await loadTransformersForPreview();
+        showTransformationPreview();
+    } else {
+        previewBtn.innerHTML = '<i class="bi bi-arrow-left-right"></i> Preview';
+        previewBtn.classList.remove('btn-primary');
+        previewBtn.classList.add('btn-unified');
+        
+        // Return to normal view
+        showNormalDocumentView();
+    }
+}
+
+async function loadTransformersForPreview() {
+    if (!currentCollection) {
+        currentTransformers = [];
+        return;
+    }
+    
+    try {
+        const response = await apiRequest('/api/collections/_transformers/documents');
+        if (response && response.documents) {
+            // Filter transformers for this collection or global transformers
+            currentTransformers = response.documents.filter(script => {
+                const tags = script.tags || [];
+                return tags.includes(currentCollection) || tags.includes('*') || tags.includes('global');
+            });
+        } else {
+            currentTransformers = [];
+        }
+    } catch (error) {
+        console.error('Failed to load transformers:', error);
+        currentTransformers = [];
+    }
+}
+
+async function runTransformers(document) {
+    const startTime = performance.now();
+    
+    if (currentTransformers.length === 0) {
+        return {
+            success: true,
+            result: document,
+            transformations: [],
+            executionMetrics: {
+                totalTime: 0,
+                transformerCount: 0,
+                successCount: 0,
+                errorCount: 0
+            }
+        };
+    }
+    
+    let currentDoc = document;
+    const transformations = [];
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const transformer of currentTransformers) {
+        const transformerStartTime = performance.now();
+        
+        try {
+            const response = await apiRequest('/api/js/native/execute', {
+                method: 'POST',
+                body: JSON.stringify({
+                    script_id: transformer.id,
+                    input_data: currentDoc,
+                    context: {
+                        collection: currentCollection,
+                        operation: 'transform',
+                        preview: true
+                    }
+                })
+            });
+            
+            const executionTime = Math.round(performance.now() - transformerStartTime);
+            
+            if (response.success && response.result) {
+                currentDoc = response.result;
+                transformations.push({
+                    name: transformer.name,
+                    success: true,
+                    result: response.result,
+                    executionTime
+                });
+                successCount++;
+            } else {
+                transformations.push({
+                    name: transformer.name,
+                    success: false,
+                    error: response.error || 'Transformation failed',
+                    executionTime
+                });
+                errorCount++;
+                // Continue with original document if transformation fails
+            }
+            
+        } catch (error) {
+            const executionTime = Math.round(performance.now() - transformerStartTime);
+            transformations.push({
+                name: transformer.name,
+                success: false,
+                error: `Execution error: ${error.message}`,
+                executionTime
+            });
+            errorCount++;
+        }
+    }
+    
+    const totalTime = Math.round(performance.now() - startTime);
+    
+    const executionMetrics = {
+        totalTime,
+        transformerCount: currentTransformers.length,
+        successCount,
+        errorCount
+    };
+    
+    // Record performance metrics
+    recordScriptPerformanceMetrics({
+        operation: 'transformation',
+        totalTime,
+        scriptCount: currentTransformers.length,
+        successCount,
+        errorCount,
+        collection: currentCollection || 'unknown',
+        timestamp: new Date().toISOString()
+    });
+    
+    return {
+        success: true,
+        result: currentDoc,
+        transformations: transformations,
+        executionMetrics
+    };
+}
+
+function showTransformationPreview() {
+    if (!originalDocumentContent) return;
+    
+    // Parse the current document
+    let parsedDoc;
+    try {
+        const editor = document.getElementById('documentEditor');
+        const currentContent = editor ? editor.value : originalDocumentContent;
+        parsedDoc = JSON.parse(currentContent);
+    } catch (e) {
+        showNotification('Cannot preview transformation: Invalid JSON', 'error');
+        return;
+    }
+    
+    // Run transformers and show preview
+    runTransformers(parsedDoc).then(result => {
+        transformedContent = JSON.stringify(result.result, null, 2);
+        
+        // Create split-view layout
+        const lines1 = (originalDocumentContent || '').split('\n');
+        const lineNumbers1 = lines1.map((_, i) => `<span class="line-number">${i + 1}</span>`).join('\n');
+        
+        const lines2 = transformedContent.split('\n');
+        const lineNumbers2 = lines2.map((_, i) => `<span class="line-number">${i + 1}</span>`).join('\n');
+        
+        document.getElementById('contentViewer').innerHTML = `
+            <div class="transformation-preview-container">
+                <div class="preview-section">
+                    <div class="preview-header">
+                        <h6 class="mb-0">Original Document</h6>
+                        <span class="badge bg-secondary">${currentCollection}</span>
+                    </div>
+                    <div class="json-editor-container">
+                        <div class="line-numbers">
+                            ${lineNumbers1}
+                        </div>
+                        <textarea id="documentEditor" class="json-editor" spellcheck="false">${originalDocumentContent}</textarea>
+                    </div>
+                </div>
+                
+                <div class="preview-divider">
+                    <i class="bi bi-arrow-right"></i>
+                </div>
+                
+                <div class="preview-section">
+                    <div class="preview-header">
+                        <h6 class="mb-0">Transformed Result</h6>
+                        <span class="badge bg-primary">${currentTransformers.length} transformer(s)</span>
+                    </div>
+                    <div class="json-editor-container">
+                        <div class="line-numbers">
+                            ${lineNumbers2}
+                        </div>
+                        <div class="json-preview">${transformedContent}</div>
+                    </div>
+                </div>
+                
+                <div class="transformation-details">
+                    <h6>Transformation Summary:</h6>
+                    ${result.transformations.map(t => `
+                        <div class="transformation-step ${t.success ? 'success' : 'error'}">
+                            <i class="bi bi-${t.success ? 'check-circle' : 'x-circle'}"></i>
+                            <span class="transformer-name">${t.name}</span>
+                            ${t.error ? `<span class="error-message">${t.error}</span>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        // Set up editor event listener (only for the original document)
+        const editor = document.getElementById('documentEditor');
+        if (editor) {
+            editor.addEventListener('input', handleDocumentEditWithPreview);
+            editor.addEventListener('scroll', syncScrollPreview);
+        }
+        
+    }).catch(error => {
+        console.error('Failed to run transformers:', error);
+        showNotification('Failed to generate transformation preview', 'error');
+    });
+}
+
+function showNormalDocumentView() {
+    // Restore normal document editor view
+    const lines = originalDocumentContent.split('\n');
+    const lineNumbers = lines.map((_, i) => `<span class="line-number">${i + 1}</span>`).join('\n');
+    
+    document.getElementById('contentViewer').innerHTML = `
+        <div class="json-editor-container">
+            <div class="line-numbers">
+                ${lineNumbers}
+            </div>
+            <textarea id="documentEditor" class="json-editor" spellcheck="false">${originalDocumentContent}</textarea>
+            <div id="validationFeedback" class="validation-feedback">
+                <div class="validation-status">
+                    <span class="validation-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                    <span class="validation-message">Document is valid</span>
+                </div>
+                <div class="validation-details" id="validationDetails"></div>
+            </div>
+        </div>
+    `;
+    
+    // Set up editor event listener
+    const editor = document.getElementById('documentEditor');
+    editor.addEventListener('input', handleDocumentEdit);
+    editor.addEventListener('scroll', syncScroll);
+    
+    // Initialize validation
+    setTimeout(() => validateDocumentRealtime(originalDocumentContent), 100);
+}
+
+function handleDocumentEditWithPreview() {
+    // Handle editing while in preview mode
+    handleDocumentEdit();
+    
+    // Update transformation preview with debouncing
+    clearTimeout(window.transformPreviewTimeout);
+    window.transformPreviewTimeout = setTimeout(() => {
+        showTransformationPreview();
+    }, 1000); // Debounce preview updates by 1 second
+}
+
+function syncScrollPreview() {
+    // Sync scroll between original and preview sections
+    const editor = document.getElementById('documentEditor');
+    const lineNumbers = document.querySelector('.line-numbers');
+    if (lineNumbers) {
+        lineNumbers.scrollTop = editor.scrollTop;
     }
 }
 
@@ -1559,6 +4107,9 @@ function copyToClipboard() {
 // ===== METRICS FUNCTIONALITY =====
 function initializeMetrics() {
     console.log('initializeMetrics called');
+    
+    // Initialize performance monitoring
+    initializePerformanceMonitoring();
     
     // Initialize charts if not already done
     if (!operationsChart) {
@@ -2018,11 +4569,112 @@ function initializeMetrics() {
         }
     }
     
+    // Initialize Script Performance Chart
+    if (!scriptPerformanceChart) {
+        const ctx = document.getElementById('scriptPerformanceChart');
+        if (ctx) {
+            const config = {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Execution Time (ms)',
+                        data: [],
+                        borderColor: '#9f7aea',
+                        backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }, {
+                        label: 'Success Rate (%)',
+                        data: [],
+                        borderColor: '#49cc90',
+                        backgroundColor: 'rgba(73, 204, 144, 0.1)',
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Execution Time (ms)',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            beginAtZero: true
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Success Rate (%)',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            min: 0,
+                            max: 100,
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            };
+            Chart.getChart(ctx)?.destroy();
+            scriptPerformanceChart = new Chart(ctx.getContext('2d'), config);
+        }
+    }
+
     // Force immediate load with a small delay to ensure DOM is ready
     console.log('Scheduling loadMetrics...');
     setTimeout(() => {
         console.log('Calling loadMetrics from initializeMetrics');
         loadMetrics();
+        
+        // Initialize performance dashboard
+        initializePerformanceDashboard();
+        loadScriptMetrics();
     }, 100);
 }
 
@@ -2849,6 +5501,313 @@ function changeTimeRange(range) {
     
     // Reload metrics with new time range
     loadMetrics(range);
+}
+
+// ===== PERFORMANCE DASHBOARD FUNCTIONALITY =====
+
+// Update performance dashboard display
+function updatePerformanceDashboard() {
+    const dashboardData = getPerformanceDashboardData();
+    
+    // Update health score
+    updateHealthScore(dashboardData.overall);
+    
+    // Update performance type cards
+    updatePerformanceTypeCard('validation', dashboardData.validation);
+    updatePerformanceTypeCard('transformation', dashboardData.transformation);
+    updatePerformanceTypeCard('function_execution', dashboardData.function_execution);
+    
+    // Update optimization suggestions
+    updateOptimizationSuggestions(dashboardData);
+}
+
+// Update health score display
+function updateHealthScore(overallData) {
+    const scoreElement = document.getElementById('healthScoreValue');
+    const statusElement = document.getElementById('healthStatus');
+    const circleElement = document.getElementById('healthScoreCircle');
+    const criticalElement = document.getElementById('criticalCount');
+    const warningElement = document.getElementById('warningCount');
+    const totalElement = document.getElementById('totalSuggestions');
+    
+    if (!scoreElement) return;
+    
+    const score = overallData.healthScore;
+    scoreElement.textContent = score;
+    
+    // Update status text and color
+    let status, colorClass;
+    if (score >= 90) {
+        status = 'Excellent';
+        colorClass = 'excellent';
+    } else if (score >= 70) {
+        status = 'Good';
+        colorClass = 'good';
+    } else if (score >= 50) {
+        status = 'Fair';
+        colorClass = 'fair';
+    } else {
+        status = 'Poor';
+        colorClass = 'poor';
+    }
+    
+    statusElement.textContent = status;
+    
+    // Update circle color
+    circleElement.className = `health-score-circle ${colorClass}`;
+    
+    // Update summary counts
+    if (criticalElement) criticalElement.textContent = overallData.criticalIssues;
+    if (warningElement) warningElement.textContent = overallData.warnings;
+    if (totalElement) totalElement.textContent = overallData.totalSuggestions;
+}
+
+// Update performance type card
+function updatePerformanceTypeCard(type, data) {
+    const stats = data.stats;
+    const suggestions = data.suggestions;
+    
+    // Update stats
+    const avgTimeElement = document.getElementById(`${type}AvgTime`);
+    const scriptCountElement = document.getElementById(`${type}ScriptCount`);
+    const errorRateElement = document.getElementById(`${type}ErrorRate`);
+    const suggestionsElement = document.getElementById(`${type}Suggestions`);
+    
+    if (stats) {
+        if (avgTimeElement) avgTimeElement.textContent = `${stats.avgTime}ms`;
+        if (scriptCountElement) scriptCountElement.textContent = stats.avgScriptCount;
+        if (errorRateElement) errorRateElement.textContent = `${stats.avgErrorRate}%`;
+    } else {
+        if (avgTimeElement) avgTimeElement.textContent = '-';
+        if (scriptCountElement) scriptCountElement.textContent = '-';
+        if (errorRateElement) errorRateElement.textContent = '-';
+    }
+    
+    // Update suggestions for this type
+    if (suggestionsElement) {
+        if (suggestions.length > 0) {
+            suggestionsElement.innerHTML = suggestions.slice(0, 2).map(suggestion => 
+                `<div class="type-suggestion ${suggestion.type}">
+                    <i class="bi bi-${suggestion.type === 'critical' ? 'exclamation-triangle-fill' : 
+                                   suggestion.type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                    <span>${suggestion.message}</span>
+                </div>`
+            ).join('');
+        } else {
+            suggestionsElement.innerHTML = '<div class="type-suggestion success"><i class="bi bi-check-circle"></i><span>No issues</span></div>';
+        }
+    }
+}
+
+// Update optimization suggestions
+function updateOptimizationSuggestions(dashboardData) {
+    const suggestionsListElement = document.getElementById('suggestionsList');
+    if (!suggestionsListElement) return;
+    
+    const allSuggestions = [
+        ...dashboardData.validation.suggestions,
+        ...dashboardData.transformation.suggestions,
+        ...dashboardData.function_execution.suggestions
+    ];
+    
+    if (allSuggestions.length === 0) {
+        suggestionsListElement.innerHTML = `
+            <div class="no-suggestions text-muted">
+                <i class="bi bi-check-circle"></i> No performance issues detected
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort by priority
+    const priorityOrder = { high: 3, medium: 2, low: 1 };
+    allSuggestions.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+    
+    suggestionsListElement.innerHTML = allSuggestions.map(suggestion => `
+        <div class="suggestion-item ${suggestion.type}" data-priority="${suggestion.priority}">
+            <div class="suggestion-header">
+                <div class="suggestion-icon">
+                    <i class="bi bi-${suggestion.type === 'critical' ? 'exclamation-triangle-fill text-danger' : 
+                                    suggestion.type === 'warning' ? 'exclamation-triangle text-warning' : 'info-circle text-info'}"></i>
+                </div>
+                <div class="suggestion-content">
+                    <div class="suggestion-title">${suggestion.message}</div>
+                    <div class="suggestion-text">${suggestion.suggestion}</div>
+                </div>
+                <div class="suggestion-category">
+                    <span class="badge bg-${suggestion.type === 'critical' ? 'danger' : 
+                                          suggestion.type === 'warning' ? 'warning' : 'info'}">${suggestion.category}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Refresh performance dashboard
+function refreshPerformanceDashboard() {
+    updatePerformanceDashboard();
+    showOperationResult(true, 'Performance dashboard refreshed');
+}
+
+// Clear performance history
+function clearPerformanceHistory() {
+    if (confirm('Are you sure you want to clear all performance history? This action cannot be undone.')) {
+        performanceMetrics = {
+            validation: [],
+            transformation: [],
+            function_execution: []
+        };
+        
+        try {
+            localStorage.removeItem('jsondb_performance_metrics');
+        } catch (e) {
+            console.warn('Failed to clear performance metrics from localStorage:', e);
+        }
+        
+        updatePerformanceDashboard();
+        showOperationResult(true, 'Performance history cleared');
+    }
+}
+
+// Show performance report
+function showPerformanceReport() {
+    const dashboardData = getPerformanceDashboardData();
+    const report = generatePerformanceReport(dashboardData);
+    
+    // Create modal to show report
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-text"></i> Performance Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="performance-report">${report}</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-unified" onclick="copyPerformanceReport()">
+                        <i class="bi bi-clipboard"></i> Copy Report
+                    </button>
+                    <button type="button" class="btn btn-unified-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    // Clean up modal when closed
+    modal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(modal);
+    });
+}
+
+// Generate performance report
+function generatePerformanceReport(dashboardData) {
+    const timestamp = new Date().toISOString();
+    
+    let report = `JSONdb JavaScript Performance Report
+Generated: ${timestamp}
+======================================
+
+OVERALL HEALTH SCORE: ${dashboardData.overall.healthScore}/100
+Status: ${dashboardData.overall.healthScore >= 90 ? 'Excellent' : 
+          dashboardData.overall.healthScore >= 70 ? 'Good' : 
+          dashboardData.overall.healthScore >= 50 ? 'Fair' : 'Poor'}
+
+Summary:
+- Critical Issues: ${dashboardData.overall.criticalIssues}
+- Warnings: ${dashboardData.overall.warnings}
+- Total Suggestions: ${dashboardData.overall.totalSuggestions}
+
+PERFORMANCE BY TYPE
+==================
+
+Validation:
+${formatTypeStats(dashboardData.validation)}
+
+Transformation:
+${formatTypeStats(dashboardData.transformation)}
+
+Function Execution:
+${formatTypeStats(dashboardData.function_execution)}
+
+OPTIMIZATION SUGGESTIONS
+=======================
+`;
+
+    const allSuggestions = [
+        ...dashboardData.validation.suggestions,
+        ...dashboardData.transformation.suggestions,
+        ...dashboardData.function_execution.suggestions
+    ];
+
+    if (allSuggestions.length === 0) {
+        report += '\nNo performance issues detected. Your JavaScript scripts are performing well!\n';
+    } else {
+        allSuggestions.forEach((suggestion, index) => {
+            report += `\n${index + 1}. [${suggestion.type.toUpperCase()}] ${suggestion.message}
+   Category: ${suggestion.category}
+   Suggestion: ${suggestion.suggestion}
+   Priority: ${suggestion.priority}
+`;
+        });
+    }
+    
+    return report;
+}
+
+// Format type stats for report
+function formatTypeStats(typeData) {
+    if (!typeData.stats) {
+        return '  No data available\n';
+    }
+    
+    const stats = typeData.stats;
+    return `  Average Time: ${stats.avgTime}ms
+  Script Count: ${stats.avgScriptCount}
+  Error Rate: ${stats.avgErrorRate}%
+  Sample Size: ${stats.sampleSize} executions
+  Issues: ${typeData.suggestions.length}
+`;
+}
+
+// Export performance data
+function exportPerformanceData() {
+    const data = {
+        timestamp: new Date().toISOString(),
+        dashboard: getPerformanceDashboardData(),
+        metrics: performanceMetrics
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jsondb-performance-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showOperationResult(true, 'Performance data exported');
+}
+
+// Initialize performance dashboard when metrics are loaded
+function initializePerformanceDashboard() {
+    if (currentView === 'metrics') {
+        updatePerformanceDashboard();
+        
+        // Set up periodic updates
+        setInterval(() => {
+            if (currentView === 'metrics') {
+                updatePerformanceDashboard();
+            }
+        }, 30000); // Update every 30 seconds
+    }
 }
 
 // ===== RBAC FUNCTIONALITY =====
@@ -4382,6 +7341,12 @@ function logout() {
     window.location.href = 'login.html';
 }
 
+// ===== JAVASCRIPT SCRIPTS INITIALIZATION =====
+function initializeScripts() {
+    console.log('Initializing Scripts view...');
+    loadScripts();
+}
+
 // ===== TERMINAL OPERATIONS =====
 let terminalContent = null;
 
@@ -4622,6 +7587,7 @@ function updateDocumentButtons() {
     const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
     const deleteBtn = document.getElementById('deleteBtn');
+    const transformPreviewBtn = document.getElementById('transformPreviewBtn');
     
     if (currentDocument) {
         // Always hide edit button initially
@@ -4629,10 +7595,19 @@ function updateDocumentButtons() {
         deleteBtn.disabled = false;
         saveBtn.style.display = 'none';
         isEditMode = false;
+        
+        // Show transformation preview button if transformers are available
+        if (currentTransformers.length > 0) {
+            transformPreviewBtn.style.display = 'inline-block';
+            transformPreviewBtn.title = `${currentTransformers.length} transformer(s) available for ${currentCollection}`;
+        } else {
+            transformPreviewBtn.style.display = 'none';
+        }
     } else {
         editBtn.style.display = 'none';
         deleteBtn.disabled = true;
         saveBtn.style.display = 'none';
+        transformPreviewBtn.style.display = 'none';
     }
 }
 
@@ -4686,3 +7661,10 @@ function createNewDocument() {
     
     showNotification('New document created. Edit and save to persist.', 'info');
 }
+
+// ========================
+// JavaScript Scripts Management
+// ========================
+
+// Current script data
+

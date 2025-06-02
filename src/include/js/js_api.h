@@ -72,4 +72,13 @@ http_response_t* api_handle_js_function(api_context_t* ctx, http_request_t* requ
  */
 http_response_t* api_handle_js_function_register(api_context_t* ctx, http_request_t* request);
 
+/**
+ * Register native JavaScript API routes
+ * 
+ * @param api_routes Array of API routes to add to
+ * @param num_routes Current number of routes
+ * @return Updated number of routes
+ */
+int register_js_native_api_routes(api_route_t* api_routes, int num_routes);
+
 #endif /* JS_API_H */

@@ -839,6 +839,50 @@
                         </div>
                     </div>
                     
+                    <!-- Batch Operations Controls -->
+                    <div class="batch-controls-section" style="border-bottom: 1px solid var(--border-color); padding: 1rem;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <button class="btn btn-sm btn-unified btn-icon-text" id="batchToggleBtn" onclick="toggleBatchMode()">
+                                <i class="bi bi-check2-square"></i> Batch Mode
+                            </button>
+                            <span id="batchCount" class="badge bg-secondary" style="display: none;">0 selected</span>
+                        </div>
+                        
+                        <div id="batchControls" style="display: none;" class="mb-2">
+                            <div class="d-flex gap-2 mb-2">
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="selectAllScripts()">
+                                    <i class="bi bi-check-all"></i> All
+                                </button>
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="clearScriptSelection()">
+                                    <i class="bi bi-x-square"></i> None
+                                </button>
+                            </div>
+                            
+                            <div id="batchActions" style="display: none;">
+                                <div class="d-grid gap-1">
+                                    <button class="btn btn-sm btn-unified-success btn-icon-text" onclick="batchEnableScripts()">
+                                        <i class="bi bi-play-circle"></i> Enable
+                                    </button>
+                                    <button class="btn btn-sm btn-unified-warning btn-icon-text" onclick="batchDisableScripts()">
+                                        <i class="bi bi-pause-circle"></i> Disable
+                                    </button>
+                                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="batchCreateVersions()">
+                                        <i class="bi bi-tag"></i> Version
+                                    </button>
+                                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="showImportScriptsModal()">
+                                        <i class="bi bi-upload"></i> Import
+                                    </button>
+                                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="batchExportScripts()">
+                                        <i class="bi bi-download"></i> Export
+                                    </button>
+                                    <button class="btn btn-sm btn-unified-danger btn-icon-text" onclick="batchDeleteScripts()">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="panel-content" id="documentsList">
                         <div class="empty-state">
                             <i class="bi bi-folder2-open"></i>
@@ -854,6 +898,20 @@
                             <span id="documentTitle" class="fw-bold">No document selected</span>
                         </div>
                         <div class="d-flex gap-2">
+                            <!-- Version Management Controls (for JavaScript Scripts) -->
+                            <div id="versionControls" style="display: none;" class="d-flex gap-2">
+                                <button class="btn btn-sm btn-unified btn-icon-text" id="versionHistoryBtn" onclick="showVersionHistory()">
+                                    <i class="bi bi-clock-history"></i> History
+                                </button>
+                                <button class="btn btn-sm btn-unified btn-icon-text" id="createVersionBtn" onclick="showCreateVersionModal()">
+                                    <i class="bi bi-tag"></i> Version
+                                </button>
+                                <span id="currentVersionLabel" class="badge bg-secondary align-self-center" style="display: none;"></span>
+                            </div>
+                            
+                            <button class="btn btn-sm btn-unified btn-icon-text" id="transformPreviewBtn" onclick="toggleTransformPreview()" style="display: none;">
+                                <i class="bi bi-arrow-left-right"></i> Preview
+                            </button>
                             <button class="btn btn-sm btn-unified btn-icon-text" id="editBtn" onclick="toggleEditMode()" disabled style="display: none;">
                                 <i class="bi bi-pencil"></i> Edit
                             </button>
@@ -1052,6 +1110,214 @@
                         <div class="card-body">
                             <div class="chart-container">
                                 <canvas id="storageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- JavaScript Performance Dashboard -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0"><i class="bi bi-speedometer2"></i> JavaScript Performance Dashboard</h5>
+                                <small class="text-muted">Real-time performance analysis and optimization suggestions</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="refreshPerformanceDashboard()">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                                </button>
+                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="clearPerformanceHistory()">
+                                    <i class="bi bi-trash"></i> Clear History
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Performance Health Score -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="performance-health-card">
+                                        <div class="health-score-container">
+                                            <div class="health-score-circle" id="healthScoreCircle">
+                                                <span class="health-score-value" id="healthScoreValue">100</span>
+                                                <span class="health-score-label">Health Score</span>
+                                            </div>
+                                        </div>
+                                        <div class="health-status" id="healthStatus">Excellent</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="performance-summary" id="performanceSummary">
+                                        <div class="summary-item">
+                                            <span class="summary-label">Critical Issues:</span>
+                                            <span class="summary-value critical" id="criticalCount">0</span>
+                                        </div>
+                                        <div class="summary-item">
+                                            <span class="summary-label">Warnings:</span>
+                                            <span class="summary-value warning" id="warningCount">0</span>
+                                        </div>
+                                        <div class="summary-item">
+                                            <span class="summary-label">Total Suggestions:</span>
+                                            <span class="summary-value info" id="totalSuggestions">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="performance-actions">
+                                        <button class="btn btn-sm btn-unified-primary" onclick="showPerformanceReport()">
+                                            <i class="bi bi-file-earmark-text"></i> View Full Report
+                                        </button>
+                                        <button class="btn btn-sm btn-unified" onclick="exportPerformanceData()">
+                                            <i class="bi bi-download"></i> Export Data
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Performance Type Breakdown -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="performance-type-card">
+                                        <div class="type-header">
+                                            <h6><i class="bi bi-shield-check"></i> Validation</h6>
+                                        </div>
+                                        <div class="type-stats" id="validationStats">
+                                            <div class="stat-item">
+                                                <span class="stat-label">Avg Time:</span>
+                                                <span class="stat-value" id="validationAvgTime">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Scripts:</span>
+                                                <span class="stat-value" id="validationScriptCount">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Error Rate:</span>
+                                                <span class="stat-value" id="validationErrorRate">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="type-suggestions" id="validationSuggestions"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="performance-type-card">
+                                        <div class="type-header">
+                                            <h6><i class="bi bi-arrow-left-right"></i> Transformation</h6>
+                                        </div>
+                                        <div class="type-stats" id="transformationStats">
+                                            <div class="stat-item">
+                                                <span class="stat-label">Avg Time:</span>
+                                                <span class="stat-value" id="transformationAvgTime">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Scripts:</span>
+                                                <span class="stat-value" id="transformationScriptCount">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Error Rate:</span>
+                                                <span class="stat-value" id="transformationErrorRate">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="type-suggestions" id="transformationSuggestions"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="performance-type-card">
+                                        <div class="type-header">
+                                            <h6><i class="bi bi-gear"></i> Functions</h6>
+                                        </div>
+                                        <div class="type-stats" id="functionStats">
+                                            <div class="stat-item">
+                                                <span class="stat-label">Avg Time:</span>
+                                                <span class="stat-value" id="functionAvgTime">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Scripts:</span>
+                                                <span class="stat-value" id="functionScriptCount">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Error Rate:</span>
+                                                <span class="stat-value" id="functionErrorRate">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="type-suggestions" id="functionSuggestions"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Performance Optimization Suggestions -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="optimization-suggestions" id="optimizationSuggestions">
+                                        <h6><i class="bi bi-lightbulb"></i> Optimization Suggestions</h6>
+                                        <div id="suggestionsList" class="suggestions-list">
+                                            <div class="no-suggestions text-muted">
+                                                <i class="bi bi-check-circle"></i> No performance issues detected
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JavaScript Execution Metrics Section -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-code-square"></i> JavaScript Execution Metrics</h5>
+                            <small class="text-muted">Performance and usage statistics for JavaScript scripts</small>
+                        </div>
+                        <div class="card-body">
+                            <!-- JavaScript Stats Grid -->
+                            <div class="row mb-4">
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Total Executions</div>
+                                        <div class="metric-value" id="jsTotalExecutions">0</div>
+                                        <div class="metric-change text-muted">
+                                            <small id="jsExecutionGrowth">No data</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Successful Executions</div>
+                                        <div class="metric-value" id="jsSuccessfulExecutions">0</div>
+                                        <div class="metric-change text-muted">
+                                            <small id="jsSuccessRate">0% success rate</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Avg Execution Time</div>
+                                        <div class="metric-value" id="jsAvgExecutionTime">0ms</div>
+                                        <div class="metric-change text-muted">
+                                            <small id="jsExecutionTrend">No trend data</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Active Scripts</div>
+                                        <div class="metric-value" id="jsActiveScripts">0</div>
+                                        <div class="metric-change text-muted">
+                                            <small id="jsScriptBreakdown">0 validators, 0 transformers, 0 functions</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- JavaScript Performance Chart -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="chart-container">
+                                        <canvas id="scriptPerformanceChart"></canvas>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1319,6 +1585,7 @@
             </div>
         </div>
 
+
         <!-- API Documentation View -->
         <div id="api-view" class="view-container">
             <div class="section-header">
@@ -1349,6 +1616,7 @@
     </div>
 
     <!-- Modals -->
+
     <!-- Create User Modal -->
     <div class="modal fade" id="createUserModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1463,6 +1731,168 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Version Modal -->
+    <div class="modal fade" id="createVersionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Script Version</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createVersionForm">
+                        <div class="mb-3">
+                            <label for="changeType" class="form-label">Change Type</label>
+                            <select class="form-select" id="changeType" required>
+                                <option value="patch">Patch - Bug fixes and minor changes</option>
+                                <option value="minor">Minor - New features, backward compatible</option>
+                                <option value="major">Major - Breaking changes</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="changeDescription" class="form-label">Change Description</label>
+                            <textarea class="form-control" id="changeDescription" rows="3" placeholder="Describe what changed in this version..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="versionTags" class="form-label">Tags (optional)</label>
+                            <input type="text" class="form-control" id="versionTags" placeholder="stable, experimental, hotfix">
+                            <div class="form-text">Comma-separated tags for this version</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-unified" onclick="createVersionFromModal()">Create Version</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version History Modal -->
+    <div class="modal fade" id="versionHistoryModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Version History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="versionHistoryContent">
+                        <div class="text-center p-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version Comparison Modal -->
+    <div class="modal fade" id="versionComparisonModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Version Comparison</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="versionComparisonContent">
+                        <div class="text-center p-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rollback Confirmation Modal -->
+    <div class="modal fade" id="rollbackConfirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Rollback</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This will revert the script to an earlier version.
+                    </div>
+                    <p id="rollbackDetails"></p>
+                    <div class="mb-3">
+                        <label for="rollbackReason" class="form-label">Rollback Reason</label>
+                        <textarea class="form-control" id="rollbackReason" rows="2" placeholder="Why are you rolling back to this version?"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmRollbackBtn">Rollback</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Scripts Modal -->
+    <div class="modal fade" id="importScriptsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Scripts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="importScriptsForm">
+                        <div class="mb-3">
+                            <label for="importFile" class="form-label">Select Export File</label>
+                            <input type="file" class="form-control" id="importFile" accept=".json" onchange="handleImportFileSelect(event)" required>
+                            <div class="form-text">Select a JSON file exported from the script management system</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="importVersions" checked>
+                                <label class="form-check-label" for="importVersions">
+                                    Import version history
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="overwriteExisting">
+                                <label class="form-check-label" for="overwriteExisting">
+                                    Overwrite existing scripts
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="importPreview"></div>
+                        
+                        <div id="importActions" style="display: none;" class="mt-3">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Warning:</strong> This will import the scripts into the current collection.
+                                Make sure you have the correct collection selected.
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-unified" id="executeImportBtn" onclick="executeImportScripts()" style="display: none;">Import Scripts</button>
                 </div>
             </div>
         </div>

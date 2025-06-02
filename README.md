@@ -14,16 +14,18 @@
 
 JSONdb is a lightweight, high-performance document database built specifically for JSON data. Written in C for maximum performance, it combines the simplicity of JSON with the power of a full database system. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a RESTful API.
 
-**Latest Version**: 2.0.9 (May 2025)
+**Latest Version**: 2.0.10 (June 2025)
 
 ## Features
 
 - **Native JSON Document Storage**: Store, query, and manipulate JSON documents with full ACID transactions
-- **JavaScript Integration**: 
-  - Write validators to enforce data integrity
-  - Create transformers to modify documents during operations
-  - Define custom functions for complex business logic
-  - Use JavaScript for powerful query expressions
+- **Advanced JavaScript Integration**: 
+  - **Script Management**: Write validators, transformers, and custom functions with comprehensive lifecycle management
+  - **Version Control**: Full versioning system with semantic versioning, rollback capabilities, and version comparison
+  - **Performance Monitoring**: Real-time script performance tracking with detailed metrics and optimization insights
+  - **Batch Operations**: Bulk enable/disable, version creation, export/import, and management tools
+  - **Error Handling**: Sophisticated validation with detailed error reporting and recovery mechanisms
+  - **Development Tools**: Comprehensive examples, debugging tools, and development documentation
 - **Security First**:
   - Database-backed Role-Based Access Control (RBAC) with UUID support
   - JWT authentication with secure HMAC-SHA256 signatures
@@ -115,18 +117,29 @@ By default, the server runs on port 5000 with automatic binary persistence for o
 
 ## JavaScript Integration
 
-JSONdb integrates the QuickJS JavaScript engine to extend database functionality:
+JSONdb features a comprehensive JavaScript integration system with QuickJS engine, providing enterprise-grade script management capabilities:
+
+### Script Management System
+
+- **Version Control**: Semantic versioning (major.minor.patch) with complete history tracking
+- **Performance Monitoring**: Real-time execution metrics, memory usage, and optimization insights
+- **Batch Operations**: Manage multiple scripts simultaneously with progress tracking
+- **Error Handling**: Sophisticated validation with detailed error reporting
+- **Import/Export**: Full backup and restore capabilities for scripts and version history
 
 ### Document Validators
 
 ```javascript
 function validateDocument(doc) {
+  // Input validation with detailed error reporting
   if (!doc.email || !doc.email.includes('@')) {
     addError('email', 'Invalid email format');
   }
   if (doc.age !== undefined && (doc.age < 18 || doc.age > 120)) {
     addError('age', 'Age must be between 18 and 120');
   }
+  
+  // Performance monitoring automatically tracks execution time
   return isValid;
 }
 ```
@@ -135,33 +148,95 @@ function validateDocument(doc) {
 
 ```javascript
 function transformDocument(doc, operation) {
+  // Automatic timestamp management
   if (operation === 'insert' || operation === 'update') {
     doc.updated_at = new Date().toISOString();
     doc.email = doc.email ? doc.email.toLowerCase() : null;
   }
+  
+  // Validation integration with error collection
+  if (!validateBusinessRules(doc)) {
+    throw new Error('Business rule validation failed');
+  }
+  
   return doc;
 }
 ```
 
-### Custom Functions
+### Custom Functions with Analytics
 
 ```javascript
-function userFunction(args) {
-  const { items, tax } = args;
+function calculateOrderTotal(args) {
+  const startTime = performance.now();
+  
+  const { items, tax, discounts = [] } = args;
   const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  return {
+  
+  // Apply discounts
+  const totalDiscount = discounts.reduce((sum, discount) => {
+    return sum + (discount.type === 'percent' ? subtotal * discount.value : discount.value);
+  }, 0);
+  
+  const result = {
     subtotal,
-    tax: subtotal * (tax || 0.1),
-    total: subtotal * (1 + (tax || 0.1))
+    discount: totalDiscount,
+    tax: (subtotal - totalDiscount) * (tax || 0.1),
+    total: (subtotal - totalDiscount) * (1 + (tax || 0.1))
   };
+  
+  // Performance tracking
+  const executionTime = performance.now() - startTime;
+  logPerformance('calculateOrderTotal', executionTime);
+  
+  return result;
 }
 ```
 
-### JavaScript Query
+### JavaScript Query with Performance Optimization
 
 ```javascript
-// Query active users over 30 years old
-const query = `doc.status === 'active' && doc.age > 30`;
+// Complex query with performance monitoring
+const query = `
+  doc.status === 'active' && 
+  doc.age > 30 && 
+  doc.orders && doc.orders.length > 5 &&
+  doc.lastLogin > new Date(Date.now() - 30*24*60*60*1000).toISOString()
+`;
+```
+
+### Script Versioning Example
+
+```javascript
+// Version 1.0.0 - Initial implementation
+function processPayment(data) {
+  return { success: true, amount: data.amount };
+}
+
+// Version 1.1.0 - Added validation (minor version)
+function processPayment(data) {
+  if (!data.amount || data.amount <= 0) {
+    throw new Error('Invalid amount');
+  }
+  return { success: true, amount: data.amount, fees: data.amount * 0.03 };
+}
+
+// Version 2.0.0 - Breaking change - new API structure (major version)
+function processPayment(request) {
+  const { payment, customer } = request;
+  if (!payment.amount || payment.amount <= 0) {
+    throw new Error('Invalid payment amount');
+  }
+  
+  return {
+    transaction: {
+      id: generateTransactionId(),
+      amount: payment.amount,
+      fees: calculateFees(payment.amount),
+      customer_id: customer.id,
+      status: 'completed'
+    }
+  };
+}
 ```
 
 ## API
@@ -176,11 +251,20 @@ JSONdb provides a comprehensive REST API. Here are some key endpoints:
 | `/api/collections/:name/documents` | GET | Query documents |
 | `/api/collections/:name/documents` | POST | Create a document |
 | `/api/collections/:name/documents/:id` | GET | Get a document |
-| `/api/js/validators` | POST | Register a validator |
-| `/api/js/transformers` | POST | Register a transformer |
-| `/api/js/functions` | POST | Register a JavaScript function |
+| **JavaScript Management** | | |
+| `/api/js/validators` | POST | Register a validator script |
+| `/api/js/transformers` | POST | Register a transformer script |
+| `/api/js/functions` | POST | Register a custom function |
 | `/api/js/functions/:name` | POST | Execute a function |
 | `/api/js/query` | POST | Execute a JavaScript query |
+| **Script Versioning** | | |
+| `/api/collections/_script_versions` | GET | List script version history |
+| `/api/collections/_script_versions` | POST | Create a new script version |
+| `/api/collections/_script_versions/:id` | GET | Get specific version details |
+| **Performance & Monitoring** | | |
+| `/api/js/performance/:scriptId` | GET | Get script performance metrics |
+| `/api/metrics/scripts` | GET | JavaScript execution statistics |
+| **System Operations** | | |
 | `/api/transactions` | POST | Begin a transaction |
 | `/api/visualization/transaction-history` | GET | View transaction history |
 | `/api/metrics` | GET | Access system metrics |
@@ -189,15 +273,22 @@ For complete API documentation, see the [API Reference](docs/api/api-rest.md).
 
 ## Documentation
 
-- [Binary Format Guide](docs/BINARY_FORMAT.md) - **NEW!** Performance-optimized binary persistence
-- [API Reference](docs/api/api-rest.md)
-- [JavaScript API](docs/api/JAVASCRIPT_API.md)
-- [RBAC System](docs/api/RBAC_API.md)
-- [Transaction Management](docs/reference/TRANSACTIONS.md)
-- [JavaScript Integration](docs/reference/JAVASCRIPT.md)
-- [Metrics System](docs/reference/METRICS.md)
-- [Project Structure](docs/architecture/project_structure.md)
-- [Configuration Guide](docs/reference/CONFIGURATION.md)
+### Core Documentation
+- [Binary Format Guide](docs/BINARY_FORMAT.md) - Performance-optimized binary persistence
+- [API Reference](docs/api/api-rest.md) - Complete REST API documentation
+- [RBAC System](docs/api/RBAC_API.md) - Role-based access control
+- [Transaction Management](docs/reference/TRANSACTIONS.md) - ACID transaction support
+- [Metrics System](docs/reference/METRICS.md) - Performance monitoring
+
+### JavaScript Integration
+- [JavaScript Development Guide](docs/guides/javascript-development-guide.md) - **NEW!** Comprehensive development guide
+- [JavaScript API Reference](docs/api/JAVASCRIPT_API.md) - Complete JavaScript API
+- [Script Management](docs/reference/JAVASCRIPT.md) - Script lifecycle and version control
+- [Performance Optimization](docs/reference/performance-optimization.md) - JavaScript performance tuning
+
+### Architecture & Configuration
+- [Project Structure](docs/architecture/project_structure.md) - Codebase organization
+- [Configuration Guide](docs/reference/CONFIGURATION.md) - Server configuration options
 
 ## Security
 
