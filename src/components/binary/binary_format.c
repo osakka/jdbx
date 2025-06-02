@@ -595,8 +595,14 @@ int binary_serialize_database(const char* path, void* db) {
         continue;
       }
       
-      /* Estimate document size for buffer allocation */
-      size_t estimated_size = get_json_binary_size(document) + 1024; /* Increased safety margin for complex documents */
+      /* Estimate document size for buffer allocation with larger safety margin */
+      size_t base_size = get_json_binary_size(document);
+      size_t estimated_size = base_size + 4096; /* Larger safety margin for complex documents */
+      
+      /* For very large documents, use percentage-based margin */
+      if (base_size > 32768) {
+        estimated_size = base_size + (base_size / 8); /* Add 12.5% margin for large documents */
+      }
       
       /* Ensure temp buffer is allocated and large enough */
       if (!temp_buffer || estimated_size > temp_size) {
@@ -630,13 +636,36 @@ int binary_serialize_database(const char* path, void* db) {
       size_t doc_size = serialize_json_value(document, temp_buffer, 0);
       TRACE_MEMORY("Document serialized to %zu bytes in temp_buffer %p", doc_size, temp_buffer);
       
-      /* Validate serialized size doesn't exceed buffer */
+      /* Handle buffer overflow with dynamic reallocation */
       if (doc_size > temp_size) {
-        LOG_ERROR("Serialized document size (%zu) exceeds buffer size (%zu)", doc_size, temp_size);
-        TRACE_MEMORY("Buffer overflow detected: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
-        free(temp_buffer);
-        close(fd);
-        return 0;
+        LOG_WARNING("Serialized document size (%zu) exceeds buffer size (%zu), reallocating", doc_size, temp_size);
+        
+        /* Reallocate buffer to actual required size plus extra margin */
+        size_t required_size = doc_size + 2048; /* Extra margin for safety */
+        void* new_buffer = realloc(temp_buffer, required_size);
+        if (!new_buffer) {
+          LOG_ERROR("Failed to reallocate buffer for document overflow (size=%zu)", required_size);
+          TRACE_MEMORY("Buffer overflow detected: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
+          free(temp_buffer);
+          close(fd);
+          return 0;
+        }
+        
+        temp_buffer = new_buffer;
+        temp_size = required_size;
+        LOG_INFO("Successfully reallocated buffer to %zu bytes for large document", temp_size);
+        
+        /* Re-serialize with new buffer */
+        doc_size = serialize_json_value(document, temp_buffer, 0);
+        TRACE_MEMORY("Document re-serialized to %zu bytes in expanded buffer %p", doc_size, temp_buffer);
+        
+        /* Final validation */
+        if (doc_size > temp_size) {
+          LOG_ERROR("Document size (%zu) still exceeds buffer after reallocation (%zu)", doc_size, temp_size);
+          free(temp_buffer);
+          close(fd);
+          return 0;
+        }
       }
       
       /* CRITICAL FIX: Ensure header size matches actual serialized data */
