@@ -402,6 +402,15 @@ void handle_client(void* client_data) {
   
   /* Debug request */
   if (g_logger) {
+    LOG_TRACE("REQUEST_RECEIVED: method=%d (%s), path='%s', content_length=%zu", 
+        request->method,
+        request->method == HTTP_GET ? "GET" :
+        request->method == HTTP_POST ? "POST" :
+        request->method == HTTP_PUT ? "PUT" :
+        request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+        request->path ? request->path : "NULL",
+        request->content_length);
+    
     LOG_DEBUG("Received request: %s %s",
        request->method == HTTP_GET ? "GET" :
        request->method == HTTP_POST ? "POST" :
@@ -415,6 +424,10 @@ void handle_client(void* client_data) {
     
     if (request->content_type) {
       LOG_DEBUG("Content-Type: %s", request->content_type);
+    }
+    
+    if (request->body) {
+      LOG_TRACE("REQUEST_BODY: %.200s", request->body);
     }
   }
 
@@ -562,10 +575,27 @@ void handle_client(void* client_data) {
   }
   
   /* Dispatch request to API handler */
+  if (g_logger) {
+    LOG_TRACE("API_DISPATCH: Dispatching %s %s to API handler", 
+        request->method == HTTP_GET ? "GET" :
+        request->method == HTTP_POST ? "POST" :
+        request->method == HTTP_PUT ? "PUT" :
+        request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+        request->path ? request->path : "NULL");
+  }
+  
   http_response_t* response = api_dispatch_request(client->api_ctx, request);
+  
+  if (g_logger) {
+    LOG_TRACE("API_DISPATCH_RESULT: response=%p, status=%d", 
+        (void*)response, response ? response->status : -1);
+  }
   
   /* If no response from API handler, return 404 */
   if (!response) {
+    if (g_logger) {
+      LOG_TRACE("API_DISPATCH: No response from API handler, returning 404");
+    }
     response = create_http_response(HTTP_NOT_FOUND, 
       "{\"error\":\"Not found\"}", "application/json");
   }

@@ -76,7 +76,15 @@ char* get_cookie_value(http_request_t* request, const char* name) {
 /* Parse HTTP request from string */
 http_request_t* parse_http_request(const char* request_str) {
   if (!request_str) {
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: request_str is NULL");
+    }
     return NULL;
+  }
+  
+  if (g_logger) {
+    LOG_TRACE("HTTP_PARSE: Starting to parse request, length=%zu", strlen(request_str));
+    LOG_TRACE("HTTP_PARSE: First 200 chars: %.200s", request_str);
   }
   
   http_request_t* request = (http_request_t*)malloc(sizeof(http_request_t));
@@ -111,6 +119,11 @@ http_request_t* parse_http_request(const char* request_str) {
     /* Set method */
     request->method = parse_http_method(method_str);
     
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: method_str='%s', parsed_method=%d, path='%s'", 
+          method_str, request->method, url);
+    }
+    
     /* Parse URL (path and query) */
     char* query_start = strchr(url, '?');
     if (query_start) {
@@ -123,6 +136,12 @@ http_request_t* parse_http_request(const char* request_str) {
       /* No query part */
       request->path = strdup(url);
       request->query = NULL;
+    }
+    
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: final path='%s', query='%s'", 
+          request->path ? request->path : "NULL", 
+          request->query ? request->query : "NULL");
     }
     
     /* Parse headers */
@@ -140,6 +159,9 @@ http_request_t* parse_http_request(const char* request_str) {
       /* Content-Length header */
       else if (strncasecmp(line, "Content-Length:", 15) == 0) {
         request->content_length = atoi(line + 16);
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Content-Length=%zu", request->content_length);
+        }
       }
       
       /* Authorization header */
@@ -188,6 +210,14 @@ http_request_t* parse_http_request(const char* request_str) {
       if (body_start) {
         body_start += 4; /* Skip the double CRLF */
         request->body = strdup(body_start);
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Body found, length=%zu, content=%.100s", 
+              strlen(request->body), request->body);
+        }
+      } else {
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Content-Length=%zu but no body found", request->content_length);
+        }
       }
     }
     

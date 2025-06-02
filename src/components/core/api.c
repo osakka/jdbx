@@ -464,8 +464,15 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
 
 /* Route matching */
 static int route_matches(const char* route, const char* path) {
+  if (g_logger) {
+    LOG_TRACE("ROUTE_MATCH_CHECK: route='%s', path='%s'", route ? route : "NULL", path ? path : "NULL");
+  }
+  
   /* Exact match */
   if (strcmp(route, path) == 0) {
+    if (g_logger) {
+      LOG_TRACE("ROUTE_MATCH_EXACT: route='%s' matches path='%s'", route, path);
+    }
     return 1;
   }
   
@@ -503,19 +510,32 @@ static int route_matches(const char* route, const char* path) {
   /* Prefix match with trailing '/' */
   size_t route_len = strlen(route);
   if (route[route_len - 1] == '/') {
-    return strncmp(route, path, route_len) == 0;
+    int prefix_match = strncmp(route, path, route_len) == 0;
+    if (g_logger) {
+      LOG_TRACE("ROUTE_MATCH_PREFIX: route='%s' (len=%zu) vs path='%s', match=%d", 
+          route, route_len, path, prefix_match);
+    }
+    return prefix_match;
   }
   
+  if (g_logger) {
+    LOG_TRACE("ROUTE_MATCH_NONE: route='%s' does not match path='%s'", route, path);
+  }
   return 0;
 }
 
 /* Dispatch request to appropriate handler */
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) {
   
+  if (g_logger) {
+    LOG_TRACE("API_DISPATCH_ENTRY: ctx=%p, request=%p", (void*)ctx, (void*)request);
+  }
+  
   if (!ctx || !request) {
     if (g_logger) {
       LOG_ERROR("API dispatch failed: Invalid context or request");
       LOG_ERROR("Context=%p, Request=%p", (void*)ctx, (void*)request);
+      LOG_TRACE("API_DISPATCH_EXIT: returning 500 - invalid params");
     }
     printf("API dispatch failed: Invalid context or request. Context=%p, Request=%p\n", (void*)ctx, (void*)request);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -557,8 +577,26 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   }
   
   /* Find matching route */
+  if (g_logger) {
+    LOG_TRACE("API_ROUTE_SEARCH: Searching %d routes for %s %s", 
+        ctx->num_routes, 
+        request->method == HTTP_GET ? "GET" :
+        request->method == HTTP_POST ? "POST" :
+        request->method == HTTP_PUT ? "PUT" :
+        request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+        request->path);
+  }
+  
   for (int i = 0; i < ctx->num_routes; i++) {
+    if (g_logger) {
+      LOG_TRACE("API_ROUTE_CHECK[%d]: route='%s', method=%d (want %d)", 
+          i, ctx->routes[i].path, ctx->routes[i].method, request->method);
+    }
+    
     if (route_matches(ctx->routes[i].path, request->path) && ctx->routes[i].method == request->method) {
+      if (g_logger) {
+        LOG_TRACE("API_ROUTE_MATCHED[%d]: route='%s' matched!", i, ctx->routes[i].path);
+      }
       if (g_logger) LOG_DEBUG("Found matching route: %s (requires_auth: %d)", 
                 ctx->routes[i].path, ctx->routes[i].requires_auth);
       
