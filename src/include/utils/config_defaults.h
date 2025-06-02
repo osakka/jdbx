@@ -23,7 +23,7 @@
 #define DEFAULT_HOST "0.0.0.0"
 
 /** Default maximum number of simultaneous connections */
-#define DEFAULT_MAX_CONNECTIONS 100
+#define DEFAULT_MAX_CONNECTIONS 1000
 
 /** Default verbose mode (0 for normal, 1 for verbose) */
 #define DEFAULT_VERBOSE_MODE 0

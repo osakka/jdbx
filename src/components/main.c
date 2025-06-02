@@ -1,5 +1,6 @@
 #include "init.h"
 #include "utils/logger.h"
+#include "core/server_thread_safe.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -274,6 +275,10 @@ int main(int argc, char** argv) {
     free(config);
     return 1;
   }
+  
+  /* Enable thread-safe mode with comprehensive tracing */
+  LOG_INFO("Enabling thread-safe connection management for enhanced stability");
+  server_enable_thread_safe_mode();
   
   /* Initialize thread pool before other initialization */
   LOG_DEBUG("Initializing Thread Pool");

@@ -9,7 +9,7 @@ const POLLING_INTERVALS = {
     dashboard: 30000,     // 30 seconds for dashboard
     browser: 60000,       // 60 seconds for browser
     metrics: 30000,       // 30 seconds for metrics
-    rbac: 120000,         // 2 minutes for RBAC
+    rbac: 30000,          // 30 seconds for RBAC (faster for session updates)
     operations: 60000     // 60 seconds for operations
 };
 
@@ -55,7 +55,13 @@ if (!authToken) {
 let sessionCheckInterval = null;
 
 async function validateSession() {
-    if (!authToken) {
+    // Always get fresh token from localStorage
+    const currentToken = localStorage.getItem('jsondb_auth_token');
+    authToken = currentToken; // Update global variable
+    
+    console.log('Session validation starting, token present:', !!currentToken);
+    
+    if (!currentToken) {
         console.log('No auth token, redirecting to login');
         window.location.href = '/login.html';
         return false;
@@ -65,14 +71,15 @@ async function validateSession() {
         // Make a lightweight request to check if session is valid
         // Using /api/collections endpoint which requires auth but is lightweight
         const response = await fetch(`${API_BASE_URL}/api/collections`, {
-            method: 'HEAD',  // Use HEAD to minimize data transfer
+            method: 'GET',  // Use GET since server doesn't support HEAD
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${currentToken}`
             }
         });
         
         if (response.status === 401) {
             console.log('Session invalid (401), redirecting to login');
+            console.log('Token was:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
             // Clear tokens
             localStorage.removeItem('jsondb_auth_token');
             localStorage.removeItem('jsondb_refresh_token');
@@ -85,8 +92,8 @@ async function validateSession() {
             return false;
         }
         
-        // If HEAD method not allowed, it's still a valid session (just not optimal)
-        if (response.status === 405) {
+        // If HEAD method not allowed or not found, it's still a valid session (just not optimal)
+        if (response.status === 405 || response.status === 404) {
             return true;
         }
         
@@ -100,8 +107,8 @@ async function validateSession() {
 
 // Start session validation check - every 30 seconds
 function startSessionValidation() {
-    // Initial check after 5 seconds
-    setTimeout(validateSession, 5000);
+    // Initial check after 15 seconds to avoid interfering with login flow
+    setTimeout(validateSession, 15000);
     
     // Then check every 30 seconds
     sessionCheckInterval = setInterval(validateSession, 30000);
@@ -339,10 +346,13 @@ function createNotificationContainer() {
 
 // API helper
 async function apiRequest(endpoint, options = {}) {
+    // Always get fresh token from localStorage to handle token refresh/updates
+    const currentToken = localStorage.getItem('jsondb_auth_token');
     const defaultOptions = {
         headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json',
+            'Connection': 'close'  // Prevent keep-alive connection issues
         }
     };
     
@@ -1019,24 +1029,35 @@ async function renderCollections() {
 }
 
 async function updateCollectionCounts() {
-    // Update counts for each collection
-    for (const collection of collections) {
+    // Update counts for each collection with rate limiting to prevent connection overload
+    for (let i = 0; i < collections.length; i++) {
+        const collection = collections[i];
         try {
-            const response = await apiRequest(`/api/collections/${collection}`);
+            const collectionName = typeof collection === 'string' ? collection : collection.name;
+            console.log(`Requesting count for collection: ${collectionName} (${i+1}/${collections.length})`);
+            const response = await apiRequest(`/api/collections/${collectionName}`);
+            console.log(`Received response for ${collectionName}:`, response ? 'success' : 'null');
             const count = Array.isArray(response) ? response.length : (response.documents ? response.documents.length : 0);
             
             // Find the badge for this collection and update it
             const collectionItems = document.querySelectorAll('.collection-item');
             collectionItems.forEach(item => {
-                if (item.querySelector('.collection-name')?.textContent === collection) {
+                if (item.querySelector('.collection-name')?.textContent === collectionName) {
                     const badge = item.querySelector('.badge');
                     if (badge) {
                         badge.textContent = count.toString();
                     }
                 }
             });
+            
+            // Add delay between requests to prevent connection overload and browser limits
+            if (i < collections.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+            }
         } catch (error) {
-            console.error(`Error getting count for ${collection}:`, error);
+            const collectionName = typeof collection === 'string' ? collection : collection.name;
+            console.error(`Error getting count for ${collectionName}:`, error);
+            // Continue with other collections even if one fails
         }
     }
 }
@@ -1064,7 +1085,8 @@ async function selectCollection(collection) {
 
 async function loadDocuments(collection, isPolling = false) {
     try {
-        const response = await apiRequest(`/api/collections/${collection}`);
+        const collectionName = typeof collection === 'string' ? collection : collection.name;
+        const response = await apiRequest(`/api/collections/${collectionName}`);
         // Handle both array response and object with documents property
         const newDocuments = Array.isArray(response) ? response : (response.documents || []);
         
@@ -2174,9 +2196,9 @@ function getPerformanceDashboardData() {
     
     // Overall health score
     const allSuggestions = [
-        ...data.validation.suggestions,
-        ...data.transformation.suggestions,
-        ...data.function_execution.suggestions
+        ...(data.validation?.suggestions || []),
+        ...(data.transformation?.suggestions || []),
+        ...(data.function_execution?.suggestions || [])
     ];
     
     const criticalCount = allSuggestions.filter(s => s.type === 'critical').length;
@@ -5530,9 +5552,9 @@ function updateHealthScore(overallData) {
     const warningElement = document.getElementById('warningCount');
     const totalElement = document.getElementById('totalSuggestions');
     
-    if (!scoreElement) return;
+    if (!scoreElement || !overallData) return;
     
-    const score = overallData.healthScore;
+    const score = overallData.healthScore || 100;
     scoreElement.textContent = score;
     
     // Update status text and color
@@ -5557,15 +5579,20 @@ function updateHealthScore(overallData) {
     circleElement.className = `health-score-circle ${colorClass}`;
     
     // Update summary counts
-    if (criticalElement) criticalElement.textContent = overallData.criticalIssues;
-    if (warningElement) warningElement.textContent = overallData.warnings;
-    if (totalElement) totalElement.textContent = overallData.totalSuggestions;
+    if (criticalElement) criticalElement.textContent = overallData.criticalIssues || 0;
+    if (warningElement) warningElement.textContent = overallData.warnings || 0;
+    if (totalElement) totalElement.textContent = overallData.totalSuggestions || 0;
 }
 
 // Update performance type card
 function updatePerformanceTypeCard(type, data) {
+    if (!data) {
+        console.warn(`No performance data available for ${type}`);
+        return;
+    }
+    
     const stats = data.stats;
-    const suggestions = data.suggestions;
+    const suggestions = data.suggestions || [];
     
     // Update stats
     const avgTimeElement = document.getElementById(`${type}AvgTime`);
@@ -5605,9 +5632,9 @@ function updateOptimizationSuggestions(dashboardData) {
     if (!suggestionsListElement) return;
     
     const allSuggestions = [
-        ...dashboardData.validation.suggestions,
-        ...dashboardData.transformation.suggestions,
-        ...dashboardData.function_execution.suggestions
+        ...(dashboardData.validation?.suggestions || []),
+        ...(dashboardData.transformation?.suggestions || []),
+        ...(dashboardData.function_execution?.suggestions || [])
     ];
     
     if (allSuggestions.length === 0) {
@@ -6354,9 +6381,29 @@ function renderSessions(sessions) {
         const createdAt = new Date(session.created_at || Date.now());
         const lastActivity = new Date(session.last_seen || session.last_activity || session.created_at || Date.now());
         const expiresAt = new Date(session.expires_at || Date.now() + 86400000);
-        const isExpired = expiresAt < new Date();
+        const now = new Date();
+        const isExpired = expiresAt < now;
         const status = session.active === false ? 'Terminated' : (isExpired ? 'Expired' : 'Active');
         const statusClass = session.active === false ? 'bg-secondary' : (isExpired ? 'bg-danger' : 'bg-success');
+        
+        // Check if session was recently extended (last activity within 2 minutes)
+        const recentlyActive = (now - lastActivity) < (2 * 60 * 1000);
+        const rowClass = recentlyActive && !isExpired ? 'table-success' : '';
+        
+        // Calculate time remaining
+        const timeRemaining = expiresAt - now;
+        let timeRemainingText = '';
+        if (timeRemaining > 0) {
+            const minutes = Math.floor(timeRemaining / (60 * 1000));
+            if (minutes > 60) {
+                const hours = Math.floor(minutes / 60);
+                const remainingMins = minutes % 60;
+                timeRemainingText = `${hours}h ${remainingMins}m`;
+            } else {
+                timeRemainingText = `${minutes}m`;
+            }
+            timeRemainingText = `<small class="text-muted">(${timeRemainingText} left)</small>`;
+        }
         
         // Format IP address
         const ipAddress = session.ip_address || 'Unknown';
@@ -6367,15 +6414,19 @@ function renderSessions(sessions) {
             userAgent = userAgent.substring(0, 47) + '...';
         }
         
+        // Add activity indicator
+        const activityIndicator = recentlyActive && !isExpired ? 
+            '<i class="bi bi-circle-fill text-success me-1" title="Recently active"></i>' : '';
+        
         return `
-            <tr>
+            <tr class="${rowClass}">
                 <td class="font-monospace small">${session._id || session.id || 'N/A'}</td>
-                <td>${session.username || session.user || 'Unknown'}</td>
+                <td>${activityIndicator}${session.username || session.user || 'Unknown'}</td>
                 <td class="font-monospace">${ipAddress}</td>
                 <td class="small" title="${session.user_agent || 'Unknown'}">${userAgent}</td>
                 <td>${formatDate(createdAt)}</td>
                 <td>${formatDate(lastActivity)}</td>
-                <td>${formatDate(expiresAt)}</td>
+                <td>${formatDate(expiresAt)} ${timeRemainingText}</td>
                 <td>
                     <span class="badge ${statusClass}">
                         ${status}
@@ -7558,14 +7609,14 @@ async function saveDocument() {
             parsedDoc._id = currentDocument;
         }
         
-        // Save the document
-        const response = await apiRequest(`/api/collections/${currentCollection}/documents`, {
-            method: 'POST',
+        // Save the document using PUT method with document ID in URL
+        const response = await apiRequest(`/api/collections/${currentCollection}/documents/${currentDocument}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(parsedDoc)
         });
         
-        if (response.success || response.id) {
+        if (response._id || response.success || response.id) {
             showNotification('Document saved successfully', 'success');
             // Update the local document
             documents[currentDocumentIndex] = parsedDoc;

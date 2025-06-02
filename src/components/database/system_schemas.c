@@ -182,6 +182,72 @@ static schema_t* create_roles_schema() {
   return schema;
 }
 
+/* Create welcome panel configuration */
+static int create_welcome_panel_config(database_t* db) {
+  if (!db) return 0;
+  
+  LOG_INFO("Creating welcome panel configuration");
+  
+  /* Create the _config collection first */
+  db_collection_t* config_collection = db_get_collection(db, "_config");
+  if (!config_collection) {
+    if (!db_create_collection(db, "_config")) {
+      LOG_ERROR("Failed to create _config collection");
+      return 0;
+    }
+    config_collection = db_get_collection(db, "_config");
+    if (!config_collection) {
+      LOG_ERROR("Failed to get _config collection after creation");
+      return 0;
+    }
+  }
+  
+  /* Create welcome panel configuration document */
+  json_value_t* welcome_config = json_create_object();
+  if (!welcome_config) {
+    LOG_ERROR("Failed to create welcome config JSON object");
+    return 0;
+  }
+  
+  json_object_set(welcome_config, "_id", json_create_string("welcome-panel-config"));
+  json_object_set(welcome_config, "type", json_create_string("welcome_panel"));
+  json_object_set(welcome_config, "enabled", json_create_boolean(1));
+  json_object_set(welcome_config, "title", json_create_string("Welcome to JSONdb"));
+  json_object_set(welcome_config, "version", json_create_string("v1"));
+  
+  /* Welcome content with basic getting started info */
+  const char* welcome_content = 
+    "# Getting Started with JSONdb\\n\\n"
+    "Welcome to your JSONdb instance! This is a high-performance document database designed for modern applications.\\n\\n"
+    "## Quick Start\\n\\n"
+    "1. **Browse Collections** - Navigate to the Browser tab to explore your data\\n"
+    "2. **Monitor Performance** - Check the Metrics tab for real-time insights\\n"
+    "3. **Manage Security** - Configure users and roles in the RBAC section\\n"
+    "4. **API Documentation** - Find comprehensive API docs in the API tab\\n\\n"
+    "## Key Features\\n\\n"
+    "- **Document Storage** - Store JSON documents with automatic indexing\\n"
+    "- **Real-time Metrics** - Monitor database performance and usage\\n"
+    "- **Role-Based Access** - Fine-grained permission control\\n"
+    "- **RESTful API** - Simple and intuitive API endpoints\\n"
+    "- **Binary Persistence** - Efficient storage with automatic saves\\n\\n"
+    "## Need Help?\\n\\n"
+    "Check out the API Documentation or explore the example collections.\\n\\n"
+    "*You can dismiss this panel by clicking the X button. To re-enable it, update the configuration in the `_config` collection.*";
+  
+  json_object_set(welcome_config, "content", json_create_string(welcome_content));
+  
+  /* Insert the document into the collection */
+  if (!db_insert_document(db, "_config", welcome_config)) {
+    LOG_ERROR("Failed to insert welcome panel configuration");
+    json_free(welcome_config);
+    return 0;
+  }
+  
+  LOG_INFO("Welcome panel configuration created successfully");
+  json_free(welcome_config);
+  return 1;
+}
+
 /* Initialize system schemas */
 int db_init_system_schemas(database_t* db) {
   if (!db) return 0;
@@ -210,6 +276,12 @@ int db_init_system_schemas(database_t* db) {
       free(roles_schema);
       return 0;
     }
+  }
+  
+  /* Create welcome panel configuration for new databases */
+  if (!create_welcome_panel_config(db)) {
+    LOG_WARNING("Failed to create welcome panel configuration, continuing bootstrap");
+    /* Don't fail bootstrap if welcome panel creation fails */
   }
   
   /* Note: Other system collections have more flexible schemas, so we don't 

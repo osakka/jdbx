@@ -19,6 +19,8 @@ QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
 
 # Source files (excluding tests)
 CORE_SRCS = $(wildcard $(SRC_DIR)/components/core/*.c)
+# Include new thread-safe connection management
+THREAD_SAFE_SRCS = $(SRC_DIR)/components/core/client_connection.c $(SRC_DIR)/components/core/server_thread_safe.c
 API_SRCS = $(wildcard $(SRC_DIR)/components/api/*.c)
 DB_SRCS = $(wildcard $(SRC_DIR)/components/database/*.c)
 BINARY_SRCS = $(wildcard $(SRC_DIR)/components/binary/*.c)
@@ -30,6 +32,11 @@ TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
 JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC_DIR)/components/js/*.c))
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
+# Performance optimization sources
+STORAGE_SRCS = $(wildcard $(SRC_DIR)/components/storage/*.c)
+INDEX_SRCS = $(wildcard $(SRC_DIR)/components/index/*.c)
+LOCKFREE_SRCS = $(wildcard $(SRC_DIR)/components/lockfree/*.c)
+
 # Initialization components
 INIT_SRCS = $(wildcard $(SRC_DIR)/initialize/*.c)
 
@@ -40,6 +47,7 @@ THREAD_POOL_OBJ = $(OBJ_DIR)/components/core/thread_pool.o
 
 # Object files
 CORE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+THREAD_SAFE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(THREAD_SAFE_SRCS))
 API_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(API_SRCS))
 DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
 BINARY_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(BINARY_SRCS))
@@ -49,13 +57,16 @@ RBAC_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(RBAC_SRCS))
 UTILS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(UTILS_SRCS))
 TOOLS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(TOOLS_SRCS))
 JS_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JS_SRCS))
+STORAGE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(STORAGE_SRCS))
+INDEX_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(INDEX_SRCS))
+LOCKFREE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(LOCKFREE_SRCS))
 
 # Initialization objects
 INIT_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(INIT_SRCS))
 
 # All objects
-OBJS = $(CORE_OBJS) ../build/obj/components/core/authentication_handler.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
-       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(INIT_OBJS)
+OBJS = $(CORE_OBJS) $(THREAD_SAFE_OBJS) ../build/obj/components/core/authentication_handler.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+       $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(INIT_OBJS) $(STORAGE_OBJS) $(INDEX_OBJS) $(LOCKFREE_OBJS)
 
 # JavaScript support handling
 ifdef DISABLE_JS
@@ -83,6 +94,9 @@ directories:
 	@mkdir -p $(OBJ_DIR)/components/utils
 	@mkdir -p $(OBJ_DIR)/components/tools
 	@mkdir -p $(OBJ_DIR)/components/js
+	@mkdir -p $(OBJ_DIR)/components/storage
+	@mkdir -p $(OBJ_DIR)/components/index
+	@mkdir -p $(OBJ_DIR)/components/lockfree
 	@mkdir -p $(OBJ_DIR)/initialize
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LIB_DIR)

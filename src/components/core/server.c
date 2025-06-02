@@ -1,4 +1,5 @@
 #include "core/server.h"
+#include "core/server_thread_safe.h"
 #include "api/api.h"
 #include "utils/daemonize.h"
 #include "utils/logger.h"
@@ -221,7 +222,16 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
   } else {
     printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
   }
-  accept_thread_func(config);
+  
+  /* Use thread-safe accept loop if enabled, otherwise use standard version */
+  if (server_is_thread_safe_mode_enabled()) {
+    if (g_logger) {
+      LOG_INFO("Using thread-safe accept loop for enhanced connection stability");
+    }
+    server_accept_loop_thread_safe_direct(config);
+  } else {
+    accept_thread_func(config);
+  }
   
   /* Clean up resources */
   if (g_logger) {

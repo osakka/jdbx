@@ -1,0 +1,45 @@
+# Makefile for mmap storage performance test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -I../../src/include -I../../src -O3 -g
+LDFLAGS = -lpthread -lm
+
+# Source files
+TEST_SRC = test_mmap_storage.c
+STORAGE_SRC = ../../src/components/storage/mmap_storage.c
+HAZARD_SRC = ../../src/components/lockfree/hazard_pointer.c
+LOGGER_SRC = ../../src/components/utils/logger.c
+
+# Object files
+TEST_OBJ = test_mmap_storage.o
+STORAGE_OBJ = mmap_storage.o
+HAZARD_OBJ = hazard_pointer.o
+LOGGER_OBJ = logger.o
+
+# Target
+TARGET = test_mmap_storage
+
+all: $(TARGET)
+
+$(TARGET): $(TEST_OBJ) $(STORAGE_OBJ) $(HAZARD_OBJ) $(LOGGER_OBJ)
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+$(TEST_OBJ): $(TEST_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(STORAGE_OBJ): $(STORAGE_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(HAZARD_OBJ): $(HAZARD_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LOGGER_OBJ): $(LOGGER_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(TARGET) *.o
+
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run
