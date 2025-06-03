@@ -51,7 +51,7 @@ int js_native_storage_init(database_t *db) {
 
     /* Create validators collection */
     if (!db_collection_exists(db, JS_VALIDATORS_COLLECTION)) {
-        if (!db_create_collection(db, JS_VALIDATORS_COLLECTION)) {
+        if (db_create_collection(db, JS_VALIDATORS_COLLECTION) != 0) {
             LOG_ERROR("Failed to create JavaScript validators collection");
             return 0;
         }
@@ -60,7 +60,7 @@ int js_native_storage_init(database_t *db) {
 
     /* Create transformers collection */
     if (!db_collection_exists(db, JS_TRANSFORMERS_COLLECTION)) {
-        if (!db_create_collection(db, JS_TRANSFORMERS_COLLECTION)) {
+        if (db_create_collection(db, JS_TRANSFORMERS_COLLECTION) != 0) {
             LOG_ERROR("Failed to create JavaScript transformers collection");
             return 0;
         }
@@ -69,7 +69,7 @@ int js_native_storage_init(database_t *db) {
 
     /* Create functions collection */
     if (!db_collection_exists(db, JS_FUNCTIONS_COLLECTION)) {
-        if (!db_create_collection(db, JS_FUNCTIONS_COLLECTION)) {
+        if (db_create_collection(db, JS_FUNCTIONS_COLLECTION) != 0) {
             LOG_ERROR("Failed to create JavaScript functions collection");
             return 0;
         }
@@ -78,7 +78,7 @@ int js_native_storage_init(database_t *db) {
 
     /* Create execution metrics collection */
     if (!db_collection_exists(db, JS_EXECUTION_METRICS_COLLECTION)) {
-        if (!db_create_collection(db, JS_EXECUTION_METRICS_COLLECTION)) {
+        if (db_create_collection(db, JS_EXECUTION_METRICS_COLLECTION) != 0) {
             LOG_ERROR("Failed to create JavaScript execution metrics collection");
             return 0;
         }

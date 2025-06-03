@@ -325,6 +325,47 @@ int hash_index_search(hash_index_t* index, const void* key, size_t key_len,
     return -1; /* Not found */
 }
 
+/* Delete a key */
+int hash_index_delete(hash_index_t* index, const void* key, size_t key_len) {
+    if (!index || !key) return -1;
+    
+    uint32_t hash = index->hash_fn(key, key_len);
+    uint32_t bucket_index = hash_to_bucket(hash, index->global_depth);
+    
+    pthread_rwlock_rdlock(&index->dir_lock);
+    
+    hash_dir_entry_t* dir_entry = &index->directory[bucket_index];
+    hash_bucket_t* bucket = (hash_bucket_t*)
+        ((char*)index->storage->base_addr + dir_entry->bucket_offset);
+    
+    /* Search for key in bucket */
+    for (uint32_t i = 0; i < bucket->num_entries; i++) {
+        hash_entry_t* entry = (hash_entry_t*)
+            ((char*)bucket + bucket->entry_offsets[i]);
+        
+        if (entry->key_hash == hash && entry->key_len == key_len) {
+            void* entry_key = (char*)(entry + 1);
+            if (memcmp(entry_key, key, key_len) == 0) {
+                /* Found the entry, remove it */
+                
+                /* Shift remaining entries down */
+                for (uint32_t j = i; j < bucket->num_entries - 1; j++) {
+                    bucket->entry_offsets[j] = bucket->entry_offsets[j + 1];
+                }
+                
+                bucket->num_entries--;
+                atomic_fetch_sub(&index->num_keys, 1);
+                
+                pthread_rwlock_unlock(&index->dir_lock);
+                return 0; /* Success */
+            }
+        }
+    }
+    
+    pthread_rwlock_unlock(&index->dir_lock);
+    return -1; /* Not found */
+}
+
 /* Get statistics */
 void hash_index_stats(hash_index_t* index, uint64_t* num_keys,
                      uint64_t* num_buckets, uint64_t* avg_chain_length) {

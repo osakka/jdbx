@@ -250,6 +250,44 @@ void generic_cache_clear(generic_cache_t* cache) {
     pthread_rwlock_unlock(&cache->lock);
 }
 
+/* Remove entry from cache */
+void generic_cache_remove(generic_cache_t* cache, const void* key, size_t key_size) {
+    if (!cache || !key) return;
+    
+    pthread_rwlock_wrlock(&cache->lock);
+    
+    generic_cache_entry_t* entry = find_entry(cache, key, key_size);
+    if (entry) {
+        /* Remove from LRU list */
+        if (entry->prev) entry->prev->next = entry->next;
+        if (entry->next) entry->next->prev = entry->prev;
+        if (entry == cache->head) cache->head = entry->next;
+        if (entry == cache->tail) cache->tail = entry->prev;
+        
+        /* Remove from hash table */
+        uint32_t hash = cache->key_hash(key, key_size);
+        uint32_t bucket = hash % cache->bucket_count;
+        
+        generic_cache_entry_t** ptr = &cache->buckets[bucket];
+        while (*ptr) {
+            if (*ptr == entry) {
+                *ptr = entry->hash_next;
+                break;
+            }
+            ptr = &(*ptr)->hash_next;
+        }
+        
+        /* Free entry */
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        
+        cache->size--;
+    }
+    
+    pthread_rwlock_unlock(&cache->lock);
+}
+
 /* Get statistics */
 void generic_cache_stats(generic_cache_t* cache, uint64_t* hits, 
                         uint64_t* misses, uint64_t* evictions) {

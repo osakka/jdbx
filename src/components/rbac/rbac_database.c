@@ -160,7 +160,7 @@ static int init_rbac_collections(struct database* db) {
     LOG_TRACE("RBAC_DB: Checking collection %zu: %s", i, collections[i]);
     if (!db_collection_exists(db, collections[i])) {
       LOG_TRACE("RBAC_DB: Creating collection: %s", collections[i]);
-      if (!db_create_collection(db, collections[i])) {
+      if (db_create_collection(db, collections[i]) != 0) {
         LOG_ERROR("RBAC_DB: Failed to create collection: %s", collections[i]);
         return 0;
       }
@@ -198,8 +198,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  /* Clean up any duplicate users/roles system-wide */
-  cleanup_all_rbac_duplicates(db);
+  /* No cleanup needed - fresh collections in high-performance mode */
   
   /* Create RBAC system structure */
   rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
