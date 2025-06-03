@@ -1,0 +1,68 @@
+# Makefile for indexed storage benchmark
+
+CC = gcc
+CFLAGS = -Wall -Wextra -I../../src/include -I../../src -O3 -g -D_GNU_SOURCE
+LDFLAGS = -lpthread -lm
+
+# Source files
+BENCH_SRC = benchmark_indexed_storage.c
+STORAGE_SRC = ../../src/components/storage/mmap_storage.c
+BTREE_SRC = ../../src/components/index/btree_disk.c
+HASH_SRC = ../../src/components/index/hash_index.c
+HAZARD_SRC = ../../src/components/lockfree/hazard_pointer.c
+SKIPLIST_SRC = ../../src/components/lockfree/skiplist.c
+CACHE_SRC = ../../src/components/utils/generic_cache.c
+LOGGER_SRC = ../../src/components/utils/logger.c
+
+# Object files
+BENCH_OBJ = benchmark_indexed_storage.o
+STORAGE_OBJ = mmap_storage.o
+BTREE_OBJ = btree_disk.o
+HASH_OBJ = hash_index.o
+HAZARD_OBJ = hazard_pointer.o
+SKIPLIST_OBJ = skiplist.o
+CACHE_OBJ = generic_cache.o
+LOGGER_OBJ = logger.o
+
+# Target
+TARGET = benchmark_indexed
+
+all: $(TARGET)
+
+$(TARGET): $(BENCH_OBJ) $(STORAGE_OBJ) $(BTREE_OBJ) $(HASH_OBJ) $(HAZARD_OBJ) $(SKIPLIST_OBJ) $(CACHE_OBJ) $(LOGGER_OBJ)
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+$(BENCH_OBJ): $(BENCH_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(STORAGE_OBJ): $(STORAGE_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BTREE_OBJ): $(BTREE_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(HASH_OBJ): $(HASH_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(HAZARD_OBJ): $(HAZARD_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(SKIPLIST_OBJ): $(SKIPLIST_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(CACHE_OBJ): $(CACHE_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LOGGER_OBJ): $(LOGGER_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(TARGET) *.o /tmp/jsondb_bench.*
+
+run: $(TARGET)
+	./$(TARGET) 10000
+
+run-large: $(TARGET)
+	./$(TARGET) 100000
+
+.PHONY: all clean run run-large

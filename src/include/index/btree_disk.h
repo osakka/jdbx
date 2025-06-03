@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include "storage/mmap_storage.h"
 #include "utils/skiplist.h"
-#include "utils/cache.h"
+#include "utils/generic_cache.h"
 
 /* Disk-based B+tree for efficient range queries and sorted access
  * Optimized for SSD with 4KB pages
@@ -69,7 +69,7 @@ typedef struct btree_disk {
     uint64_t num_keys;
     
     /* Node cache for hot nodes */
-    cache_t* node_cache;
+    generic_cache_t* node_cache;
     
     /* Write buffer for batching updates */
     skiplist_t* write_buffer;

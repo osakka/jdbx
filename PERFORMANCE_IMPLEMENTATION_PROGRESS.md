@@ -69,11 +69,35 @@ This document tracks the implementation progress of the performance optimization
    - Node cache for hot paths
    - Cursor support for range scans
 
+2. **B+Tree Implementation** (`src/components/index/btree_disk.c`)
+   - Complete implementation with split/merge
+   - Write buffer for batch operations
+   - Generic cache integration
+   - Flush buffer functionality
+
+3. **Hash Index** (`src/components/index/hash_index.c/h`)
+   - Extendible hashing for dynamic growth
+   - O(1) point queries
+   - Bucket splitting for overflow handling
+   - Directory-based structure
+
+4. **Generic Cache** (`src/components/utils/generic_cache.c/h`)
+   - LRU eviction policy
+   - Thread-safe operations
+   - Used by B+tree for node caching
+
+#### 🔄 In Progress
+
+1. **Index Testing and Debugging**
+   - Segmentation faults in complex scenarios
+   - Need to validate B+tree operations
+   - Performance benchmarking
+
 #### 📋 TODO
 
-1. **B+Tree Implementation** (`src/components/index/btree_disk.c`)
-2. **Bitmap Index** for low-cardinality fields
-3. **Index integration** with query engine
+1. **Bitmap Index** for low-cardinality fields
+2. **Index integration** with query engine
+3. **Query result caching**
 
 ### Phase 3: Query Optimization Engine
 
