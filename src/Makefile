@@ -123,7 +123,7 @@ ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/com
            $(THREAD_POOL_OBJ)
 
 # Build static library
-libjsondb: $(ALL_OBJS)
+libjsondb: $(OPTIMIZED_OBJS)
 	@echo "Creating libjsondb.a with optimized implementations..."
 	ar rcs $(LIB_DIR)/libjsondb.a $(OPTIMIZED_OBJS)
 

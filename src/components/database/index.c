@@ -212,7 +212,7 @@ static char* json_value_to_string(json_value_t* value) {
 }
 
 /* Create a new index */
-index_t* db_create_index(database_t* db, const char* collection, const char* name,
+index_t* db_create_index_old(database_t* db, const char* collection, const char* name,
              const char* field_path, index_type_t type) {
   if (!db || !collection || !name || !field_path) {
     LOG_ERROR("create index: invalid params",
@@ -402,7 +402,7 @@ static void free_index_entry(index_entry_t* entry) {
 }
 
 /* Drop an index */
-int db_drop_index(database_t* db, const char* collection, const char* name) {
+int db_drop_index_old(database_t* db, const char* collection, const char* name) {
   if (!db || !collection || !name) {
     LOG_ERROR("drop index: Invalid parameters (db: %p, collection: %s, name: %s)",
          db, collection ? collection : "NULL", name ? name : "NULL");
@@ -523,7 +523,7 @@ index_t* db_get_index(database_t* db, const char* collection, const char* name) 
 }
 
 /* List all indexes for a collection */
-json_value_t* db_list_indexes(database_t* db, const char* collection) {
+json_value_t* db_list_indexes_old(database_t* db, const char* collection) {
   if (!db || !collection) {
     return NULL;
   }

@@ -588,7 +588,7 @@ void handle_client(void* client_data) {
   
   if (g_logger) {
     LOG_TRACE("API_DISPATCH_RESULT: response=%p, status=%d", 
-        (void*)response, response ? response->status : -1);
+        (void*)response, response ? (int)response->status : -1);
   }
   
   /* If no response from API handler, return 404 */

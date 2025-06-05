@@ -1,0 +1,28 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -g -O0 -pthread -I../../src/include -I../../build/include
+LDFLAGS = -pthread -lm
+
+SRCS = test_split_tracking.c \
+       ../../src/components/index/hash_index.c \
+       ../../src/components/storage/mmap_storage.c \
+       ../../src/components/utils/logger.c
+
+OBJS = $(SRCS:.c=.o)
+TARGET = test_split_tracking
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+run: $(TARGET)
+	rm -f /tmp/test_split.idx /tmp/test_split_tracking.log
+	./$(TARGET)
+
+.PHONY: all clean run

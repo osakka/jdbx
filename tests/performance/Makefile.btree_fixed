@@ -1,0 +1,21 @@
+# Makefile for B+Tree safety test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../../src/include -I../../src
+LDFLAGS = -L../../build/lib -ljsondb -lpthread -lm -lssl -lcrypto
+
+TARGET = test_btree_fixed
+SOURCES = test_btree_fixed.c
+
+all: $(TARGET)
+
+$(TARGET): $(SOURCES)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET)
+
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean run

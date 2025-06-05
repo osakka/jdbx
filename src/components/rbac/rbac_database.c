@@ -29,119 +29,9 @@ static char* generate_document_id(void) {
   return id;
 }
 
-/* Clean up ALL duplicate users and roles (not just admin) */
-static void cleanup_all_rbac_duplicates(struct database* db) {
-  LOG_INFO("RBAC_DB: Cleaning up all duplicate users and roles");
-  
-  /* Get all users and group by username */
-  json_value_t* empty_query = json_create_object();
-  json_value_t* all_users = db_query_documents(db, RBAC_USERS_COLLECTION, empty_query);
-  json_free(empty_query);
-  
-  if (all_users) {
-    json_value_t* documents = json_object_get(all_users, "documents");
-    if (documents && documents->type == JSON_ARRAY) {
-      /* Track usernames we've seen */
-      json_value_t* seen_usernames = json_create_object();
-      
-      for (size_t i = 0; i < json_array_size(documents); i++) {
-        json_value_t* doc = json_array_get(documents, i);
-        json_value_t* username_val = json_object_get(doc, "username");
-        json_value_t* id_val = json_object_get(doc, "_id");
-        
-        if (username_val && username_val->type == JSON_STRING && 
-          id_val && id_val->type == JSON_STRING) {
-          const char* username = username_val->value.string;
-          const char* doc_id = id_val->value.string;
-          
-          /* Generate expected ID for this username */
-          char* expected_id = strdup(username); /* For comparison with old IDs */
-          if (!expected_id) continue;
-          
-          /* Check if we've seen this username before */
-          json_value_t* seen = json_object_get(seen_usernames, username);
-          if (seen) {
-            /* Duplicate username - delete if not using standardized ID */
-            if (strcmp(doc_id, expected_id) != 0) {
-              LOG_INFO("RBAC_DB: Deleting duplicate user %s with non-standard ID: %s", 
-                  username, doc_id);
-              db_delete_document(db, RBAC_USERS_COLLECTION, doc_id);
-            }
-          } else {
-            /* First time seeing this username */
-            json_object_set(seen_usernames, username, json_create_boolean(1));
-            
-            /* If it doesn't have the standardized ID, we'll need to recreate it */
-            if (strcmp(doc_id, expected_id) != 0) {
-              LOG_INFO("RBAC_DB: User %s has non-standard ID: %s (expected: %s)", 
-                  username, doc_id, expected_id);
-              /* Note: In a production system, we might migrate the data instead of deleting */
-            }
-          }
-          
-          free(expected_id);
-        }
-      }
-      
-      json_free(seen_usernames);
-    }
-    json_free(all_users);
-  }
-  
-  /* Same for roles */
-  empty_query = json_create_object();
-  json_value_t* all_roles = db_query_documents(db, RBAC_ROLES_COLLECTION, empty_query);
-  json_free(empty_query);
-  
-  if (all_roles) {
-    json_value_t* documents = json_object_get(all_roles, "documents");
-    if (documents && documents->type == JSON_ARRAY) {
-      /* Track role names we've seen */
-      json_value_t* seen_roles = json_create_object();
-      
-      for (size_t i = 0; i < json_array_size(documents); i++) {
-        json_value_t* doc = json_array_get(documents, i);
-        json_value_t* name_val = json_object_get(doc, "name");
-        json_value_t* id_val = json_object_get(doc, "_id");
-        
-        if (name_val && name_val->type == JSON_STRING && 
-          id_val && id_val->type == JSON_STRING) {
-          const char* rolename = name_val->value.string;
-          const char* doc_id = id_val->value.string;
-          
-          /* Generate expected ID for this role */
-          char* expected_id = strdup(rolename); /* For comparison with old IDs */
-          if (!expected_id) continue;
-          
-          /* Check if we've seen this role before */
-          json_value_t* seen = json_object_get(seen_roles, rolename);
-          if (seen) {
-            /* Duplicate role - delete if not using standardized ID */
-            if (strcmp(doc_id, expected_id) != 0) {
-              LOG_INFO("RBAC_DB: Deleting duplicate role %s with non-standard ID: %s", 
-                  rolename, doc_id);
-              db_delete_document(db, RBAC_ROLES_COLLECTION, doc_id);
-            }
-          } else {
-            /* First time seeing this role */
-            json_object_set(seen_roles, rolename, json_create_boolean(1));
-            
-            /* If it doesn't have the standardized ID, log it */
-            if (strcmp(doc_id, expected_id) != 0) {
-              LOG_INFO("RBAC_DB: Role %s has non-standard ID: %s (expected: %s)", 
-                  rolename, doc_id, expected_id);
-            }
-          }
-          
-          free(expected_id);
-        }
-      }
-      
-      json_free(seen_roles);
-    }
-    json_free(all_roles);
-  }
-}
+/* Note: cleanup_all_rbac_duplicates function removed as it was unused.
+ * If duplicate cleanup is needed in the future, implement it as part of
+ * the regular RBAC maintenance operations. */
 
 /* Initialize RBAC database collections */
 static int init_rbac_collections(struct database* db) {
@@ -177,7 +67,6 @@ static int init_rbac_collections(struct database* db) {
 
 /* Forward declarations */
 /* Removed old ID generation forward declarations - using generate_document_id() now */
-static void cleanup_all_rbac_duplicates(struct database* db);
 static int create_default_admin_role(struct database* db);
 static int create_default_admin_user(struct database* db);
 
@@ -222,7 +111,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  /* Create default admin role if it doesn't exist */
+  /* Create default admin role and user */
   if (!create_default_admin_role(db)) {
     LOG_ERROR("RBAC_DB: Failed to create default admin role");
     json_free(rbac->users);
@@ -231,7 +120,6 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  /* Create default admin user if it doesn't exist */
   if (!create_default_admin_user(db)) {
     LOG_ERROR("RBAC_DB: Failed to create default admin user");
     json_free(rbac->users);
@@ -324,10 +212,9 @@ int create_default_admin_role(struct database* db) {
     return 0;
   }
   
-  const char* role_id = json_get_string(json_object_get(result, "_id"));
   json_free(result);
   
-  LOG_TRACE("RBAC_DB: Admin role created with ID: %s", role_id ? role_id : "(null)");
+  LOG_TRACE("RBAC_DB: Admin role created successfully");
   return 1;
 }
 

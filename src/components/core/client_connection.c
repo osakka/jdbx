@@ -12,7 +12,6 @@
 
 /* Global connection manager */
 static connection_manager_t *g_connection_manager = NULL;
-static pthread_once_t manager_init_once = PTHREAD_ONCE_INIT;
 
 /* === INTERNAL HELPER FUNCTIONS === */
 

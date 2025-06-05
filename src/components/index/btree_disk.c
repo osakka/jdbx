@@ -46,8 +46,8 @@ static btree_node_t* load_node(btree_disk_t* tree, uint64_t page_id) {
     atomic_fetch_add(&tree->cache_misses, 1);
     
     /* Load from disk */
-    if (page_id >= tree->storage->mapped_size) {
-        LOG_ERROR("Invalid page_id %lu", page_id);
+    if (page_id == 0 || page_id + BTREE_PAGE_SIZE > tree->storage->mapped_size) {
+        LOG_ERROR("Invalid page_id %lu (mapped_size=%zu)", page_id, tree->storage->mapped_size);
         return NULL;
     }
     
@@ -263,20 +263,22 @@ static int insert_non_full(btree_disk_t* tree, btree_node_t* node,
         /* Insert new key */
         memcpy(node->key_data + insert_offset, key, key_len);
         
-        /* Update offsets and pointers */
+        /* Update offsets and pointers - shift existing entries */
         for (uint16_t i = node->num_keys; i > index; i--) {
-            node->key_offsets[i] = node->key_offsets[i-1] + key_len;
+            node->key_offsets[i] = node->key_offsets[i-1];
             node->key_lengths[i] = node->key_lengths[i-1];
             node->pointers[i] = node->pointers[i-1];
         }
         
-        if (index < node->num_keys) {
-            node->key_offsets[index+1] = node->key_offsets[index] + key_len;
-        }
-        
+        /* Set the new key's offset and length */
         node->key_offsets[index] = insert_offset;
         node->key_lengths[index] = key_len;
         node->pointers[index] = value;
+        
+        /* Update offsets for keys after the inserted one */
+        for (uint16_t i = index + 1; i <= node->num_keys; i++) {
+            node->key_offsets[i] += key_len;
+        }
         node->num_keys++;
         
         return 0;
@@ -295,6 +297,10 @@ static int insert_non_full(btree_disk_t* tree, btree_node_t* node,
             void* split_key = btree_node_get_key(node, index);
             if (tree->compare(key, key_len, split_key, node->key_lengths[index]) > 0) {
                 child = load_node(tree, node->pointers[index + 1]);
+                if (!child) {
+                    LOG_ERROR("Failed to load child node after split");
+                    return -1;
+                }
             }
         }
         
@@ -384,6 +390,8 @@ int btree_disk_insert(btree_disk_t* tree, const void* key, size_t key_len,
                      uint64_t value_offset) {
     if (!tree || !key) return -1;
     
+    LOG_DEBUG("btree_disk_insert: key_len=%zu, value_offset=%lu", key_len, value_offset);
+    
     /* Add to write buffer first */
     size_t entry_size = sizeof(write_buffer_entry_t) + key_len;
     
@@ -409,10 +417,11 @@ int btree_disk_insert(btree_disk_t* tree, const void* key, size_t key_len,
     entry->value_offset = value_offset;
     entry->type = WB_INSERT;
     
-    /* Add to skip list */
-    if (skiplist_insert(tree->write_buffer, key, key_len, entry, sizeof(void*))) {
+    /* Add to skip list - store pointer to entry */
+    if (skiplist_insert(tree->write_buffer, key, key_len, &entry, sizeof(void*))) {
         atomic_fetch_add(&tree->current_buffer_size, entry_size);
         tree->num_keys++;
+        LOG_DEBUG("Successfully added to write buffer");
         return 0;
     }
     
@@ -427,12 +436,15 @@ int btree_disk_search(btree_disk_t* tree, const void* key, size_t key_len,
     if (!tree || !key || !value_offset) return -1;
     
     /* Check write buffer first */
+    LOG_DEBUG("Checking write buffer for key of length %zu", key_len);
     size_t entry_size;
     write_buffer_entry_t** entry_ptr = (write_buffer_entry_t**)
         skiplist_search(tree->write_buffer, key, key_len, &entry_size);
     
     if (entry_ptr && *entry_ptr) {
         write_buffer_entry_t* entry = *entry_ptr;
+        LOG_DEBUG("Found key in write buffer, type=%d, value_offset=%lu", 
+                  entry->type, entry->value_offset);
         if (entry->type == WB_INSERT) {
             *value_offset = entry->value_offset;
             free(entry_ptr);
@@ -442,11 +454,17 @@ int btree_disk_search(btree_disk_t* tree, const void* key, size_t key_len,
             return -1; /* Deleted */
         }
         free(entry_ptr);
+    } else {
+        LOG_DEBUG("Key not found in write buffer, searching tree");
     }
     
     /* Search in tree */
+    LOG_DEBUG("Searching for key in B+tree, root_page_id=%lu", tree->root_page_id);
     btree_node_t* node = load_node(tree, tree->root_page_id);
-    if (!node) return -1;
+    if (!node) {
+        LOG_ERROR("Failed to load root node, root_page_id=%lu", tree->root_page_id);
+        return -1;
+    }
     
     while (node->type != BTREE_LEAF) {
         uint16_t index = find_child_index(node, key, key_len, tree->compare);

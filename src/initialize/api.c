@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* External function for batch API */
+extern void register_batch_api_routes(void);
+
 /* Initialize API context and register routes */
 init_status_t init_api(server_config_t* config, database_t* database, 
           rbac_system_t* rbac, api_context_t** api_ctx_out) {
@@ -92,6 +95,8 @@ init_status_t init_api(server_config_t* config, database_t* database,
     }
   }
   
+  /* TODO: Register batch API endpoints */
+  /* Batch API will be integrated into main API routes */
   
   INIT_LOG_SUCCESS("API", "API context initialized with all routes successfully");
   

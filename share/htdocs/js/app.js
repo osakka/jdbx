@@ -643,19 +643,29 @@ function hasDataChanged(newData) {
 async function loadCollections() {
     try {
         const response = await apiRequest('/api/collections');
-        let collectionsData = Array.isArray(response) ? response : (response.collections || []);
         
-        // Ensure we don't have mixed formats that could cause issues
-        const collections = collectionsData.map(item => {
+        // Handle both formats: standard and array
+        let collectionsData = Array.isArray(response) ? response : (response.collections || []);
+        collectionsData = collectionsData.map(item => {
             if (typeof item === 'string') {
                 return { name: item, documentCount: 0, isSystem: item.startsWith('_') };
             }
+            // Handle both documentCount and document_count
+            if (item.document_count !== undefined && item.documentCount === undefined) {
+                item.documentCount = item.document_count;
+            }
+            item.isSystem = item.name && item.name.startsWith('_');
             return item;
         });
         
-        if (previousData.totalCollections !== collections.length) {
-            document.getElementById('statTotalCollections').textContent = collections.length;
-            previousData.totalCollections = collections.length;
+        const collections = collectionsData;
+        
+        // Use total from response if available (ultra-fast format)
+        const totalCollections = response.total || collections.length;
+        
+        if (previousData.totalCollections !== totalCollections) {
+            document.getElementById('statTotalCollections').textContent = totalCollections;
+            previousData.totalCollections = totalCollections;
         }
         
         let totalDocuments = 0;
@@ -716,17 +726,31 @@ async function loadSystemHealth() {
         const health = await apiRequest('/api/health').catch(() => null);
         
         if (health && health.status === 'ok') {
-            const memoryUsagePercent = ((health.memory.used_kb / health.memory.total_kb) * 100).toFixed(1);
-            document.getElementById('cpuUsage').textContent = `${(health.load_average || 0).toFixed(1)}%`;
+            // Handle both old and new formats
+            const memory = health.memory || health.mem || {};
+            const memoryUsagePercent = memory.used_kb && memory.total_kb ? 
+                ((memory.used_kb / memory.total_kb) * 100).toFixed(1) : '0';
+            const loadPercent = health.load_average ? health.load_average.toFixed(1) : '0';
+            
+            document.getElementById('cpuUsage').textContent = `${loadPercent}%`;
             document.getElementById('memoryUsage').textContent = `${memoryUsagePercent}%`;
             
-            // Show real API latency from metrics
+            // Show latency
             let apiLatency = 'N/A';
-            if (health.metrics && health.metrics.performance && health.metrics.performance.avg_response_time_ms) {
-                apiLatency = `${health.metrics.performance.avg_response_time_ms.toFixed(2)}ms`;
+            if (health.latency_us) {
+                apiLatency = `${(health.latency_us / 1000).toFixed(2)}ms`;
             }
             document.getElementById('apiLatency').textContent = apiLatency;
-            document.getElementById('uptime').textContent = health.uptime || 'N/A';
+            
+            // Calculate uptime from seconds
+            if (health.up) {
+                const days = Math.floor(health.up / 86400);
+                const hours = Math.floor((health.up % 86400) / 3600);
+                const minutes = Math.floor((health.up % 3600) / 60);
+                document.getElementById('uptime').textContent = `${days}d ${hours}h ${minutes}m`;
+            } else {
+                document.getElementById('uptime').textContent = 'N/A';
+            }
         } else {
             document.getElementById('cpuUsage').textContent = 'N/A';
             document.getElementById('memoryUsage').textContent = 'N/A';

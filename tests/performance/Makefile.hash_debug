@@ -1,0 +1,33 @@
+# Makefile for hash debug test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -pthread -I../../src/include -DDEBUG
+LDFLAGS = -pthread -lm
+
+BUILD_DIR = ../../build/obj/components
+
+TARGET = test_hash_debug
+
+OBJS = test_hash_debug.o \
+       $(BUILD_DIR)/index/hash_index.o \
+       $(BUILD_DIR)/storage/mmap_storage.o \
+       $(BUILD_DIR)/utils/logger.o
+
+.PHONY: all clean run
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+test_hash_debug.o: test_hash_debug.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: $(TARGET)
+	@echo "Running hash debug test..."
+	@rm -rf /tmp/test_hash.* /tmp/test_hash_debug.log
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET) *.o
+	rm -rf /tmp/test_hash.*

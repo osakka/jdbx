@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 
 # Environment file paths (absolute paths, in order of preference)
 ENV_FILES=(
-    "/opt/jsondb/var/jsondb.env"           # Running configuration
+    "/opt/jsondb/build/var/jsondb.env"     # Running configuration
     "/opt/jsondb/share/config/jsondb.env"  # Template defaults (if running config doesn't exist)
 )
 
@@ -25,7 +25,7 @@ done
 # Set default values if not defined in environment
 : ${JSONDB_PORT:=5000}
 : ${JSONDB_HOST:="0.0.0.0"}
-: ${JSONDB_LOG_LEVEL:="info"}
+: ${JSONDB_LOG_LEVEL:="trace"}
 
 # SSL configuration
 : ${JSONDB_USE_SSL:="true"}
@@ -39,7 +39,7 @@ done
 : ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
 
 # Updated paths for v2.0.0 binary persistence
-: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/database.jdb"}
+: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/data"}
 : ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/rbac.json"}
 : ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb.log"}
 : ${JSONDB_PID_FILE:="${JSONDB_VAR_DIR}/jsondb.pid"}

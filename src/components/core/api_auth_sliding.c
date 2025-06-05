@@ -1,5 +1,6 @@
 #include "api/api.h"
 #include "rbac/jwt.h"
+#include "rbac/jwt_cache.h"
 #include "rbac/rbac_database.h"
 #include "database/database.h"
 #include "utils/logger.h"
@@ -156,6 +157,26 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     }
   }
   
+  /* Check JWT cache first */
+  jwt_payload_t* cached_payload = jwt_cache_get(token);
+  if (cached_payload) {
+    /* Extract username from claims if available */
+    const char* username = "unknown";
+    if (cached_payload->claims) {
+      json_value_t* username_val = json_object_get(cached_payload->claims, "username");
+      if (username_val && username_val->type == JSON_STRING) {
+        username = username_val->value.string;
+      }
+    }
+    if (g_logger) LOG_DEBUG("JWT cache hit - token valid for user: %s", username);
+    
+    /* Extend session expiration for sliding sessions */
+    extend_session_expiration(ctx, token);
+    
+    free(token);
+    return 1;
+  }
+  
   /* Verify JWT secret is set */
   if (!ctx->jwt_secret) {
     if (g_logger) {
@@ -235,6 +256,26 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     if (g_logger) {
       LOG_INFO("AUTH_FLOW_SUCCESS: client=%s, token_valid=yes, session_found=%s, user=%s", 
           client_ip, session_found ? "yes" : "no", session_user);
+    }
+    
+    /* Decode token to cache payload */
+    jwt_token_t* decoded = jwt_decode(token);
+    if (decoded && decoded->payload) {
+      /* Note: jwt_cache_put takes ownership of payload, so we need to duplicate */
+      jwt_payload_t* payload_copy = jwt_payload_duplicate(decoded->payload);
+      if (payload_copy) {
+        /* Extract username from claims */
+        const char* username = NULL;
+        if (decoded->payload->claims) {
+          json_value_t* username_val = json_object_get(decoded->payload->claims, "username");
+          if (username_val && username_val->type == JSON_STRING) {
+            username = username_val->value.string;
+          }
+        }
+        jwt_cache_put(token, payload_copy, username, decoded->payload->sub);
+        if (g_logger) LOG_DEBUG("JWT cached for user: %s", username ? username : "unknown");
+      }
+      jwt_free(decoded);
     }
     
     /* Extend session expiration on successful authentication */

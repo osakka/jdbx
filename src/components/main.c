@@ -1,6 +1,8 @@
 #include "init.h"
 #include "utils/logger.h"
 #include "core/server_thread_safe.h"
+#include "rbac/jwt_cache.h"
+#include "utils/production_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -267,6 +269,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   
+  /* Initialize production configuration before database */
+  const char* config_level = getenv("JSONDB_CONFIG_LEVEL");
+  if (!config_level) {
+    config_level = "development";  /* Default to development */
+  }
+  LOG_INFO("Initializing production configuration: %s", config_level);
+  production_config_init(config_level);
+  
   /* Now that we have a socket and proper daemon context, initialize the database */
   LOG_DEBUG("Initializing Database");
   status = init_database(config, &database);
@@ -289,6 +299,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   
+  /* Initialize thread-safe server components */
+  LOG_DEBUG("Initializing thread-safe server components");
+  if (server_init_thread_safe(config) != 0) {
+    INIT_LOG_FAILURE("MAIN", "Failed to initialize thread-safe server components");
+    free(config);
+    return 1;
+  }
+  
   /* Initialize metrics system */
   LOG_DEBUG("Initializing Metrics");
   status = init_metrics(config);
@@ -303,6 +321,14 @@ int main(int argc, char** argv) {
   status = init_rbac(config, database, &rbac, &rbac_ref);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize RBAC system");
+    free(config);
+    return 1;
+  }
+  
+  /* Initialize JWT cache for performance */
+  LOG_DEBUG("Initializing JWT cache");
+  if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
+    INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
     free(config);
     return 1;
   }

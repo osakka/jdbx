@@ -4,6 +4,7 @@
 #include "database/database.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
+#include "rbac/jwt_cache.h"
 #include "rbac/rbac_database.h"
 #include "utils/metrics.h"
 #include "utils/logger.h"
@@ -38,9 +39,9 @@ api_route_t routes[] = {
   {"/api/sessions/active", HTTP_GET, api_handle_get_active_sessions, 1},
   {"/api/sessions/", HTTP_POST, api_handle_session_terminate, 1},
   
-  /* Collection routes - TEMP: auth disabled for persistence testing */
-  {"/api/collections", HTTP_GET, api_handle_collections_list, 0},
-  {"/api/collections", HTTP_POST, api_handle_collection_create, 0},
+  /* Collection routes */
+  {"/api/collections", HTTP_GET, api_handle_collections_list, 1},
+  {"/api/collections", HTTP_POST, api_handle_collection_create, 1},
   
   /* Document routes - TEMP: auth disabled for persistence testing */
   /* NOTE: More specific routes must come before general ones for proper matching */
@@ -405,7 +406,23 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     }
   }
   
-  /* Verify JWT secret is set */
+  /* Check JWT cache first */
+  jwt_payload_t* cached_payload = jwt_cache_get(token);
+  if (cached_payload) {
+    /* Extract username from claims if available */
+    const char* username = "unknown";
+    if (cached_payload->claims) {
+      json_value_t* username_val = json_object_get(cached_payload->claims, "username");
+      if (username_val && username_val->type == JSON_STRING) {
+        username = username_val->value.string;
+      }
+    }
+    if (g_logger) LOG_DEBUG("JWT cache hit - token valid for user: %s", username);
+    free(token);
+    return 1;
+  }
+  
+  /* Cache miss - verify JWT secret is set */
   if (!ctx->jwt_secret) {
     if (g_logger) LOG_ERROR("Authentication failed: JWT secret not set in API context");
     free(token);
@@ -413,12 +430,31 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
   }
   
   /* Verify token */
-  if (g_logger) LOG_DEBUG("Using JWT secret: '%s'", ctx->jwt_secret);
+  if (g_logger) LOG_DEBUG("JWT cache miss - verifying token");
   
   int result = jwt_verify(token, ctx->jwt_secret);
   
   if (result) {
     if (g_logger) LOG_DEBUG("Token authentication successful");
+    
+    /* Decode token to cache payload */
+    jwt_token_t* decoded = jwt_decode(token);
+    if (decoded && decoded->payload) {
+      /* Note: jwt_cache_put takes ownership of payload, so we need to duplicate */
+      jwt_payload_t* payload_copy = jwt_payload_duplicate(decoded->payload);
+      if (payload_copy) {
+        /* Extract username from claims */
+        const char* username = NULL;
+        if (decoded->payload->claims) {
+          json_value_t* username_val = json_object_get(decoded->payload->claims, "username");
+          if (username_val && username_val->type == JSON_STRING) {
+            username = username_val->value.string;
+          }
+        }
+        jwt_cache_put(token, payload_copy, username, decoded->payload->sub);
+      }
+      jwt_free(decoded);
+    }
   } else {
     if (g_logger) {
       LOG_ERROR("Token verification failed");
@@ -978,7 +1014,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   const char* name = name_val->value.string;
   
   /* Create collection */
-  if (!db_create_collection(ctx->db, name)) {
+  if (db_create_collection(ctx->db, name) != 0) {
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create collection\"}", "application/json");
@@ -1012,7 +1048,7 @@ http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* 
   }
   
   /* Drop collection */
-  if (!db_drop_collection(ctx->db, name)) {
+  if (db_drop_collection(ctx->db, name) != 0) {
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }

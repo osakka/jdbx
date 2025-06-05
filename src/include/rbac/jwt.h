@@ -59,4 +59,9 @@ void jwt_set_jwt_id(jwt_token_t* token, const char* jti);
 void jwt_add_claim(jwt_token_t* token, const char* key, json_value_t* value);
 json_value_t* jwt_get_claim(jwt_token_t* token, const char* key);
 
+/* JWT payload operations */
+void jwt_payload_free(jwt_payload_t* payload);
+jwt_payload_t* jwt_payload_duplicate(const jwt_payload_t* payload);
+void jwt_payload_set_username(jwt_payload_t* payload, const char* username);
+
 #endif /* JWT_H */

@@ -1,0 +1,59 @@
+# Makefile for hash bucket split test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -pthread -I../../src/include -DDEBUG
+LDFLAGS = -pthread -lm
+
+# Source directories
+SRC_DIR = ../../src/components
+BUILD_DIR = ../../build/obj/components
+
+# Test executable
+TARGET = test_hash_bucket_split
+
+# Object files needed for the test
+OBJS = test_hash_bucket_split.o \
+       $(BUILD_DIR)/database/database.o \
+       $(BUILD_DIR)/storage/mmap_storage.o \
+       $(BUILD_DIR)/index/hash_index.o \
+       $(BUILD_DIR)/index/btree_disk.o \
+       $(BUILD_DIR)/utils/json.o \
+       $(BUILD_DIR)/utils/json_helpers.o \
+       $(BUILD_DIR)/utils/json_deep_copy.o \
+       $(BUILD_DIR)/utils/logger.o \
+       $(BUILD_DIR)/utils/buffer_pool.o \
+       $(BUILD_DIR)/utils/generic_cache.o \
+       $(BUILD_DIR)/utils/ref_counter.o \
+       $(BUILD_DIR)/utils/skiplist.o \
+       $(BUILD_DIR)/utils/string_pool.o \
+       $(BUILD_DIR)/utils/config_string_pool.o \
+       $(BUILD_DIR)/utils/ref_json.o
+
+.PHONY: all clean run
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+test_hash_bucket_split.o: test_hash_bucket_split.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: $(TARGET)
+	@echo "Running hash bucket split test..."
+	@rm -rf /tmp/test_hash_bucket_split /tmp/test_hash_bucket_split.log
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET) *.o
+	rm -rf /tmp/test_hash_bucket_split /tmp/test_hash_bucket_split.log
+
+analyze-log:
+	@echo "=== Bucket Split Analysis ==="
+	@grep -E "(split_bucket:|Bucket .* is full|Created hash index|Splits:)" /tmp/test_hash_bucket_split.log || echo "No bucket splits found"
+	@echo ""
+	@echo "=== Document Insertion Summary ==="
+	@grep -E "(Thread .* Completed|Total documents in collection:|Verification complete:)" /tmp/test_hash_bucket_split.log
+	@echo ""
+	@echo "=== Errors ==="
+	@grep ERROR /tmp/test_hash_bucket_split.log | tail -20 || echo "No errors found"

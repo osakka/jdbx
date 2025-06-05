@@ -1049,3 +1049,48 @@ int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char
   
   return 1;
 }
+
+/* Free JWT payload */
+void jwt_payload_free(jwt_payload_t* payload) {
+  if (!payload) return;
+  
+  if (payload->iss) buffer_pool_free_safe(payload->iss);
+  if (payload->sub) buffer_pool_free_safe(payload->sub);
+  if (payload->aud) buffer_pool_free_safe(payload->aud);
+  if (payload->jti) buffer_pool_free_safe(payload->jti);
+  if (payload->claims) json_free(payload->claims);
+  
+  buffer_pool_free_safe(payload);
+}
+
+/* Duplicate JWT payload for caching */
+jwt_payload_t* jwt_payload_duplicate(const jwt_payload_t* payload) {
+  if (!payload) return NULL;
+  
+  jwt_payload_t* dup = (jwt_payload_t*)buffer_pool_alloc(sizeof(jwt_payload_t));
+  if (!dup) return NULL;
+  
+  /* Copy all fields */
+  dup->iss = payload->iss ? buffer_pool_strdup(payload->iss) : NULL;
+  dup->sub = payload->sub ? buffer_pool_strdup(payload->sub) : NULL;
+  dup->aud = payload->aud ? buffer_pool_strdup(payload->aud) : NULL;
+  dup->jti = payload->jti ? buffer_pool_strdup(payload->jti) : NULL;
+  dup->claims = payload->claims ? json_clone(payload->claims) : NULL;
+  
+  dup->exp = payload->exp;
+  dup->nbf = payload->nbf;
+  dup->iat = payload->iat;
+  
+  return dup;
+}
+
+/* Set username in JWT payload */
+void jwt_payload_set_username(jwt_payload_t* payload, const char* username) {
+  if (!payload || !username) return;
+  
+  if (!payload->claims) {
+    payload->claims = json_create_object();
+  }
+  
+  json_object_set(payload->claims, "username", json_create_string(username));
+}

@@ -1,0 +1,25 @@
+# Makefile for secondary index test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -I../../src/include -I../../src
+LDFLAGS = -L../../build/lib -ljsondb -lpthread -lm -lssl -lcrypto
+
+TARGET = test_secondary_indexes
+OBJS = test_secondary_indexes.o
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+run: $(TARGET)
+	rm -rf /tmp/test_indexes_db
+	./$(TARGET)
+
+.PHONY: all clean run

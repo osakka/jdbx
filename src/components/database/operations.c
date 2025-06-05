@@ -44,7 +44,7 @@ static char* generate_uuid() {
  * in a clear, step-by-step manner with detailed logging.
  */
 json_value_t* db_insert_document(database_t* db, const char* collection_name, json_value_t* document) {
-  LOG_INFO("Collection '%s'" ? collection_name : "NULL");
+  LOG_INFO("Collection '%s'", collection_name ? collection_name : "NULL");
   
   if (!db || !collection_name || !document || document->type != JSON_OBJECT) {
     LOG_ERROR("Invalid parameters");
@@ -382,7 +382,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
   if (!db->collections || db->collections->type != JSON_OBJECT) {
     if (g_logger) {
       LOG_ERROR("DELETE_FAILED: Invalid collections structure - collections=%p, type=%d", 
-           (void*)db->collections, db->collections ? db->collections->type : -1);
+           (void*)db->collections, db->collections ? (int)db->collections->type : -1);
     }
     pthread_mutex_unlock(&db->lock);
     return 0;
@@ -396,7 +396,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
   if (!collection || collection->type != JSON_ARRAY) {
     if (g_logger) {
       LOG_ERROR("DELETE_FAILED: Collection not found or invalid - collection='%s', found=%p, type=%d", 
-           collection_name, (void*)collection, collection ? collection->type : -1);
+           collection_name, (void*)collection, collection ? (int)collection->type : -1);
     }
     pthread_mutex_unlock(&db->lock);
     return 0;

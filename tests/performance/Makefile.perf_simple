@@ -1,0 +1,24 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -pthread -I../../src/include -I../../build/include
+LDFLAGS = -pthread -lm -lrt
+
+# Link against the optimized library
+LIBS = -L../../build/lib -ljsondb
+
+TARGET = test_perf_simple
+SRC = test_perf_simple.c
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET)
+
+run: $(TARGET)
+	@echo "Running performance test..."
+	@rm -f /tmp/test_perf_simple.log
+	./$(TARGET)
+
+.PHONY: all clean run

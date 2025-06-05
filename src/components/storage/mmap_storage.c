@@ -156,9 +156,8 @@ mmap_storage_t* mmap_storage_create(const char* path, size_t initial_size) {
     
     /* Round up to page size */
     initial_size = (initial_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    if (initial_size < DEFAULT_MMAP_SIZE) {
-        initial_size = DEFAULT_MMAP_SIZE;
-    }
+    /* Don't force minimum size - use what was requested */
+    LOG_TRACE("mmap_storage_create: using size %zu bytes", initial_size);
     
     mmap_storage_t* storage = calloc(1, sizeof(mmap_storage_t));
     if (!storage) {
@@ -321,7 +320,10 @@ void mmap_storage_destroy(mmap_storage_t* storage) {
 /* Store a key-value pair */
 int mmap_storage_put(mmap_storage_t* storage, const void* key, size_t key_len,
                      const void* value, size_t value_len) {
+    LOG_TRACE("mmap_storage_put: key_len=%zu, value_len=%zu", key_len, value_len);
     if (!storage || !key || !value) {
+        LOG_ERROR("mmap_storage_put: invalid params - storage=%p, key=%p, value=%p",
+                  storage, key, value);
         return -1;
     }
     
@@ -333,6 +335,7 @@ int mmap_storage_put(mmap_storage_t* storage, const void* key, size_t key_len,
     
     /* Allocate space */
     uint64_t offset = allocate_space(storage, entry_size);
+    LOG_TRACE("mmap_storage_put: allocated offset=%lu for entry_size=%zu", offset, entry_size);
     if (offset == 0) {
         pthread_rwlock_unlock(&storage->resize_lock);
         LOG_ERROR("Failed to allocate space for document");
@@ -340,6 +343,14 @@ int mmap_storage_put(mmap_storage_t* storage, const void* key, size_t key_len,
     }
     
     /* Write the entry */
+    LOG_TRACE("mmap_storage_put: writing entry at base_addr=%p + offset=%lu", 
+              storage->base_addr, offset);
+    if (offset + entry_size > storage->mapped_size) {
+        LOG_ERROR("mmap_storage_put: offset %lu + size %zu exceeds mapped size %zu", 
+                  offset, entry_size, storage->mapped_size);
+        pthread_rwlock_unlock(&storage->resize_lock);
+        return -1;
+    }
     doc_entry_t* entry = (doc_entry_t*)((char*)storage->base_addr + offset);
     entry->magic = 0x444F4355; /* "DOCU" */
     entry->flags = 0;
@@ -424,6 +435,61 @@ int mmap_storage_get(mmap_storage_t* storage, const void* key, size_t key_len,
     return -1; /* Not found */
 }
 
+/* Get data by offset - for index lookups */
+int mmap_storage_get_by_offset(mmap_storage_t* storage, uint64_t offset,
+                              void** key, size_t* key_len,
+                              void** value, size_t* value_len) {
+    if (!storage || !value || !value_len) {
+        return -1;
+    }
+    
+    pthread_rwlock_rdlock(&storage->resize_lock);
+    
+    /* Validate offset */
+    if (offset + sizeof(doc_entry_t) > storage->header->free_offset) {
+        pthread_rwlock_unlock(&storage->resize_lock);
+        return -1;
+    }
+    
+    doc_entry_t* entry = (doc_entry_t*)((char*)storage->base_addr + offset);
+    
+    /* Validate magic */
+    if (entry->magic != 0x444F4355) { /* "DOCU" */
+        pthread_rwlock_unlock(&storage->resize_lock);
+        return -1;
+    }
+    
+    /* Return key if requested */
+    if (key && key_len) {
+        *key_len = entry->key_len;
+        *key = malloc(entry->key_len);
+        if (!*key) {
+            pthread_rwlock_unlock(&storage->resize_lock);
+            return -1;
+        }
+        memcpy(*key, (char*)(entry + 1), entry->key_len);
+    }
+    
+    /* Return value */
+    *value_len = entry->value_len;
+    *value = malloc(entry->value_len);
+    if (!*value) {
+        if (key && *key) {
+            free(*key);
+        }
+        pthread_rwlock_unlock(&storage->resize_lock);
+        return -1;
+    }
+    
+    memcpy(*value, (char*)(entry + 1) + entry->key_len, entry->value_len);
+    
+    atomic_fetch_add(&storage->read_count, 1);
+    atomic_fetch_add(&storage->cache_hits, 1);
+    
+    pthread_rwlock_unlock(&storage->resize_lock);
+    return 0;
+}
+
 /* Delete a document */
 int mmap_storage_delete(mmap_storage_t* storage, const void* key, size_t key_len) {
     if (!storage || !key) {
@@ -456,20 +522,46 @@ int mmap_storage_delete(mmap_storage_t* storage, const void* key, size_t key_len
                 
                 /* Add to free list */
                 size_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
-                free_entry_t* free_entry = malloc(sizeof(free_entry_t));
-                if (free_entry) {
-                    free_entry->offset = offset;
-                    free_entry->size = entry_size;
-                    
-                    pthread_mutex_lock(&storage->alloc_lock);
-                    free_entry->next = storage->free_list;
-                    storage->free_list = free_entry;
-                    storage->total_free += entry_size;
-                    pthread_mutex_unlock(&storage->alloc_lock);
+                
+                /* Count free list entries to prevent unbounded growth */
+                pthread_mutex_lock(&storage->alloc_lock);
+                int free_count = 0;
+                free_entry_t* temp = storage->free_list;
+                while (temp && free_count < 1000) {
+                    free_count++;
+                    temp = temp->next;
                 }
+                
+                /* Only add to free list if not too long or entry is large enough */
+                if (free_count < 1000 || entry_size >= 1024) {
+                    free_entry_t* free_entry = malloc(sizeof(free_entry_t));
+                    if (free_entry) {
+                        free_entry->offset = offset;
+                        free_entry->size = entry_size;
+                        free_entry->next = storage->free_list;
+                        storage->free_list = free_entry;
+                        storage->total_free += entry_size;
+                    }
+                }
+                pthread_mutex_unlock(&storage->alloc_lock);
                 
                 storage->header->doc_count--;
                 storage->header->deleted_count++;
+                
+                /* Periodic free list cleanup to prevent memory leak */
+                if (storage->header->deleted_count % 1000 == 0) {
+                    pthread_mutex_lock(&storage->alloc_lock);
+                    /* Clear the entire free list - space will be reclaimed on next allocation */
+                    free_entry_t* current = storage->free_list;
+                    while (current) {
+                        free_entry_t* next = current->next;
+                        free(current);
+                        current = next;
+                    }
+                    storage->free_list = NULL;
+                    storage->total_free = 0;
+                    pthread_mutex_unlock(&storage->alloc_lock);
+                }
                 
                 pthread_rwlock_unlock(&storage->resize_lock);
                 return 0;

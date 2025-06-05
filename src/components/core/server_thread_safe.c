@@ -17,21 +17,12 @@ extern void free_http_response(http_response_t* response);
 extern http_response_t* api_dispatch_request(struct api_context* ctx, http_request_t* request);
 extern metric_t* get_server_request_duration_metric(void);
 extern metric_t* get_active_connections_metric(void);
-/* Simple HTTP status text function */
-static const char* http_status_text(int status) {
-    switch (status) {
-        case 200: return "OK";
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 404: return "Not Found";
-        case 500: return "Internal Server Error";
-        default: return "Unknown";
-    }
-}
 extern int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), void* argument);
+
 
 /* Global thread-safe mode flag */
 static int g_thread_safe_mode_enabled = 0;
+
 
 /**
  * Thread-safe client handler that uses the new connection management system
@@ -44,15 +35,18 @@ void handle_client_thread_safe(void* client_data) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
     
-    /* Start request timer for metrics */
+    /* Start request timer for metrics (skip if disabled for performance) */
     timer_context_t* request_timer = NULL;
-    metric_t* request_duration_metric = get_server_request_duration_metric();
+    metric_t* request_duration_metric = NULL;
+    metric_t* active_connections = NULL;
+    
+    request_duration_metric = get_server_request_duration_metric();
     if (request_duration_metric) {
         request_timer = metrics_timer_start(request_duration_metric);
     }
     
     /* Increment active connections */
-    metric_t* active_connections = get_active_connections_metric();
+    active_connections = get_active_connections_metric();
     if (active_connections) {
         metrics_gauge_inc(active_connections, 1.0);
     }
@@ -475,6 +469,7 @@ int server_init_thread_safe(server_config_t *config) {
     
     /* Initialize any additional thread-safe components here */
     LOG_INFO("Thread-safe server components initialized");
+    
     
     return 0;
 }

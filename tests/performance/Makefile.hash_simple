@@ -1,0 +1,36 @@
+# Makefile for simple hash test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -pthread -I../../src/include -DDEBUG
+LDFLAGS = -pthread -lm
+
+BUILD_DIR = ../../build/obj/components
+
+TARGET = test_hash_simple
+
+OBJS = test_hash_simple.o \
+       $(BUILD_DIR)/index/hash_index.o \
+       $(BUILD_DIR)/storage/mmap_storage.o \
+       $(BUILD_DIR)/utils/logger.o
+
+.PHONY: all clean run
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+test_hash_simple.o: test_hash_simple.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: $(TARGET)
+	@echo "Running simple hash test..."
+	@rm -rf /tmp/test_hash_simple.* 
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET) *.o
+	rm -rf /tmp/test_hash_simple.*
+
+check-log:
+	@grep -E "(split_bucket:|Bucket .* is full|ERROR)" /tmp/test_hash_simple.log || echo "No issues found"

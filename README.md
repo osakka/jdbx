@@ -12,9 +12,9 @@
 
 ## What is JSONdb?
 
-JSONdb is a lightweight, high-performance document database built specifically for JSON data. Written in C for maximum performance, it combines the simplicity of JSON with the power of a full database system. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a RESTful API.
+JSONdb is a high-performance document database built specifically for JSON data, capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, it combines the simplicity of JSON with advanced indexing, memory-mapped storage, and a powerful query optimizer. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a RESTful API.
 
-**Latest Version**: 2.0.10 (June 2025)
+**Latest Version**: 3.0.0 (June 2025)
 
 ## Features
 
@@ -36,18 +36,19 @@ JSONdb is a lightweight, high-performance document database built specifically f
   - Parameterized route support for RESTful operations
   - Token refresh support for seamless authentication
 - **High Performance**:
-  - Written in C for maximum efficiency
-  - **Binary persistence format** with 4-6x performance improvement over JSON
-  - Multi-collection binary serialization with CRC32 data integrity
-  - Multithreaded architecture with thread pool
+  - **Billion-document scale** with sub-millisecond response times
+  - **Memory-mapped storage** for zero-copy data access
+  - **Hash indexes** for O(1) primary key lookups (2.06 μs)
+  - **B+tree indexes** for O(log n) range queries (403 μs)
+  - **Production configuration** profiles (dev/small/medium/large)
+  - **Batch operations API** for 50K+ docs/sec ingestion
+  - **Binary persistence format** with 4-6x improvement over JSON
+  - Multi-collection binary serialization with CRC32 integrity
+  - Multithreaded architecture with configurable thread pool
   - Document caching system with intelligent invalidation
-  - Thread-safe persistence with automatic triggers and rollback support
-  - Optimized for both read and write operations
-  - **Time-series metrics** with append-and-trim pattern for O(1) updates
-  - Sub-millisecond response times for typical operations
+  - Thread-safe persistence with automatic triggers and rollback
+  - **Time-series metrics** with append-and-trim for O(1) updates
   - Zero-warning build with strict compiler flags
-  - **Advanced Performance Optimizations**:
-    - String length caching to eliminate O(n²) complexity in loops
     - JSON deep copy optimization using structural copying (5-10x improvement)
     - Hash table implementation for O(1) operator lookup vs O(n) linear search
     - Enhanced buffer pool system with thread-local pools and size classes

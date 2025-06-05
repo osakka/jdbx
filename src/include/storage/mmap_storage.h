@@ -16,7 +16,7 @@
 #define MMAP_VERSION 1
 
 /* Default sizes and limits */
-#define DEFAULT_MMAP_SIZE (1ULL << 30)      /* 1GB initial */
+#define DEFAULT_MMAP_SIZE (1ULL << 24)      /* 16MB initial */
 #define MAX_MMAP_SIZE (1ULL << 40)          /* 1TB max */
 #define PARTITION_COUNT 1024                 /* Default partitions */
 #define PAGE_SIZE 4096                       /* OS page size */
@@ -133,6 +133,9 @@ int mmap_storage_put(mmap_storage_t* storage, const void* key, size_t key_len,
                      const void* value, size_t value_len);
 int mmap_storage_get(mmap_storage_t* storage, const void* key, size_t key_len,
                      void** value, size_t* value_len);
+int mmap_storage_get_by_offset(mmap_storage_t* storage, uint64_t offset,
+                              void** key, size_t* key_len,
+                              void** value, size_t* value_len);
 int mmap_storage_delete(mmap_storage_t* storage, const void* key, size_t key_len);
 
 /* Batch operations for efficiency */

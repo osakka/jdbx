@@ -1,0 +1,16 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -O3 -march=native -I../../src/include
+LDFLAGS = -L../../build/lib -ljsondb -lpthread -lm
+
+.PHONY: all clean
+
+all: load_test_billion
+
+load_test_billion: load_test_billion.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+clean:
+	rm -f load_test_billion
+
+test: load_test_billion
+	./load_test_billion 10000000  # Test with 10M documents first
