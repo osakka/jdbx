@@ -908,7 +908,7 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   const char* proj_key;
   json_value_t* proj_value;
   json_object_foreach(projection, proj_key, proj_value) {
-    if (strcmp(proj_key, "_id") == 0) {
+    if (strcmp(proj_key, "uuid") == 0) {
       continue; /* _id is special, skip it for mode determination */
     }
     
@@ -936,7 +936,7 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   json_value_t* result = json_create_object();
   
   /* Handle _id field specially */
-  json_value_t* id_proj = json_object_get(projection, "_id");
+  json_value_t* id_proj = json_object_get(projection, "uuid");
   int include_id = 1; /* Include by default */
   
   if (id_proj) {
@@ -948,9 +948,9 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   }
   
   if (include_id) {
-    json_value_t* id_value = json_object_get(document, "_id");
+    json_value_t* id_value = json_object_get(document, "uuid");
     if (id_value) {
-      json_object_set(result, "_id", json_clone(id_value));
+      json_object_set(result, "uuid", json_clone(id_value));
     }
   }
   
@@ -958,7 +958,7 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   const char* doc_key;
   json_value_t* doc_value;
   json_object_foreach(document, doc_key, doc_value) {
-    if (strcmp(doc_key, "_id") == 0) {
+    if (strcmp(doc_key, "uuid") == 0) {
       continue; /* Already handled */
     }
     

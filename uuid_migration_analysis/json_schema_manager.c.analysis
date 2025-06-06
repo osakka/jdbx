@@ -1,0 +1,27 @@
+File: /opt/jsondb/src/components/database/json_schema_manager.c
+=
+
+53-      /* Delete existing schema */
+54-      json_value_t* old_doc = json_array_get(docs, 0);
+55:    json_value_t* id_val = json_object_get(old_doc, "_id");
+56-    if (id_val && id_val->type == JSON_STRING) {
+57-      db_delete_document(db, SCHEMAS_COLLECTION, id_val->value.string);
+--
+140-  for (size_t i = 0; i < json_array_size(documents); i++) {
+141-    json_value_t* doc = json_array_get(documents, i);
+142:    json_value_t* id_val = json_object_get(doc, "_id");
+143-    if (id_val && id_val->type == JSON_STRING) {
+144-      if (!db_delete_document(db, SCHEMAS_COLLECTION, id_val->value.string)) {
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+55:    json_value_t* id_val = json_object_get(old_doc, "_id");
+142:    json_value_t* id_val = json_object_get(doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

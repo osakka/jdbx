@@ -40,7 +40,7 @@ int main() {
     json_value_t* doc = json_create_object();
     json_object_set(doc, "name", json_create_string("Test Document"));
     json_object_set(doc, "value", json_create_integer(42));
-    json_object_set(doc, "_id", json_create_string("test-id-123"));
+    json_object_set(doc, "uuid", json_create_string("test-id-123"));
     
     printf("Test document created\n");
     

@@ -373,9 +373,9 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
         json_object_set(result, "success", json_create_boolean(1));
 
         /* Extract ID if available */
-        json_value_t* id = json_object_get(document, "_id");
+        json_value_t* id = json_object_get(document, "uuid");
         if (id && id->type == JSON_STRING) {
-          json_object_set(result, "_id", json_create_string(id->value.string));
+          json_object_set(result, "uuid", json_create_string(id->value.string));
         }
 
         response = http_response_json(result, 201);
@@ -413,7 +413,7 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
       result = json_create_object();
       if (result) {
         json_object_set(result, "success", json_create_boolean(1));
-        json_object_set(result, "_id", json_create_string(doc_id));
+        json_object_set(result, "uuid", json_create_string(doc_id));
         json_object_set(result, "updated", json_create_boolean(1));
 
         response = http_response_json(result, 200);
@@ -448,7 +448,7 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
 
     json_object_set(result, "success", json_create_boolean(1));
     json_object_set(result, "deleted", json_create_boolean(1));
-    json_object_set(result, "_id", json_create_string(doc_id));
+    json_object_set(result, "uuid", json_create_string(doc_id));
 
     response = http_response_json(result, 200);
   }

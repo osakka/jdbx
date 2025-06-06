@@ -151,7 +151,7 @@ int main() {
             /* Pick a random document */
             int idx = i % json_array_size(sample_docs);
             json_t* sample = json_array_get(sample_docs, idx);
-            const char* doc_id = json_string_value(json_object_get(sample, "_id"));
+            const char* doc_id = json_string_value(json_object_get(sample, "uuid"));
             
             double start = get_time_us();
             json_t* result = db_get_document(db, "perf_collection", doc_id);
@@ -184,7 +184,7 @@ int main() {
     if (update_docs && json_array_size(update_docs) > 0) {
         for (int i = 0; i < json_array_size(update_docs) && i < update_count; i++) {
             json_t* doc = json_array_get(update_docs, i);
-            const char* doc_id = json_string_value(json_object_get(doc, "_id"));
+            const char* doc_id = json_string_value(json_object_get(doc, "uuid"));
             
             json_t* update = json_object();
             json_object_set(update, "updated", json_boolean(1));

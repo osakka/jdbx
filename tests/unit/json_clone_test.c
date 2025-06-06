@@ -113,10 +113,10 @@ json_value_t* test_insert_document(test_db_t* db, const char* collection_name, j
 
     printf("  - Adding ID to document\n");
     /* Generate ID if not provided */
-    if (!json_object_has(doc_copy, "_id")) {
+    if (!json_object_has(doc_copy, "uuid")) {
         char* id = test_generate_uuid();
         if (id) {
-            json_object_set(doc_copy, "_id", json_create_string(id));
+            json_object_set(doc_copy, "uuid", json_create_string(id));
             free(id);
         } else {
             printf("  - Failed to generate UUID\n");
@@ -127,7 +127,7 @@ json_value_t* test_insert_document(test_db_t* db, const char* collection_name, j
 
     printf("  - Checking document has ID\n");
     /* Ensure the document has an ID */
-    json_value_t* id = json_object_get(doc_copy, "_id");
+    json_value_t* id = json_object_get(doc_copy, "uuid");
     if (!id || id->type != JSON_STRING) {
         printf("  - Document has no valid ID\n");
         json_free(doc_copy);
@@ -142,7 +142,7 @@ json_value_t* test_insert_document(test_db_t* db, const char* collection_name, j
         json_free(doc_copy);
         return NULL;
     }
-    json_object_set(result, "_id", json_create_string(id->value.string));
+    json_object_set(result, "uuid", json_create_string(id->value.string));
 
     printf("  - Locking database\n");
     /* Lock database */
@@ -231,7 +231,7 @@ int main() {
     alarm(0);  /* Cancel timeout */
 
     if (insert_result) {
-        json_value_t* id_val = json_object_get(insert_result, "_id");
+        json_value_t* id_val = json_object_get(insert_result, "uuid");
         printf("SUCCESS: Document inserted with ID: %s\n", id_val->value.string);
         json_free(insert_result);
     } else {

@@ -272,7 +272,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
       json_value_t* sanitized = json_create_object();
       
       /* Copy user fields */
-      json_value_t* id = json_object_get(user, "_id");
+      json_value_t* id = json_object_get(user, "uuid");
       json_value_t* username = json_object_get(user, "username");
       json_value_t* cn = json_object_get(user, "cn");
       json_value_t* email = json_object_get(user, "email");
@@ -729,7 +729,7 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
       json_value_t* role_data = json_create_object();
       
       /* Copy role fields */
-      json_value_t* id = json_object_get(role, "_id");
+      json_value_t* id = json_object_get(role, "uuid");
       json_value_t* name = json_object_get(role, "name");
       json_value_t* cn = json_object_get(role, "cn");
       json_value_t* description = json_object_get(role, "description");
@@ -784,7 +784,7 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
                 if (user_role && user_role->type == JSON_STRING &&
                   strcmp(user_role->value.string, role_id) == 0) {
                   /* User has this role, add user ID to array */
-                  json_value_t* user_id = json_object_get(user, "_id");
+                  json_value_t* user_id = json_object_get(user, "uuid");
                   if (user_id && user_id->type == JSON_STRING) {
                     json_array_append(computed_users, json_create_string(user_id->value.string));
                   }
@@ -1455,7 +1455,7 @@ http_response_t* api_handle_rbac_get_permissions(api_context_t* ctx, http_reques
     json_value_t* role_obj = json_create_object();
     
     /* Copy role basic info */
-    json_value_t* id = json_object_get(role_doc, "_id");
+    json_value_t* id = json_object_get(role_doc, "uuid");
     json_value_t* name = json_object_get(role_doc, "name");
     json_value_t* description = json_object_get(role_doc, "description");
     json_value_t* permissions = json_object_get(role_doc, "permissions");

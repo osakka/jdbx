@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
         }
         
         printf("Document inserted with ID: %s\n", 
-               json_get_string(json_object_get(result, "_id")));
+               json_get_string(json_object_get(result, "uuid")));
         
         json_free(result);
         printf("Insert completed successfully\n");

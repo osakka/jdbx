@@ -1,0 +1,20 @@
+File: /opt/jsondb/tests/performance/test_batch_insert.c
+=
+
+90-    for (int i = 0; i < 50; i++) {
+91-        json_value_t* doc = json_create_object();
+92:        json_object_set(doc, "_id", json_create_string("unique_doc"));
+93-        json_object_set(doc, "value", json_create_integer(i));
+94-        json_array_append(dup_batch, doc);
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+92:        json_object_set(doc, "_id", json_create_string("unique_doc"));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

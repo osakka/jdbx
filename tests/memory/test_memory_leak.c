@@ -51,7 +51,7 @@ int main() {
         char* doc_id = NULL;
         
         if (result) {
-            json_value_t* id_val = json_object_get(result, "_id");
+            json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
                 doc_id = strdup(id_val->value.string);
             }

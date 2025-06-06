@@ -1,0 +1,20 @@
+File: /opt/jsondb/src/components/core/api.c
+=
+
+1221-  json_value_t* id_field = json_object_get(document, "uuid");
+1222-  if (!id_field) {
+1223:    id_field = json_object_get(document, "_id"); /* Legacy support */
+1224-  }
+1225-  json_value_t* result = NULL;
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+1223:    id_field = json_object_get(document, "_id"); /* Legacy support */
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

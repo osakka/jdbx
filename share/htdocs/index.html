@@ -502,6 +502,68 @@
                 border-bottom: 1px solid var(--border-color);
             }
         }
+        
+        /* Terminal Panel Styles */
+        .terminal-panel {
+            background-color: #1a1a1a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            min-height: 400px;
+            max-height: 600px;
+            overflow: hidden;
+        }
+        
+        .terminal-content {
+            padding: 1rem;
+            color: #00ff00;
+            font-size: 14px;
+            line-height: 1.4;
+            height: 100%;
+            overflow-y: auto;
+            max-height: 568px;
+        }
+        
+        .terminal-line {
+            margin-bottom: 4px;
+            word-wrap: break-word;
+        }
+        
+        .terminal-prompt {
+            color: #00aaff;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .terminal-text {
+            color: #ffffff;
+        }
+        
+        .terminal-success {
+            color: #00ff00;
+        }
+        
+        .terminal-error {
+            color: #ff4444;
+        }
+        
+        .terminal-info {
+            color: #00aaff;
+        }
+        
+        .terminal-warning {
+            color: #ffaa00;
+        }
+        
+        /* Dark theme support for terminal */
+        [data-theme="dark"] .terminal-panel {
+            background-color: #0d1117;
+            border-color: #30363d;
+        }
+        
+        [data-theme="dark"] .terminal-text {
+            color: #e6edf3;
+        }
     </style>
 </head>
 <body>
@@ -578,7 +640,12 @@
                         <div class="stat-icon">
                             <i class="bi bi-collection"></i>
                         </div>
-                        <div class="stat-value" id="statTotalCollections">0</div>
+                        <div class="stat-value">
+                            <span id="statTotalCollections">0</span>
+                            <small class="text-muted" style="font-size: 0.6em;">
+                                (<span id="statUserCollections">0</span> user / <span id="statSystemCollections">0</span> system)
+                            </small>
+                        </div>
                         <div class="stat-label">Collections</div>
                     </div>
                 </div>
@@ -587,7 +654,12 @@
                         <div class="stat-icon">
                             <i class="bi bi-file-text"></i>
                         </div>
-                        <div class="stat-value" id="totalDocuments">0</div>
+                        <div class="stat-value">
+                            <span id="totalDocuments">0</span>
+                            <small class="text-muted" style="font-size: 0.6em;">
+                                (<span id="userDocuments">0</span> user / <span id="systemDocuments">0</span> system)
+                            </small>
+                        </div>
                         <div class="stat-label">Documents</div>
                     </div>
                 </div>
@@ -946,376 +1018,400 @@
                         <small class="text-muted last-update ms-3"></small>
                     </div>
                 </div>
-                <div class="time-range-selector">
-                    <button class="btn btn-sm btn-unified btn-icon-text active" onclick="changeTimeRange('1h')">1H</button>
-                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('24h')">24H</button>
-                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('7d')">7D</button>
-                    <button class="btn btn-sm btn-unified btn-icon-text" onclick="changeTimeRange('30d')">30D</button>
-                </div>
             </div>
 
-            <!-- Metrics Grid -->
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <div class="metric-label">Total Operations</div>
-                    <div class="metric-value" id="totalOps">0</div>
-                    <div class="metric-change text-muted">
-                        <small>No historical data</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Read Operations</div>
-                    <div class="metric-value" id="readOps">0</div>
-                    <div class="metric-change text-muted">
-                        <small>No historical data</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Write Operations</div>
-                    <div class="metric-value" id="writeOps">0</div>
-                    <div class="metric-change text-muted">
-                        <small>No historical data</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Average Response Time</div>
-                    <div class="metric-value" id="avgResponseTime">0ms</div>
-                    <div class="metric-change text-muted">
-                        <small>No historical data</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Cache Hit Rate</div>
-                    <div class="metric-value" id="cacheHitRate">0%</div>
-                    <div class="metric-change text-muted">
-                        <small id="cacheStats">0 hits / 0 misses</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Cache Size</div>
-                    <div class="metric-value" id="cacheSize">0</div>
-                    <div class="metric-change text-muted">
-                        <small id="cacheMemory">0 MB</small>
-                    </div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Database Size</div>
-                    <div class="metric-value" id="databaseSize">0 MB</div>
-                    <div class="metric-change text-muted">
-                        <small id="totalCollections">0 collections</small>
-                    </div>
-                </div>
-            </div>
+            <!-- Metrics Tabs -->
+            <ul class="nav nav-tabs" id="metricsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="system-overview-tab" data-bs-toggle="tab" data-bs-target="#system-overview" type="button">
+                        <i class="bi bi-speedometer2"></i> System Overview
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="database-performance-tab" data-bs-toggle="tab" data-bs-target="#database-performance" type="button">
+                        <i class="bi bi-database"></i> Database Performance
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="javascript-analytics-tab" data-bs-toggle="tab" data-bs-target="#javascript-analytics" type="button">
+                        <i class="bi bi-code-square"></i> JavaScript Analytics
+                    </button>
+                </li>
+            </ul>
 
-            <!-- Insights and Trends Section -->
-            <div class="row mt-4">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Insights & Trends</h5>
-                            <small class="text-muted">AI-powered analysis of your database performance</small>
+            <!-- Tab Content -->
+            <div class="tab-content mt-3" id="metricsTabContent">
+                <!-- System Overview Tab -->
+                <div class="tab-pane fade show active" id="system-overview" role="tabpanel">
+                    <!-- Metrics Grid -->
+                    <div class="metric-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Total Operations</div>
+                            <div class="metric-value" id="totalOps">0</div>
+                            <div class="metric-change text-muted">
+                                <small>No historical data</small>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <div id="metricsInsights" class="insights-container">
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
-                                    <p>Loading insights...</p>
-                                </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Read Operations</div>
+                            <div class="metric-value" id="readOps">0</div>
+                            <div class="metric-change text-muted">
+                                <small>No historical data</small>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Write Operations</div>
+                            <div class="metric-value" id="writeOps">0</div>
+                            <div class="metric-change text-muted">
+                                <small>No historical data</small>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Average Response Time</div>
+                            <div class="metric-value" id="avgResponseTime">0ms</div>
+                            <div class="metric-change text-muted">
+                                <small>No historical data</small>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Cache Hit Rate</div>
+                            <div class="metric-value" id="cacheHitRate">0%</div>
+                            <div class="metric-change text-muted">
+                                <small id="cacheStats">0 hits / 0 misses</small>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Cache Size</div>
+                            <div class="metric-value" id="cacheSize">0</div>
+                            <div class="metric-change text-muted">
+                                <small id="cacheMemory">0 MB</small>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Database Size</div>
+                            <div class="metric-value" id="databaseSize">0 MB</div>
+                            <div class="metric-change text-muted">
+                                <small id="totalCollections">0 collections</small>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Metrics Charts -->
-            <div class="row mt-4">
-                <div class="col-md-8">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Operations Per Second</h5>
-                            <small class="text-muted">Real-time throughput from metrics system</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="operationsChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Operation Types</h5>
-                            <small class="text-muted">Current distribution</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="operationTypesChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Four equal-sized charts that stack responsively -->
-            <div class="row mt-4">
-                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Cache Hit Rate Over Time</h5>
-                            <small class="text-muted">Cache performance metrics</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="cacheHitRateChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Memory Usage Over Time</h5>
-                            <small class="text-muted">System memory utilization</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="memoryUsageChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row mt-4">
-                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Database Size Over Time</h5>
-                            <small class="text-muted">JSONdb database growth tracking</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="processMemoryChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Storage Usage</h5>
-                            <small class="text-muted">Database and collection sizes</small>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="storageChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- JavaScript Performance Dashboard -->
-            <div class="row mt-4">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-0"><i class="bi bi-speedometer2"></i> JavaScript Performance Dashboard</h5>
-                                <small class="text-muted">Real-time performance analysis and optimization suggestions</small>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="refreshPerformanceDashboard()">
-                                    <i class="bi bi-arrow-clockwise"></i> Refresh
-                                </button>
-                                <button class="btn btn-sm btn-unified btn-icon-text" onclick="clearPerformanceHistory()">
-                                    <i class="bi bi-trash"></i> Clear History
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <!-- Performance Health Score -->
-                            <div class="row mb-4">
-                                <div class="col-md-4">
-                                    <div class="performance-health-card">
-                                        <div class="health-score-container">
-                                            <div class="health-score-circle" id="healthScoreCircle">
-                                                <span class="health-score-value" id="healthScoreValue">100</span>
-                                                <span class="health-score-label">Health Score</span>
-                                            </div>
-                                        </div>
-                                        <div class="health-status" id="healthStatus">Excellent</div>
-                                    </div>
+                <!-- Database Performance Tab -->
+                <div class="tab-pane fade" id="database-performance" role="tabpanel">
+                    <!-- Insights and Trends Section -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Insights & Trends</h5>
+                                    <small class="text-muted">AI-powered analysis of your database performance</small>
                                 </div>
-                                <div class="col-md-8">
-                                    <div class="performance-summary" id="performanceSummary">
-                                        <div class="summary-item">
-                                            <span class="summary-label">Critical Issues:</span>
-                                            <span class="summary-value critical" id="criticalCount">0</span>
-                                        </div>
-                                        <div class="summary-item">
-                                            <span class="summary-label">Warnings:</span>
-                                            <span class="summary-value warning" id="warningCount">0</span>
-                                        </div>
-                                        <div class="summary-item">
-                                            <span class="summary-label">Total Suggestions:</span>
-                                            <span class="summary-value info" id="totalSuggestions">0</span>
-                                        </div>
-                                    </div>
-                                    <div class="performance-actions">
-                                        <button class="btn btn-sm btn-unified-primary" onclick="showPerformanceReport()">
-                                            <i class="bi bi-file-earmark-text"></i> View Full Report
-                                        </button>
-                                        <button class="btn btn-sm btn-unified" onclick="exportPerformanceData()">
-                                            <i class="bi bi-download"></i> Export Data
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Performance Type Breakdown -->
-                            <div class="row mb-4">
-                                <div class="col-md-4">
-                                    <div class="performance-type-card">
-                                        <div class="type-header">
-                                            <h6><i class="bi bi-shield-check"></i> Validation</h6>
-                                        </div>
-                                        <div class="type-stats" id="validationStats">
-                                            <div class="stat-item">
-                                                <span class="stat-label">Avg Time:</span>
-                                                <span class="stat-value" id="validationAvgTime">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Scripts:</span>
-                                                <span class="stat-value" id="validationScriptCount">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Error Rate:</span>
-                                                <span class="stat-value" id="validationErrorRate">-</span>
-                                            </div>
-                                        </div>
-                                        <div class="type-suggestions" id="validationSuggestions"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="performance-type-card">
-                                        <div class="type-header">
-                                            <h6><i class="bi bi-arrow-left-right"></i> Transformation</h6>
-                                        </div>
-                                        <div class="type-stats" id="transformationStats">
-                                            <div class="stat-item">
-                                                <span class="stat-label">Avg Time:</span>
-                                                <span class="stat-value" id="transformationAvgTime">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Scripts:</span>
-                                                <span class="stat-value" id="transformationScriptCount">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Error Rate:</span>
-                                                <span class="stat-value" id="transformationErrorRate">-</span>
-                                            </div>
-                                        </div>
-                                        <div class="type-suggestions" id="transformationSuggestions"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="performance-type-card">
-                                        <div class="type-header">
-                                            <h6><i class="bi bi-gear"></i> Functions</h6>
-                                        </div>
-                                        <div class="type-stats" id="functionStats">
-                                            <div class="stat-item">
-                                                <span class="stat-label">Avg Time:</span>
-                                                <span class="stat-value" id="functionAvgTime">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Scripts:</span>
-                                                <span class="stat-value" id="functionScriptCount">-</span>
-                                            </div>
-                                            <div class="stat-item">
-                                                <span class="stat-label">Error Rate:</span>
-                                                <span class="stat-value" id="functionErrorRate">-</span>
-                                            </div>
-                                        </div>
-                                        <div class="type-suggestions" id="functionSuggestions"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Performance Optimization Suggestions -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="optimization-suggestions" id="optimizationSuggestions">
-                                        <h6><i class="bi bi-lightbulb"></i> Optimization Suggestions</h6>
-                                        <div id="suggestionsList" class="suggestions-list">
-                                            <div class="no-suggestions text-muted">
-                                                <i class="bi bi-check-circle"></i> No performance issues detected
-                                            </div>
+                                <div class="card-body">
+                                    <div id="metricsInsights" class="insights-container">
+                                        <div class="text-center text-muted py-4">
+                                            <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
+                                            <p>Loading insights...</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- JavaScript Execution Metrics Section -->
-            <div class="row mt-4">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-code-square"></i> JavaScript Execution Metrics</h5>
-                            <small class="text-muted">Performance and usage statistics for JavaScript scripts</small>
-                        </div>
-                        <div class="card-body">
-                            <!-- JavaScript Stats Grid -->
-                            <div class="row mb-4">
-                                <div class="col-md-3 col-sm-6 mb-3">
-                                    <div class="metric-card">
-                                        <div class="metric-label">Total Executions</div>
-                                        <div class="metric-value" id="jsTotalExecutions">0</div>
-                                        <div class="metric-change text-muted">
-                                            <small id="jsExecutionGrowth">No data</small>
-                                        </div>
-                                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Operations Per Second</h5>
+                                    <small class="text-muted">Real-time throughput from metrics system</small>
                                 </div>
-                                <div class="col-md-3 col-sm-6 mb-3">
-                                    <div class="metric-card">
-                                        <div class="metric-label">Successful Executions</div>
-                                        <div class="metric-value" id="jsSuccessfulExecutions">0</div>
-                                        <div class="metric-change text-muted">
-                                            <small id="jsSuccessRate">0% success rate</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3 col-sm-6 mb-3">
-                                    <div class="metric-card">
-                                        <div class="metric-label">Avg Execution Time</div>
-                                        <div class="metric-value" id="jsAvgExecutionTime">0ms</div>
-                                        <div class="metric-change text-muted">
-                                            <small id="jsExecutionTrend">No trend data</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3 col-sm-6 mb-3">
-                                    <div class="metric-card">
-                                        <div class="metric-label">Active Scripts</div>
-                                        <div class="metric-value" id="jsActiveScripts">0</div>
-                                        <div class="metric-change text-muted">
-                                            <small id="jsScriptBreakdown">0 validators, 0 transformers, 0 functions</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- JavaScript Performance Chart -->
-                            <div class="row">
-                                <div class="col-12">
+                                <div class="card-body">
                                     <div class="chart-container">
-                                        <canvas id="scriptPerformanceChart"></canvas>
+                                        <canvas id="operationsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Operation Types</h5>
+                                    <small class="text-muted">Current distribution</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="operationTypesChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Four equal-sized charts that stack responsively -->
+                    <div class="row mt-4">
+                        <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Cache Hit Rate Over Time</h5>
+                                    <small class="text-muted">Cache performance metrics</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="cacheHitRateChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Memory Usage Over Time</h5>
+                                    <small class="text-muted">System memory utilization</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="memoryUsageChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Database Size Over Time</h5>
+                                    <small class="text-muted">JSONdb database growth tracking</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="processMemoryChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-xl-6 mb-4 mb-lg-0">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Storage Usage</h5>
+                                    <small class="text-muted">Database and collection sizes</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="storageChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- JavaScript Analytics Tab -->
+                <div class="tab-pane fade" id="javascript-analytics" role="tabpanel">
+                    <!-- JavaScript Performance Dashboard -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0"><i class="bi bi-speedometer2"></i> JavaScript Performance Dashboard</h5>
+                                        <small class="text-muted">Real-time performance analysis and optimization suggestions</small>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-unified btn-icon-text" onclick="refreshPerformanceDashboard()">
+                                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                                        </button>
+                                        <button class="btn btn-sm btn-unified btn-icon-text" onclick="clearPerformanceHistory()">
+                                            <i class="bi bi-trash"></i> Clear History
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Performance Health Score -->
+                                    <div class="row mb-4">
+                                        <div class="col-md-4">
+                                            <div class="performance-health-card">
+                                                <div class="health-score-container">
+                                                    <div class="health-score-circle" id="healthScoreCircle">
+                                                        <span class="health-score-value" id="healthScoreValue">100</span>
+                                                        <span class="health-score-label">Health Score</span>
+                                                    </div>
+                                                </div>
+                                                <div class="health-status" id="healthStatus">Excellent</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <div class="performance-summary" id="performanceSummary">
+                                                <div class="summary-item">
+                                                    <span class="summary-label">Critical Issues:</span>
+                                                    <span class="summary-value critical" id="criticalCount">0</span>
+                                                </div>
+                                                <div class="summary-item">
+                                                    <span class="summary-label">Warnings:</span>
+                                                    <span class="summary-value warning" id="warningCount">0</span>
+                                                </div>
+                                                <div class="summary-item">
+                                                    <span class="summary-label">Total Suggestions:</span>
+                                                    <span class="summary-value info" id="totalSuggestions">0</span>
+                                                </div>
+                                            </div>
+                                            <div class="performance-actions">
+                                                <button class="btn btn-sm btn-unified-primary" onclick="showPerformanceReport()">
+                                                    <i class="bi bi-file-earmark-text"></i> View Full Report
+                                                </button>
+                                                <button class="btn btn-sm btn-unified" onclick="exportPerformanceData()">
+                                                    <i class="bi bi-download"></i> Export Data
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Performance Type Breakdown -->
+                                    <div class="row mb-4">
+                                        <div class="col-md-4">
+                                            <div class="performance-type-card">
+                                                <div class="type-header">
+                                                    <h6><i class="bi bi-shield-check"></i> Validation</h6>
+                                                </div>
+                                                <div class="type-stats" id="validationStats">
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Avg Time:</span>
+                                                        <span class="stat-value" id="validationAvgTime">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Scripts:</span>
+                                                        <span class="stat-value" id="validationScriptCount">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Error Rate:</span>
+                                                        <span class="stat-value" id="validationErrorRate">-</span>
+                                                    </div>
+                                                </div>
+                                                <div class="type-suggestions" id="validationSuggestions"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="performance-type-card">
+                                                <div class="type-header">
+                                                    <h6><i class="bi bi-arrow-left-right"></i> Transformation</h6>
+                                                </div>
+                                                <div class="type-stats" id="transformationStats">
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Avg Time:</span>
+                                                        <span class="stat-value" id="transformationAvgTime">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Scripts:</span>
+                                                        <span class="stat-value" id="transformationScriptCount">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Error Rate:</span>
+                                                        <span class="stat-value" id="transformationErrorRate">-</span>
+                                                    </div>
+                                                </div>
+                                                <div class="type-suggestions" id="transformationSuggestions"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="performance-type-card">
+                                                <div class="type-header">
+                                                    <h6><i class="bi bi-gear"></i> Functions</h6>
+                                                </div>
+                                                <div class="type-stats" id="functionStats">
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Avg Time:</span>
+                                                        <span class="stat-value" id="functionAvgTime">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Scripts:</span>
+                                                        <span class="stat-value" id="functionScriptCount">-</span>
+                                                    </div>
+                                                    <div class="stat-item">
+                                                        <span class="stat-label">Error Rate:</span>
+                                                        <span class="stat-value" id="functionErrorRate">-</span>
+                                                    </div>
+                                                </div>
+                                                <div class="type-suggestions" id="functionSuggestions"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Performance Optimization Suggestions -->
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <div class="optimization-suggestions" id="optimizationSuggestions">
+                                                <h6><i class="bi bi-lightbulb"></i> Optimization Suggestions</h6>
+                                                <div id="suggestionsList" class="suggestions-list">
+                                                    <div class="no-suggestions text-muted">
+                                                        <i class="bi bi-check-circle"></i> No performance issues detected
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- JavaScript Execution Metrics Section -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="bi bi-code-square"></i> JavaScript Execution Metrics</h5>
+                                    <small class="text-muted">Performance and usage statistics for JavaScript scripts</small>
+                                </div>
+                                <div class="card-body">
+                                    <!-- JavaScript Stats Grid -->
+                                    <div class="row mb-4">
+                                        <div class="col-md-3 col-sm-6 mb-3">
+                                            <div class="metric-card">
+                                                <div class="metric-label">Total Executions</div>
+                                                <div class="metric-value" id="jsTotalExecutions">0</div>
+                                                <div class="metric-change text-muted">
+                                                    <small id="jsExecutionGrowth">No data</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-sm-6 mb-3">
+                                            <div class="metric-card">
+                                                <div class="metric-label">Successful Executions</div>
+                                                <div class="metric-value" id="jsSuccessfulExecutions">0</div>
+                                                <div class="metric-change text-muted">
+                                                    <small id="jsSuccessRate">0% success rate</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-sm-6 mb-3">
+                                            <div class="metric-card">
+                                                <div class="metric-label">Avg Execution Time</div>
+                                                <div class="metric-value" id="jsAvgExecutionTime">0ms</div>
+                                                <div class="metric-change text-muted">
+                                                    <small id="jsExecutionTrend">No trend data</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-sm-6 mb-3">
+                                            <div class="metric-card">
+                                                <div class="metric-label">Active Scripts</div>
+                                                <div class="metric-value" id="jsActiveScripts">0</div>
+                                                <div class="metric-change text-muted">
+                                                    <small id="jsScriptBreakdown">0 validators, 0 transformers, 0 functions</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- JavaScript Performance Chart -->
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="chart-container">
+                                                <canvas id="scriptPerformanceChart"></canvas>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1429,7 +1525,18 @@
 
                 <!-- Permissions Tab -->
                 <div class="tab-pane fade" id="permissions" role="tabpanel">
-                    <h4 class="mb-4">Permission Matrix</h4>
+                    <h4 class="mb-2">Permission Matrix</h4>
+                    <div class="alert alert-info mb-4">
+                        <h6 class="alert-heading"><i class="bi bi-info-circle"></i> Permission Model Overview</h6>
+                        <p class="mb-2">JSONdb uses a role-based access control (RBAC) system with fine-grained permissions:</p>
+                        <ul class="mb-0">
+                            <li><strong>Resource-based</strong>: Permissions are granted on specific resources (collections, APIs, etc.)</li>
+                            <li><strong>CRUD Operations</strong>: Create, Read, Update (Write), Delete permissions per resource</li>
+                            <li><strong>Admin Permission</strong>: Full control over the resource including permission management</li>
+                            <li><strong>Role Inheritance</strong>: Users inherit all permissions from their assigned roles</li>
+                            <li><strong>Default Roles</strong>: Admin (full access), Editor (CRUD), Viewer (read-only)</li>
+                        </ul>
+                    </div>
                     <div class="card">
                         <div class="card-body">
                             <div class="table-responsive">

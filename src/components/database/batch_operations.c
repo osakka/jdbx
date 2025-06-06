@@ -10,6 +10,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* Suppress unused parameter warnings */
+#define UNUSED(x) ((void)(x))
+
 /* Get collection definition from database.c */
 typedef struct {
     char name[256];
@@ -33,12 +36,26 @@ static double get_time_ms() {
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1000000.0;
 }
 
-/* Generate document ID */
+/* Generate UUID v4 document ID for batch operations */
 static void generate_batch_doc_id(char* id_buf, size_t buf_size, size_t batch_idx) {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    snprintf(id_buf, buf_size, "doc-%ld-%09ld-%zu-%04x", 
-             ts.tv_sec, ts.tv_nsec, batch_idx, rand() & 0xFFFF);
+    UNUSED(batch_idx); /* Use same UUID logic regardless of batch position */
+    
+    /* Generate 16 bytes of random data for UUID v4 */
+    unsigned char uuid_bytes[16];
+    for (int i = 0; i < 16; i++) {
+        uuid_bytes[i] = rand() & 0xFF;
+    }
+    
+    /* Set version (4) and variant bits according to RFC 4122 */
+    uuid_bytes[6] = (uuid_bytes[6] & 0x0F) | 0x40; /* Version 4 */
+    uuid_bytes[8] = (uuid_bytes[8] & 0x3F) | 0x80; /* Variant bits */
+    
+    /* Format as standard UUID string: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx */
+    snprintf(id_buf, buf_size, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+             uuid_bytes[0], uuid_bytes[1], uuid_bytes[2], uuid_bytes[3],
+             uuid_bytes[4], uuid_bytes[5], uuid_bytes[6], uuid_bytes[7],
+             uuid_bytes[8], uuid_bytes[9], uuid_bytes[10], uuid_bytes[11],
+             uuid_bytes[12], uuid_bytes[13], uuid_bytes[14], uuid_bytes[15]);
 }
 
 /* Process a single batch of documents */
@@ -73,19 +90,19 @@ static int process_document_batch(
         
         /* Generate or extract ID */
         doc_ids[i] = malloc(256);
-        json_value_t* id_field = json_object_get(doc, "_id");
+        json_value_t* id_field = json_object_get(doc, "uuid");
         if (!id_field) {
             id_field = json_object_get(doc, "id");
         }
         
         if (!id_field || id_field->type != JSON_STRING) {
             generate_batch_doc_id(doc_ids[i], 256, result->total_documents + i);
-            json_object_set(doc, "_id", json_create_string(doc_ids[i]));
+            json_object_set(doc, "uuid", json_create_string(doc_ids[i]));
         } else {
             strncpy(doc_ids[i], id_field->value.string, 255);
             doc_ids[i][255] = '\0';
-            if (!json_object_get(doc, "_id")) {
-                json_object_set(doc, "_id", json_create_string(doc_ids[i]));
+            if (!json_object_get(doc, "uuid")) {
+                json_object_set(doc, "uuid", json_create_string(doc_ids[i]));
             }
         }
         

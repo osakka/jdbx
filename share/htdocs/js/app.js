@@ -46,6 +46,36 @@ let previousData = {
     lastUpdate: null
 };
 
+// Global variable to store consistent database size across all displays
+window.currentDatabaseSizeBytes = 0;
+
+// Unified function to get actual database size
+async function getActualDatabaseSize() {
+    try {
+        // Get size from collections API - this is the most accurate source
+        const response = await apiRequest('/api/collections');
+        let totalSize = 0;
+        
+        // Handle both array and object with collections property
+        const collections = Array.isArray(response) ? response : (response?.collections || []);
+        
+        if (collections && Array.isArray(collections)) {
+            totalSize = collections.reduce((sum, collection) => {
+                return sum + (collection.total_size || 0);
+            }, 0);
+        }
+        
+        // Apply minimum size for system collections (20KB)
+        const actualSize = Math.max(totalSize, 20480);
+        window.currentDatabaseSizeBytes = actualSize;
+        
+        return actualSize;
+    } catch (error) {
+        console.warn('Failed to get actual database size, using cached value:', error);
+        return window.currentDatabaseSizeBytes || 20480;
+    }
+}
+
 // Check authentication
 if (!authToken) {
     window.location.href = '/login.html';
@@ -366,7 +396,16 @@ async function apiRequest(endpoint, options = {}) {
             }
         };
         
-        console.log('API Request:', url, fetchOptions);
+        // Log request details for debugging
+        if (options.method === 'PUT' || options.method === 'POST') {
+            console.log('API Request:', url, {
+                method: fetchOptions.method,
+                headers: fetchOptions.headers,
+                body: fetchOptions.body ? fetchOptions.body.substring(0, 200) + '...' : 'No body'
+            });
+        } else {
+            console.log('API Request:', url, fetchOptions);
+        }
         
         const response = await fetch(url, fetchOptions);
         
@@ -646,51 +685,87 @@ async function loadCollections() {
         
         // Handle both formats: standard and array
         let collectionsData = Array.isArray(response) ? response : (response.collections || []);
+        
+        console.log('Raw collections response:', response);
+        
         collectionsData = collectionsData.map(item => {
             if (typeof item === 'string') {
                 return { name: item, documentCount: 0, isSystem: item.startsWith('_') };
             }
-            // Handle both documentCount and document_count
+            // Handle both documentCount and document_count fields
             if (item.document_count !== undefined && item.documentCount === undefined) {
                 item.documentCount = item.document_count;
             }
+            // Ensure documentCount is properly set from total_size or other fields
+            if (item.documentCount === undefined) {
+                item.documentCount = item.total_documents || item.document_count || 0;
+            }
             item.isSystem = item.name && item.name.startsWith('_');
+            
+            console.log(`Collection ${item.name}: documentCount=${item.documentCount}, document_count=${item.document_count}`);
+            
             return item;
         });
         
-        const collections = collectionsData;
+        // Update the global collections array
+        collections = collectionsData;
         
-        // Use total from response if available (ultra-fast format)
-        const totalCollections = response.total || collections.length;
+        // Count system and user collections separately
+        const systemCollections = collections.filter(c => {
+            const name = typeof c === 'string' ? c : (c.name || '');
+            return name.startsWith('_');
+        });
+        const userCollections = collections.filter(c => {
+            const name = typeof c === 'string' ? c : (c.name || '');
+            return !name.startsWith('_');
+        });
+        
+        const totalCollections = collections.length;
+        const userCollectionCount = userCollections.length;
+        const systemCollectionCount = systemCollections.length;
         
         if (previousData.totalCollections !== totalCollections) {
             document.getElementById('statTotalCollections').textContent = totalCollections;
+            document.getElementById('statUserCollections').textContent = userCollectionCount;
+            document.getElementById('statSystemCollections').textContent = systemCollectionCount;
             previousData.totalCollections = totalCollections;
         }
         
         let totalDocuments = 0;
+        let userDocuments = 0;
+        let systemDocuments = 0;
         let totalSize = 0;
         
         for (const collectionInfo of collections) {
             // Handle both old format (string) and new format (object)
             const collectionName = typeof collectionInfo === 'string' ? collectionInfo : (collectionInfo?.name || 'unknown');
             
+            // Check if it's a system collection
+            const isSystemCollection = collectionName.startsWith('_');
+            
             try {
                 const docCountFromInfo = typeof collectionInfo === 'object' ? collectionInfo.documentCount : null;
                 
-                // If we already have the count from the API, use it for efficiency
-                let docCount = docCountFromInfo;
-                let size = 0;
+                console.log(`Collection ${collectionName}: docCountFromInfo=${docCountFromInfo}, collectionInfo=`, collectionInfo);
                 
-                if (docCount === null || docCount > 0) {
-                    // Only fetch documents if we don't have count or if there are documents
-                    const docsResponse = await apiRequest(`/api/collections/${collectionName}/documents`);
-                    const documents = Array.isArray(docsResponse) ? docsResponse : (docsResponse.documents || []);
-                    docCount = docCount !== null ? docCount : documents.length;
-                    size = JSON.stringify(documents).length;
+                // If we already have the count from the API, use it for efficiency
+                let docCount = docCountFromInfo !== null && docCountFromInfo !== undefined ? docCountFromInfo : 0;
+                let size = typeof collectionInfo === 'object' ? (collectionInfo.total_size || 0) : 0;
+                
+                // Only fetch documents if we specifically need to calculate size and don't have it
+                if (docCount > 0 && size === 0) {
+                    // For now, estimate size based on document count
+                    // This avoids fetching all documents just for size calculation
+                    size = docCount * 100; // Rough estimate: 100 bytes per document
                 }
                 
+                // Count documents for both system and user collections
                 totalDocuments += docCount;
+                if (isSystemCollection) {
+                    systemDocuments += docCount;
+                } else {
+                    userDocuments += docCount;
+                }
                 totalSize += size;
                 
                 const collectionKey = `${collectionName}_${docCount}_${size}`;
@@ -701,16 +776,25 @@ async function loadCollections() {
             }
         }
         
-        if (previousData.totalDocuments !== totalDocuments) {
-            document.getElementById('totalDocuments').textContent = formatNumber(totalDocuments);
+        // Update document count display
+        if (previousData.totalDocuments !== totalDocuments || 
+            document.getElementById('totalDocuments')?.textContent === '0') {
+            const totalDocsEl = document.getElementById('totalDocuments');
+            const userDocsEl = document.getElementById('userDocuments');
+            const systemDocsEl = document.getElementById('systemDocuments');
+            
+            if (totalDocsEl) totalDocsEl.textContent = formatNumber(totalDocuments);
+            if (userDocsEl) userDocsEl.textContent = formatNumber(userDocuments);
+            if (systemDocsEl) systemDocsEl.textContent = formatNumber(systemDocuments);
+            
             previousData.totalDocuments = totalDocuments;
         }
         
-        // Ensure we show a minimum size for the database (system collections exist)
-        const displaySize = totalSize > 0 ? totalSize : 20480; // 20KB minimum for system collections
-        if (previousData.databaseSize !== displaySize) {
-            document.getElementById('statDatabaseSize').textContent = formatSize(displaySize);
-            previousData.databaseSize = displaySize;
+        // Use unified database size calculation
+        const actualSize = await getActualDatabaseSize();
+        if (previousData.databaseSize !== actualSize) {
+            document.getElementById('statDatabaseSize').textContent = formatSize(actualSize);
+            previousData.databaseSize = actualSize;
         }
         
         return { collections, totalDocuments, totalSize };
@@ -737,13 +821,20 @@ async function loadSystemHealth() {
             
             // Show latency
             let apiLatency = 'N/A';
-            if (health.latency_us) {
+            if (health.metrics && health.metrics.performance && health.metrics.performance.avg_response_time_ms) {
+                apiLatency = `${health.metrics.performance.avg_response_time_ms.toFixed(2)}ms`;
+            } else if (health.latency_us) {
                 apiLatency = `${(health.latency_us / 1000).toFixed(2)}ms`;
             }
             document.getElementById('apiLatency').textContent = apiLatency;
             
             // Calculate uptime from seconds
-            if (health.up) {
+            if (health.uptime_seconds) {
+                const days = Math.floor(health.uptime_seconds / 86400);
+                const hours = Math.floor((health.uptime_seconds % 86400) / 3600);
+                const minutes = Math.floor((health.uptime_seconds % 3600) / 60);
+                document.getElementById('uptime').textContent = `${days}d ${hours}h ${minutes}m`;
+            } else if (health.up) {
                 const days = Math.floor(health.up / 86400);
                 const hours = Math.floor((health.up % 86400) / 3600);
                 const minutes = Math.floor((health.up % 3600) / 60);
@@ -871,8 +962,8 @@ function updateResponseTimesChart(performanceData) {
 
 async function loadDashboardMetrics() {
     try {
-        // Fetch metrics data from _system_metrics collection
-        const metricsData = await apiRequest('/api/collections/_system_metrics').catch(err => {
+        // Fetch metrics data from _metrics collection
+        const metricsData = await apiRequest('/api/collections/_metrics').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -880,7 +971,17 @@ async function loadDashboardMetrics() {
         console.log('Dashboard metrics data:', metricsData);
         
         // Extract metrics documents by type
-        const metricsDocuments = metricsData.documents || [];
+        // Deduplicate documents by ID (temporary fix for server bug)
+        const seenIds = new Set();
+        const uniqueDocuments = [];
+        for (const doc of (metricsData.documents || [])) {
+            if (!seenIds.has(doc.uuid || doc._id)) {
+                seenIds.add(doc.uuid || doc._id);
+                uniqueDocuments.push(doc);
+            }
+        }
+        
+        const metricsDocuments = uniqueDocuments;
         const performanceDoc = metricsDocuments.find(doc => doc.type === 'performance');
         const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
         
@@ -927,7 +1028,7 @@ async function loadBrowserCollections() {
             // Ensure the object has all required fields
             return {
                 name: item.name || (typeof item === 'string' ? item : 'unknown'),
-                documentCount: item.documentCount || 0,
+                documentCount: item.documentCount || item.document_count || 0,
                 isSystem: item.isSystem !== undefined ? item.isSystem : ((item.name || (typeof item === 'string' ? item : '')).startsWith('_'))
             };
         });
@@ -1048,8 +1149,15 @@ async function renderCollections() {
     
     container.innerHTML = html;
     
-    // Update document counts
-    updateCollectionCounts();
+    // Update document counts only if we have collections without counts
+    const needsCountUpdate = collections.some(c => {
+        const count = typeof c === 'object' ? c.documentCount : null;
+        return count === undefined || count === null;
+    });
+    
+    if (needsCountUpdate) {
+        updateCollectionCounts();
+    }
 }
 
 async function updateCollectionCounts() {
@@ -1059,24 +1167,50 @@ async function updateCollectionCounts() {
         try {
             const collectionName = typeof collection === 'string' ? collection : collection.name;
             console.log(`Requesting count for collection: ${collectionName} (${i+1}/${collections.length})`);
-            const response = await apiRequest(`/api/collections/${collectionName}`);
+            const response = await apiRequest(`/api/collections/${collectionName}/documents`);
             console.log(`Received response for ${collectionName}:`, response ? 'success' : 'null');
-            const count = Array.isArray(response) ? response.length : (response.documents ? response.documents.length : 0);
+            const count = response && response.documents ? response.documents.length : 0;
             
-            // Find the badge for this collection and update it
-            const collectionItems = document.querySelectorAll('.collection-item');
-            collectionItems.forEach(item => {
-                if (item.querySelector('.collection-name')?.textContent === collectionName) {
-                    const badge = item.querySelector('.badge');
-                    if (badge) {
-                        badge.textContent = count.toString();
+            // Check if count has changed before updating DOM (prevent flicker)
+            const countKey = `${collectionName}_count`;
+            if (previousData.collectionsData[countKey] !== count) {
+                // Update the collections array with the real count
+                if (typeof collection === 'object') {
+                    collection.documentCount = count;
+                } else {
+                    // If it's a string, find and update in the collections array
+                    for (let j = 0; j < collections.length; j++) {
+                        if (typeof collections[j] === 'string' && collections[j] === collectionName) {
+                            collections[j] = { name: collectionName, documentCount: count, isSystem: collectionName.startsWith('_') };
+                            break;
+                        } else if (typeof collections[j] === 'object' && collections[j].name === collectionName) {
+                            collections[j].documentCount = count;
+                            break;
+                        }
                     }
                 }
-            });
+                
+                // Find the badge for this collection and update it only if count changed
+                const collectionItems = document.querySelectorAll('.collection-item');
+                collectionItems.forEach(item => {
+                    if (item.querySelector('.collection-name')?.textContent === collectionName) {
+                        const badge = item.querySelector('.badge');
+                        if (badge) {
+                            badge.textContent = count.toString();
+                            console.log(`Updated count for ${collectionName}: ${previousData.collectionsData[countKey]} → ${count}`);
+                        }
+                    }
+                });
+                
+                // Store the new count for future comparison
+                previousData.collectionsData[countKey] = count;
+            } else {
+                console.log(`No change in count for ${collectionName}: ${count}`);
+            }
             
-            // Add delay between requests to prevent connection overload and browser limits
+            // Add small delay between requests to prevent connection overload
             if (i < collections.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 250));
+                await new Promise(resolve => setTimeout(resolve, 50));
             }
         } catch (error) {
             const collectionName = typeof collection === 'string' ? collection : collection.name;
@@ -1086,10 +1220,25 @@ async function updateCollectionCounts() {
     }
 }
 
+function updateCollectionActiveState() {
+    // Update active state for collections without full re-render
+    const collectionItems = document.querySelectorAll('.collection-item');
+    collectionItems.forEach(item => {
+        const collectionName = item.querySelector('.collection-name')?.textContent;
+        if (collectionName === currentCollection) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
 async function selectCollection(collection) {
     currentCollection = collection;
     currentDocument = null;
-    await renderCollections();
+    
+    // Update active state without full re-render to prevent count flicker
+    updateCollectionActiveState();
     
     // Load documents
     await loadDocuments(collection);
@@ -1153,6 +1302,16 @@ async function loadDocuments(collection, isPolling = false) {
     }
 }
 
+// Helper function to truncate UUIDs
+function truncateUuid(uuid, maxLength = 10) {
+    if (!uuid || uuid.length <= maxLength) return uuid;
+    // Check if it's a UUID format (with dashes)
+    if (uuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        return uuid.substring(0, maxLength) + '...';
+    }
+    return uuid;
+}
+
 function renderDocuments() {
     const container = document.getElementById('documentsList');
     if (!container) return;
@@ -1168,27 +1327,37 @@ function renderDocuments() {
     }
     
     container.innerHTML = documents.map((doc, index) => {
-        const docId = doc._id || doc.id || `Document ${index + 1}`;
+        const docId = doc.uuid || doc._id || doc.id || `Document ${index + 1}`;
         const docName = doc.name || docId; // Use name if available, otherwise fallback to ID
         const docSize = JSON.stringify(doc).length;
         const sizeStr = docSize < 1024 ? `${docSize} B` : `${(docSize / 1024).toFixed(1)} KB`;
-        const updatedAt = doc.updated_at || doc.created_at || '';
+        const createdAt = doc.created_at || '';
+        const updatedAt = doc.updated_at || '';
         
         // Format the display based on whether we have a custom name
         const hasCustomName = doc.name && doc.name !== docId;
         
+        // Truncate UUID for display
+        const displayId = truncateUuid(docId);
+        
         return `
-            <div class="document-item ${currentDocument === (doc._id || doc.id) ? 'active' : ''}" 
-                 onclick="selectDocument(${index})">
+            <div class="document-item ${currentDocument === (doc.uuid || doc._id || doc.id) ? 'active' : ''}" 
+                 onclick="selectDocument(${index})" title="${docId}">
                 <div class="d-flex align-items-center w-100">
                     <i class="bi bi-file-text me-2" style="font-size: 0.875rem;"></i>
                     <div class="flex-grow-1">
                         ${hasCustomName ? `
                             <div class="document-name fw-bold">${docName}</div>
-                            <div class="document-id text-muted small">${docId}${updatedAt ? ` • ${new Date(updatedAt).toLocaleDateString()}` : ''}</div>
+                            <div class="document-id text-muted small">${displayId}</div>
                         ` : `
-                            <span class="document-name">${docId}</span>
+                            <div class="document-id text-muted small">${displayId}</div>
                         `}
+                        ${createdAt || updatedAt ? `
+                            <div class="document-dates text-muted small" style="font-size: 0.75rem;">
+                                ${createdAt ? `<span title="Created"><i class="bi bi-plus-circle" style="font-size: 0.7rem;"></i> ${new Date(createdAt).toLocaleDateString()}</span>` : ''}
+                                ${updatedAt && updatedAt !== createdAt ? `<span title="Updated" class="ms-2"><i class="bi bi-pencil" style="font-size: 0.7rem;"></i> ${new Date(updatedAt).toLocaleDateString()}</span>` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                     <span class="badge bg-secondary ms-2">${sizeStr}</span>
                 </div>
@@ -1208,14 +1377,17 @@ function selectDocument(index) {
     const doc = documents[index];
     if (!doc) return;
     
-    currentDocument = doc._id || doc.id;
+    currentDocument = doc.uuid || doc._id || doc.id;
     currentDocumentIndex = index;
     originalDocumentContent = JSON.stringify(doc, null, 2);
     isDocumentModified = false;
     renderDocuments();
     
-    // Update title
-    document.getElementById('documentTitle').textContent = currentDocument || `Document ${index + 1}`;
+    // Update title with truncated UUID
+    const fullId = currentDocument || `Document ${index + 1}`;
+    const displayTitle = doc.name || truncateUuid(fullId, 15);
+    document.getElementById('documentTitle').textContent = displayTitle;
+    document.getElementById('documentTitle').title = fullId; // Show full ID on hover
     
     // Show editable document content with line numbers
     const lines = originalDocumentContent.split('\n');
@@ -1327,14 +1499,9 @@ function updateQueryPreview() {
             break;
             
         case 'custom':
-            try {
-                const customJSON = document.getElementById('customJSON').value;
-                if (customJSON) {
-                    query = JSON.parse(customJSON);
-                }
-            } catch (e) {
-                query = { error: 'Invalid JSON' };
-            }
+            const customJSON = document.getElementById('customJSON').value;
+            const parseResult = parseJSONSafely(customJSON, 'query JSON');
+            query = parseResult.success ? parseResult.data : {};
             break;
     }
     
@@ -1406,15 +1573,12 @@ async function executeQuery() {
             break;
             
         case 'custom':
-            try {
-                const customJSON = document.getElementById('customJSON').value;
-                if (customJSON) {
-                    query = JSON.parse(customJSON);
-                }
-            } catch (e) {
-                showNotification('Invalid JSON query', 'error');
+            const customJSON = document.getElementById('customJSON').value;
+            const parseResult = parseJSONSafely(customJSON, 'query JSON');
+            if (!parseResult.success) {
                 return;
             }
+            query = parseResult.data;
             break;
     }
     
@@ -1531,18 +1695,19 @@ async function validateDocumentRealtime(content) {
     let jsonValid = true;
     let parsedDoc = null;
     
-    try {
-        parsedDoc = JSON.parse(content);
-    } catch (e) {
+    // Use parseJSONSafely but don't show notifications for real-time validation
+    const parseResult = parseJSONSafely(content, 'document', false);
+    if (!parseResult.success) {
         jsonValid = false;
         updateValidationDisplay({
             valid: false,
             error: 'JSON Syntax Error',
-            message: e.message,
+            message: parseResult.error.replace('Invalid document: ', ''),
             type: 'syntax'
         });
         return;
     }
+    parsedDoc = parseResult.data;
     
     // If JSON is valid, check for JavaScript validators
     try {
@@ -1621,10 +1786,9 @@ async function runValidators(document, validators) {
                 continue;
             }
             
-            const response = await apiRequest('/api/js/native/execute', {
+            const response = await apiRequest(`/api/js/functions/${validator.name || validator.id}`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    script_id: validator.id,
                     input_data: document,
                     context: {
                         collection: currentCollection,
@@ -2289,7 +2453,7 @@ function generateVersionNumber(existingVersions = []) {
 // Create a new version of a script
 async function createScriptVersion(scriptDocument, changeType = 'patch', changeDescription = '') {
     try {
-        const scriptId = scriptDocument._id;
+        const scriptId = scriptDocument.uuid || scriptDocument._id;
         const scriptType = scriptDocument.type;
         
         // Load existing versions
@@ -2700,7 +2864,7 @@ function renderVersionHistory(versions) {
                                 }
                             </div>
                             <div class="version-actions">
-                                <button class="btn btn-sm btn-unified" onclick="viewVersionCode('${version._id}')">
+                                <button class="btn btn-sm btn-unified" onclick="viewVersionCode('${version.uuid || version._id}')">
                                     <i class="bi bi-eye"></i> View Code
                                 </button>
                                 ${index > 0 ? `
@@ -3080,7 +3244,7 @@ async function createVersionFromModal() {
         // Add tags if provided
         if (tags.length > 0) {
             versionDoc.tags = [...(versionDoc.tags || []), ...tags];
-            await apiRequest(`/api/collections/_script_versions/${versionDoc._id}`, 'PUT', versionDoc);
+            await apiRequest(`/api/collections/_script_versions/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
         }
         
         showMessage(`Version ${versionDoc.version} created successfully!`, 'success');
@@ -3225,7 +3389,7 @@ function renderDocumentsWithBatchSelection() {
     }
     
     const documentsHTML = documents.map((doc, index) => {
-        const docId = doc._id || doc.id;
+        const docId = doc.uuid || doc._id || doc.id;
         const isSelected = selectedScripts.has(docId);
         const docName = doc.name || docId || `Document ${index + 1}`;
         const docType = getDocumentType(doc);
@@ -3264,7 +3428,7 @@ function toggleScriptSelection(scriptId) {
 
 function selectAllScripts() {
     documents.forEach(doc => {
-        const docId = doc._id || doc.id;
+        const docId = doc.uuid || doc._id || doc.id;
         selectedScripts.add(docId);
     });
     renderDocumentsWithBatchSelection();
@@ -3299,7 +3463,7 @@ async function batchEnableScripts() {
     
     try {
         const results = await processBatchOperation(selectedScripts, async (scriptId) => {
-            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = true;
                 await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
@@ -3323,7 +3487,7 @@ async function batchDisableScripts() {
     
     try {
         const results = await processBatchOperation(selectedScripts, async (scriptId) => {
-            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = false;
                 await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
@@ -3376,7 +3540,7 @@ async function batchCreateVersions() {
     
     try {
         const results = await processBatchOperation(selectedScripts, async (scriptId) => {
-            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 const versionDoc = await createScriptVersion(doc, changeType, changeDescription.trim());
                 return { success: true, scriptId, version: versionDoc.version };
@@ -3402,7 +3566,7 @@ async function batchExportScripts() {
         };
         
         for (const scriptId of selectedScripts) {
-            const doc = documents.find(d => (d._id || d.id) === scriptId);
+            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 // Include version history if available
                 try {
@@ -3455,7 +3619,11 @@ async function handleImportFileSelect(event) {
     
     try {
         const text = await file.text();
-        const importData = JSON.parse(text);
+        const parseResult = parseJSONSafely(text, 'script import file');
+        if (!parseResult.success) {
+            return;
+        }
+        const importData = parseResult.data;
         
         // Validate import data structure
         if (!importData.export_type || importData.export_type !== 'javascript_scripts') {
@@ -3504,7 +3672,7 @@ function renderImportPreview(importData) {
                         const versions = script.versions || [];
                         return `
                             <tr>
-                                <td>${doc.name || doc._id || 'Unnamed'}</td>
+                                <td>${doc.name || doc.uuid || doc._id || 'Unnamed'}</td>
                                 <td>${getDocumentType(doc)}</td>
                                 <td>${versions.length} versions</td>
                                 <td>
@@ -3551,12 +3719,12 @@ async function executeImportScripts() {
             try {
                 // Check if script already exists
                 const existingDocs = await apiRequest(`/api/collections/${currentCollection}`);
-                const existing = existingDocs.find(d => d.name === doc.name || d._id === doc._id);
+                const existing = existingDocs.find(d => d.name === doc.name || d.uuid === doc.uuid || d._id === doc._id);
                 
                 if (existing && !overwriteExisting) {
                     results.push({ 
                         success: false, 
-                        scriptName: doc.name || doc._id, 
+                        scriptName: doc.name || doc.uuid || doc._id, 
                         error: 'Script already exists (use overwrite option)' 
                     });
                     continue;
@@ -3568,11 +3736,13 @@ async function executeImportScripts() {
                     // Update existing document
                     const updateData = { ...doc };
                     delete updateData._id; // Remove _id to avoid conflicts
-                    importedDoc = await apiRequest(`/api/collections/${currentCollection}/${existing._id}`, 'PUT', updateData);
+                    delete updateData.uuid; // Remove uuid to avoid conflicts
+                    importedDoc = await apiRequest(`/api/collections/${currentCollection}/${existing.uuid || existing._id}`, 'PUT', updateData);
                 } else {
                     // Create new document
                     const createData = { ...doc };
                     delete createData._id; // Let server assign new ID
+                    delete createData.uuid; // Let server assign new UUID
                     importedDoc = await apiRequest(`/api/collections/${currentCollection}`, 'POST', createData);
                 }
                 
@@ -3581,8 +3751,9 @@ async function executeImportScripts() {
                     for (const version of versions) {
                         try {
                             const versionData = { ...version };
-                            versionData.script_id = importedDoc._id || importedDoc.id;
+                            versionData.script_id = importedDoc.uuid || importedDoc._id || importedDoc.id;
                             delete versionData._id; // Let server assign new ID
+                            delete versionData.uuid; // Let server assign new UUID
                             
                             await apiRequest('/api/collections/_script_versions', 'POST', versionData);
                         } catch (versionError) {
@@ -3593,14 +3764,14 @@ async function executeImportScripts() {
                 
                 results.push({ 
                     success: true, 
-                    scriptName: doc.name || doc._id,
+                    scriptName: doc.name || doc.uuid || doc._id,
                     versionsImported: importVersions ? versions.length : 0
                 });
                 
             } catch (error) {
                 results.push({ 
                     success: false, 
-                    scriptName: doc.name || doc._id, 
+                    scriptName: doc.name || doc.uuid || doc._id, 
                     error: error.message 
                 });
             }
@@ -3827,10 +3998,9 @@ async function runTransformers(document) {
         const transformerStartTime = performance.now();
         
         try {
-            const response = await apiRequest('/api/js/native/execute', {
+            const response = await apiRequest(`/api/js/functions/${transformer.name || transformer.id}`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    script_id: transformer.id,
                     input_data: currentDoc,
                     context: {
                         collection: currentCollection,
@@ -3906,15 +4076,13 @@ function showTransformationPreview() {
     if (!originalDocumentContent) return;
     
     // Parse the current document
-    let parsedDoc;
-    try {
-        const editor = document.getElementById('documentEditor');
-        const currentContent = editor ? editor.value : originalDocumentContent;
-        parsedDoc = JSON.parse(currentContent);
-    } catch (e) {
-        showNotification('Cannot preview transformation: Invalid JSON', 'error');
+    const editor = document.getElementById('documentEditor');
+    const currentContent = editor ? editor.value : originalDocumentContent;
+    const parseResult = parseJSONSafely(currentContent, 'document JSON');
+    if (!parseResult.success) {
         return;
     }
+    const parsedDoc = parseResult.data;
     
     // Run transformers and show preview
     runTransformers(parsedDoc).then(result => {
@@ -4062,10 +4230,10 @@ function filterDocuments() {
     container.innerHTML = filtered.map((doc, index) => {
         const preview = JSON.stringify(doc).substring(0, 100) + '...';
         return `
-            <div class="document-item ${currentDocument === doc._id ? 'active' : ''}" 
+            <div class="document-item ${currentDocument === (doc.uuid || doc._id) ? 'active' : ''}" 
                  onclick="selectDocument(${documents.indexOf(doc)})">
                 <div class="document-title">
-                    <span>${doc._id || doc.id || `Document ${index + 1}`}</span>
+                    <span>${doc.uuid || doc._id || doc.id || `Document ${index + 1}`}</span>
                 </div>
                 <div class="document-preview">${preview}</div>
             </div>
@@ -4102,7 +4270,7 @@ async function createNewCollection() {
         // Create collection by inserting a document into it
         // JSONdb typically creates collections implicitly when first document is added
         const initialDocument = {
-            _id: 'welcome-doc',
+            uuid: 'welcome-doc',
             name: 'Welcome Document',
             message: `Welcome to the ${collectionName} collection!`,
             created_at: new Date().toISOString(),
@@ -4763,9 +4931,9 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         console.log('API responses:', { health, collections, cacheStats });
         
-        // Fetch metrics data from _system_metrics collection
-        console.log('Fetching metrics from _system_metrics collection...');
-        const metricsData = await apiRequest('/api/collections/_system_metrics').catch(err => {
+        // Fetch metrics data from _metrics collection
+        console.log('Fetching metrics from _metrics collection...');
+        const metricsData = await apiRequest('/api/collections/_metrics').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -4846,6 +5014,13 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             totalOps = health.metrics.operations.total || 0;
             readOps = health.metrics.operations.read || 0;
             writeOps = health.metrics.operations.write || 0;
+            
+            // Fix: Ensure total operations is at least the sum of read and write
+            const calculatedTotal = readOps + writeOps;
+            if (calculatedTotal > totalOps) {
+                console.log('Fixing total operations:', totalOps, '->', calculatedTotal);
+                totalOps = calculatedTotal;
+            }
             
             if (health.metrics.performance) {
                 avgResponseTime = health.metrics.performance.avg_response_time_ms;
@@ -5203,23 +5378,16 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         // Update database size chart
         if (databaseSizeChart) {
             try {
-                // Create database size data from document counts over time
+                // Use unified database size calculation for consistency
+                const currentSizeBytes = await getActualDatabaseSize();
+                const currentSizeMB = currentSizeBytes / (1024 * 1024);
+                
                 const dbSizeData = [];
                 
-                // Calculate database size for each time point based on operations count
-                // Estimate: each operation adds approximately 0.5KB to database
-                if (operationsDoc && operationsDoc.data && operationsDoc.data.length > 0) {
-                    operationsDoc.data.forEach(point => {
-                        // Estimate database size in MB based on total operations
-                        const estimatedSizeMB = (point.total || 0) * 0.5 / 1024;
-                        dbSizeData.push(Math.round(estimatedSizeMB * 100) / 100);
-                    });
-                } else {
-                    // If no operations data, use the current estimated size
-                    const currentSizeMB = window.estimatedDatabaseSizeKB ? window.estimatedDatabaseSizeKB / 1024 : 0.02;
-                    for (let i = 0; i < labels.length; i++) {
-                        dbSizeData.push(currentSizeMB);
-                    }
+                // For historical chart data, we'll show the current size across all time points
+                // In a real implementation, you'd want to store historical size data
+                for (let i = 0; i < labels.length; i++) {
+                    dbSizeData.push(Math.round(currentSizeMB * 100) / 100);
                 }
                 
                 databaseSizeChart.data.labels = labels;
@@ -5246,12 +5414,14 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 // Process collections directly from the response
                 if (Array.isArray(collectionList)) {
                     collectionList.forEach(col => {
-                        if (col && typeof col === 'object' && col.name && col.documentCount !== undefined) {
+                        if (col && typeof col === 'object' && col.name) {
+                            const docCount = col.documentCount || 0;
                             // Estimate size based on document count (rough estimate: 1KB per doc)
-                            const estimatedSizeKB = col.documentCount * 1; // 1KB per document estimate
+                            // For system collections without documents, use a minimum size
+                            const estimatedSizeKB = docCount > 0 ? docCount * 1 : (col.isSystem ? 5 : 0);
                             totalSizeKB += estimatedSizeKB;
                             
-                            console.log(`Collection ${col.name}: ${col.documentCount} docs, ${estimatedSizeKB}KB`);
+                            console.log(`Collection ${col.name}: ${docCount} docs, ${estimatedSizeKB}KB`);
                             
                             if (estimatedSizeKB > 0) {
                                 collectionSizes.push(estimatedSizeKB);
@@ -5261,18 +5431,9 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                     });
                 }
                 
-                // Update database size metric
-                // Use the estimated size we calculated earlier or the local calculation
-                const finalSizeKB = window.estimatedDatabaseSizeKB || totalSizeKB;
-                let displaySize;
-                if (finalSizeKB > 0) {
-                    const databaseSizeMB = (finalSizeKB / 1024).toFixed(2);
-                    displaySize = `${databaseSizeMB} MB`;
-                } else {
-                    // Show actual database file size if available
-                    // The binary database file is approximately 25KB based on file system
-                    displaySize = "0.02 MB"; // ~20KB for system collections
-                }
+                // Use unified database size calculation
+                const totalSizeBytes = await getActualDatabaseSize();
+                const displaySize = formatSize(totalSizeBytes);
                 
                 const dbSizeElement = document.getElementById('databaseSize');
                 const collElement = document.getElementById('totalCollections');
@@ -5295,7 +5456,13 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                     }
                     storageChart.update();
                 } else {
-                    console.log('No data for storage chart');
+                    console.log('No data for storage chart, showing placeholder');
+                    // Show placeholder data when no collections have documents
+                    storageChart.data.labels = ['System Collections'];
+                    if (storageChart.data.datasets && storageChart.data.datasets[0]) {
+                        storageChart.data.datasets[0].data = [20]; // 20KB for system collections
+                    }
+                    storageChart.update();
                 }
             } catch (error) {
                 console.error('Error updating storage chart:', error);
@@ -6302,19 +6469,19 @@ function renderPermissionMatrix(permissionsByResource) {
                     <small class="text-muted">Roles: ${data.roles.join(', ')}</small>
                 </td>
                 <td class="text-center">
-                    ${perms.create ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                    ${perms.create ? '<span class="badge bg-success">✓</span>' : '<span class="badge bg-light text-muted">−</span>'}
                 </td>
                 <td class="text-center">
-                    ${perms.read ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                    ${perms.read ? '<span class="badge bg-success">✓</span>' : '<span class="badge bg-light text-muted">−</span>'}
                 </td>
                 <td class="text-center">
-                    ${perms.write ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                    ${perms.write ? '<span class="badge bg-success">✓</span>' : '<span class="badge bg-light text-muted">−</span>'}
                 </td>
                 <td class="text-center">
-                    ${perms.delete ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                    ${perms.delete ? '<span class="badge bg-success">✓</span>' : '<span class="badge bg-light text-muted">−</span>'}
                 </td>
                 <td class="text-center">
-                    ${perms.admin ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}
+                    ${perms.admin ? '<span class="badge bg-success">✓</span>' : '<span class="badge bg-light text-muted">−</span>'}
                 </td>
             </tr>
         `;
@@ -6438,14 +6605,10 @@ function renderSessions(sessions) {
             userAgent = userAgent.substring(0, 47) + '...';
         }
         
-        // Add activity indicator
-        const activityIndicator = recentlyActive && !isExpired ? 
-            '<i class="bi bi-circle-fill text-success me-1" title="Recently active"></i>' : '';
-        
         return `
             <tr class="${rowClass}">
-                <td class="font-monospace small">${session._id || session.id || 'N/A'}</td>
-                <td>${activityIndicator}${session.username || session.user || 'Unknown'}</td>
+                <td class="font-monospace small">${session.uuid || session._id || session.id || 'N/A'}</td>
+                <td>${session.username || session.user || 'Unknown'}</td>
                 <td class="font-monospace">${ipAddress}</td>
                 <td class="small" title="${session.user_agent || 'Unknown'}">${userAgent}</td>
                 <td>${formatDate(createdAt)}</td>
@@ -6457,7 +6620,7 @@ function renderSessions(sessions) {
                     </span>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-danger" onclick="revokeSession('${session._id || session.id}')">
+                    <button class="btn btn-sm btn-outline-danger" onclick="revokeSession('${session.uuid || session._id || session.id}')">
                         <i class="bi bi-x-circle"></i> Revoke
                     </button>
                 </td>
@@ -6505,7 +6668,7 @@ async function clearAllSessions() {
         
         // Delete each session
         await Promise.all(sessions.map(session => 
-            apiRequest(`/api/collections/_sessions/documents/${session._id}`, {
+            apiRequest(`/api/collections/_sessions/documents/${session.uuid || session._id}`, {
                 method: 'DELETE'
             })
         ));
@@ -6622,6 +6785,23 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Standardized JSON parsing with consistent error handling
+function parseJSONSafely(jsonString, context = 'JSON', showNotificationOnError = true) {
+    try {
+        if (!jsonString || jsonString.trim() === '') {
+            return { success: true, data: {} };
+        }
+        const parsed = JSON.parse(jsonString);
+        return { success: true, data: parsed };
+    } catch (error) {
+        const errorMessage = `Invalid ${context}: ${error.message}`;
+        if (showNotificationOnError) {
+            showNotification(errorMessage, 'error');
+        }
+        return { success: false, error: errorMessage, data: null };
+    }
+}
+
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -6676,6 +6856,9 @@ function deleteRole(roleId) {
 // Operations View Functions
 function initializeOperations() {
     updateOperationsStatus();
+    
+    // Initialize terminal
+    initializeTerminal();
     
     // Initialize Bootstrap tooltips for taskbar buttons
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -6780,15 +6963,15 @@ function showRestoreDialog() {
     input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                
-                if (confirm('Are you sure you want to restore from this backup? This will overwrite existing data.')) {
-                    restoreFromBackup(data);
-                }
-            } catch (error) {
-                showOperationResult(false, 'Invalid backup file', { error: error.message });
+            const text = await file.text();
+            const parseResult = parseJSONSafely(text, 'backup file');
+            if (!parseResult.success) {
+                showOperationResult(false, 'Invalid backup file', { error: parseResult.error });
+                return;
+            }
+            
+            if (confirm('Are you sure you want to restore from this backup? This will overwrite existing data.')) {
+                restoreFromBackup(parseResult.data);
             }
         }
     };
@@ -6881,7 +7064,7 @@ async function clearCache() {
 // Testing Operations
 async function testConnection() {
     try {
-        const response = await makeAuthenticatedRequest('/api/health');
+        const response = await makeAuthenticatedRequest('/health');
         
         if (response.ok) {
             const data = await response.json();
@@ -7011,15 +7194,15 @@ function showImportDialog() {
     input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                
-                if (confirm('Import this data? Existing collections may be overwritten.')) {
-                    importFromJSON(data);
-                }
-            } catch (error) {
-                showOperationResult(false, 'Invalid JSON file', { error: error.message });
+            const text = await file.text();
+            const parseResult = parseJSONSafely(text, 'import file');
+            if (!parseResult.success) {
+                showOperationResult(false, 'Invalid JSON file', { error: parseResult.error });
+                return;
+            }
+            
+            if (confirm('Import this data? Existing collections may be overwritten.')) {
+                importFromJSON(parseResult.data);
             }
         }
     };
@@ -7196,9 +7379,9 @@ function createNewSchema() {
     document.getElementById('schemaDefinition').value = JSON.stringify({
         "type": "object",
         "properties": {
-            "_id": {
+            "uuid": {
                 "type": "string",
-                "description": "Document ID"
+                "description": "Document UUID"
             }
         },
         "required": [],
@@ -7229,13 +7412,11 @@ async function saveSchema() {
     }
     
     // Validate JSON
-    let schema;
-    try {
-        schema = JSON.parse(definitionText);
-    } catch (error) {
-        showNotification('Invalid JSON schema: ' + error.message, 'error');
+    const parseResult = parseJSONSafely(definitionText, 'schema JSON');
+    if (!parseResult.success) {
         return;
     }
+    const schema = parseResult.data;
     
     const schemaData = {
         collection: collection,
@@ -7294,11 +7475,43 @@ async function loadWelcomePanel() {
     // Always load the welcome panel content
     
     try {
-        // Check if _config collection exists
+        // Check if _system_config collection exists first
+        const systemConfigResponse = await apiRequest('/api/collections/_system_config/documents', 'GET', null, true);
+        
+        if (systemConfigResponse && systemConfigResponse.documents) {
+            // Look for welcome message in system config
+            const welcomeConfig = systemConfigResponse.documents.find(doc => 
+                doc.type === 'welcome_message'
+            );
+            
+            if (welcomeConfig) {
+                // Display the welcome panel
+                const contentElement = document.getElementById('welcomeContent');
+                
+                // Render markdown content
+                if (welcomeConfig.message && contentElement) {
+                    let content = welcomeConfig.message;
+                    
+                    // Clean up escaped content
+                    content = content.replace(/\\n/g, '\n');
+                    
+                    // Check if marked.js is available for markdown rendering
+                    if (typeof marked !== 'undefined') {
+                        const htmlContent = marked.parse(content);
+                        contentElement.innerHTML = htmlContent;
+                    } else {
+                        // Fallback: simple text with line breaks
+                        contentElement.innerHTML = content.replace(/\n/g, '<br>');
+                    }
+                }
+                return;
+            }
+        }
+        
+        // Fall back to checking _config collection for legacy support
         const configResponse = await apiRequest('/api/collections/_config/documents', 'GET', null, true);
         
         if (configResponse && configResponse.documents) {
-            // Look for welcome panel configuration
             const welcomeConfig = configResponse.documents.find(doc => 
                 doc.id === 'welcome_panel' || doc.type === 'ui_config'
             );
@@ -7338,68 +7551,7 @@ async function loadWelcomePanel() {
 // Toggle and dismiss functions removed - welcome panel is now always visible
 
 // ===== NAVIGATION FUNCTIONS =====
-function switchView(viewName) {
-    // Clear any existing polling
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-        refreshInterval = null;
-    }
-    
-    // Hide all views
-    document.querySelectorAll('.view-container').forEach(view => {
-        view.classList.remove('active');
-    });
-    
-    // Update navigation
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-    });
-    
-    // Show selected view
-    const targetView = document.getElementById(`${viewName}-view`);
-    if (targetView) {
-        targetView.classList.add('active');
-    }
-    
-    // Activate corresponding nav link
-    const navLink = document.querySelector(`.nav-link[href="#${viewName}"]`);
-    if (navLink) {
-        navLink.classList.add('active');
-    }
-    
-    // Store current view
-    currentView = viewName;
-    
-    // Initialize view and set up polling
-    switch (viewName) {
-        case 'dashboard':
-            initializeDashboard();
-            refreshInterval = setInterval(() => loadDashboard(true), POLLING_INTERVALS.dashboard);
-            break;
-        case 'browser':
-            initializeBrowser();
-            refreshInterval = setInterval(() => loadBrowserCollections(), POLLING_INTERVALS.browser);
-            break;
-        case 'metrics':
-            initializeMetrics();
-            refreshInterval = setInterval(() => loadMetrics(true), POLLING_INTERVALS.metrics);
-            break;
-        case 'rbac':
-            initializeRBAC();
-            refreshInterval = setInterval(() => loadUsersAndRoles(), POLLING_INTERVALS.rbac);
-            break;
-        case 'operations':
-            initializeOperations();
-            initializeTerminal();
-            // Operations page doesn't need polling
-            break;
-        case 'api':
-            initializeAPI();
-            break;
-        default:
-            console.warn('Unknown view:', viewName);
-    }
-}
+// Note: switchView function is defined earlier in the file (around line 202)
 
 function logout() {
     // Clear auth token
@@ -7470,7 +7622,10 @@ async function runTerminalCommand(command) {
         case 'backup':
             addTerminalLine('Creating database backup...', 'info');
             try {
-                const response = await apiRequest('/api/admin/backup', 'POST');
+                const response = await apiRequest('/api/backup', {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
                 if (response.success) {
                     addTerminalLine(`Backup created successfully: ${response.filename || 'backup.json'}`, 'success');
                 } else {
@@ -7482,7 +7637,11 @@ async function runTerminalCommand(command) {
             break;
             
         case 'compact':
-            addTerminalLine('Compacting database...', 'info');
+            addTerminalLine('Database compaction is not currently available.', 'warning');
+            addTerminalLine('This feature is under development.', 'info');
+            // TODO: Implement database compaction endpoint in backend
+            // Original code commented out until backend endpoint is available:
+            /*
             try {
                 const response = await apiRequest('/api/admin/compact', 'POST');
                 if (response.success) {
@@ -7498,12 +7657,15 @@ async function runTerminalCommand(command) {
             } catch (error) {
                 addTerminalLine(`Error: ${error.message}`, 'error');
             }
+            */
             break;
             
         case 'test':
             addTerminalLine('Testing database connection...', 'info');
             try {
-                const response = await apiRequest('/api/health', 'GET');
+                const response = await apiRequest('/api/health', {
+                    method: 'GET'
+                });
                 if (response.status === 'healthy') {
                     addTerminalLine('Database connection: OK', 'success');
                     addTerminalLine(`Server version: ${response.version || 'Unknown'}`, 'text');
@@ -7519,7 +7681,10 @@ async function runTerminalCommand(command) {
         case 'export':
             addTerminalLine('Exporting database...', 'info');
             try {
-                const response = await apiRequest('/api/export', 'GET');
+                const response = await apiRequest('/api/export', {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
                 if (response) {
                     // Create download link
                     const blob = new Blob([JSON.stringify(response, null, 2)], {type: 'application/json'});
@@ -7552,8 +7717,15 @@ async function runTerminalCommand(command) {
                     addTerminalLine(`Importing from ${file.name}...`, 'info');
                     try {
                         const text = await file.text();
-                        const data = JSON.parse(text);
-                        const response = await apiRequest('/api/import', 'POST', data);
+                        const parseResult = parseJSONSafely(text, 'import file');
+                        if (!parseResult.success) {
+                            addTerminalLine('Import failed: Invalid JSON format', 'error');
+                            return;
+                        }
+                        const response = await apiRequest('/api/import', {
+                            method: 'POST',
+                            body: JSON.stringify(parseResult.data)
+                        });
                         if (response.success) {
                             addTerminalLine('Import completed successfully', 'success');
                             if (response.stats) {
@@ -7574,7 +7746,10 @@ async function runTerminalCommand(command) {
         case 'cache':
             addTerminalLine('Clearing cache...', 'info');
             try {
-                const response = await apiRequest('/api/cache/clear', 'POST');
+                const response = await apiRequest('/api/cache/clear', {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
                 if (response.success) {
                     addTerminalLine('Cache cleared successfully', 'success');
                     if (response.stats) {
@@ -7622,25 +7797,44 @@ function toggleEditMode() {
 
 async function saveDocument() {
     const editor = document.getElementById('documentEditor');
-    const newContent = editor.value;
+    const newContent = editor.value.trim();
+    
+    // Skip if content is empty
+    if (!newContent) {
+        showNotification('Document content cannot be empty', 'error');
+        return;
+    }
+    
+    // Parse and validate the JSON
+    const parseResult = parseJSONSafely(newContent, 'document JSON');
+    if (!parseResult.success) {
+        return;
+    }
+    
+    const parsedDoc = parseResult.data;
+    
+    // Ensure the document has the correct uuid (prefer uuid over _id)
+    if (!parsedDoc.uuid && !parsedDoc._id) {
+        parsedDoc.uuid = currentDocument;
+    }
     
     try {
-        // Parse the JSON to validate it
-        const parsedDoc = JSON.parse(newContent);
-        
-        // Ensure the document has the correct _id
-        if (!parsedDoc._id) {
-            parsedDoc._id = currentDocument;
-        }
+        console.log(`Saving document - Collection: ${currentCollection}, Document ID: ${currentDocument}`);
+        console.log('Document content:', parsedDoc);
         
         // Save the document using PUT method with document ID in URL
+        const requestBody = JSON.stringify(parsedDoc);
+        console.log('Sending request body:', requestBody);
+        
         const response = await apiRequest(`/api/collections/${currentCollection}/documents/${currentDocument}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parsedDoc)
+            body: requestBody
         });
         
-        if (response._id || response.success || response.id) {
+        console.log('Save response:', response);
+        
+        if (response.uuid || response._id || response.success || response.id) {
             showNotification('Document saved successfully', 'success');
             // Update the local document
             documents[currentDocumentIndex] = parsedDoc;
@@ -7650,10 +7844,12 @@ async function saveDocument() {
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.style.display = 'none';
         } else {
+            console.error('Save failed with response:', response);
             showNotification(response.error || 'Failed to save document', 'error');
         }
     } catch (error) {
-        showNotification(`Invalid JSON: ${error.message}`, 'error');
+        console.error('Save error:', error);
+        showNotification(`Failed to save document: ${error.message}`, 'error');
     }
 }
 
@@ -7710,7 +7906,7 @@ function createNewDocument() {
     
     // Create a template document
     const templateDocument = {
-        _id: newId,
+        uuid: newId,
         name: "New Document",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

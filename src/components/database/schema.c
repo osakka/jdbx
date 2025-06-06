@@ -1144,7 +1144,7 @@ int db_validate_collection(database_t* db, const char* collection) {
       if (doc) {
         /* Get document ID for better logging */
         const char* doc_id = "unknown";
-        json_value_t* id_val = json_object_get(doc, "_id");
+        json_value_t* id_val = json_object_get(doc, "uuid");
         if (id_val && id_val->type == JSON_STRING) {
           doc_id = id_val->value.string;
         }

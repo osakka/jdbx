@@ -36,7 +36,7 @@ void* insert_documents_thread(void* arg) {
         
         // Create document with various fields
         json_value_t* doc = json_create_object();
-        json_object_set(doc, "_id", json_create_string(doc_id));
+        json_object_set(doc, "uuid", json_create_string(doc_id));
         json_object_set(doc, "thread_id", json_create_integer(data->thread_id));
         json_object_set(doc, "sequence", json_create_integer(i));
         json_object_set(doc, "timestamp", json_create_integer(time(NULL)));
@@ -104,7 +104,7 @@ int main() {
         snprintf(doc_id, sizeof(doc_id), "warmup-%03d", i);
         
         json_value_t* doc = json_create_object();
-        json_object_set(doc, "_id", json_create_string(doc_id));
+        json_object_set(doc, "uuid", json_create_string(doc_id));
         json_object_set(doc, "type", json_create_string("warmup"));
         
         json_value_t* result = db_insert_document(db, "bucket_test", doc);

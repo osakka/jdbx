@@ -89,7 +89,7 @@ int main() {
     /* Add some new documents */
     for (int i = 0; i < 50; i++) {
         json_value_t* doc = json_create_object();
-        json_object_set(doc, "_id", json_create_string("unique_doc"));
+        json_object_set(doc, "uuid", json_create_string("unique_doc"));
         json_object_set(doc, "value", json_create_integer(i));
         json_array_append(dup_batch, doc);
     }

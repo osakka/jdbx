@@ -34,10 +34,10 @@ json_value_t* safe_insert_document(database_t* db, const char* collection_name, 
     }
     
     /* Generate ID if needed - do this before getting any locks */
-    if (!json_object_has(doc_copy, "_id")) {
+    if (!json_object_has(doc_copy, "uuid")) {
         char id[40];
         snprintf(id, sizeof(id), "thread-doc-%ld", random());
-        json_object_set(doc_copy, "_id", json_create_string(id));
+        json_object_set(doc_copy, "uuid", json_create_string(id));
     }
     
     /* Prepare result - also before locking */
@@ -49,9 +49,9 @@ json_value_t* safe_insert_document(database_t* db, const char* collection_name, 
     }
     
     /* Copy ID to result */
-    json_value_t* id = json_object_get(doc_copy, "_id");
+    json_value_t* id = json_object_get(doc_copy, "uuid");
     if (id && id->type == JSON_STRING) {
-        json_object_set(result, "_id", json_create_string(id->value.string));
+        json_object_set(result, "uuid", json_create_string(id->value.string));
     }
     
     /* Acquire single global database lock for thread safety */
@@ -104,7 +104,7 @@ void* thread_worker(void* arg) {
         if (result) {
             printf("Thread %d: Successfully inserted document %d with ID: %s\n", 
                   thread_id, i, 
-                  json_get_string(json_object_get(result, "_id")));
+                  json_get_string(json_object_get(result, "uuid")));
             json_free(result);
         } else {
             printf("Thread %d: Failed to insert document %d\n", thread_id, i);

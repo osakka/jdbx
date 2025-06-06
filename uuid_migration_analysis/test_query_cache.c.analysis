@@ -1,0 +1,27 @@
+File: /opt/jsondb/tests/test_query_cache.c
+=
+
+254-    if (documents && documents->value.array.size > 0) {
+255-        json_value_t* first_doc = documents->value.array.items[0];
+256:        json_value_t* id_val = json_object_get(first_doc, "_id");
+257-        if (id_val && id_val->type == JSON_STRING) {
+258-            doc_id = id_val->value.string;
+--
+327-    if (documents && documents->value.array.size > 0) {
+328-        json_value_t* last_doc = documents->value.array.items[documents->value.array.size - 1];
+329:        json_value_t* id_val = json_object_get(last_doc, "_id");
+330-        if (id_val && id_val->type == JSON_STRING) {
+331-            doc_id = id_val->value.string;
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+256:        json_value_t* id_val = json_object_get(first_doc, "_id");
+329:        json_value_t* id_val = json_object_get(last_doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

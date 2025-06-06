@@ -8,7 +8,7 @@
 #define SYSTEM_ROLES_COLLECTION "_roles"  
 #define SYSTEM_PERMISSIONS_COLLECTION "_permissions"
 #define SYSTEM_SESSIONS_COLLECTION "_sessions"
-#define SYSTEM_METRICS_COLLECTION "_system_metrics"
+#define SYSTEM_METRICS_COLLECTION "_metrics"
 #define SYSTEM_CONFIG_COLLECTION "_system_config"
 
 /* Initialize system schemas for bootstrap */

@@ -45,11 +45,11 @@ json_value_t* debug_insert_document(database_t* db, const char* collection_name,
     }
     
     printf("STEP 3: Checking/generating ID\n");
-    if (!json_object_has(doc_copy, "_id")) {
+    if (!json_object_has(doc_copy, "uuid")) {
         char* id = malloc(37);  /* UUID string plus null terminator */
         if (id) {
             sprintf(id, "debug-uuid-%ld", random());
-            json_object_set(doc_copy, "_id", json_create_string(id));
+            json_object_set(doc_copy, "uuid", json_create_string(id));
             free(id);
         }
     }
@@ -62,9 +62,9 @@ json_value_t* debug_insert_document(database_t* db, const char* collection_name,
         return NULL;
     }
     
-    json_value_t* id = json_object_get(doc_copy, "_id");
+    json_value_t* id = json_object_get(doc_copy, "uuid");
     if (id && id->type == JSON_STRING) {
-        json_object_set(result, "_id", json_create_string(id->value.string));
+        json_object_set(result, "uuid", json_create_string(id->value.string));
     }
     
     printf("STEP 5: Locking database\n");
@@ -157,7 +157,7 @@ int main() {
     }
     
     printf("Document inserted with ID: %s\n", 
-           json_get_string(json_object_get(result, "_id")));
+           json_get_string(json_object_get(result, "uuid")));
     
     /* Free result and document */
     json_free(result);

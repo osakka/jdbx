@@ -1,0 +1,41 @@
+File: /opt/jsondb/tests/insert_debug.c
+=
+
+46-    
+47-    printf("STEP 3: Checking/generating ID\n");
+48:    if (!json_object_has(doc_copy, "_id")) {
+49-        char* id = malloc(37);  /* UUID string plus null terminator */
+50-        if (id) {
+51-            sprintf(id, "debug-uuid-%ld", random());
+52:            json_object_set(doc_copy, "_id", json_create_string(id));
+53-            free(id);
+54-        }
+--
+63-    }
+64-    
+65:    json_value_t* id = json_object_get(doc_copy, "_id");
+66-    if (id && id->type == JSON_STRING) {
+67:        json_object_set(result, "_id", json_create_string(id->value.string));
+68-    }
+69-    
+--
+158-    
+159-    printf("Document inserted with ID: %s\n", 
+160:           json_get_string(json_object_get(result, "_id")));
+161-    
+162-    /* Free result and document */
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+65:    json_value_t* id = json_object_get(doc_copy, "_id");
+160:           json_get_string(json_object_get(result, "_id")));
+
+WRITE PATTERNS (setting _id):
+52:            json_object_set(doc_copy, "_id", json_create_string(id));
+67:        json_object_set(result, "_id", json_create_string(id->value.string));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

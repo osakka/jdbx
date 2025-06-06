@@ -65,7 +65,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
       json_array_append(valid_sessions, json_clone(session));
     } else {
       /* Log corrupted session for debugging */
-      json_value_t* session_id = json_object_get(session, "_id");
+      json_value_t* session_id = json_object_get(session, "uuid");
       if (session_id && session_id->type == JSON_STRING) {
         LOG_WARNING("Skipping corrupted session: %s", session_id->value.string);
       }
@@ -145,7 +145,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
       json_array_append(valid_sessions, json_clone(session));
     } else {
       /* Log corrupted session for debugging */
-      json_value_t* session_id = json_object_get(session, "_id");
+      json_value_t* session_id = json_object_get(session, "uuid");
       if (session_id && session_id->type == JSON_STRING) {
         LOG_WARNING("Skipping corrupted active session: %s", session_id->value.string);
       }
@@ -208,7 +208,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   
   /* Get first session */
   json_value_t* session = json_array_get(documents, 0);
-  json_value_t* session_id_val = json_object_get(session, "_id");
+  json_value_t* session_id_val = json_object_get(session, "uuid");
   
   if (session_id_val && session_id_val->type == JSON_STRING) {
     const char* session_id = session_id_val->value.string;

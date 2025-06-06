@@ -196,7 +196,7 @@ int main() {
     }
     
     json_value_t* first_doc = docs->value.array.items[0];
-    json_value_t* id_val = json_object_get(first_doc, "_id");
+    json_value_t* id_val = json_object_get(first_doc, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         printf("FAILED: Could not get document ID\n");
         json_free(result1);

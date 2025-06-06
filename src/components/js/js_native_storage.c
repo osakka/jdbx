@@ -13,7 +13,7 @@
 #define JS_TRANSFORMERS_COLLECTION "_transformers"
 #define JS_FUNCTIONS_COLLECTION "_functions"
 /* Use existing system metrics collection for JavaScript execution metrics */
-#define JS_EXECUTION_METRICS_COLLECTION "_system_metrics"
+#define JS_EXECUTION_METRICS_COLLECTION "_metrics"
 
 const char* js_script_type_to_string(js_script_type_t type) {
     switch (type) {
@@ -94,7 +94,10 @@ void js_native_generate_script_id(char *buffer, size_t buffer_size) {
     time_t now = time(NULL);
     int random_part = rand() % 10000;
     
-    snprintf(buffer, buffer_size, "doc-%ld-%d", (long)now, random_part);
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    snprintf(buffer, buffer_size, "doc-%ld-%09ld-%04x", 
+             ts.tv_sec, ts.tv_nsec, random_part & 0xFFFF);
 }
 
 /* Create script metadata structure */
@@ -145,7 +148,7 @@ json_value_t* js_native_script_metadata_to_json(js_script_metadata_t *metadata) 
 
     json_value_t *json = json_create_object();
     
-    json_object_set(json, "_id", json_create_string(metadata->id));
+    json_object_set(json, "uuid", json_create_string(metadata->id));
     json_object_set(json, "name", json_create_string(metadata->name));
     json_object_set(json, "description", json_create_string(metadata->description));
     json_object_set(json, "type", json_create_string(js_script_type_to_string(metadata->type)));
@@ -174,7 +177,7 @@ js_script_metadata_t* js_native_script_metadata_from_json(json_value_t *json) {
     json_value_t *val;
 
     /* Extract ID */
-    val = json_object_get(json, "_id");
+    val = json_object_get(json, "uuid");
     if (val && val->type == JSON_STRING) {
         strncpy(metadata->id, val->value.string, sizeof(metadata->id) - 1);
     }

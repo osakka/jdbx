@@ -1,0 +1,20 @@
+File: /opt/jsondb/src/components/database/schema.c
+=
+
+1145-        /* Get document ID for better logging */
+1146-        const char* doc_id = "unknown";
+1147:        json_value_t* id_val = json_object_get(doc, "_id");
+1148-        if (id_val && id_val->type == JSON_STRING) {
+1149-          doc_id = id_val->value.string;
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+1147:        json_value_t* id_val = json_object_get(doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -1,0 +1,38 @@
+File: /opt/jsondb/src/components/database/database.c
+=
+
+387-    }
+388-    
+389:    /* Get or generate ID - check both "uuid" and legacy "_id" and "id" fields */
+390-    char doc_id[256];
+391-    json_value_t* id_field = json_object_get(document, "uuid");
+392-    if (!id_field) {
+393:        id_field = json_object_get(document, "_id"); /* Legacy support */
+394-        if (!id_field) {
+395-            id_field = json_object_get(document, "id");
+--
+555-    
+556-    /* Add the actual document ID to the result */
+557:    json_object_set(result_doc, "_id", json_create_string(doc_id));
+558-    
+559-    /* Return the cloned document */
+--
+950-                if (result_doc) {
+951-                    /* Add the ID to the document if it doesn't have one */
+952:                    if (!json_object_get(result_doc, "uuid") && !json_object_get(result_doc, "_id")) {
+953-                        json_object_set(result_doc, "uuid", json_create_string(doc_id));
+954-                    }
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+393:        id_field = json_object_get(document, "_id"); /* Legacy support */
+952:                    if (!json_object_get(result_doc, "uuid") && !json_object_get(result_doc, "_id")) {
+
+WRITE PATTERNS (setting _id):
+557:    json_object_set(result_doc, "_id", json_create_string(doc_id));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -122,7 +122,7 @@ int main() {
         return 1;
     }
     printf("Document inserted with ID: %s\n", 
-           json_get_string(json_object_get(result, "_id")));
+           json_get_string(json_object_get(result, "uuid")));
     
     /* Free result */
     json_free(result);

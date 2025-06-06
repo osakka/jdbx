@@ -1,0 +1,41 @@
+File: /opt/jsondb/src/components/api/rbac_api.c
+=
+
+273-      
+274-      /* Copy user fields */
+275:      json_value_t* id = json_object_get(user, "_id");
+276-      json_value_t* username = json_object_get(user, "username");
+277-      json_value_t* cn = json_object_get(user, "cn");
+--
+730-      
+731-      /* Copy role fields */
+732:      json_value_t* id = json_object_get(role, "_id");
+733-      json_value_t* name = json_object_get(role, "name");
+734-      json_value_t* cn = json_object_get(role, "cn");
+--
+785-                  strcmp(user_role->value.string, role_id) == 0) {
+786-                  /* User has this role, add user ID to array */
+787:                  json_value_t* user_id = json_object_get(user, "_id");
+788-                  if (user_id && user_id->type == JSON_STRING) {
+789-                    json_array_append(computed_users, json_create_string(user_id->value.string));
+--
+1456-    
+1457-    /* Copy role basic info */
+1458:    json_value_t* id = json_object_get(role_doc, "_id");
+1459-    json_value_t* name = json_object_get(role_doc, "name");
+1460-    json_value_t* description = json_object_get(role_doc, "description");
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+275:      json_value_t* id = json_object_get(user, "_id");
+732:      json_value_t* id = json_object_get(role, "_id");
+787:                  json_value_t* user_id = json_object_get(user, "_id");
+1458:    json_value_t* id = json_object_get(role_doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

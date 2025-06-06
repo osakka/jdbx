@@ -1,0 +1,27 @@
+File: /opt/jsondb/src/components/core/api_auth_sliding.c
+=
+
+50-  /* Get first session */
+51-  json_value_t* session = json_array_get(documents, 0);
+52:  json_value_t* session_id_val = json_object_get(session, "_id");
+53-  json_value_t* expires_val = json_object_get(session, "expires_at");
+54-  
+--
+214-      
+215-      json_value_t* user_val = json_object_get(session, "username");
+216:      json_value_t* id_val = json_object_get(session, "_id");
+217-      json_value_t* expires_val = json_object_get(session, "expires_at");
+218-      json_value_t* created_val = json_object_get(session, "created_at");
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+52:  json_value_t* session_id_val = json_object_get(session, "_id");
+216:      json_value_t* id_val = json_object_get(session, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -1,0 +1,15 @@
+File: /opt/jsondb/share/examples/js-examples/comprehensive_test.js
+=
+
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+181:                id: product._id,
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -46,7 +46,7 @@ int main() {
         json_value_t* result = db_insert_document(db, "perf_test", doc);
         char* doc_id = NULL;
         if (result) {
-            json_value_t* id_val = json_object_get(result, "_id");
+            json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
                 doc_id = buffer_pool_strdup(id_val->value.string);
             }
@@ -86,7 +86,7 @@ int main() {
         
         for (int i = 0; i < num_queries; i++) {
             json_value_t* doc = json_array_get(results, i);
-            json_value_t* id_val = json_object_get(doc, "_id");
+            json_value_t* id_val = json_object_get(doc, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
                 const char* doc_id = id_val->value.string;
                 
@@ -128,7 +128,7 @@ int main() {
         
         for (int i = 0; i < num_updates; i++) {
             json_value_t* doc = json_array_get(update_results, i);
-            json_value_t* id_val = json_object_get(doc, "_id");
+            json_value_t* id_val = json_object_get(doc, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
                 const char* doc_id = id_val->value.string;
                 

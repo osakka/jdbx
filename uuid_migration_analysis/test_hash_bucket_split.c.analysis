@@ -1,0 +1,27 @@
+File: /opt/jsondb/tests/performance/test_hash_bucket_split.c
+=
+
+37-        // Create document with various fields
+38-        json_value_t* doc = json_create_object();
+39:        json_object_set(doc, "_id", json_create_string(doc_id));
+40-        json_object_set(doc, "thread_id", json_create_integer(data->thread_id));
+41-        json_object_set(doc, "sequence", json_create_integer(i));
+--
+105-        
+106-        json_value_t* doc = json_create_object();
+107:        json_object_set(doc, "_id", json_create_string(doc_id));
+108-        json_object_set(doc, "type", json_create_string("warmup"));
+109-        
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+39:        json_object_set(doc, "_id", json_create_string(doc_id));
+107:        json_object_set(doc, "_id", json_create_string(doc_id));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -1,0 +1,73 @@
+File: /opt/jsondb/src/components/database/operations.c
+=
+
+65-  
+66-  LOG_DEBUG("Generating document ID if needed");
+67:  if (!json_object_has(doc_copy, "_id")) {
+68-    char* id = generate_uuid();
+69-    if (id) {
+70-      LOG_DEBUG("Generated new UUID: %s", id);
+71:      json_object_set(doc_copy, "_id", json_create_string(id));
+72-      free(id);
+73-    } else {
+--
+79-  
+80-  LOG_DEBUG("Verifying document has valid ID");
+81:  json_value_t* id = json_object_get(doc_copy, "_id");
+82-  if (!id || id->type != JSON_STRING) {
+83-    LOG_ERROR("Document has no valid ID after preparation");
+--
+94-    return NULL;
+95-  }
+96:  json_object_set(result, "_id", json_create_string(id_str));
+97-  
+98-  LOG_DEBUG("Acquiring lock");
+--
+267-  
+268-  LOG_DEBUG("Adding ID to document: %s", id);
+269:  json_object_set(doc_copy, "_id", json_create_string(id));
+270-  
+271-  LOG_DEBUG("Creating result object");
+--
+276-    return NULL;
+277-  }
+278:  json_object_set(result, "_id", json_create_string(id));
+279-  
+280-  LOG_DEBUG("Acquiring lock");
+--
+297-    json_value_t* doc = collection->value.array.items[i];
+298-    if (doc && doc->type == JSON_OBJECT) {
+299:      json_value_t* doc_id = json_object_get(doc, "_id");
+300-      
+301-      if (doc_id && doc_id->type == JSON_STRING &&
+--
+461-    }
+462-    
+463:    json_value_t* doc_id = json_object_get(doc, "_id");
+464-    if (!doc_id || doc_id->type != JSON_STRING) {
+465-      if (g_logger) {
+--
+600-    json_value_t* doc = collection->value.array.items[i];
+601-    if (doc && doc->type == JSON_OBJECT) {
+602:      json_value_t* doc_id = json_object_get(doc, "_id");
+603-      if (doc_id && doc_id->type == JSON_STRING &&
+604-        strcmp(doc_id->value.string, id) == 0) {
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+81:  json_value_t* id = json_object_get(doc_copy, "_id");
+299:      json_value_t* doc_id = json_object_get(doc, "_id");
+463:    json_value_t* doc_id = json_object_get(doc, "_id");
+602:      json_value_t* doc_id = json_object_get(doc, "_id");
+
+WRITE PATTERNS (setting _id):
+71:      json_object_set(doc_copy, "_id", json_create_string(id));
+96:  json_object_set(result, "_id", json_create_string(id_str));
+269:  json_object_set(doc_copy, "_id", json_create_string(id));
+278:  json_object_set(result, "_id", json_create_string(id));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

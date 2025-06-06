@@ -49,7 +49,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   
   /* Get first session */
   json_value_t* session = json_array_get(documents, 0);
-  json_value_t* session_id_val = json_object_get(session, "_id");
+  json_value_t* session_id_val = json_object_get(session, "uuid");
   json_value_t* expires_val = json_object_get(session, "expires_at");
   
   if (!session_id_val || session_id_val->type != JSON_STRING ||
@@ -213,7 +213,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
       json_value_t* session = json_array_get(documents, 0);
       
       json_value_t* user_val = json_object_get(session, "username");
-      json_value_t* id_val = json_object_get(session, "_id");
+      json_value_t* id_val = json_object_get(session, "uuid");
       json_value_t* expires_val = json_object_get(session, "expires_at");
       json_value_t* created_val = json_object_get(session, "created_at");
       json_value_t* last_seen_val = json_object_get(session, "last_seen");

@@ -128,8 +128,8 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
     return NULL;
   }
   
-  /* Get user fields - try both "id" and "_id" */
-  json_value_t* id_val = json_object_get(user_doc, "_id");
+  /* Get user fields - try both "id" and "uuid" */
+  json_value_t* id_val = json_object_get(user_doc, "uuid");
   if (!id_val || id_val->type != JSON_STRING) {
     id_val = json_object_get(user_doc, "id");
   }
@@ -181,7 +181,7 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
   }
   
   /* Get role fields */
-  json_value_t* doc_id_val = json_object_get(role_doc, "_id"); /* Document ID */
+  json_value_t* doc_id_val = json_object_get(role_doc, "uuid"); /* Document ID */
   json_value_t* id_val = json_object_get(role_doc, "id");    /* UUID */
   json_value_t* name_val = json_object_get(role_doc, "name");
   json_value_t* permissions_val = json_object_get(role_doc, "permissions");
@@ -449,7 +449,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   }
   
   /* Set user properties */
-  json_object_set(user_doc, "id", json_create_string(id));
+  /* Don't set id - let db_insert_document generate uuid */
   json_object_set(user_doc, "username", json_create_string(username));
   json_object_set(user_doc, "password_hash", json_create_string(password_hash));
   json_object_set(user_doc, "roles", json_create_array());
@@ -501,7 +501,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     }
     
     /* Get the actual document ID */
-    json_value_t* doc_id_val = json_object_get(user_doc, "_id");
+    json_value_t* doc_id_val = json_object_get(user_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
       actual_doc_id = strdup(doc_id_val->value.string);
     }
@@ -689,7 +689,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   }
   
   /* Set role properties */
-  json_object_set(role_doc, "id", json_create_string(id));
+  /* Don't set id - let db_insert_document generate uuid */
   json_object_set(role_doc, "name", json_create_string(name));
   json_object_set(role_doc, "permissions", json_create_object());
   json_object_set(role_doc, "users", json_create_array());
@@ -727,7 +727,7 @@ static json_value_t* find_role_by_uuid(database_t* db, const char* uuid) {
   
   /* Query for role with matching UUID */
   json_value_t* query = json_create_object();
-  json_object_set(query, "id", json_create_string(uuid));
+  json_object_set(query, "uuid", json_create_string(uuid));
   
   json_value_t* result = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
   json_free(query);
@@ -758,7 +758,7 @@ static json_value_t* find_user_by_uuid(database_t* db, const char* uuid) {
   
   /* Query for user with matching UUID */
   json_value_t* query = json_create_object();
-  json_object_set(query, "id", json_create_string(uuid));
+  json_object_set(query, "uuid", json_create_string(uuid));
   
   json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
   json_free(query);
@@ -800,7 +800,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
     }
     
     /* Get the actual document ID */
-    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+    json_value_t* doc_id_val = json_object_get(role_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
       actual_doc_id = strdup(doc_id_val->value.string);
     }
@@ -879,7 +879,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
     }
     
     /* Get the actual document ID */
-    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+    json_value_t* doc_id_val = json_object_get(role_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
       actual_doc_id = strdup(doc_id_val->value.string);
     }

@@ -1,0 +1,50 @@
+File: /opt/jsondb/share/htdocs/js/app.js
+=
+
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+896:            if (!seenIds.has(doc.uuid || doc._id)) {
+897:                seenIds.add(doc.uuid || doc._id);
+1200:        const docId = doc.uuid || doc._id || doc.id || `Document ${index + 1}`;
+1210:            <div class="document-item ${currentDocument === (doc.uuid || doc._id || doc.id) ? 'active' : ''}" 
+1242:    currentDocument = doc.uuid || doc._id || doc.id;
+2322:        const scriptId = scriptDocument.uuid || scriptDocument._id;
+2733:                                <button class="btn btn-sm btn-unified" onclick="viewVersionCode('${version.uuid || version._id}')">
+3113:            await apiRequest(`/api/collections/_script_versions/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
+3258:        const docId = doc.uuid || doc._id || doc.id;
+3297:        const docId = doc.uuid || doc._id || doc.id;
+3332:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3356:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3409:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3435:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3537:                                <td>${doc.name || doc.uuid || doc._id || 'Unnamed'}</td>
+3584:                const existing = existingDocs.find(d => d.name === doc.name || d.uuid === doc.uuid || d._id === doc._id);
+3589:                        scriptName: doc.name || doc.uuid || doc._id, 
+3600:                    delete updateData._id; // Remove _id to avoid conflicts
+3602:                    importedDoc = await apiRequest(`/api/collections/${currentCollection}/${existing.uuid || existing._id}`, 'PUT', updateData);
+3606:                    delete createData._id; // Let server assign new ID
+3616:                            versionData.script_id = importedDoc.uuid || importedDoc._id || importedDoc.id;
+3617:                            delete versionData._id; // Let server assign new ID
+3629:                    scriptName: doc.name || doc.uuid || doc._id,
+3636:                    scriptName: doc.name || doc.uuid || doc._id, 
+4097:            <div class="document-item ${currentDocument === (doc.uuid || doc._id) ? 'active' : ''}" 
+4100:                    <span>${doc.uuid || doc._id || doc.id || `Document ${index + 1}`}</span>
+6479:                <td class="font-monospace small">${session.uuid || session._id || session.id || 'N/A'}</td>
+6492:                    <button class="btn btn-sm btn-outline-danger" onclick="revokeSession('${session.uuid || session._id || session.id}')">
+6540:            apiRequest(`/api/collections/_sessions/documents/${session.uuid || session._id}`, {
+7603:        if (!parsedDoc.uuid && !parsedDoc._id) {
+7614:        if (response.uuid || response._id || response.success || response.id) {
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+3332:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3356:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3409:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3435:            const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
+3584:                const existing = existingDocs.find(d => d.name === doc.name || d.uuid === doc.uuid || d._id === doc._id);
+
+SCHEMA PATTERNS (defining _id):

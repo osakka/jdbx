@@ -105,7 +105,7 @@ static void* stress_worker(void* arg) {
                 snprintf(doc_id, sizeof(doc_id), "doc-%lu", next_doc_id++);
                 
                 json_value_t* doc = json_create_object();
-                json_object_set(doc, "_id", json_create_string(doc_id));
+                json_object_set(doc, "uuid", json_create_string(doc_id));
                 json_object_set(doc, "thread", json_create_integer(thread_id));
                 json_object_set(doc, "timestamp", json_create_integer(time(NULL)));
                 json_object_set(doc, "value", json_create_integer(rand()));

@@ -52,7 +52,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
     if (docs && docs->type == JSON_ARRAY && json_array_size(docs) > 0) {
       /* Delete existing schema */
       json_value_t* old_doc = json_array_get(docs, 0);
-    json_value_t* id_val = json_object_get(old_doc, "_id");
+    json_value_t* id_val = json_object_get(old_doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
       db_delete_document(db, SCHEMAS_COLLECTION, id_val->value.string);
     }
@@ -139,7 +139,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
   int success = 1;
   for (size_t i = 0; i < json_array_size(documents); i++) {
     json_value_t* doc = json_array_get(documents, i);
-    json_value_t* id_val = json_object_get(doc, "_id");
+    json_value_t* id_val = json_object_get(doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
       if (!db_delete_document(db, SCHEMAS_COLLECTION, id_val->value.string)) {
         success = 0;

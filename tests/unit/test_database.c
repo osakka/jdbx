@@ -97,7 +97,7 @@ int test_document_get() {
     json_value_t *doc = json_create_object();
     json_object_set(doc, "test_key", json_create_string("test_value"));
     json_object_set(doc, "number", json_create_number(42));
-    json_object_set(doc, "_id", json_create_string("get_test_id"));
+    json_object_set(doc, "uuid", json_create_string("get_test_id"));
 
     json_value_t *insert_result = db_insert_document(db, "test_collection", doc);
     if (!insert_result) {
@@ -145,7 +145,7 @@ int test_document_update() {
     // Create and insert a test document first
     json_value_t *doc = json_create_object();
     json_object_set(doc, "update_key", json_create_string("original_value"));
-    json_object_set(doc, "_id", json_create_string("update_test_id"));
+    json_object_set(doc, "uuid", json_create_string("update_test_id"));
 
     json_value_t *insert_result = db_insert_document(db, "test_collection", doc);
     if (!insert_result) {
@@ -158,7 +158,7 @@ int test_document_update() {
     // Create update document
     json_value_t *update_doc = json_create_object();
     json_object_set(update_doc, "update_key", json_create_string("updated_value"));
-    json_object_set(update_doc, "_id", json_create_string("update_test_id"));
+    json_object_set(update_doc, "uuid", json_create_string("update_test_id"));
 
     // Update the document
     json_value_t *update_result = db_update_document(db, "test_collection", "update_test_id", update_doc);
@@ -206,7 +206,7 @@ int test_document_delete() {
     // Create and insert a test document first
     json_value_t *doc = json_create_object();
     json_object_set(doc, "delete_key", json_create_string("delete_value"));
-    json_object_set(doc, "_id", json_create_string("delete_test_id"));
+    json_object_set(doc, "uuid", json_create_string("delete_test_id"));
 
     json_value_t *insert_result = db_insert_document(db, "test_collection", doc);
     if (!insert_result) {
@@ -260,7 +260,7 @@ int test_error_handling() {
 
     // Test with NULL collection name
     json_value_t *doc = json_create_object();
-    json_object_set(doc, "_id", json_create_string("test_id"));
+    json_object_set(doc, "uuid", json_create_string("test_id"));
     result = db_insert_document(db, NULL, doc);
     if (result) {
         log_test("FAIL: Insert with NULL collection should fail but succeeded");

@@ -651,8 +651,24 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       
       /* Call handler */
       if (g_logger) LOG_DEBUG("About to call handler function");
+      
+      /* Increment request counter */
+      metric_t* request_counter = get_server_requests_metric();
+      if (request_counter) {
+          metrics_counter_inc(request_counter, 1);
+      }
+      
       http_response_t* result = ctx->routes[i].handler(ctx, request);
       if (g_logger) LOG_DEBUG("Handler function returned: %p", (void*)result);
+      
+      /* Track errors */
+      if (result && result->status >= 400) {
+          metric_t* error_counter = get_api_errors_metric();
+          if (error_counter) {
+              metrics_counter_inc(error_counter, 1);
+          }
+      }
+      
       return result;
     }
   }
@@ -1201,12 +1217,12 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid document\"}", "application/json");
   }
   
-  /* Check if document has _id field for update vs insert */
-  json_value_t* id_field = json_object_get(document, "_id");
+  /* Check if document has uuid or _id field for update vs insert */
+  json_value_t* id_field = json_object_get(document, "uuid");
   json_value_t* result = NULL;
   
   if (id_field && id_field->type == JSON_STRING) {
-    /* Document has _id, check if it exists and update */
+    /* Document has uuid/id, check if it exists and update */
     const char* doc_id = id_field->value.string;
     
     /* Try to get existing document */
@@ -1226,7 +1242,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
       result = db_insert_document(ctx->db, collection_name, document);
     }
   } else {
-    /* No _id field, just insert */
+    /* No uuid or _id field, just insert */
     result = db_insert_document(ctx->db, collection_name, document);
   }
   
@@ -1246,16 +1262,25 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
 
 /* Update document */
 http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* request) {
-  if (!ctx || !request || !request->body) {
+  if (!ctx || !request) {
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid request\"}", "application/json");
+                 "{\"error\":\"Invalid request: Missing context or request\"}", "application/json");
   }
+  
+  if (!request->body) {
+    LOG_ERROR("Document update request has no body. Path: %s", request->path);
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request: Missing request body\"}", "application/json");
+  }
+  
+  LOG_DEBUG("Document update request - Path: %s, Body length: %zu", 
+            request->path, strlen(request->body));
   
   /* Extract collection name and document ID from path */
   const char* path = request->path;
   if (strncmp(path, "/api/collections/", 17) != 0) {
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid path\"}", "application/json");
+                 "{\"error\":\"Invalid path: Must start with /api/collections/\"}", "application/json");
   }
   
   path += 17;
@@ -1264,29 +1289,49 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   const char* slash = strchr(path, '/');
   if (!slash || strncmp(slash, "/documents/", 11) != 0) {
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid path\"}", "application/json");
+                 "{\"error\":\"Invalid path: Expected /api/collections/{collection}/documents/{id}\"}", "application/json");
   }
   
   char* collection_name = strndup(path, slash - path);
   const char* document_id = slash + 11;
   
+  /* Check if updating system collection */
+  if (collection_name[0] == '_') {
+    LOG_DEBUG("Updating system collection document: %s/%s", collection_name, document_id);
+  }
+  
   /* Parse document */
+  LOG_DEBUG("Parsing JSON body for collection %s: %.100s...", collection_name, request->body);
   json_value_t* document = json_parse(request->body);
-  if (!document || document->type != JSON_OBJECT) {
-    if (document) json_free(document);
+  if (!document) {
+    LOG_ERROR("Failed to parse JSON for collection %s. Body: %.200s", collection_name, request->body);
     free(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid document\"}", "application/json");
+                 "{\"error\":\"Invalid JSON: Failed to parse request body\"}", "application/json");
+  }
+  if (document->type != JSON_OBJECT) {
+    json_free(document);
+    free(collection_name);
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid document: Expected JSON object, got array or primitive value\"}", "application/json");
   }
   
   /* Update document */
   json_value_t* result = db_update_document(ctx->db, collection_name, document_id, document);
-  free(collection_name);
   
   if (!result) {
+    /* Check if collection exists */
+    if (!db_collection_exists(ctx->db, collection_name)) {
+      free(collection_name);
+      return create_http_response(HTTP_NOT_FOUND, 
+                   "{\"error\":\"Collection not found\"}", "application/json");
+    }
+    free(collection_name);
     return create_http_response(HTTP_NOT_FOUND, 
-                 "{\"error\":\"Document not found\"}", "application/json");
+                 "{\"error\":\"Document not found or update failed\"}", "application/json");
   }
+  
+  free(collection_name);
   
   /* Create response */
   char* response_str = json_stringify(result);

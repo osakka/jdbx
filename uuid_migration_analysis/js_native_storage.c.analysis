@@ -1,0 +1,29 @@
+File: /opt/jsondb/src/components/js/js_native_storage.c
+=
+
+149-    json_value_t *json = json_create_object();
+150-    
+151:    json_object_set(json, "_id", json_create_string(metadata->id));
+152-    json_object_set(json, "name", json_create_string(metadata->name));
+153-    json_object_set(json, "description", json_create_string(metadata->description));
+--
+178-
+179-    /* Extract ID */
+180:    val = json_object_get(json, "_id");
+181-    if (val && val->type == JSON_STRING) {
+182-        strncpy(metadata->id, val->value.string, sizeof(metadata->id) - 1);
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+180:    val = json_object_get(json, "_id");
+
+WRITE PATTERNS (setting _id):
+151:    json_object_set(json, "_id", json_create_string(metadata->id));
+
+QUERY PATTERNS (searching by _id):
+636:        json_object_set(query, "created_by", json_create_string(user_id));
+1035:    json_object_set(query, "script_id", json_create_string(script_id));
+
+SCHEMA PATTERNS (defining _id):

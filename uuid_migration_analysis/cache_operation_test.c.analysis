@@ -1,0 +1,20 @@
+File: /opt/jsondb/tests/cache/cache_operation_test.c
+=
+
+106-    }
+107-    printf("Document inserted with ID: %s\n",
+108:           json_get_string(json_object_get(insert_result, "_id")));
+109-    json_free(insert_result);
+110-    
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+108:           json_get_string(json_object_get(insert_result, "_id")));
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

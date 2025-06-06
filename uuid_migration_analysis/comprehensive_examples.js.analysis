@@ -1,0 +1,17 @@
+File: /opt/jsondb/share/examples/js-examples/comprehensive_examples.js
+=
+
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+454:            data: { id: document._id, collection: context.collection }
+468:                    id: document._id, 
+483:                    data: { id: document._id, criticalChanges }
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

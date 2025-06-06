@@ -58,7 +58,7 @@ void* thread_worker(void* arg) {
         
         if (result) {
             printf("Thread %d inserted document %d with ID: %s\n", 
-                  thread_id, i, json_get_string(json_object_get(result, "_id")));
+                  thread_id, i, json_get_string(json_object_get(result, "uuid")));
             json_free(result);
         } else {
             printf("Thread %d failed to insert document %d\n", thread_id, i);

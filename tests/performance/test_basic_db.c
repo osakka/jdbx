@@ -47,7 +47,7 @@ int main() {
     if (result_str) buffer_pool_free_safe(result_str);
     
     // Get the ID
-    json_value_t* id_val = json_object_get(result, "_id");
+    json_value_t* id_val = json_object_get(result, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         LOG_ERROR("No _id in result");
         json_free(doc);

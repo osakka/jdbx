@@ -1,0 +1,14 @@
+File: /opt/jsondb/share/examples/basic/insert_data.js
+=
+
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

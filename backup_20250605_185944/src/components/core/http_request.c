@@ -1,0 +1,259 @@
+#include "core/server.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+/* Parse cookies from Cookie header */
+void parse_cookies(http_request_t* request) {
+  if (!request || !request->cookie_header) {
+    return;
+  }
+  
+  char* cookie_str = strdup(request->cookie_header);
+  if (!cookie_str) {
+    return;
+  }
+  
+  /* Split cookie string by '; ' */
+  char* saveptr;
+  char* cookie_pair = strtok_r(cookie_str, ";", &saveptr);
+  
+  while (cookie_pair) {
+    /* Trim leading whitespace */
+    while (*cookie_pair == ' ') {
+      cookie_pair++;
+    }
+    
+    /* Find equals sign separating name and value */
+    char* equals = strchr(cookie_pair, '=');
+    if (equals) {
+      /* Create cookie */
+      cookie_t* cookie = (cookie_t*)malloc(sizeof(cookie_t));
+      if (cookie) {
+        /* Get name and value */
+        *equals = '\0';
+        cookie->name = strdup(cookie_pair);
+        cookie->value = strdup(equals + 1);
+        cookie->next = NULL;
+        
+        /* Add to cookies list */
+        if (!request->cookies) {
+          request->cookies = cookie;
+        } else {
+          cookie_t* last = request->cookies;
+          while (last->next) {
+            last = last->next;
+          }
+          last->next = cookie;
+        }
+      }
+    }
+    
+    cookie_pair = strtok_r(NULL, ";", &saveptr);
+  }
+  
+  free(cookie_str);
+}
+
+/* Get cookie value by name */
+char* get_cookie_value(http_request_t* request, const char* name) {
+  if (!request || !request->cookies || !name) {
+    return NULL;
+  }
+  
+  cookie_t* cookie = request->cookies;
+  while (cookie) {
+    if (cookie->name && strcmp(cookie->name, name) == 0) {
+      return cookie->value;
+    }
+    cookie = cookie->next;
+  }
+  
+  return NULL;
+}
+
+/* Parse HTTP request from string */
+http_request_t* parse_http_request(const char* request_str) {
+  if (!request_str) {
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: request_str is NULL");
+    }
+    return NULL;
+  }
+  
+  if (g_logger) {
+    LOG_TRACE("HTTP_PARSE: Starting to parse request, length=%zu", strlen(request_str));
+    LOG_TRACE("HTTP_PARSE: First 200 chars: %.200s", request_str);
+  }
+  
+  http_request_t* request = (http_request_t*)malloc(sizeof(http_request_t));
+  if (!request) {
+    return NULL;
+  }
+  
+  /* Initialize request fields */
+  request->method = HTTP_UNKNOWN;
+  request->path = NULL;
+  request->query = NULL;
+  request->body = NULL;
+  request->content_type = NULL;
+  request->authorization = NULL;
+  request->cookie_header = NULL;
+  request->cookies = NULL;
+  request->origin = NULL;
+  request->content_length = 0;
+  request->user_agent = NULL;
+  request->remote_addr = NULL;
+  
+  /* Parse request line and headers */
+  char* request_copy = strdup(request_str);
+  char* line = strtok(request_copy, "\r\n");
+  
+  if (line) {
+    /* Parse request line */
+    char method_str[16] = {0};
+    char url[2048] = {0};
+    sscanf(line, "%15s %2047s", method_str, url);
+    
+    /* Set method */
+    request->method = parse_http_method(method_str);
+    
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: method_str='%s', parsed_method=%d, path='%s'", 
+          method_str, request->method, url);
+    }
+    
+    /* Parse URL (path and query) */
+    char* query_start = strchr(url, '?');
+    if (query_start) {
+      /* Split path and query */
+      *query_start = '\0';
+      query_start++;
+      request->path = strdup(url);
+      request->query = strdup(query_start);
+    } else {
+      /* No query part */
+      request->path = strdup(url);
+      request->query = NULL;
+    }
+    
+    if (g_logger) {
+      LOG_TRACE("HTTP_PARSE: final path='%s', query='%s'", 
+          request->path ? request->path : "NULL", 
+          request->query ? request->query : "NULL");
+    }
+    
+    /* Parse headers */
+    line = strtok(NULL, "\r\n");
+    while (line && *line) {
+      /* Content-Type header */
+      if (strncasecmp(line, "Content-Type:", 13) == 0) {
+        request->content_type = strdup(line + 14);
+        /* Trim leading/trailing whitespace */
+        while (*request->content_type == ' ') {
+          request->content_type++;
+        }
+      }
+      
+      /* Content-Length header */
+      else if (strncasecmp(line, "Content-Length:", 15) == 0) {
+        request->content_length = atoi(line + 16);
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Content-Length=%zu", request->content_length);
+        }
+      }
+      
+      /* Authorization header */
+      else if (strncasecmp(line, "Authorization:", 14) == 0) {
+        request->authorization = strdup(line + 15);
+        /* Trim leading/trailing whitespace */
+        while (*request->authorization == ' ') {
+          request->authorization++;
+        }
+      }
+      
+      /* Cookie header */
+      else if (strncasecmp(line, "Cookie:", 7) == 0) {
+        request->cookie_header = strdup(line + 8);
+        /* Trim leading/trailing whitespace */
+        while (*request->cookie_header == ' ') {
+          request->cookie_header++;
+        }
+      }
+      
+      /* Origin header */
+      else if (strncasecmp(line, "Origin:", 7) == 0) {
+        request->origin = strdup(line + 8);
+        /* Trim leading/trailing whitespace */
+        while (*request->origin == ' ') {
+          request->origin++;
+        }
+      }
+      
+      /* User-Agent header */
+      else if (strncasecmp(line, "User-Agent:", 11) == 0) {
+        request->user_agent = strdup(line + 12);
+        /* Trim leading/trailing whitespace */
+        while (*request->user_agent == ' ') {
+          request->user_agent++;
+        }
+      }
+      
+      line = strtok(NULL, "\r\n");
+    }
+    
+    /* Parse body if present */
+    if (request->content_length > 0) {
+      /* Find the body start (after the double CRLF) */
+      const char* body_start = strstr(request_str, "\r\n\r\n");
+      if (body_start) {
+        body_start += 4; /* Skip the double CRLF */
+        request->body = strdup(body_start);
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Body found, length=%zu, content=%.100s", 
+              strlen(request->body), request->body);
+        }
+      } else {
+        if (g_logger) {
+          LOG_TRACE("HTTP_PARSE: Content-Length=%zu but no body found", request->content_length);
+        }
+      }
+    }
+    
+    /* Parse cookies if present */
+    if (request->cookie_header) {
+      parse_cookies(request);
+    }
+  }
+  
+  free(request_copy);
+  return request;
+}
+
+/* Free HTTP request */
+void free_http_request(http_request_t* request) {
+  if (request) {
+    if (request->path) free(request->path);
+    if (request->query) free(request->query);
+    if (request->body) free(request->body);
+    if (request->content_type) free(request->content_type);
+    if (request->authorization) free(request->authorization);
+    if (request->cookie_header) free(request->cookie_header);
+    if (request->origin) free(request->origin);
+    if (request->user_agent) free(request->user_agent);
+    if (request->remote_addr) free(request->remote_addr);
+    
+    /* Free cookies */
+    cookie_t* cookie = request->cookies;
+    while (cookie) {
+      cookie_t* next = cookie->next;
+      if (cookie->name) free(cookie->name);
+      if (cookie->value) free(cookie->value);
+      free(cookie);
+      cookie = next;
+    }
+    
+    free(request);
+  }
+}

@@ -1,0 +1,20 @@
+File: /opt/jsondb/tests/database/quick_insert.c
+=
+
+41-    json_object_set(doc, "name", json_create_string("Test Document"));
+42-    json_object_set(doc, "value", json_create_integer(42));
+43:    json_object_set(doc, "_id", json_create_string("test-id-123"));
+44-    
+45-    printf("Test document created\n");
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+43:    json_object_set(doc, "_id", json_create_string("test-id-123"));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

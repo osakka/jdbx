@@ -1,0 +1,173 @@
+/**
+ * Configuration-specific string interning for JSONdb
+ * 
+ * This implements specialized string pools for configuration values
+ * to achieve the 40% allocation reduction target in Phase 2.
+ */
+
+#include "utils/string_pool.h"
+#include "utils/buffer_pool.h"
+#include "utils/logger.h"
+#include <stdlib.h>
+#include <string.h>
+
+/* Global specialized string pools */
+static string_pool_t* g_config_pool = NULL;
+static string_pool_t* g_error_messages_pool = NULL;
+
+/* Initialization flag */
+static int pools_initialized = 0;
+static pthread_mutex_t pools_init_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* Initialize specialized string pools */
+void config_string_pools_init(void) {
+    pthread_mutex_lock(&pools_init_lock);
+    
+    if (!pools_initialized) {
+        /* Initialize global pools first */
+        if (string_pools_init() != 0) {
+            if (g_logger) {
+                LOG_ERROR("Failed to initialize global string pools");
+            }
+            pthread_mutex_unlock(&pools_init_lock);
+            return;
+        }
+        
+        /* Configuration strings pool (64 buckets for common config values) */
+        g_config_pool = string_pool_create(64, 1000);
+        
+        /* Error messages pool (32 buckets for error templates) */
+        g_error_messages_pool = string_pool_create(32, 100);
+        
+        if (g_config_pool && g_error_messages_pool) {
+            pools_initialized = 1;
+            if (g_logger) {
+                LOG_INFO("Specialized string pools initialized successfully");
+            }
+        } else {
+            if (g_logger) {
+                LOG_ERROR("Failed to initialize specialized string pools");
+            }
+        }
+    }
+    
+    pthread_mutex_unlock(&pools_init_lock);
+}
+
+/* Cleanup specialized string pools */
+void config_string_pools_cleanup(void) {
+    pthread_mutex_lock(&pools_init_lock);
+    
+    if (pools_initialized) {
+        if (g_config_pool) {
+            string_pool_destroy(g_config_pool);
+            g_config_pool = NULL;
+        }
+        
+        if (g_error_messages_pool) {
+            string_pool_destroy(g_error_messages_pool);
+            g_error_messages_pool = NULL;
+        }
+        
+        pools_initialized = 0;
+        
+        if (g_logger) {
+            LOG_INFO("Specialized string pools cleaned up");
+        }
+    }
+    
+    pthread_mutex_unlock(&pools_init_lock);
+}
+
+/* Intern a configuration string (host, paths, secrets, etc.) */
+const char* config_string_intern(const char* str) {
+    if (!str) return NULL;
+    
+    if (!pools_initialized) {
+        config_string_pools_init();
+    }
+    
+    if (!g_config_pool) {
+        /* Fallback to regular strdup if pool failed */
+        return buffer_pool_strdup(str);
+    }
+    
+    interned_string_t* istr = string_pool_intern(g_config_pool, str);
+    return istr ? istr->str : buffer_pool_strdup(str);
+}
+
+/* Intern a JSON field name (_id, username, type, etc.) */
+const char* json_key_intern(const char* str) {
+    if (!str) return NULL;
+    
+    if (!pools_initialized) {
+        config_string_pools_init();
+    }
+    
+    if (!g_json_keys_pool) {
+        return buffer_pool_strdup(str);
+    }
+    
+    interned_string_t* istr = string_pool_intern(g_json_keys_pool, str);
+    return istr ? istr->str : buffer_pool_strdup(str);
+}
+
+/* Intern a document ID */
+const char* doc_id_intern(const char* str) {
+    if (!str) return NULL;
+    
+    if (!pools_initialized) {
+        config_string_pools_init();
+    }
+    
+    if (!g_doc_ids_pool) {
+        return buffer_pool_strdup(str);
+    }
+    
+    interned_string_t* istr = string_pool_intern(g_doc_ids_pool, str);
+    return istr ? istr->str : buffer_pool_strdup(str);
+}
+
+/* Intern an error message */
+const char* error_message_intern(const char* str) {
+    if (!str) return NULL;
+    
+    if (!pools_initialized) {
+        config_string_pools_init();
+    }
+    
+    if (!g_error_messages_pool) {
+        return buffer_pool_strdup(str);
+    }
+    
+    interned_string_t* istr = string_pool_intern(g_error_messages_pool, str);
+    return istr ? istr->str : buffer_pool_strdup(str);
+}
+
+/* Get statistics for all specialized pools */
+void config_string_pools_get_stats(
+    size_t* config_count, size_t* config_memory,
+    size_t* json_keys_count, size_t* json_keys_memory,
+    size_t* doc_ids_count, size_t* doc_ids_memory,
+    size_t* errors_count, size_t* errors_memory
+) {
+    if (!pools_initialized) return;
+    
+    uint64_t hit_count, miss_count;
+    
+    if (g_config_pool && config_count && config_memory) {
+        string_pool_get_stats(g_config_pool, config_count, config_memory, &hit_count, &miss_count);
+    }
+    
+    if (g_json_keys_pool && json_keys_count && json_keys_memory) {
+        string_pool_get_stats(g_json_keys_pool, json_keys_count, json_keys_memory, &hit_count, &miss_count);
+    }
+    
+    if (g_doc_ids_pool && doc_ids_count && doc_ids_memory) {
+        string_pool_get_stats(g_doc_ids_pool, doc_ids_count, doc_ids_memory, &hit_count, &miss_count);
+    }
+    
+    if (g_error_messages_pool && errors_count && errors_memory) {
+        string_pool_get_stats(g_error_messages_pool, errors_count, errors_memory, &hit_count, &miss_count);
+    }
+}

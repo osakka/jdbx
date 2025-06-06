@@ -1,0 +1,37 @@
+File: /opt/jsondb/src/components/api/transaction_api.c
+=
+
+374-
+375-        /* Extract ID if available */
+376:        json_value_t* id = json_object_get(document, "_id");
+377-        if (id && id->type == JSON_STRING) {
+378:          json_object_set(result, "_id", json_create_string(id->value.string));
+379-        }
+380-
+--
+414-      if (result) {
+415-        json_object_set(result, "success", json_create_boolean(1));
+416:        json_object_set(result, "_id", json_create_string(doc_id));
+417-        json_object_set(result, "updated", json_create_boolean(1));
+418-
+--
+449-    json_object_set(result, "success", json_create_boolean(1));
+450-    json_object_set(result, "deleted", json_create_boolean(1));
+451:    json_object_set(result, "_id", json_create_string(doc_id));
+452-
+453-    response = http_response_json(result, 200);
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+376:        json_value_t* id = json_object_get(document, "_id");
+
+WRITE PATTERNS (setting _id):
+378:          json_object_set(result, "_id", json_create_string(id->value.string));
+416:        json_object_set(result, "_id", json_create_string(doc_id));
+451:    json_object_set(result, "_id", json_create_string(doc_id));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

@@ -253,7 +253,7 @@ int test_query_caching() {
     const char* doc_id = NULL;
     if (documents && documents->value.array.size > 0) {
         json_value_t* first_doc = documents->value.array.items[0];
-        json_value_t* id_val = json_object_get(first_doc, "_id");
+        json_value_t* id_val = json_object_get(first_doc, "uuid");
         if (id_val && id_val->type == JSON_STRING) {
             doc_id = id_val->value.string;
         }
@@ -326,7 +326,7 @@ int test_query_caching() {
     documents = json_object_get(result_pre_update, "documents");
     if (documents && documents->value.array.size > 0) {
         json_value_t* last_doc = documents->value.array.items[documents->value.array.size - 1];
-        json_value_t* id_val = json_object_get(last_doc, "_id");
+        json_value_t* id_val = json_object_get(last_doc, "uuid");
         if (id_val && id_val->type == JSON_STRING) {
             doc_id = id_val->value.string;
         }

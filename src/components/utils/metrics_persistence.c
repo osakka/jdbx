@@ -12,7 +12,7 @@
 /* json_deep_copy is now available from json_deep_copy.c */
 
 /* Metrics persistence configuration */
-#define METRICS_COLLECTION_NAME "_system_metrics" /* Collection for new metrics */
+#define METRICS_COLLECTION_NAME "_metrics" /* Collection for new metrics */
 #define OLD_METRICS_COLLECTION "metrics"      /* Old collection to clean up */
 #define METRICS_SNAPSHOT_INTERVAL 60 /* Save metrics every 60 seconds */
 #define METRICS_RETENTION_DAYS 7   /* Keep metrics for 7 days */
@@ -42,6 +42,7 @@ static metrics_persistence_t* g_metrics_persistence = NULL;
 static void* metrics_persistence_thread(void* arg);
 static int save_metrics_snapshot(metrics_persistence_t* mp);
 static int cleanup_old_metrics(metrics_persistence_t* mp);
+static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_name);
 
 /**
  * Initialize metrics persistence
@@ -74,10 +75,29 @@ int metrics_persistence_init(database_t* db) {
   pthread_mutex_init(&g_metrics_persistence->lock, NULL);
   
   /* Create metrics collection if it doesn't exist */
-  json_value_t* collection = json_object_get(db->collections, METRICS_COLLECTION_NAME);
-  if (!collection) {
-    LOG_INFO("Creating metrics collection: %s", METRICS_COLLECTION_NAME);
-    json_object_set(db->collections, METRICS_COLLECTION_NAME, json_create_array());
+  LOG_INFO("Creating metrics collection: %s", METRICS_COLLECTION_NAME);
+  int result = db_create_collection(db, METRICS_COLLECTION_NAME);
+  if (result != 0 && result != -1) { /* -1 means collection already exists */
+    LOG_ERROR("Failed to create metrics collection");
+    free(g_metrics_persistence);
+    g_metrics_persistence = NULL;
+    return 0;
+  }
+  
+  /* Find existing metric documents by name and cache their IDs */
+  LOG_INFO("Looking for existing metric documents");
+  const char* metric_names[] = {"operations", "performance", "cache", "memory", "connections"};
+  char** metric_id_ptrs[] = {&g_metric_id_operations, &g_metric_id_performance, 
+                              &g_metric_id_cache, &g_metric_id_memory, &g_metric_id_connections};
+  
+  for (int i = 0; i < 5; i++) {
+    char* existing_id = find_metric_by_name(g_metrics_persistence, metric_names[i]);
+    if (existing_id) {
+      *metric_id_ptrs[i] = existing_id;
+      LOG_INFO("Found existing metric document '%s' with ID: %s", metric_names[i], existing_id);
+    } else {
+      LOG_DEBUG("No existing metric document found for '%s'", metric_names[i]);
+    }
   }
   
   /* Start persistence thread */
@@ -162,8 +182,8 @@ static void* metrics_persistence_thread(void* arg) {
       mp->last_cleanup = now;
     }
     
-    /* Sleep for a short time */
-    sleep(5);
+    /* Sleep for a short time - reduced from 5s to 100ms for lower latency */
+    usleep(100000); /* 100ms */
   }
   
   LOG_INFO("Metrics persistence thread stopped");
@@ -184,7 +204,10 @@ static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_n
     json_value_t* documents = json_object_get(result, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       json_value_t* doc = json_array_get(documents, 0);
-      json_value_t* id = json_object_get(doc, "_id");
+      json_value_t* id = json_object_get(doc, "uuid");
+      if (!id) {
+        id = json_object_get(doc, "uuid");
+      }
       if (id && id->type == JSON_STRING) {
         char* id_copy = strdup(json_get_string(id));
         json_free(result);
@@ -306,7 +329,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
     result = db_insert_document(mp->db, METRICS_COLLECTION_NAME, document_to_save);
     if (result && !*metric_id_ptr) {
       /* Get and store the generated ID */
-      json_value_t* id_val = json_object_get(result, "_id");
+      json_value_t* id_val = json_object_get(result, "uuid");
       if (id_val && id_val->type == JSON_STRING) {
         *metric_id_ptr = strdup(json_get_string(id_val));
       }
@@ -469,7 +492,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
       /* Delete all documents in old metrics collection */
       for (size_t i = 0; i < documents->value.array.size; i++) {
         json_value_t* doc = json_array_get(documents, i);
-        json_value_t* id = json_object_get(doc, "_id");
+        json_value_t* id = json_object_get(doc, "uuid");
         
         if (id && id->type == JSON_STRING) {
           const char* id_str = json_get_string(id);

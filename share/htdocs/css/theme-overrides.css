@@ -1056,3 +1056,95 @@
         font-size: 0.75rem;
     }
 }
+
+/* Terminal Panel Styles */
+.terminal-panel {
+    background-color: #000;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 14px;
+    overflow-y: auto;
+    height: 500px;
+    color: #00ff00;
+}
+
+.terminal-content {
+    min-height: 100%;
+}
+
+.terminal-line {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.terminal-prompt {
+    color: #00ff00;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.terminal-text {
+    color: #fff;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+.terminal-info {
+    color: #00bfff;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+.terminal-success {
+    color: #00ff00;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+.terminal-error {
+    color: #ff4444;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+.terminal-warning {
+    color: #ffaa00;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+/* Dark theme adjustments for terminal */
+[data-theme="dark"] .terminal-panel {
+    background-color: #0a0a0a;
+    border-color: #333;
+}
+
+[data-theme="dark"] .terminal-prompt {
+    color: #00ff00;
+}
+
+[data-theme="dark"] .terminal-text {
+    color: #e0e0e0;
+}
+
+/* Terminal scrollbar */
+.terminal-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.terminal-panel::-webkit-scrollbar-track {
+    background: #111;
+}
+
+.terminal-panel::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+.terminal-panel::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

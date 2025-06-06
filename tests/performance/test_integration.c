@@ -47,7 +47,7 @@ int main() {
         
         // Save the ID for later
         if (i == 50) {
-            json_value_t* id_val = json_object_get(result, "_id");
+            json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val) {
                 const char* id_str = json_get_string(id_val);
                 if (id_str) {

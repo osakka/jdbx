@@ -1,0 +1,20 @@
+File: /opt/jsondb/tests/performance/stress_test_sustained.c
+=
+
+106-                
+107-                json_value_t* doc = json_create_object();
+108:                json_object_set(doc, "_id", json_create_string(doc_id));
+109-                json_object_set(doc, "thread", json_create_integer(thread_id));
+110-                json_object_set(doc, "timestamp", json_create_integer(time(NULL)));
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+108:                json_object_set(doc, "_id", json_create_string(doc_id));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

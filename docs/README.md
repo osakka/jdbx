@@ -1,202 +1,123 @@
 # JSONdb Documentation
 
-Welcome to the JSONdb documentation. This guide will help you navigate the comprehensive documentation for the JSON Database Server.
+Welcome to the comprehensive documentation for JSONdb - a high-performance document database built for JSON data.
 
-## Quick Links
+**Version**: 3.0.0  
+**Last Updated**: June 2025
 
-- [API Reference](api/API_CORRECTED.md) - Complete API documentation (corrected version)
-- [Getting Started](../README.md#getting-started) - Installation and quick start
-- [Configuration Guide](reference/CONFIG.md) - Server configuration options
-- [CHANGELOG](../CHANGELOG.md) - Version history and updates
+## 📚 Documentation Overview
 
-## Documentation Structure
+This documentation is organized into clear categories to help you find exactly what you need:
 
-### 🚀 Getting Started
-- [Installation](../README.md#installation) - How to build and install JSONdb
-- [Quick Start](../README.md#getting-started) - Basic usage examples
-- [Configuration](reference/CONFIGURATION.md) - Configuration options
+### [Getting Started](getting-started/README.md)
+New to JSONdb? Start here!
+- **[Installation Guide](getting-started/installation.md)** - System requirements and setup
+- **[Quick Start Tutorial](getting-started/quick-start.md)** - Up and running in 5 minutes
+- **[Configuration Basics](getting-started/configuration.md)** - Essential settings
+- **[First Application](getting-started/first-app.md)** - Build your first app
 
-### 📚 API Documentation
-- [API Reference](api/API_CORRECTED.md) - **USE THIS** - Corrected and verified API endpoints
-- [RBAC API](api/RBAC_API.md) - Role-based access control endpoints
-- [JavaScript API](api/JAVASCRIPT_API.md) - JavaScript extension endpoints
-- [OpenAPI Spec](../share/htdocs/openapi.json) - OpenAPI 3.0 specification
+### [Guides](guides/README.md)
+Step-by-step guides for common tasks:
+- **[Authentication Guide](guides/authentication-guide.md)** - Secure your database
+- **[JavaScript Development](guides/javascript-development-guide.md)** - Extend with custom logic
+- **[Production Deployment](guides/production-deployment.md)** - Deploy to production
+- **[Performance Tuning](guides/performance-tuning.md)** - Optimize for your workload
 
-### 📖 User Guides
-- [Query Language](reference/QUERY_LANGUAGE.md) - Comprehensive query syntax
-- [JavaScript Functions](guides/javascript_functions.md) - Creating JS extensions
-- [Authentication](AUTHENTICATION_FIX_PLAN.md) - Authentication system guide
-- [Transactions](reference/TRANSACTIONS.md) - Transaction support
+### [API Reference](api/README.md)
+Complete API documentation:
+- **[REST API](api/rest-api.md)** - HTTP endpoints reference
+- **[JavaScript API](api/javascript-api.md)** - Script execution API
+- **[Client Libraries](api/client-libraries.md)** - Language-specific SDKs
 
-### 🔧 Operations
-- [Server Usage](reference/SERVER_USAGE.md) - Running the server
-- [Metrics](reference/METRICS.md) - Monitoring and metrics
-- [Performance](reference/PERFORMANCE_BOTTLENECKS.md) - Performance tuning
-- [Production Readiness](reference/PRODUCTION_READINESS.md) - Production deployment
+### [Architecture](architecture/README.md)
+Understand how JSONdb works:
+- **[System Design](architecture/system-design.md)** - High-level architecture
+- **[Data Storage](architecture/data-storage.md)** - Storage engine details
+- **[Binary Format](architecture/binary-format.md)** - Performance-optimized format
+- **[Indexing System](architecture/indexing.md)** - B+tree and hash indexes
 
-### 🏗️ Architecture
-- [Project Structure](architecture/project_structure.md) - Codebase organization
-- [Component Organization](architecture/component_organization.md) - System components
-- [Binary Format](BINARY_FORMAT.md) - Binary persistence format
-- [Database Locking](reference/DATABASE_LOCKING.md) - Concurrency control
+### [Reference](reference/README.md)
+Detailed technical reference:
+- **[Configuration Reference](reference/configuration.md)** - All config options
+- **[Query Language](reference/query-language.md)** - Query syntax guide
+- **[Metrics Reference](reference/metrics.md)** - Performance metrics
+- **[Troubleshooting](reference/troubleshooting.md)** - Common issues
 
-### 🛠️ Development
-- [Build System](reference/BUILD_FIX_PLAN.md) - Building from source
-- [Testing Framework](testing/TESTING_FRAMEWORK.md) - Testing guidelines
-- [Git Guidelines](guidelines/GIT_GUIDELINES.md) - Version control practices
-- [Frontend Best Practices](guidelines/FRONTEND_BEST_PRACTICES.md) - UI development
+### [Development](development/README.md)
+For contributors and developers:
+- **[Building from Source](development/building.md)** - Compilation guide
+- **[Contributing](development/contributing.md)** - How to contribute
+- **[Testing](development/testing.md)** - Test suite guide
+- **[Code Style](development/code-style.md)** - Coding standards
 
-### 📋 Reference
-- [Configuration Reference](reference/CONFIG.md) - All configuration options
-- [Environment Variables](reference/ENVIRONMENT_CONFIGURATION.md) - Environment setup
-- [File Descriptions](reference/FILE_DESCRIPTIONS.md) - Source file guide
-- [Tools](reference/TOOLS.md) - Available tools and utilities
+## 🚀 Quick Links
 
-## Important Notes
+### Most Popular Pages
+1. [REST API Reference](api/rest-api.md)
+2. [Authentication Setup](guides/authentication-guide.md)
+3. [Configuration Options](reference/configuration.md)
+4. [JavaScript Integration](guides/javascript-development-guide.md)
+5. [Performance Tuning](guides/performance-tuning.md)
 
-### ⚠️ Documentation Status
+### By Use Case
 
-We are currently undergoing a major documentation reorganization. Please note:
+**First Time Users**
+- [Installation](getting-started/installation.md) → [Quick Start](getting-started/quick-start.md) → [First App](getting-started/first-app.md)
 
-1. **Use API_CORRECTED.md** for accurate API endpoint information
-2. The original API.md contains several inaccuracies (wrong port, incorrect endpoints)
-3. Backup/Restore endpoints shown in some docs are NOT implemented
-4. Authentication is currently disabled for some collection endpoints
+**API Integration**
+- [REST API](api/rest-api.md) → [Authentication](guides/authentication-guide.md) → [Client Libraries](api/client-libraries.md)
 
-### 🔄 Recent Changes
+**Production Deployment**
+- [Production Guide](guides/production-deployment.md) → [Performance Tuning](guides/performance-tuning.md) → [Monitoring](guides/monitoring.md)
 
-- **v2.0.6** (2025-01-28): Fixed binary serialization crash, improved logging
-- **v2.0.5**: Added session management with IP/UA tracking
-- **v2.0.4**: Implemented time-series metrics with 10x performance improvement
-- **v2.0.3**: Added binary persistence with automatic saves
+**Advanced Features**
+- [JavaScript Development](guides/javascript-development-guide.md) → [Custom Indexes](guides/indexing-strategy.md) → [High Availability](guides/high-availability.md)
 
-### 📊 Documentation Audit Results
+## 📖 Documentation Standards
 
-A comprehensive audit revealed:
-- 154 total documentation files
-- ~40% duplicate content
-- Significant API documentation inaccuracies
-- Missing documentation for new features
+All documentation follows our [Style Guide](development/style-guide.md):
+- **Clear**: Simple language, well-structured
+- **Complete**: Every feature documented
+- **Current**: Updated with each release
+- **Practical**: Real-world examples
+- **Accessible**: Easy navigation
 
-See [DOCUMENTATION_ACCURACY_AUDIT.md](DOCUMENTATION_ACCURACY_AUDIT.md) for details.
+## 🔍 Finding Information
 
-## Finding Information
+### Search Tips
+- Use the GitHub search in this repository
+- Check the README.md in each directory
+- Follow cross-references between documents
+- Look for "See Also" sections
 
-### By Feature
+### Can't Find Something?
+1. Check the [Troubleshooting Guide](reference/troubleshooting.md)
+2. Search [GitHub Issues](https://github.com/jsondb/jsondb/issues)
+3. Ask in [Discussions](https://github.com/jsondb/jsondb/discussions)
 
-**Authentication & Security**
-- [Authentication Guide](AUTHENTICATION_FIX_PLAN.md)
-- [RBAC Implementation](RBAC_IMPLEMENTATION_PLAN.md)
-- [JWT Implementation](jwt/JWT_VERIFICATION_FIX.md)
-- [Security Guidelines](security/SECURITY_GUIDELINES.md)
+## 🛠 Version Information
 
-**Data Management**
-- [Collections & Documents](api/API_CORRECTED.md#collections)
-- [Query Language](reference/QUERY_LANGUAGE.md)
-- [Indexing](api/API_CORRECTED.md#indexes)
-- [Transactions](reference/TRANSACTIONS.md)
+This documentation covers JSONdb v3.0.0 and later.
 
-**Extensions**
-- [JavaScript Integration](reference/JAVASCRIPT.md)
-- [JavaScript Functions](guides/javascript_functions.md)
-- [Schema Validation](api/API_CORRECTED.md#schemas)
+**Major Version Documentation**:
+- [v3.x](https://github.com/jsondb/jsondb/tree/v3.0/docs) (Current)
+- [v2.x](https://github.com/jsondb/jsondb/tree/v2.0/docs)
+- [v1.x](https://github.com/jsondb/jsondb/tree/v1.0/docs)
 
-**Operations**
-- [Metrics Collection](METRICS_COLLECTION_IMPLEMENTATION.md)
-- [Session Management](SESSION_MANAGEMENT_IMPLEMENTATION.md)
-- [Binary Persistence](BINARY_PERSISTENCE.md)
-- [Performance Tuning](reference/PERFORMANCE_BOTTLENECKS.md)
+## 🤝 Getting Help
 
-### By User Role
+### Support Channels
+- **GitHub Issues**: [Bug reports and feature requests](https://github.com/jsondb/jsondb/issues)
+- **Discussions**: [Questions and community help](https://github.com/jsondb/jsondb/discussions)
+- **Stack Overflow**: Tag questions with `jsondb`
 
-**Application Developers**
-1. Start with [Getting Started](../README.md#getting-started)
-2. Review [API Reference](api/API_CORRECTED.md)
-3. Learn [Query Language](reference/QUERY_LANGUAGE.md)
-4. Explore [JavaScript Extensions](guides/javascript_functions.md)
+### Contributing
+We welcome contributions! See our [Contributing Guide](development/contributing.md) to get started.
 
-**System Administrators**
-1. Read [Server Usage](reference/SERVER_USAGE.md)
-2. Configure using [Configuration Guide](reference/CONFIG.md)
-3. Monitor with [Metrics Guide](reference/METRICS.md)
-4. Deploy with [Production Readiness](reference/PRODUCTION_READINESS.md)
+## 📄 License
 
-**Contributors**
-1. Understand [Architecture](architecture/project_structure.md)
-2. Follow [Git Guidelines](guidelines/GIT_GUIDELINES.md)
-3. Use [Testing Framework](testing/TESTING_FRAMEWORK.md)
-4. Read [Contributing Guide](project/CONTRIBUTING.md)
+JSONdb is open source software licensed under the MIT License. See [LICENSE](../LICENSE) for details.
 
-## Directory Structure
+---
 
-The documentation is organized into these directories:
-
-- `/api/` - API documentation and usage guides
-- `/architecture/` - Design and architecture documentation
-- `/build/` - Build-related documentation
-- `/compiler/` - Compiler warning fixes and related information
-- `/development/` - Developer documentation and build guides
-- `/guidelines/` - Project guidelines and contribution rules
-- `/guides/` - User guides and tutorials
-- `/implementation/` - Implementation status and details
-- `/integration/` - Integration documentation and status
-- `/jwt/` - JWT verification and authentication details
-- `/port/` - Port and network binding information
-- `/rbac/` - Role-based access control documentation
-- `/reference/` - Reference materials and detailed information
-- `/socket-binding/` - Socket binding and network connection documentation
-- `/src/` - Source code documentation
-- `/status/` - Project status and progress tracking
-- `/testing/` - Testing framework and approach
-- `/threads/` - Thread management and synchronization
-- `/tty/` - TTY and terminal handling documentation
-
-## Known Issues
-
-1. **Port Documentation**: Many docs show port 8080, but default is 5000
-2. **RBAC Endpoints**: Some docs show `/api/rbac/*` but actual endpoints are `/api/*`
-3. **Backup/Restore**: Documentation exists but feature is not implemented
-4. **Duplicate Files**: Multiple versions of RBAC, metrics, and socket documentation
-
-## Getting Help
-
-- Check the [Troubleshooting Guide](../README.md#troubleshooting)
-- Review [Implementation Status](IMPLEMENTATION_STATUS.md)
-- See [Latest Changes](reference/LATEST_CHANGES.md)
-
-## Contributing to Documentation
-
-Please help improve our documentation:
-
-1. Report inaccuracies via GitHub issues
-2. Submit corrections via pull requests
-3. Follow [Documentation Standards](guidelines/DOCUMENTATION_STANDARDS.md)
-4. Test all code examples before submitting
-
-## Documentation Standards
-
-- All documentation is written in Markdown format
-- Documentation follows the "One source of truth" principle from `guidelines/CLAUDE.md`
-- README.md files may exist in code directories for context-specific guidance
-- All substantial documentation belongs in the `/docs` directory
-
-## Cross-References
-
-When referring to other documents, use relative paths from the document location:
-
-```markdown
-Please see the [API documentation](../api/API.md) for details.
-```
-
-## Maintaining Documentation
-
-- Keep documentation updated as code changes
-- Follow the principles in `guidelines/CLAUDE.md`
-- Document thoroughly with clear, concise language
-- Update index files when adding new documentation
-
-## Version
-
-This documentation is for JSONdb v2.0.6. Last updated: January 28, 2025.
-
-For version-specific documentation, see the [CHANGELOG](../CHANGELOG.md).
+*For the main project README, see the [repository root](../README.md)*

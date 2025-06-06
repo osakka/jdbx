@@ -1,0 +1,34 @@
+File: /opt/jsondb/src/components/utils/metrics_persistence.c
+=
+
+205-    if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+206-      json_value_t* doc = json_array_get(documents, 0);
+207:      json_value_t* id = json_object_get(doc, "_id");
+208-      if (id && id->type == JSON_STRING) {
+209-        char* id_copy = strdup(json_get_string(id));
+--
+327-    if (result && !*metric_id_ptr) {
+328-      /* Get and store the generated ID */
+329:      json_value_t* id_val = json_object_get(result, "_id");
+330-      if (id_val && id_val->type == JSON_STRING) {
+331-        *metric_id_ptr = strdup(json_get_string(id_val));
+--
+490-      for (size_t i = 0; i < documents->value.array.size; i++) {
+491-        json_value_t* doc = json_array_get(documents, i);
+492:        json_value_t* id = json_object_get(doc, "_id");
+493-        
+494-        if (id && id->type == JSON_STRING) {
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+207:      json_value_t* id = json_object_get(doc, "_id");
+329:      json_value_t* id_val = json_object_get(result, "_id");
+492:        json_value_t* id = json_object_get(doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

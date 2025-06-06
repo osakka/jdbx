@@ -1,0 +1,58 @@
+File: /opt/jsondb/src/components/database/indexed_document_operations.c
+=
+
+437-    json_value_t* doc = collection->value.array.items[i];
+438-    if (doc && doc->type == JSON_OBJECT) {
+439:      json_value_t* id_val = json_object_get(doc, "_id");
+440-      if (id_val && id_val->type == JSON_STRING) {
+441-        add_to_index(index, id_val->value.string, i);
+--
+470-  char* generated_id = NULL;
+471-  
+472:  json_value_t* id = json_object_get(doc_copy, "_id");
+473-  if (!id || id->type != JSON_STRING) {
+474-    generated_id = generate_uuid();
+--
+479-    }
+480-    
+481:    json_object_set(doc_copy, "_id", json_create_string(generated_id));
+482-    id_str = generated_id;
+483-  } else {
+--
+502-    return NULL;
+503-  }
+504:  json_object_set(result, "_id", json_create_string(id_str));
+505-  
+506-  /* Acquire database lock */
+--
+606-  
+607-  /* Verify ID matches */
+608:  json_value_t* doc_id = json_object_get(doc, "_id");
+609-  if (!doc_id || doc_id->type != JSON_STRING || strcmp(doc_id->value.string, id) != 0) {
+610-    LOG_ERROR("Document ID mismatch: expected '%s', found '%s'", id, 
+--
+695-  if (query_result.expr && query_result.expr->op == OP_AND && query_result.expr->num_children == 1) {
+696-    query_expr_t* child = query_result.expr->children[0];
+697:    if (child && child->op == OP_EQ && child->field_path && strcmp(child->field_path, "_id") == 0 && 
+698-      child->value && child->value->type == JSON_STRING) {
+699-      /* This is an ID lookup query */
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+439:      json_value_t* id_val = json_object_get(doc, "_id");
+472:  json_value_t* id = json_object_get(doc_copy, "_id");
+608:  json_value_t* doc_id = json_object_get(doc, "_id");
+
+WRITE PATTERNS (setting _id):
+481:    json_object_set(doc_copy, "_id", json_create_string(generated_id));
+504:  json_object_set(result, "_id", json_create_string(id_str));
+
+QUERY PATTERNS (searching by _id):
+697:    if (child && child->op == OP_EQ && child->field_path && strcmp(child->field_path, "_id") == 0 && 
+700:      const char* query_id = child->value->value.string;
+701:      LOG_INFO("Optimizing query as direct ID lookup for ID: %s", query_id);
+704:      json_value_t* doc = indexed_db_get_document(db, collection_name, query_id);
+
+SCHEMA PATTERNS (defining _id):

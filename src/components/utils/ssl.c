@@ -88,6 +88,12 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     return SSL_ERROR_INIT;
   }
   
+  /* Enable SSL session caching for performance */
+  SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
+  SSL_CTX_sess_set_cache_size(ssl_ctx, 128); /* Cache up to 128 sessions */
+  SSL_CTX_set_timeout(ssl_ctx, 300); /* 5 minute session timeout */
+  LOG_INFO("SSL session caching enabled (128 sessions, 5 min timeout)");
+  
   /* Set the certificate file */
   if (config->cert_file) {
     if (SSL_CTX_use_certificate_file(ssl_ctx, config->cert_file, SSL_FILETYPE_PEM) <= 0) {

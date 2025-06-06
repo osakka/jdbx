@@ -37,7 +37,7 @@ static json_value_t* create_test_object(void) {
     json_value_t* obj = json_create_object();
     
     /* Add various types of data */
-    json_object_set(obj, "_id", json_create_string("test_doc_12345"));
+    json_object_set(obj, "uuid", json_create_string("test_doc_12345"));
     json_object_set(obj, "name", json_create_string("Test Document"));
     json_object_set(obj, "age", json_create_integer(42));
     json_object_set(obj, "score", json_create_number(95.5));
@@ -161,7 +161,7 @@ static void test_string_interning(void) {
     
     /* Common JSON keys */
     const char* common_keys[] = {
-        "_id", "name", "email", "age", "created_at", "updated_at",
+        "uuid", "name", "email", "age", "created_at", "updated_at",
         "status", "type", "category", "description", "metadata"
     };
     size_t num_keys = sizeof(common_keys) / sizeof(common_keys[0]);

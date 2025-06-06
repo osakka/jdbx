@@ -74,9 +74,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                    "{\"error\":\"Admin user not found\"}", "application/json");
     }
     
-    /* Get the actual user ID */
     json_value_t* admin_doc = json_array_get(documents, 0);
-    json_value_t* id_val = json_object_get(admin_doc, "_id");
+    json_value_t* id_val = json_object_get(admin_doc, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
       json_free(results);
       json_free(body);
@@ -109,17 +108,49 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
       if (token_val && token_val->type == JSON_STRING) {
         const char* access_token = token_val->value.string;
         
+        /* First, invalidate any existing active sessions for this user */
+        LOG_DEBUG("LOGIN: Checking for existing sessions for user: %s", user_id);
+        json_value_t* session_query = json_create_object();
+        json_object_set(session_query, "user_id", json_create_string(user_id));
+        json_object_set(session_query, "active", json_create_boolean(1));
+        
+        json_value_t* existing_sessions = db_query_documents(ctx->db, "_sessions", session_query);
+        json_free(session_query);
+        
+        if (existing_sessions) {
+          json_value_t* documents = json_object_get(existing_sessions, "documents");
+          if (documents && documents->type == JSON_ARRAY) {
+            int session_count = json_array_size(documents);
+            LOG_DEBUG("LOGIN: Found %d existing active sessions for user", session_count);
+            
+            /* Invalidate each existing session */
+            for (size_t i = 0; i < documents->value.array.size; i++) {
+              json_value_t* session = json_array_get(documents, i);
+              json_value_t* session_id_val = json_object_get(session, "uuid");
+              if (!session_id_val) {
+                session_id_val = json_object_get(session, "uuid");
+              }
+              if (session_id_val && session_id_val->type == JSON_STRING) {
+                const char* old_session_id = session_id_val->value.string;
+                LOG_DEBUG("LOGIN: Invalidating old session: %s", old_session_id);
+                rbac_db_invalidate_session(ctx->db, old_session_id);
+              }
+            }
+          }
+          json_free(existing_sessions);
+        }
+        
         /* Extract client info from request */
         const char* ip_address = request->remote_addr;
         const char* user_agent = request->user_agent;
         
-        /* Create session with 30 minute expiration */
+        /* Create new session with 30 minute expiration */
         time_t expires_at = time(NULL) + (30 * 60);
         char* session_id = rbac_db_create_session(ctx->db, user_id, access_token, 
                             expires_at, ip_address, user_agent);
         
         if (session_id) {
-          LOG_DEBUG("LOGIN: Session created with ID: %s", session_id);
+          LOG_DEBUG("LOGIN: New session created with ID: %s", session_id);
           buffer_pool_free(session_id);
         } else {
           LOG_WARNING("LOGIN: Failed to create session for user: %s", username);

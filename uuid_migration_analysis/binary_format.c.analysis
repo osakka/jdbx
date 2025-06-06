@@ -1,0 +1,27 @@
+File: /opt/jsondb/src/components/binary/binary_format.c
+=
+
+676-      
+677-      /* Get document ID for better debugging */
+678:      json_value_t* id_val = json_object_get(document, "_id");
+679-      const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
+680-      
+--
+973-      
+974-      /* Get document ID for debugging */
+975:      json_value_t* id_val = json_object_get(document, "_id");
+976-      const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
+977-      
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+678:      json_value_t* id_val = json_object_get(document, "_id");
+975:      json_value_t* id_val = json_object_get(document, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

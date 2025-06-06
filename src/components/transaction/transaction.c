@@ -1141,7 +1141,7 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
   }
 
   /* Get document ID, or generate one if not present */
-  json_value_t* id_value = json_object_get(document, "_id");
+  json_value_t* id_value = json_object_get(document, "uuid");
   if (id_value && id_value->type == JSON_STRING) {
     operation->document_id = strdup(id_value->value.string);
   } else {
@@ -1150,7 +1150,7 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
     operation->document_id = new_id;
 
     /* Add ID to document */
-    json_object_set(document, "_id", json_create_string(new_id));
+    json_object_set(document, "uuid", json_create_string(new_id));
   }
 
   if (!operation->document_id) {

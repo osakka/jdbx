@@ -82,7 +82,7 @@ void test_insert_document_no_cache() {
     
     if (result) {
         /* Get ID of inserted document */
-        json_value_t* id = json_object_get(result, "_id");
+        json_value_t* id = json_object_get(result, "uuid");
         if (id && id->type == JSON_STRING) {
             printf("SUCCESS: Document inserted with ID: %s\n", id->value.string);
         } else {
@@ -122,7 +122,7 @@ void test_get_document() {
     }
     
     /* Get ID of inserted document */
-    json_value_t* id_val = json_object_get(insert_result, "_id");
+    json_value_t* id_val = json_object_get(insert_result, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         printf("FAILED: Could not get ID of inserted document\n");
         json_free(doc);
@@ -183,7 +183,7 @@ void test_update_document() {
     }
     
     /* Get ID of inserted document */
-    json_value_t* id_val = json_object_get(insert_result, "_id");
+    json_value_t* id_val = json_object_get(insert_result, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         printf("FAILED: Could not get ID of inserted document\n");
         json_free(doc);
@@ -252,7 +252,7 @@ void test_delete_document() {
     }
     
     /* Get ID of inserted document */
-    json_value_t* id_val = json_object_get(insert_result, "_id");
+    json_value_t* id_val = json_object_get(insert_result, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         printf("FAILED: Could not get ID of inserted document\n");
         json_free(doc);

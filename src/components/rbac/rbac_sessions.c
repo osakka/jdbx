@@ -74,7 +74,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   }
   
   /* Get the actual session ID from result */
-  const char* actual_id = json_get_string(json_object_get(result, "_id"));
+  const char* actual_id = json_get_string(json_object_get(result, "uuid"));
   char* session_id_copy = NULL;
   if (actual_id) {
     size_t len = strlen(actual_id) + 1;
@@ -146,7 +146,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   
   /* Update last seen */
   if (user_id) {
-    json_value_t* session_id_val = json_object_get(session, "_id");
+    json_value_t* session_id_val = json_object_get(session, "uuid");
     if (session_id_val && session_id_val->type == JSON_STRING) {
       const char* session_id = session_id_val->value.string;
       

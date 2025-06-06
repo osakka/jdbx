@@ -1,0 +1,26 @@
+File: /opt/jsondb/tests/memory/test_memory_optimizations.c
+=
+
+38-    
+39-    /* Add various types of data */
+40:    json_object_set(obj, "_id", json_create_string("test_doc_12345"));
+41-    json_object_set(obj, "name", json_create_string("Test Document"));
+42-    json_object_set(obj, "age", json_create_integer(42));
+--
+162-    /* Common JSON keys */
+163-    const char* common_keys[] = {
+164:        "_id", "name", "email", "age", "created_at", "updated_at",
+165-        "status", "type", "category", "description", "metadata"
+166-    };
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+
+WRITE PATTERNS (setting _id):
+40:    json_object_set(obj, "_id", json_create_string("test_doc_12345"));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

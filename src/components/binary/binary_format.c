@@ -675,7 +675,7 @@ int binary_serialize_database(const char* path, void* db) {
       doc_header->size = (uint32_t)expected_data_size;
       
       /* Get document ID for better debugging */
-      json_value_t* id_val = json_object_get(document, "_id");
+      json_value_t* id_val = json_object_get(document, "uuid");
       const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
       
       LOG_DEBUG("Document: %s, collection: %s, size: %lu", 
@@ -972,7 +972,7 @@ void* binary_deserialize_database(const char* path) {
       }
       
       /* Get document ID for debugging */
-      json_value_t* id_val = json_object_get(document, "_id");
+      json_value_t* id_val = json_object_get(document, "uuid");
       const char* doc_id = (id_val && id_val->type == JSON_STRING) ? json_get_string(id_val) : "NO_ID";
       
       LOG_INFO("Document: %s, collection: %s", doc_id, collection_name);

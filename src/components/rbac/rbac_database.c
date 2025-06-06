@@ -19,15 +19,7 @@
 /* Permission cache TTL in seconds (5 minutes) */
 #define PERMISSION_CACHE_TTL 300
 
-/* Generate standardized document ID using the same format as regular documents */
-static char* generate_document_id(void) {
-  char* id = (char*)malloc(64);
-  if (!id) return NULL;
-  
-  time_t now = time(NULL);
-  snprintf(id, 64, "doc-%ld-%d", (long)now, rand() % 10000);
-  return id;
-}
+/* Document ID generation is now handled by db_insert_document which generates UUIDs */
 
 /* Note: cleanup_all_rbac_duplicates function removed as it was unused.
  * If duplicate cleanup is needed in the future, implement it as part of
@@ -67,8 +59,9 @@ static int init_rbac_collections(struct database* db) {
 
 /* Forward declarations */
 /* Removed old ID generation forward declarations - using generate_document_id() now */
-static int create_default_admin_role(struct database* db);
-static int create_default_admin_user(struct database* db);
+static int create_default_admin_role(struct database* db, char** admin_role_id_out);
+static int create_default_user_role(struct database* db);
+static int create_default_admin_user(struct database* db, const char* admin_role_id);
 
 /* Initialize RBAC system with database backend */
 rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
@@ -111,8 +104,9 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  /* Create default admin role and user */
-  if (!create_default_admin_role(db)) {
+  /* Create default roles and admin user */
+  char* admin_role_id = NULL;
+  if (!create_default_admin_role(db, &admin_role_id)) {
     LOG_ERROR("RBAC_DB: Failed to create default admin role");
     json_free(rbac->users);
     json_free(rbac->roles);
@@ -120,20 +114,32 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  if (!create_default_admin_user(db)) {
-    LOG_ERROR("RBAC_DB: Failed to create default admin user");
+  if (!create_default_user_role(db)) {
+    LOG_ERROR("RBAC_DB: Failed to create default user role");
     json_free(rbac->users);
     json_free(rbac->roles);
+    if (admin_role_id) free(admin_role_id);
     free(rbac);
     return NULL;
   }
+  
+  if (!create_default_admin_user(db, admin_role_id)) {
+    LOG_ERROR("RBAC_DB: Failed to create default admin user");
+    json_free(rbac->users);
+    json_free(rbac->roles);
+    if (admin_role_id) free(admin_role_id);
+    free(rbac);
+    return NULL;
+  }
+  
+  if (admin_role_id) free(admin_role_id);
   
   LOG_TRACE("RBAC_DB: Database-backed RBAC system initialized");
   return rbac;
 }
 
 /* Create default admin role */
-int create_default_admin_role(struct database* db) {
+int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   LOG_TRACE("RBAC_DB: Creating default admin role");
   
   /* No need to check by old ID since we're not preserving compatibility */
@@ -148,22 +154,30 @@ int create_default_admin_role(struct database* db) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       LOG_TRACE("RBAC_DB: Admin role already exists by name");
+      /* Get the UUID from the existing role */
+      json_value_t* existing_role = json_array_get(documents, 0);
+      json_value_t* role_uuid = json_object_get(existing_role, "uuid");
+      if (!role_uuid) {
+        role_uuid = json_object_get(existing_role, "uuid");
+      }
+      
+      if (role_uuid && role_uuid->type == JSON_STRING && admin_role_id_out) {
+        *admin_role_id_out = strdup(role_uuid->value.string);
+        LOG_TRACE("RBAC_DB: Using existing admin role ID: %s", role_uuid->value.string);
+        json_free(results);
+        return 1; /* Success - role already exists */
+      }
+      
+      LOG_ERROR("RBAC_DB: Admin role exists but has no ID");
       json_free(results);
-      return 1;
+      return 0;
     }
     json_free(results);
   }
   
-  /* Create admin role document with standard document ID */
-  char* admin_role_id = generate_document_id();
-  if (!admin_role_id) {
-    LOG_ERROR("RBAC_DB: Failed to generate admin role ID");
-    return 0;
-  }
-  
+  /* Create admin role document - let database generate UUID */
   json_value_t* admin_role = json_create_object();
-  json_object_set(admin_role, "_id", json_create_string(admin_role_id));
-  free(admin_role_id);
+  /* Don't set _id - let db_insert_document generate it */
   json_object_set(admin_role, "name", json_create_string("admin"));
   json_object_set(admin_role, "cn", json_create_string("Administrator Role"));
   json_object_set(admin_role, "description", json_create_string("System administrator with full access"));
@@ -212,19 +226,112 @@ int create_default_admin_role(struct database* db) {
     return 0;
   }
   
+  /* Store the generated ID for later use */
+  LOG_TRACE("RBAC_DB: Insert result: %s", json_stringify(result));
+  json_value_t* id_val = json_object_get(result, "uuid");
+  if (id_val && id_val->type == JSON_STRING) {
+    LOG_TRACE("RBAC_DB: Admin role created with ID: %s", id_val->value.string);
+    if (admin_role_id_out) {
+      *admin_role_id_out = strdup(id_val->value.string);
+    }
+  } else {
+    LOG_ERROR("RBAC_DB: Failed to get _id from insert result");
+    json_free(result);
+    return 0;
+  }
+  
   json_free(result);
   
   LOG_TRACE("RBAC_DB: Admin role created successfully");
   return 1;
 }
 
+/* Create default user role */
+int create_default_user_role(struct database* db) {
+  LOG_TRACE("RBAC_DB: Creating default user role");
+  
+  /* Check if any role with name "user" exists to prevent duplicates */
+  json_value_t* query = json_create_object();
+  json_object_set(query, "name", json_create_string("user"));
+  json_value_t* results = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+  json_free(query);
+  
+  if (results) {
+    json_value_t* documents = json_object_get(results, "documents");
+    if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+      LOG_TRACE("RBAC_DB: User role already exists by name");
+      json_free(results);
+      return 1;  /* OK for user role to exist */
+    }
+    json_free(results);
+  }
+  
+  /* Create user role document - let database generate UUID */
+  json_value_t* user_role = json_create_object();
+  /* Don't set _id - let db_insert_document generate it */
+  json_object_set(user_role, "name", json_create_string("user"));
+  json_object_set(user_role, "cn", json_create_string("Standard User Role"));
+  json_object_set(user_role, "description", json_create_string("Standard user with limited access"));
+  
+  /* Set permissions - users have read access to their own data and limited write */
+  json_value_t* permissions = json_create_object();
+  json_value_t* collections = json_create_object();
+  
+  /* Users can read/write their own documents in non-system collections */
+  json_value_t* user_perms = json_create_array();
+  json_array_append(user_perms, json_create_string("READ"));
+  json_array_append(user_perms, json_create_string("UPDATE"));
+  json_array_append(user_perms, json_create_string("DELETE"));
+  
+  /* Apply to all non-system collections (those not starting with _) */
+  json_object_set(collections, "*", user_perms);
+  
+  /* No access to system collections */
+  json_value_t* no_perms = json_create_array();
+  json_object_set(collections, "_*", no_perms);
+  
+  json_object_set(permissions, "collections", collections);
+  json_object_set(user_role, "permissions", permissions);
+  
+  /* Add timestamps */
+  char timestamp[64];
+  time_t now = time(NULL);
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+  json_object_set(user_role, "created_at", json_create_string(timestamp));
+  json_object_set(user_role, "updated_at", json_create_string(timestamp));
+  
+  /* Insert role */
+  json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, user_role);
+  json_free(user_role);
+  
+  if (!result) {
+    LOG_ERROR("RBAC_DB: Failed to create user role");
+    return 0;
+  }
+  
+  /* Store the generated ID for later use */
+  LOG_TRACE("RBAC_DB: User role insert result: %s", json_stringify(result));
+  json_value_t* id_val = json_object_get(result, "uuid");
+  if (id_val && id_val->type == JSON_STRING) {
+    LOG_TRACE("RBAC_DB: User role created with ID: %s", id_val->value.string);
+  }
+  
+  json_free(result);
+  
+  LOG_TRACE("RBAC_DB: User role created successfully");
+  return 1;
+}
+
 /* Create default admin user */
-int create_default_admin_user(struct database* db) {
+int create_default_admin_user(struct database* db, const char* admin_role_id) {
   LOG_TRACE("RBAC_DB: Creating default admin user");
   
-  /* No need to check by old ID since we're not preserving compatibility */
+  if (!admin_role_id) {
+    LOG_ERROR("RBAC_DB: Admin role ID not provided");
+    return 0;
+  }
   
-  /* Also check if any user with username "admin" exists to prevent duplicates */
+  /* Check if any user with username "admin" exists to prevent duplicates */
   json_value_t* query = json_create_object();
   json_object_set(query, "username", json_create_string("admin"));
   json_value_t* results = db_query_documents(db, RBAC_USERS_COLLECTION, query);
@@ -237,7 +344,10 @@ int create_default_admin_user(struct database* db) {
       
       /* Check if admin user has correct role ID */
       json_value_t* admin_user = json_array_get(documents, 0);
-      json_value_t* user_id_val = json_object_get(admin_user, "_id");
+      json_value_t* user_id_val = json_object_get(admin_user, "uuid");
+      if (!user_id_val) {
+        user_id_val = json_object_get(admin_user, "uuid");
+      }
       json_value_t* roles_val = json_object_get(admin_user, "roles");
       
       if (user_id_val && roles_val && roles_val->type == JSON_ARRAY) {
@@ -266,7 +376,7 @@ int create_default_admin_user(struct database* db) {
             json_value_t* role_docs = json_object_get(role_results, "documents");
             if (role_docs && role_docs->type == JSON_ARRAY && json_array_size(role_docs) > 0) {
               json_value_t* admin_role = json_array_get(role_docs, 0);
-              json_value_t* role_id_val = json_object_get(admin_role, "_id");
+              json_value_t* role_id_val = json_object_get(admin_role, "uuid");
               
               if (role_id_val && role_id_val->type == JSON_STRING) {
                 const char* admin_role_id = role_id_val->value.string;
@@ -290,45 +400,16 @@ int create_default_admin_user(struct database* db) {
       }
       
       json_free(results);
-      return 1;
+      return 1;  /* Admin user already exists, that's OK */
     }
     json_free(results);
   }
   
-  /* Look up the admin role by name to get its ID */
-  json_value_t* role_query = json_create_object();
-  json_object_set(role_query, "name", json_create_string("admin"));
-  json_value_t* role_results = db_query_documents(db, RBAC_ROLES_COLLECTION, role_query);
-  json_free(role_query);
+  LOG_TRACE("RBAC_DB: Using admin role ID: %s", admin_role_id);
   
-  const char* admin_role_id = NULL;
-  if (role_results) {
-    json_value_t* documents = json_object_get(role_results, "documents");
-    if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-      json_value_t* admin_role = json_array_get(documents, 0);
-      json_value_t* role_id_val = json_object_get(admin_role, "_id");
-      if (role_id_val && role_id_val->type == JSON_STRING) {
-        admin_role_id = role_id_val->value.string;
-      }
-    }
-  }
-  
-  if (!admin_role_id) {
-    LOG_ERROR("RBAC_DB: Admin role not found");
-    if (role_results) json_free(role_results);
-    return 0;
-  }
-  
-  /* Create admin user document with standard document ID */
-  char* admin_id = generate_document_id();
-  if (!admin_id) {
-    LOG_ERROR("RBAC_DB: Failed to generate admin user ID");
-    return 0;
-  }
-  
+  /* Create admin user document - let database generate UUID */
   json_value_t* admin_user = json_create_object();
-  json_object_set(admin_user, "_id", json_create_string(admin_id));
-  free(admin_id);
+  /* Don't set _id - let db_insert_document generate it */
   json_object_set(admin_user, "username", json_create_string("admin"));
   json_object_set(admin_user, "cn", json_create_string("System Administrator"));
   json_object_set(admin_user, "email", json_create_string("admin@localhost"));
@@ -364,14 +445,12 @@ int create_default_admin_user(struct database* db) {
   
   if (!user_result) {
     LOG_ERROR("RBAC_DB: Failed to create admin user");
-    if (role_results) json_free(role_results);
     return 0;
   }
   
-  const char* user_id = json_get_string(json_object_get(user_result, "_id"));
+  const char* user_id = json_get_string(json_object_get(user_result, "uuid"));
   LOG_TRACE("RBAC_DB: Admin user created with ID: %s", user_id ? user_id : "(null)");
   json_free(user_result);
-  if (role_results) json_free(role_results);
   return 1;
 }
 
@@ -416,7 +495,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   }
   
   /* Extract user data */
-  json_value_t* id_val = json_object_get(user_doc, "_id");
+  json_value_t* id_val = json_object_get(user_doc, "uuid");
   json_value_t* username_val = json_object_get(user_doc, "username");
   json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
   json_value_t* roles_val = json_object_get(user_doc, "roles");
@@ -462,27 +541,9 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
     return NULL;
   }
   
-  /* Generate standard document ID */
-  char* user_id = generate_document_id();
-  if (!user_id) {
-    LOG_ERROR("RBAC_DB: Failed to generate user ID");
-    free(password_hash);
-    return NULL;
-  }
-  
-  /* Check if user with this ID already exists (shouldn't happen after cleanup) */
-  json_value_t* existing_by_id = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
-  if (existing_by_id) {
-    LOG_ERROR("RBAC_DB: User with ID %s already exists", user_id);
-    json_free(existing_by_id);
-    free(user_id);
-    free(password_hash);
-    return NULL;
-  }
-  
-  /* Create user document with standardized ID */
+  /* Create user document - let database generate UUID */
   json_value_t* user_doc = json_create_object();
-  json_object_set(user_doc, "_id", json_create_string(user_id));
+  /* Don't set _id - let db_insert_document generate it */
   json_object_set(user_doc, "username", json_create_string(username));
   json_object_set(user_doc, "password_hash", json_create_string(password_hash));
   json_object_set(user_doc, "roles", json_create_array());
@@ -501,28 +562,36 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   
   if (!insert_result) {
     LOG_ERROR("RBAC_DB: Failed to insert user");
-    free(user_id);
     free(password_hash);
     return NULL;
   }
   
-  json_free(insert_result);
+  /* Get the actual ID from the insert result */
+  const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
+  if (!actual_id) {
+    LOG_ERROR("RBAC_DB: Failed to get user ID from insert result");
+    json_free(insert_result);
+    free(password_hash);
+    return NULL;
+  }
   
   /* Create rbac_user_t structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("RBAC_DB: Failed to allocate memory for user");
-    free(user_id);
+    json_free(insert_result);
     free(password_hash);
     return NULL;
   }
   
-  user->id = user_id;
+  user->id = strdup(actual_id);
   user->username = strdup(username);
   user->password_hash = password_hash;
   user->roles = json_create_array();
   
-  LOG_TRACE("RBAC_DB: User created with ID: %s", user_id);
+  json_free(insert_result);
+  
+  LOG_TRACE("RBAC_DB: User created with ID: %s", user->id);
   return user;
 }
 
@@ -532,13 +601,6 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   
   if (!db || !rolename) {
     LOG_ERROR("RBAC_DB: Invalid parameters");
-    return NULL;
-  }
-  
-  /* Generate standard document ID */
-  char* role_id = generate_document_id();
-  if (!role_id) {
-    LOG_ERROR("RBAC_DB: Failed to generate role ID");
     return NULL;
   }
   
@@ -553,24 +615,14 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       LOG_ERROR("RBAC_DB: Role already exists: %s", rolename);
       json_free(results);
-      free(role_id);
       return NULL;
     }
     json_free(results);
   }
   
-  /* Check if role with this ID already exists (shouldn't happen after cleanup) */
-  json_value_t* existing_by_id = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
-  if (existing_by_id) {
-    LOG_ERROR("RBAC_DB: Role with ID %s already exists", role_id);
-    json_free(existing_by_id);
-    free(role_id);
-    return NULL;
-  }
-  
-  /* Create role document with standardized ID */
+  /* Create role document - let database generate UUID */
   json_value_t* role_doc = json_create_object();
-  json_object_set(role_doc, "_id", json_create_string(role_id));
+  /* Don't set _id - let db_insert_document generate it */
   json_object_set(role_doc, "name", json_create_string(rolename));
   json_object_set(role_doc, "description", json_create_string(description ? description : ""));
   json_object_set(role_doc, "permissions", json_create_object());
@@ -588,25 +640,32 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   
   if (!insert_result) {
     LOG_ERROR("RBAC_DB: Failed to insert role");
-    free(role_id);
     return NULL;
   }
   
-  json_free(insert_result);
+  /* Get the actual ID from the insert result */
+  const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
+  if (!actual_id) {
+    LOG_ERROR("RBAC_DB: Failed to get role ID from insert result");
+    json_free(insert_result);
+    return NULL;
+  }
   
   /* Create rbac_role_t structure */
   rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
   if (!role) {
     LOG_ERROR("RBAC_DB: Failed to allocate memory for role");
-    free(role_id);
+    json_free(insert_result);
     return NULL;
   }
   
-  role->id = role_id;
+  role->id = strdup(actual_id);
   role->name = strdup(rolename);
   role->permissions = json_create_object();
   
-  LOG_TRACE("RBAC_DB: Role created with ID: %s", role_id);
+  json_free(insert_result);
+  
+  LOG_TRACE("RBAC_DB: Role created with ID: %s", role->id);
   return role;
 }
 
@@ -645,7 +704,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   snprintf(cache_key, sizeof(cache_key), "%s:%s:%s", user_id, resource_type_str, resource_id);
   
   json_value_t* cache_query = json_create_object();
-  json_object_set(cache_query, "_id", json_create_string(cache_key));
+  json_object_set(cache_query, "uuid", json_create_string(cache_key));
   
   json_value_t* cache_result = db_query_documents(db, RBAC_PERMISSION_CACHE_COLLECTION, cache_query);
   json_free(cache_query);
@@ -692,7 +751,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   /* TODO: Implement full permission resolution algorithm */
   /* For now, just check if user has admin role */
   json_value_t* user_query = json_create_object();
-  json_object_set(user_query, "_id", json_create_string(user_id));
+  json_object_set(user_query, "uuid", json_create_string(user_id));
   
   LOG_TRACE("RBAC_DB: Querying user with _id: %s", user_id);
   

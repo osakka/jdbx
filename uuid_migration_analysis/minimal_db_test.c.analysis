@@ -1,0 +1,44 @@
+File: /opt/jsondb/tests/database/minimal_db_test.c
+=
+
+117-    printf("  - Adding ID to document\n");
+118-    /* Add ID if not provided */
+119:    if (!json_object_has(doc_copy, "_id")) {
+120-        char* id = mini_generate_id();
+121-        if (id) {
+122:            json_object_set(doc_copy, "_id", json_create_string(id));
+123-            free(id);
+124-        } else {
+--
+131-    printf("  - Getting document ID\n");
+132-    /* Get document ID */
+133:    json_value_t* id_val = json_object_get(doc_copy, "_id");
+134-    if (!id_val || id_val->type != JSON_STRING) {
+135-        printf("  - Document has no valid ID\n");
+--
+146-        return NULL;
+147-    }
+148:    json_object_set(result, "_id", json_create_string(id_val->value.string));
+149-    
+150-    printf("  - Locking database\n");
+--
+232-    
+233-    /* Get document ID */
+234:    json_value_t* id_val = json_object_get(insert_result, "_id");
+235-    printf("SUCCESS: Document inserted with ID: %s\n", id_val->value.string);
+236-    
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+133:    json_value_t* id_val = json_object_get(doc_copy, "_id");
+234:    json_value_t* id_val = json_object_get(insert_result, "_id");
+
+WRITE PATTERNS (setting _id):
+122:            json_object_set(doc_copy, "_id", json_create_string(id));
+148:    json_object_set(result, "_id", json_create_string(id_val->value.string));
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

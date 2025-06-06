@@ -436,7 +436,7 @@ static int rebuild_collection_index(database_t* db, const char* collection_name)
   for (size_t i = 0; i < collection->value.array.size; i++) {
     json_value_t* doc = collection->value.array.items[i];
     if (doc && doc->type == JSON_OBJECT) {
-      json_value_t* id_val = json_object_get(doc, "_id");
+      json_value_t* id_val = json_object_get(doc, "uuid");
       if (id_val && id_val->type == JSON_STRING) {
         add_to_index(index, id_val->value.string, i);
       }
@@ -469,7 +469,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   const char* id_str = NULL;
   char* generated_id = NULL;
   
-  json_value_t* id = json_object_get(doc_copy, "_id");
+  json_value_t* id = json_object_get(doc_copy, "uuid");
   if (!id || id->type != JSON_STRING) {
     generated_id = generate_uuid();
     if (!generated_id) {
@@ -478,7 +478,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
       return NULL;
     }
     
-    json_object_set(doc_copy, "_id", json_create_string(generated_id));
+    json_object_set(doc_copy, "uuid", json_create_string(generated_id));
     id_str = generated_id;
   } else {
     id_str = id->value.string;
@@ -501,7 +501,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
     if (generated_id) free(generated_id);
     return NULL;
   }
-  json_object_set(result, "_id", json_create_string(id_str));
+  json_object_set(result, "uuid", json_create_string(id_str));
   
   /* Acquire database lock */
   pthread_mutex_lock(&db->lock);
@@ -605,7 +605,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   }
   
   /* Verify ID matches */
-  json_value_t* doc_id = json_object_get(doc, "_id");
+  json_value_t* doc_id = json_object_get(doc, "uuid");
   if (!doc_id || doc_id->type != JSON_STRING || strcmp(doc_id->value.string, id) != 0) {
     LOG_ERROR("Document ID mismatch: expected '%s', found '%s'", id, 
          doc_id && doc_id->type == JSON_STRING ? doc_id->value.string : "NULL");
@@ -694,7 +694,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   int used_index = 0;
   if (query_result.expr && query_result.expr->op == OP_AND && query_result.expr->num_children == 1) {
     query_expr_t* child = query_result.expr->children[0];
-    if (child && child->op == OP_EQ && child->field_path && strcmp(child->field_path, "_id") == 0 && 
+    if (child && child->op == OP_EQ && child->field_path && strcmp(child->field_path, "uuid") == 0 && 
       child->value && child->value->type == JSON_STRING) {
       /* This is an ID lookup query */
       const char* query_id = child->value->value.string;

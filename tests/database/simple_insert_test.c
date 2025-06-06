@@ -70,7 +70,7 @@ int main() {
     }
     
     /* Get document ID */
-    json_value_t* id_val = json_object_get(result, "_id");
+    json_value_t* id_val = json_object_get(result, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
         printf("Document inserted with ID: %s\n", id_val->value.string);
     } else {

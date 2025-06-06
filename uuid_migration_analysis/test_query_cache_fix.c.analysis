@@ -1,0 +1,20 @@
+File: /opt/jsondb/tests/test_query_cache_fix.c
+=
+
+197-    
+198-    json_value_t* first_doc = docs->value.array.items[0];
+199:    json_value_t* id_val = json_object_get(first_doc, "_id");
+200-    if (!id_val || id_val->type != JSON_STRING) {
+201-        printf("FAILED: Could not get document ID\n");
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+199:    json_value_t* id_val = json_object_get(first_doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+
+SCHEMA PATTERNS (defining _id):

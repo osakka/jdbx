@@ -1,0 +1,54 @@
+File: /opt/jsondb/src/components/rbac/rbac_db.c
+=
+
+129-  }
+130-  
+131:  /* Get user fields - try both "id" and "_id" */
+132:  json_value_t* id_val = json_object_get(user_doc, "_id");
+133-  if (!id_val || id_val->type != JSON_STRING) {
+134-    id_val = json_object_get(user_doc, "id");
+--
+182-  
+183-  /* Get role fields */
+184:  json_value_t* doc_id_val = json_object_get(role_doc, "_id"); /* Document ID */
+185-  json_value_t* id_val = json_object_get(role_doc, "id");    /* UUID */
+186-  json_value_t* name_val = json_object_get(role_doc, "name");
+--
+502-    
+503-    /* Get the actual document ID */
+504:    json_value_t* doc_id_val = json_object_get(user_doc, "_id");
+505-    if (doc_id_val && doc_id_val->type == JSON_STRING) {
+506-      actual_doc_id = strdup(doc_id_val->value.string);
+--
+801-    
+802-    /* Get the actual document ID */
+803:    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+804-    if (doc_id_val && doc_id_val->type == JSON_STRING) {
+805-      actual_doc_id = strdup(doc_id_val->value.string);
+--
+880-    
+881-    /* Get the actual document ID */
+882:    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+883-    if (doc_id_val && doc_id_val->type == JSON_STRING) {
+884-      actual_doc_id = strdup(doc_id_val->value.string);
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+132:  json_value_t* id_val = json_object_get(user_doc, "_id");
+184:  json_value_t* doc_id_val = json_object_get(role_doc, "_id"); /* Document ID */
+504:    json_value_t* doc_id_val = json_object_get(user_doc, "_id");
+803:    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+882:    json_value_t* doc_id_val = json_object_get(role_doc, "_id");
+
+WRITE PATTERNS (setting _id):
+
+QUERY PATTERNS (searching by _id):
+497:    user_doc = find_user_by_uuid(db, user_id);
+575:    user_doc = find_user_by_uuid(db, user_id);
+796:    role_doc = find_role_by_uuid(db, role_id);
+875:    role_doc = find_role_by_uuid(db, role_id);
+932:    role_doc = find_role_by_uuid(db, role_id);
+
+SCHEMA PATTERNS (defining _id):

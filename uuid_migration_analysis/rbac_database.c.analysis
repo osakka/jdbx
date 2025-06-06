@@ -1,0 +1,92 @@
+File: /opt/jsondb/src/components/rbac/rbac_database.c
+=
+
+159-      json_value_t* role_uuid = json_object_get(existing_role, "uuid");
+160-      if (!role_uuid) {
+161:        role_uuid = json_object_get(existing_role, "_id");
+162-      }
+163-      
+--
+229-  /* Store the generated ID for later use */
+230-  LOG_TRACE("RBAC_DB: Insert result: %s", json_stringify(result));
+231:  json_value_t* id_val = json_object_get(result, "_id");
+232-  if (id_val && id_val->type == JSON_STRING) {
+233-    LOG_TRACE("RBAC_DB: Admin role created with ID: %s", id_val->value.string);
+--
+312-  /* Store the generated ID for later use */
+313-  LOG_TRACE("RBAC_DB: User role insert result: %s", json_stringify(result));
+314:  json_value_t* id_val = json_object_get(result, "_id");
+315-  if (id_val && id_val->type == JSON_STRING) {
+316-    LOG_TRACE("RBAC_DB: User role created with ID: %s", id_val->value.string);
+--
+347-      json_value_t* user_id_val = json_object_get(admin_user, "uuid");
+348-      if (!user_id_val) {
+349:        user_id_val = json_object_get(admin_user, "_id");
+350-      }
+351-      json_value_t* roles_val = json_object_get(admin_user, "roles");
+--
+377-            if (role_docs && role_docs->type == JSON_ARRAY && json_array_size(role_docs) > 0) {
+378-              json_value_t* admin_role = json_array_get(role_docs, 0);
+379:              json_value_t* role_id_val = json_object_get(admin_role, "_id");
+380-              
+381-              if (role_id_val && role_id_val->type == JSON_STRING) {
+--
+449-  }
+450-  
+451:  const char* user_id = json_get_string(json_object_get(user_result, "_id"));
+452-  LOG_TRACE("RBAC_DB: Admin user created with ID: %s", user_id ? user_id : "(null)");
+453-  json_free(user_result);
+--
+496-  
+497-  /* Extract user data */
+498:  json_value_t* id_val = json_object_get(user_doc, "_id");
+499-  json_value_t* username_val = json_object_get(user_doc, "username");
+500-  json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
+--
+568-  
+569-  /* Get the actual ID from the insert result */
+570:  const char* actual_id = json_get_string(json_object_get(insert_result, "_id"));
+571-  if (!actual_id) {
+572-    LOG_ERROR("RBAC_DB: Failed to get user ID from insert result");
+--
+645-  
+646-  /* Get the actual ID from the insert result */
+647:  const char* actual_id = json_get_string(json_object_get(insert_result, "_id"));
+648-  if (!actual_id) {
+649-    LOG_ERROR("RBAC_DB: Failed to get role ID from insert result");
+--
+705-  
+706-  json_value_t* cache_query = json_create_object();
+707:  json_object_set(cache_query, "_id", json_create_string(cache_key));
+708-  
+709-  json_value_t* cache_result = db_query_documents(db, RBAC_PERMISSION_CACHE_COLLECTION, cache_query);
+--
+752-  /* For now, just check if user has admin role */
+753-  json_value_t* user_query = json_create_object();
+754:  json_object_set(user_query, "_id", json_create_string(user_id));
+755-  
+756-  LOG_TRACE("RBAC_DB: Querying user with _id: %s", user_id);
+
+PATTERN ANALYSIS:
+=================
+
+READ PATTERNS (accessing _id):
+161:        role_uuid = json_object_get(existing_role, "_id");
+231:  json_value_t* id_val = json_object_get(result, "_id");
+314:  json_value_t* id_val = json_object_get(result, "_id");
+349:        user_id_val = json_object_get(admin_user, "_id");
+379:              json_value_t* role_id_val = json_object_get(admin_role, "_id");
+451:  const char* user_id = json_get_string(json_object_get(user_result, "_id"));
+498:  json_value_t* id_val = json_object_get(user_doc, "_id");
+570:  const char* actual_id = json_get_string(json_object_get(insert_result, "_id"));
+647:  const char* actual_id = json_get_string(json_object_get(insert_result, "_id"));
+
+WRITE PATTERNS (setting _id):
+707:  json_object_set(cache_query, "_id", json_create_string(cache_key));
+754:  json_object_set(user_query, "_id", json_create_string(user_id));
+
+QUERY PATTERNS (searching by _id):
+707:  json_object_set(cache_query, "_id", json_create_string(cache_key));
+754:  json_object_set(user_query, "_id", json_create_string(user_id));
+
+SCHEMA PATTERNS (defining _id):

@@ -6,12 +6,17 @@
 
 #include "database/database.h"
 #include "utils/logger.h"
+#include "utils/metrics.h"
 #include "query/query_language.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
+
+/* External metrics registry */
+extern metrics_registry_t* g_metrics_registry;
 
 /**
  * Generate a UUID for document IDs
@@ -59,11 +64,11 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   }
   
   LOG_DEBUG("Generating document ID if needed");
-  if (!json_object_has(doc_copy, "_id")) {
+  if (!json_object_has(doc_copy, "uuid")) {
     char* id = generate_uuid();
     if (id) {
       LOG_DEBUG("Generated new UUID: %s", id);
-      json_object_set(doc_copy, "_id", json_create_string(id));
+      json_object_set(doc_copy, "uuid", json_create_string(id));
       free(id);
     } else {
       LOG_ERROR("generate UUID for document");
@@ -73,7 +78,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   }
   
   LOG_DEBUG("Verifying document has valid ID");
-  json_value_t* id = json_object_get(doc_copy, "_id");
+  json_value_t* id = json_object_get(doc_copy, "uuid");
   if (!id || id->type != JSON_STRING) {
     LOG_ERROR("Document has no valid ID after preparation");
     json_free(doc_copy);
@@ -88,7 +93,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
     json_free(doc_copy);
     return NULL;
   }
-  json_object_set(result, "_id", json_create_string(id_str));
+  json_object_set(result, "uuid", json_create_string(id_str));
   
   LOG_DEBUG("Acquiring lock");
   pthread_mutex_lock(&db->lock);
@@ -261,7 +266,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
   }
   
   LOG_DEBUG("Adding ID to document: %s", id);
-  json_object_set(doc_copy, "_id", json_create_string(id));
+  json_object_set(doc_copy, "uuid", json_create_string(id));
   
   LOG_DEBUG("Creating result object");
   json_value_t* result = json_create_object();
@@ -270,7 +275,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     json_free(doc_copy);
     return NULL;
   }
-  json_object_set(result, "_id", json_create_string(id));
+  json_object_set(result, "uuid", json_create_string(id));
   
   LOG_DEBUG("Acquiring lock");
   pthread_mutex_lock(&db->lock);
@@ -291,7 +296,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
   for (size_t i = 0; i < collection->value.array.size; i++) {
     json_value_t* doc = collection->value.array.items[i];
     if (doc && doc->type == JSON_OBJECT) {
-      json_value_t* doc_id = json_object_get(doc, "_id");
+      json_value_t* doc_id = json_object_get(doc, "uuid");
       
       if (doc_id && doc_id->type == JSON_STRING &&
         strcmp(doc_id->value.string, id) == 0) {
@@ -455,7 +460,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
       continue;
     }
     
-    json_value_t* doc_id = json_object_get(doc, "_id");
+    json_value_t* doc_id = json_object_get(doc, "uuid");
     if (!doc_id || doc_id->type != JSON_STRING) {
       if (g_logger) {
         LOG_TRACE("DELETE_SEARCH_ITEM: document %zu has no valid _id field", i);
@@ -594,7 +599,7 @@ json_value_t* get_document(database_t* db, const char* collection_name, const ch
   for (size_t i = 0; i < collection->value.array.size; i++) {
     json_value_t* doc = collection->value.array.items[i];
     if (doc && doc->type == JSON_OBJECT) {
-      json_value_t* doc_id = json_object_get(doc, "_id");
+      json_value_t* doc_id = json_object_get(doc, "uuid");
       if (doc_id && doc_id->type == JSON_STRING &&
         strcmp(doc_id->value.string, id) == 0) {
         

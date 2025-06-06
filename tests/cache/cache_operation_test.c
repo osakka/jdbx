@@ -105,7 +105,7 @@ int main() {
         return 1;
     }
     printf("Document inserted with ID: %s\n",
-           json_get_string(json_object_get(insert_result, "_id")));
+           json_get_string(json_object_get(insert_result, "uuid")));
     json_free(insert_result);
     
     /* Get cache stats before query */
