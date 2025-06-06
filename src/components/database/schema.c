@@ -590,9 +590,9 @@ int db_attach_schema(database_t* db, const char* collection, schema_t* schema) {
 
   /* Mark database as modified */
   LOG_TRACE("Marking database as modified");
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   db->is_modified = 1;
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
 
   LOG_INFO("Schema '%s' attached to collection '%s'",
       schema->name ? schema->name : "unnamed", collection);
@@ -635,9 +635,9 @@ int db_detach_schema(database_t* db, const char* collection) {
 
   /* Mark database as modified */
   LOG_TRACE("Marking database as modified");
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   db->is_modified = 1;
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
 
   LOG_INFO("Schema detached from collection '%s'", collection);
   return 1;

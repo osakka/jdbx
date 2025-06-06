@@ -856,7 +856,7 @@ void* binary_deserialize_database(const char* path) {
   /* Initialize database */
   db->path = strdup(path);
   db->collections = json_create_object();
-  pthread_mutex_init(&db->lock, NULL);
+  pthread_rwlock_init(&db->rwlock, NULL);
   db->is_modified = 0;
   db->cache = NULL;
   db->cache_enabled = 0;

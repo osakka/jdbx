@@ -1,0 +1,18 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -I../../src/include -pthread
+LDFLAGS = -L../../build/lib -ljsondb -lpthread -lm -lssl -lcrypto -L/opt/qjs/lib/quickjs -lquickjs
+
+TARGET = test_rwlock_concurrency
+
+all: $(TARGET)
+
+$(TARGET): test_rwlock_concurrency.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+run: $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all run clean

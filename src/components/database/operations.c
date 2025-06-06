@@ -95,14 +95,14 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   }
   json_object_set(result, "uuid", json_create_string(id_str));
   
-  LOG_DEBUG("Acquiring lock");
-  pthread_mutex_lock(&db->lock);
+  LOG_DEBUG("Acquiring write lock");
+  pthread_rwlock_wrlock(&db->rwlock);
   
   LOG_DEBUG("Collection: %s", collection_name);
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     json_free(result);
     json_free(doc_copy);
     return NULL;
@@ -112,8 +112,8 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name, js
   json_array_append(collection, doc_copy);
   db->is_modified = 1;
   
-  LOG_DEBUG("Releasing lock");
-  pthread_mutex_unlock(&db->lock);
+  LOG_DEBUG("Releasing write lock");
+  pthread_rwlock_unlock(&db->rwlock);
   
   LOG_INFO("Inserted: %s", id_str);
   
@@ -157,14 +157,14 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     return NULL;
   }
   
-  LOG_DEBUG("Acquiring lock");
-  pthread_mutex_lock(&db->lock);
+  LOG_DEBUG("Acquiring read lock");
+  pthread_rwlock_rdlock(&db->rwlock);
   
   LOG_DEBUG("Collection: %s", collection_name);
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);
@@ -176,7 +176,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
   json_value_t* documents_copy = json_create_array();
   if (!documents_copy) {
     LOG_ERROR("create documents copy");
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);
@@ -192,8 +192,8 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name, js
     }
   }
   
-  LOG_DEBUG("Releasing lock");
-  pthread_mutex_unlock(&db->lock);
+  LOG_DEBUG("Releasing read lock");
+  pthread_rwlock_unlock(&db->rwlock);
   
   LOG_DEBUG("Executing query against documents");
   query_result_t execute_result = query_execute(query_result.expr, documents_copy, &query_result.options);
@@ -277,14 +277,14 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
   }
   json_object_set(result, "uuid", json_create_string(id));
   
-  LOG_DEBUG("Acquiring lock");
-  pthread_mutex_lock(&db->lock);
+  LOG_DEBUG("Acquiring write lock");
+  pthread_rwlock_wrlock(&db->rwlock);
   
   LOG_DEBUG("Collection: %s", collection_name);
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     json_free(result);
     json_free(doc_copy);
     return NULL;
@@ -312,8 +312,8 @@ json_value_t* db_update_document(database_t* db, const char* collection_name, co
     }
   }
   
-  LOG_DEBUG("Releasing lock");
-  pthread_mutex_unlock(&db->lock);
+  LOG_DEBUG("Releasing read lock");
+  pthread_rwlock_unlock(&db->rwlock);
   
   if (!found) {
     LOG_ERROR("Document with ID '%s' not found in collection '%s'", id, collection_name);
@@ -343,7 +343,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
          id ? id : "NULL", (unsigned long)thread_id);
     LOG_TRACE("DELETE_PARAMS: db=%p, db->collections=%p, db->lock=%p", 
          (void*)db, db ? (void*)db->collections : NULL, 
-         db ? (void*)&db->lock : NULL);
+         db ? (void*)&db->rwlock : NULL);
   }
   
   if (!db || !collection_name || !id) {
@@ -369,7 +369,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
   }
   
   /* Acquire lock with enhanced error handling */
-  int lock_result = pthread_mutex_lock(&db->lock);
+  int lock_result = pthread_rwlock_wrlock(&db->rwlock);
   if (lock_result != 0) {
     if (g_logger) {
       LOG_ERROR("DELETE_FAILED: Unable to acquire database lock - error=%d, thread=%lu", 
@@ -389,7 +389,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
       LOG_ERROR("DELETE_FAILED: Invalid collections structure - collections=%p, type=%d", 
            (void*)db->collections, db->collections ? (int)db->collections->type : -1);
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -403,7 +403,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
       LOG_ERROR("DELETE_FAILED: Collection not found or invalid - collection='%s', found=%p, type=%d", 
            collection_name, (void*)collection, collection ? (int)collection->type : -1);
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -419,7 +419,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
       LOG_ERROR("DELETE_FAILED: Collection has size but no items array - size=%zu, items=%p", 
            collection_size, (void*)collection->value.array.items);
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -482,7 +482,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     if (g_logger) {
       LOG_WARNING("DELETE_NOT_FOUND: document with id='%s' not found in collection '%s'", id, collection_name);
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -497,7 +497,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     if (g_logger) {
       LOG_ERROR("DELETE_FAILED: Document pointer is NULL at found index %zu", found_index);
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -530,7 +530,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     if (g_logger) {
       LOG_ERROR("DELETE_FAILED: Cannot decrease array size from 0");
     }
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -550,7 +550,7 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
   }
   
   /* Release lock */
-  int unlock_result = pthread_mutex_unlock(&db->lock);
+  int unlock_result = pthread_rwlock_unlock(&db->rwlock);
   if (unlock_result != 0) {
     if (g_logger) {
       LOG_ERROR("DELETE_WARNING: Failed to release database lock - error=%d, thread=%lu", 
@@ -582,14 +582,14 @@ json_value_t* get_document(database_t* db, const char* collection_name, const ch
     return NULL;
   }
   
-  LOG_DEBUG("Acquiring lock");
-  pthread_mutex_lock(&db->lock);
+  LOG_DEBUG("Acquiring read lock");
+  pthread_rwlock_rdlock(&db->rwlock);
   
   LOG_DEBUG("Collection: %s", collection_name);
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return NULL;
   }
   
@@ -610,8 +610,8 @@ json_value_t* get_document(database_t* db, const char* collection_name, const ch
     }
   }
   
-  LOG_DEBUG("Releasing lock");
-  pthread_mutex_unlock(&db->lock);
+  LOG_DEBUG("Releasing read lock");
+  pthread_rwlock_unlock(&db->rwlock);
   
   if (document) {
     LOG_INFO("Document retrieved");

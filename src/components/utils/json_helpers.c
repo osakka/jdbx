@@ -107,9 +107,9 @@ json_value_t* json_export_database(database_t* db) {
   }
   
   /* Create a deep copy of the collections object using optimized structural copy */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   json_value_t* result = json_clone(db->collections);
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   if (!result) {
     return NULL;
@@ -160,7 +160,7 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
   
   if (coll_data->type == JSON_ARRAY) {
     /* Lock database */
-    pthread_mutex_lock(&db->lock);
+    pthread_rwlock_wrlock(&db->rwlock);
     
     /* Create the collection if it doesn't exist */
     json_value_t* existing_coll = json_object_get(db->collections, collection);
@@ -168,14 +168,14 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
       json_object_set(db->collections, collection, json_create_array());
       existing_coll = json_object_get(db->collections, collection);
       if (!existing_coll) {
-        pthread_mutex_unlock(&db->lock);
+        pthread_rwlock_unlock(&db->rwlock);
         return 0;
       }
     } else if (replace_mode) {
       /* Replace the collection with an empty array */
       json_value_t* empty_array = json_create_array();
       if (!empty_array) {
-        pthread_mutex_unlock(&db->lock);
+        pthread_rwlock_unlock(&db->rwlock);
         return 0;
       }
       json_object_set(db->collections, collection, empty_array);
@@ -201,7 +201,7 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
     /* Mark database as modified */
     db->is_modified = 1;
     
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     
     /* Save the database */
     result = db_save(db);
@@ -234,14 +234,14 @@ int json_import_database(database_t* db, json_value_t* data, int replace_mode, i
   }
   
   /* Lock database */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   
   /* If replace mode, clear all collections */
   if (replace_mode) {
     json_free(db->collections);
     db->collections = json_create_object();
     if (!db->collections) {
-      pthread_mutex_unlock(&db->lock);
+      pthread_rwlock_unlock(&db->rwlock);
       return 0;
     }
   }
@@ -291,7 +291,7 @@ int json_import_database(database_t* db, json_value_t* data, int replace_mode, i
   /* Mark database as modified */
   db->is_modified = 1;
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   /* Save the database */
   return db_save(db);

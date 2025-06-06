@@ -126,7 +126,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
   }
   
   /* Lock database */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Copy specified collections */
   for (int i = 0; i < num_collections; i++) {
@@ -148,7 +148,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
     }
   }
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   /* Write to file */
   char* json_str = json_stringify(export_obj);
@@ -188,9 +188,9 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   
   /* If overwrite is false, only import if database is empty */
   if (!overwrite) {
-    pthread_mutex_lock(&db->lock);
+    pthread_rwlock_rdlock(&db->rwlock);
     size_t num_collections = db->collections->value.object.size;
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     
     if (num_collections > 0) {
       return IMPORT_ERROR_NOT_EMPTY;
@@ -233,14 +233,14 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   }
   
   /* Lock database */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   
   /* If overwrite, clear existing collections */
   if (overwrite) {
     json_free(db->collections);
     db->collections = json_create_object();
     if (!db->collections) {
-      pthread_mutex_unlock(&db->lock);
+      pthread_rwlock_unlock(&db->rwlock);
       json_free(import_obj);
       return IMPORT_ERROR_MEMORY;
     }
@@ -268,7 +268,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   /* Mark database as modified */
   db->is_modified = 1;
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   json_free(import_obj);
   
@@ -327,7 +327,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
   }
   
   /* Lock database */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   
   /* Import specified collections */
   for (int i = 0; i < num_collections; i++) {
@@ -355,7 +355,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
     }
   }
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   json_free(import_obj);
   

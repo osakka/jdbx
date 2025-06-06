@@ -406,19 +406,19 @@ static int rebuild_collection_index(database_t* db, const char* collection_name)
     return 0;
   }
   
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Get collection */
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
   /* Create or get index */
   document_index_t* index = get_or_create_index(collection_name);
   if (!index) {
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return 0;
   }
   
@@ -443,7 +443,7 @@ static int rebuild_collection_index(database_t* db, const char* collection_name)
     }
   }
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   return 1;
 }
 
@@ -503,14 +503,14 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   }
   json_object_set(result, "uuid", json_create_string(id_str));
   
-  /* Acquire database lock */
-  pthread_mutex_lock(&db->lock);
+  /* Acquire database write lock */
+  pthread_rwlock_wrlock(&db->rwlock);
   
   /* Get collection */
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     json_free(result);
     json_free(doc_copy);
     if (generated_id) free(generated_id);
@@ -523,7 +523,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   db->is_modified = 1;
   
   /* Release database lock */
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   /* Add to index */
   add_to_index(index, id_str, position);
@@ -575,20 +575,20 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   }
   
   /* Acquire database lock */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Get collection */
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return NULL;
   }
   
   /* Verify position is valid */
   if (position < 0 || (size_t)position >= collection->value.array.size) {
     LOG_ERROR("Invalid position %d in collection of size %zu", position, collection->value.array.size);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     
     /* Rebuild index - position is out of bounds */
     LOG_INFO("Rebuilding index for collection '%s' due to invalid position");
@@ -600,7 +600,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   json_value_t* doc = collection->value.array.items[position];
   if (!doc || doc->type != JSON_OBJECT) {
     LOG_ERROR("Document at position %d is not a valid object", position);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     return NULL;
   }
   
@@ -609,7 +609,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   if (!doc_id || doc_id->type != JSON_STRING || strcmp(doc_id->value.string, id) != 0) {
     LOG_ERROR("Document ID mismatch: expected '%s', found '%s'", id, 
          doc_id && doc_id->type == JSON_STRING ? doc_id->value.string : "NULL");
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     
     /* Rebuild index - ID mismatch */
     LOG_INFO("Rebuilding index for collection '%s' due to ID mismatch");
@@ -621,7 +621,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   json_value_t* doc_clone = json_clone(doc);
   
   /* Release database lock */
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   if (!doc_clone) {
     LOG_ERROR("clone document");
@@ -664,13 +664,13 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   }
   
   /* Acquire database lock */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Get collection */
   json_value_t* collection = json_object_get(db->collections, collection_name);
   if (!collection || collection->type != JSON_ARRAY) {
     LOG_ERROR("Collection not found: %s", collection_name);
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);
@@ -682,7 +682,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   json_value_t* documents_copy = json_create_array();
   if (!documents_copy) {
     LOG_ERROR("create documents array");
-    pthread_mutex_unlock(&db->lock);
+    pthread_rwlock_unlock(&db->rwlock);
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);
@@ -732,13 +732,13 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
               MAX_BATCH_SIZE : (collection_size - processed);
         
         /* Copy batch references while holding the lock */
-        pthread_mutex_lock(&db->lock);
+        pthread_rwlock_rdlock(&db->rwlock);
         
         /* Verify collection size hasn't changed */
         if (collection->value.array.size < processed + batch_size) {
           batch_size = collection->value.array.size - processed;
           if (batch_size <= 0) {
-            pthread_mutex_unlock(&db->lock);
+            pthread_rwlock_unlock(&db->rwlock);
             break;
           }
         }
@@ -748,7 +748,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
           batch[i] = collection->value.array.items[processed + i];
         }
         
-        pthread_mutex_unlock(&db->lock);
+        pthread_rwlock_unlock(&db->rwlock);
         
         /* Clone documents outside the lock with better error handling */
         for (size_t i = 0; i < batch_size; i++) {
@@ -780,7 +780,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
       /* Fallback to traditional one-by-one copying with safer handling */
       LOG_WARNING("Using fallback document copying method - this may be slower");
       for (size_t i = 0; i < collection_size; i++) {
-        pthread_mutex_lock(&db->lock);
+        pthread_rwlock_rdlock(&db->rwlock);
         
         json_value_t* doc = NULL;
         if (i < collection->value.array.size) {
@@ -788,7 +788,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
           if (doc && doc->type == JSON_OBJECT) {
             /* Just extract the document pointer and stringify while locked */
             char* doc_str = json_stringify(doc);
-            pthread_mutex_unlock(&db->lock);
+            pthread_rwlock_unlock(&db->rwlock);
             
             if (doc_str) {
               /* Parse and append outside the lock */
@@ -805,18 +805,18 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
             }
           } else {
             LOG_WARNING("Skipping invalid document in collection at index %zu", i);
-            pthread_mutex_unlock(&db->lock);
+            pthread_rwlock_unlock(&db->rwlock);
           }
         } else {
-          pthread_mutex_unlock(&db->lock);
+          pthread_rwlock_unlock(&db->rwlock);
         }
       }
     }
   }
   
   /* Release database lock if still held */
-  if (pthread_mutex_trylock(&db->lock) == 0) {
-    pthread_mutex_unlock(&db->lock);
+  if (pthread_rwlock_trywrlock(&db->rwlock) == 0) {
+    pthread_rwlock_unlock(&db->rwlock);
   }
   
   /* Execute query */
@@ -871,7 +871,7 @@ int rebuild_all_indices(database_t* db) {
     return 0;
   }
   
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Get all collection names */
   size_t collection_count = db->collections->value.object.size;
@@ -880,7 +880,7 @@ int rebuild_all_indices(database_t* db) {
   if (collection_count > 0) {
     collection_names = (char**)malloc(collection_count * sizeof(char*));
     if (!collection_names) {
-      pthread_mutex_unlock(&db->lock);
+      pthread_rwlock_unlock(&db->rwlock);
       return 0;
     }
     
@@ -889,7 +889,7 @@ int rebuild_all_indices(database_t* db) {
     }
   }
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   /* Rebuild indices */
   int success = 1;

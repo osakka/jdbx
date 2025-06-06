@@ -378,9 +378,9 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
   pthread_mutex_unlock(&coll->lock);
 
   /* Mark database as modified */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_wrlock(&db->rwlock);
   db->is_modified = 1;
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
 
   LOG_INFO("Index '%s' created with %zu/%zu documents indexed",
       name, indexed_count, doc_count);
@@ -474,9 +474,9 @@ int db_drop_index_old(database_t* db, const char* collection, const char* name) 
       pthread_mutex_unlock(&coll->lock);
 
       /* Mark database as modified */
-      pthread_mutex_lock(&db->lock);
+      pthread_rwlock_wrlock(&db->rwlock);
       db->is_modified = 1;
-      pthread_mutex_unlock(&db->lock);
+      pthread_rwlock_unlock(&db->rwlock);
 
       LOG_INFO("Index '%s' dropped", name);
       return 1;

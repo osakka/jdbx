@@ -322,7 +322,7 @@ static int cmd_info(int argc, char** argv) {
   }
   
   /* Get database info */
-  pthread_mutex_lock(&db->lock);
+  pthread_rwlock_rdlock(&db->rwlock);
   
   /* Count collections */
   int num_collections = db->collections->value.object.size;
@@ -356,7 +356,7 @@ static int cmd_info(int argc, char** argv) {
     }
   }
   
-  pthread_mutex_unlock(&db->lock);
+  pthread_rwlock_unlock(&db->rwlock);
   
   /* Close database */
   db_close(db);

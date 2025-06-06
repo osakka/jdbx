@@ -122,7 +122,7 @@ typedef struct {
 typedef struct database {
     char* path;                    /* Path to database file */
     json_value_t* collections;     /* JSON object of collections */
-    pthread_mutex_t lock;          /* Database lock for thread safety */
+    pthread_rwlock_t rwlock;       /* Read-write lock for concurrent access */
     int is_modified;               /* Flag to track if database is modified */
     cache_t* cache;                /* Document cache */
     int cache_enabled;             /* Flag indicating if caching is enabled */
