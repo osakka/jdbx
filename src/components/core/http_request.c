@@ -105,6 +105,7 @@ http_request_t* parse_http_request(const char* request_str) {
   request->content_length = 0;
   request->user_agent = NULL;
   request->remote_addr = NULL;
+  request->keep_alive = 0;  /* Default to close connection */
   
   /* Parse request line and headers */
   char* request_copy = strdup(request_str);
@@ -198,6 +199,22 @@ http_request_t* parse_http_request(const char* request_str) {
         while (*request->user_agent == ' ') {
           request->user_agent++;
         }
+      }
+      
+      /* Connection header */
+      else if (strncasecmp(line, "Connection:", 11) == 0) {
+        char* conn_value = line + 12;
+        /* Trim leading whitespace */
+        while (*conn_value == ' ') {
+          conn_value++;
+        }
+        /* Check for keep-alive */
+        if (strncasecmp(conn_value, "keep-alive", 10) == 0) {
+          request->keep_alive = 1;
+        } else if (strncasecmp(conn_value, "close", 5) == 0) {
+          request->keep_alive = 0;
+        }
+        /* For HTTP/1.1, default is keep-alive unless explicitly closed */
       }
       
       line = strtok(NULL, "\r\n");

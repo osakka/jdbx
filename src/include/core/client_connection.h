@@ -18,6 +18,7 @@ struct ssl_connection_t;
  */
 typedef enum {
     CONN_STATE_INITIALIZING = 0,  /* Being created */
+    CONN_STATE_IDLE,              /* Idle, waiting for next request */
     CONN_STATE_ACTIVE,            /* Actively processing */
     CONN_STATE_READING,           /* Reading request data */
     CONN_STATE_PROCESSING,        /* Processing request */

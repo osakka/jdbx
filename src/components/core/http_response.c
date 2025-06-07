@@ -59,6 +59,7 @@ http_response_t* create_http_response(http_status_t status, const char* body, co
   response->content_length = response->body ? strlen(response->body) : 0;
   response->headers = NULL;
   response->num_headers = 0;
+  response->keep_alive = 0;  /* Default to close */
   
   return response;
 }
@@ -90,6 +91,7 @@ http_response_t* create_http_response_binary(http_status_t status, const char* b
   response->content_type = content_type ? strdup(content_type) : strdup("application/octet-stream");
   response->headers = NULL;
   response->num_headers = 0;
+  response->keep_alive = 0;  /* Default to close */
   
   return response;
 }
@@ -382,4 +384,123 @@ http_response_t* create_auth_response(http_response_t* response, const char* tok
   }
 
   return response;
+}
+
+/* Serialize HTTP response with keep-alive support */
+char* serialize_http_response_keep_alive(http_response_t* response, int keep_alive) {
+  size_t length;
+  return serialize_http_response_keep_alive_with_length(response, keep_alive, &length);
+}
+
+/* Serialize HTTP response with keep-alive support and length */
+char* serialize_http_response_keep_alive_with_length(http_response_t* response, int keep_alive, size_t* length) {
+  if (!response || !length) {
+    return NULL;
+  }
+
+  /* Calculate response size with a larger base size and safety margin */
+  int response_size = 1024; /* Increased base size for headers */
+  if (response->body) {
+    response_size += response->content_length;
+  }
+
+  /* Add space for additional headers with larger allocation per header */
+  response_size += response->num_headers * 256;
+
+  /* Add safety margin to prevent buffer overflows */
+  response_size += 1024;
+
+  /* Allocate response string */
+  char* response_str = (char*)malloc(response_size);
+  if (!response_str) {
+    return NULL;
+  }
+  
+  /* Create response */
+  size_t written = 0;
+  size_t remaining = response_size;
+
+  /* Status line */
+  int n = snprintf(response_str + written, remaining, "HTTP/1.1 %s\r\n", http_status_string(response->status));
+  if (n < 0 || (size_t)n >= remaining) {
+    free(response_str);
+    return NULL;
+  }
+  written += n;
+  remaining -= n;
+
+  /* Headers */
+  n = snprintf(response_str + written, remaining, "Content-Type: %s\r\n", response->content_type);
+  if (n < 0 || (size_t)n >= remaining) {
+    free(response_str);
+    return NULL;
+  }
+  written += n;
+  remaining -= n;
+
+  n = snprintf(response_str + written, remaining, "Content-Length: %zu\r\n", response->content_length);
+  if (n < 0 || (size_t)n >= remaining) {
+    free(response_str);
+    return NULL;
+  }
+  written += n;
+  remaining -= n;
+
+  /* Connection header based on keep_alive flag */
+  n = snprintf(response_str + written, remaining, "Connection: %s\r\n", 
+               keep_alive ? "keep-alive" : "close");
+  if (n < 0 || (size_t)n >= remaining) {
+    free(response_str);
+    return NULL;
+  }
+  written += n;
+  remaining -= n;
+
+  /* Add Keep-Alive header if using keep-alive */
+  if (keep_alive) {
+    n = snprintf(response_str + written, remaining, "Keep-Alive: timeout=15, max=100\r\n");
+    if (n < 0 || (size_t)n >= remaining) {
+      free(response_str);
+      return NULL;
+    }
+    written += n;
+    remaining -= n;
+  }
+
+  /* Additional headers */
+  for (size_t i = 0; i < response->num_headers; i++) {
+    if (response->headers[i]) {
+      n = snprintf(response_str + written, remaining, "%s\r\n", response->headers[i]);
+      if (n < 0 || (size_t)n >= remaining) {
+        free(response_str);
+        return NULL;
+      }
+      written += n;
+      remaining -= n;
+    }
+  }
+
+  /* End of headers */
+  n = snprintf(response_str + written, remaining, "\r\n");
+  if (n < 0 || (size_t)n >= remaining) {
+    free(response_str);
+    return NULL;
+  }
+  written += n;
+  remaining -= n;
+
+  /* Body */
+  if (response->body && response->content_length > 0) {
+    if (response->content_length > remaining) {
+      free(response_str);
+      return NULL;
+    }
+    memcpy(response_str + written, response->body, response->content_length);
+    written += response->content_length;
+  }
+
+  /* Return the actual length written */
+  *length = written;
+  
+  return response_str;
 }

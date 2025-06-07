@@ -161,6 +161,7 @@ typedef struct {
     size_t content_length;
     char* user_agent;      /* User-Agent header */
     char* remote_addr;     /* Client IP address */
+    int keep_alive;        /* Keep-Alive header flag (1 = keep-alive, 0 = close) */
 } http_request_t;
 
 /* HTTP response struct */
@@ -171,6 +172,7 @@ typedef struct {
     size_t content_length;
     char** headers;        /* Additional headers */
     size_t num_headers;    /* Number of additional headers */
+    int keep_alive;        /* Keep-Alive flag (1 = keep-alive, 0 = close) */
 } http_response_t;
 
 /* Client connection info */
@@ -221,6 +223,8 @@ http_response_t* http_response_error(const char* message, int status_code);
 http_response_t* http_response_json(json_value_t* json, int status_code);
 char* serialize_http_response(http_response_t* response);
 char* serialize_http_response_with_length(http_response_t* response, size_t* length);
+char* serialize_http_response_keep_alive(http_response_t* response, int keep_alive);
+char* serialize_http_response_keep_alive_with_length(http_response_t* response, int keep_alive, size_t* length);
 void free_http_response(http_response_t* response);
 int add_response_header(http_response_t* response, const char* header);
 http_method_t parse_http_method(const char* method_str);

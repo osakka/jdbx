@@ -203,9 +203,9 @@ void handle_client_thread_safe(void* client_data) {
     /* Serialize HTTP response properly (handles binary content) */
     LOG_TRACE("TRACE_HANDLER_BUILD: Serializing HTTP response for connection %lu...", safe_conn->connection_id);
     
-    extern char* serialize_http_response_with_length(http_response_t* response, size_t* length);
+    extern char* serialize_http_response_keep_alive_with_length(http_response_t* response, int keep_alive, size_t* length);
     size_t response_len = 0;
-    char* response_str = serialize_http_response_with_length(response, &response_len);
+    char* response_str = serialize_http_response_keep_alive_with_length(response, request->keep_alive, &response_len);
     
     if (!response_str) {
         LOG_ERROR("TRACE_HANDLER_ERROR: Connection %lu: Failed to serialize response", safe_conn->connection_id);
@@ -247,12 +247,33 @@ void handle_client_thread_safe(void* client_data) {
     
     /* Cleanup */
     LOG_TRACE("TRACE_HANDLER_CLEANUP: Cleaning up resources for connection %lu...", safe_conn->connection_id);
+    
+    /* Check if we should keep the connection alive */
+    int should_keep_alive = request->keep_alive;
+    
     free_http_request(request);
     free_http_response(response);
     
-    /* Mark connection as closing (we're using Connection: close) */
-    LOG_TRACE("TRACE_HANDLER_STATE: Setting connection %lu to CLOSING state...", safe_conn->connection_id);
-    client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+    if (should_keep_alive) {
+        /* Keep connection alive - set to ACTIVE state for next request */
+        LOG_TRACE("TRACE_HANDLER_KEEPALIVE: Connection %lu requested keep-alive, continuing to next request", safe_conn->connection_id);
+        client_connection_set_state(safe_conn, CONN_STATE_ACTIVE);
+        
+        /* Release reference and continue the loop to handle next request */
+        LOG_TRACE("TRACE_HANDLER_RELEASE: Releasing reference to connection %lu...", safe_conn->connection_id);
+        client_connection_release(safe_conn);
+        
+        /* Loop back to handle the next request on this connection */
+        LOG_INFO("TRACE_HANDLER_CONTINUE: Continuing with keep-alive connection %lu", safe_conn->connection_id);
+        
+        /* Restart the handler for the same connection */
+        handle_client_thread_safe(client_data);
+        return;
+    } else {
+        /* Mark connection as closing */
+        LOG_TRACE("TRACE_HANDLER_STATE: Setting connection %lu to CLOSING state...", safe_conn->connection_id);
+        client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+    }
     
     /* Release our reference */
     LOG_TRACE("TRACE_HANDLER_RELEASE: Releasing reference to connection %lu...", safe_conn->connection_id);
