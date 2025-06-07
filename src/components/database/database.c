@@ -74,6 +74,7 @@ typedef struct {
 /* Forward declarations */
 static json_value_t* extract_field_value(json_value_t* doc, const char* field);
 static int rebuild_collection_indices(hp_collection_t* coll);
+extern int populate_secondary_index(void* storage, void* btree, const char* field_name);
 
 /* Global database instance */
 static struct {
@@ -1380,7 +1381,9 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     
     LOG_INFO("Created index %s on %s.%s", name, collection_name, field_path);
     
-    /* TODO: Populate index with existing documents */
+    /* Populate index with existing documents */
+    int populated = populate_secondary_index(coll->storage, btree, field_path);
+    LOG_INFO("Populated index with %d existing documents", populated);
     
     pthread_rwlock_unlock(&coll->lock);
     

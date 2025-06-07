@@ -1,0 +1,19 @@
+# Makefile for B+tree index test
+
+CC = gcc
+CFLAGS = -Wall -Wextra -I../src/include -I../src -g
+LDFLAGS = -L../build/lib -ljsondb -lpthread -lm -lssl -lcrypto
+
+# QuickJS support
+QUICKJS_LIBS = -L/opt/qjs/lib/quickjs -lquickjs
+
+test_btree_index: test_btree_index.c
+	$(CC) $(CFLAGS) -o test_btree_index test_btree_index.c $(LDFLAGS) $(QUICKJS_LIBS)
+
+clean:
+	rm -f test_btree_index
+
+run: test_btree_index
+	./test_btree_index
+
+.PHONY: clean run
