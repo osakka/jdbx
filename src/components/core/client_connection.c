@@ -286,6 +286,11 @@ int client_connection_set_state(client_connection_t *conn, connection_state_t ne
         
         /* Validate state transition */
         switch (old_state) {
+            case CONN_STATE_IDLE:
+                if (new_state != CONN_STATE_ACTIVE && new_state != CONN_STATE_ERROR && new_state != CONN_STATE_CLOSING) {
+                    result = -1;
+                }
+                break;
             case CONN_STATE_INITIALIZING:
                 if (new_state != CONN_STATE_ACTIVE && new_state != CONN_STATE_ERROR && new_state != CONN_STATE_CLOSING) {
                     result = -1;
