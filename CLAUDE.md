@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 5, 2025 (v3.0.0)
+**Last Updated**: June 8, 2025 (v3.1.0)
 
 ## Core Principles
 
@@ -140,6 +140,38 @@ The JSONdb server includes a complete binary persistence system with automatic d
 - Location: `/opt/jsondb/build/var/database.jdb`
 - Format: Binary with magic number 0x4A534442 ("JSDB")
 - Persistence: Automatic saves ensure data durability across server restarts
+
+## Adaptive Indexing System (v3.1.0)
+
+The JSONdb server now includes an advanced adaptive indexing system that automatically creates and manages indexes based on query patterns:
+
+1. **Query Pattern Tracking**: All database queries are tracked with field path extraction
+2. **Automatic Index Creation**: Background thread analyzes patterns and creates indexes
+3. **Dynamic Thresholds**: System collections use lower thresholds for faster indexing
+4. **Index Maintenance**: Automatic updates on insert/update/delete operations
+5. **Performance Metrics**: ROI tracking, effectiveness scores, and Prometheus integration
+6. **Zero Memory Leaks**: Connection handling converted from recursive to loop-based
+
+### Key Implementation Files:
+- `src/components/database/query_tracker.c` - Query pattern tracking
+- `src/components/database/adaptive_indexer.c` - Automatic index creation
+- `src/components/database/index_maintenance.c` - Index update hooks
+- `src/components/database/index_metrics.c` - Performance monitoring
+
+### Configuration:
+- Query threshold: 10 queries (5 for system collections)
+- Time threshold: 50ms average (10ms for system collections)
+- Startup delay: 30 seconds
+- Check interval: 60 seconds
+
+## Connection Management (v3.1.0)
+
+Fixed critical connection leak in thread-safe handler:
+
+1. **Root Cause**: Recursive keep-alive handler bypassed cleanup
+2. **Solution**: Converted to loop-based implementation
+3. **Result**: Zero memory growth with unlimited keep-alive requests
+4. **Logging**: Comprehensive connection lifecycle tracking
 
 ## Metrics System
 

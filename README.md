@@ -14,7 +14,7 @@
 
 JSONdb is a high-performance document database built specifically for JSON data, capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, it combines the simplicity of JSON with advanced indexing, memory-mapped storage, and a powerful query optimizer. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a RESTful API.
 
-**Latest Version**: 3.0.0 (June 2025)
+**Latest Version**: 3.1.0 (June 2025)
 
 ## Features
 
@@ -40,6 +40,9 @@ JSONdb is a high-performance document database built specifically for JSON data,
   - **Memory-mapped storage** for zero-copy data access
   - **Hash indexes** for O(1) primary key lookups (2.06 μs)
   - **B+tree indexes** for O(log n) range queries (403 μs)
+  - **Adaptive indexing** - automatic index creation based on query patterns
+  - **Index maintenance** - automatic updates on insert/update/delete operations
+  - **Index metrics** - ROI tracking, effectiveness scores, and Prometheus integration
   - **Production configuration** profiles (dev/small/medium/large)
   - **Batch operations API** for 50K+ docs/sec ingestion
   - **Binary persistence format** with 4-6x improvement over JSON
@@ -48,6 +51,7 @@ JSONdb is a high-performance document database built specifically for JSON data,
   - Document caching system with intelligent invalidation
   - Thread-safe persistence with automatic triggers and rollback
   - **Time-series metrics** with append-and-trim for O(1) updates
+  - **Connection management** - Zero memory leaks with loop-based keep-alive handling
   - Zero-warning build with strict compiler flags
     - JSON deep copy optimization using structural copying (5-10x improvement)
     - Hash table implementation for O(1) operator lookup vs O(n) linear search

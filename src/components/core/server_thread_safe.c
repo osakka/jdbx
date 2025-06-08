@@ -27,28 +27,23 @@ static int g_thread_safe_mode_enabled = 0;
 /**
  * Thread-safe client handler that uses the new connection management system
  * WITH COMPREHENSIVE TRACING FOR DEBUGGING
+ * SURGICALLY CONVERTED TO USE LOOP INSTEAD OF RECURSION
  */
 void handle_client_thread_safe(void* client_data) {
     LOG_TRACE("TRACE_HANDLER_START: Entering thread-safe client handler, thread_data=%p", client_data);
     
-    /* Get start time for performance tracking */
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    /* Get start time for entire connection lifetime */
+    struct timespec conn_start_time, conn_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &conn_start_time);
     
-    /* Start request timer for metrics (skip if disabled for performance) */
-    timer_context_t* request_timer = NULL;
-    metric_t* request_duration_metric = NULL;
-    metric_t* active_connections = NULL;
+    /* Get metrics references once */
+    metric_t* request_duration_metric = get_server_request_duration_metric();
+    metric_t* active_connections = get_active_connections_metric();
     
-    request_duration_metric = get_server_request_duration_metric();
-    if (request_duration_metric) {
-        request_timer = metrics_timer_start(request_duration_metric);
-    }
-    
-    /* Increment active connections */
-    active_connections = get_active_connections_metric();
+    /* INCREMENT active connections ONCE for this TCP connection */
     if (active_connections) {
         metrics_gauge_inc(active_connections, 1.0);
+        LOG_DEBUG("TRACE_METRICS: Incremented active connections (new connection) - data=%p", client_data);
     }
     
     /* Cast to our thread-safe connection structure */
@@ -72,41 +67,71 @@ void handle_client_thread_safe(void* client_data) {
     
     LOG_INFO("TRACE_HANDLER_ACQUIRED: Successfully acquired reference to connection %lu", safe_conn->connection_id);
     
-    /* Read HTTP request with timeout - no need to set state, client_connection_read will handle it */
-    LOG_TRACE("TRACE_HANDLER_READ: Starting HTTP request read for connection %lu (timeout=5000ms)...", safe_conn->connection_id);
-    char request_buffer[8192];
-    ssize_t bytes_read = client_connection_read(safe_conn, request_buffer, sizeof(request_buffer) - 1, 5000); /* 5 second timeout */
+    /* Get API context once before the loop */
+    struct api_context *api_ctx = NULL;
+    WITH_CONNECTION_LOCK(safe_conn, {
+        api_ctx = safe_conn->api_ctx;
+    });
     
-    LOG_TRACE("TRACE_HANDLER_READ: Read operation completed, bytes_read=%zd", bytes_read);
-    
-    if (bytes_read <= 0) {
-        if (bytes_read == 0) {
-            LOG_DEBUG("TRACE_HANDLER_CLOSED: Connection %lu closed by client", safe_conn->connection_id);
-        } else {
-            int error_code;
-            char error_msg[256];
-            if (client_connection_get_error(safe_conn, &error_code, error_msg, sizeof(error_msg))) {
-                LOG_WARNING("TRACE_HANDLER_ERROR: Connection %lu read error: %s", safe_conn->connection_id, error_msg);
-            } else {
-                LOG_WARNING("TRACE_HANDLER_ERROR: Connection %lu read failed: %s", safe_conn->connection_id, strerror(errno));
-            }
-        }
-        client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+    if (!api_ctx) {
+        LOG_ERROR("TRACE_HANDLER_ERROR: No API context available");
         client_connection_release(safe_conn);
-        LOG_TRACE("TRACE_HANDLER_EXIT: Exiting handler due to read failure");
         goto cleanup;
     }
     
-    /* Null-terminate the request */
-    request_buffer[bytes_read] = '\0';
+    /* MAIN LOOP: Process requests on this connection until it closes */
+    int keep_alive = 1;
+    int request_count = 0;
     
-    LOG_INFO("TRACE_HANDLER_DATA: Connection %lu received %zd bytes of HTTP data", safe_conn->connection_id, bytes_read);
-    LOG_TRACE("TRACE_HANDLER_RAW: First 100 chars: %.100s", request_buffer);
+    while (keep_alive) {
+        request_count++;
+        LOG_DEBUG("TRACE_HANDLER_LOOP: Processing request #%d on connection %lu", 
+                  request_count, safe_conn->connection_id);
+        
+        /* Per-request timing */
+        struct timespec req_start_time, req_end_time;
+        clock_gettime(CLOCK_MONOTONIC, &req_start_time);
+        timer_context_t* request_timer = NULL;
+        
+        if (request_duration_metric) {
+            request_timer = metrics_timer_start(request_duration_metric);
+        }
+        
+        /* Read HTTP request with timeout */
+        LOG_TRACE("TRACE_HANDLER_READ: Starting HTTP request read for connection %lu (timeout=5000ms)...", safe_conn->connection_id);
+        char request_buffer[8192];
+        ssize_t bytes_read = client_connection_read(safe_conn, request_buffer, sizeof(request_buffer) - 1, 5000); /* 5 second timeout */
     
-    /* Parse HTTP request */
-    LOG_TRACE("TRACE_HANDLER_PARSE: Parsing HTTP request for connection %lu...", safe_conn->connection_id);
-    http_request_t *request = parse_http_request(request_buffer);
-    if (!request) {
+        LOG_TRACE("TRACE_HANDLER_READ: Read operation completed, bytes_read=%zd", bytes_read);
+        
+        if (bytes_read <= 0) {
+            if (bytes_read == 0) {
+                LOG_DEBUG("TRACE_HANDLER_CLOSED: Connection %lu closed by client", safe_conn->connection_id);
+            } else {
+                int error_code;
+                char error_msg[256];
+                if (client_connection_get_error(safe_conn, &error_code, error_msg, sizeof(error_msg))) {
+                    LOG_WARNING("TRACE_HANDLER_ERROR: Connection %lu read error: %s", safe_conn->connection_id, error_msg);
+                } else {
+                    LOG_WARNING("TRACE_HANDLER_ERROR: Connection %lu read failed: %s", safe_conn->connection_id, strerror(errno));
+                }
+            }
+            client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+            keep_alive = 0;  /* Exit loop */
+            LOG_TRACE("TRACE_HANDLER_EXIT: Exiting loop due to read failure");
+            break;
+        }
+    
+        /* Null-terminate the request */
+        request_buffer[bytes_read] = '\0';
+        
+        LOG_INFO("TRACE_HANDLER_DATA: Connection %lu received %zd bytes of HTTP data", safe_conn->connection_id, bytes_read);
+        LOG_TRACE("TRACE_HANDLER_RAW: First 100 chars: %.100s", request_buffer);
+        
+        /* Parse HTTP request */
+        LOG_TRACE("TRACE_HANDLER_PARSE: Parsing HTTP request for connection %lu...", safe_conn->connection_id);
+        http_request_t *request = parse_http_request(request_buffer);
+        if (!request) {
         LOG_WARNING("TRACE_HANDLER_ERROR: Connection %lu: Failed to parse HTTP request", safe_conn->connection_id);
         
         /* Send 400 Bad Request */
@@ -118,12 +143,12 @@ void handle_client_thread_safe(void* client_data) {
             "\r\n"
             "Bad Request";
         
-        LOG_TRACE("TRACE_HANDLER_RESPONSE: Sending 400 Bad Request to connection %lu", safe_conn->connection_id);
-        client_connection_write(safe_conn, bad_request_response, strlen(bad_request_response));
-        client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
-        client_connection_release(safe_conn);
-        LOG_TRACE("TRACE_HANDLER_EXIT: Exiting handler due to parse failure");
-        goto cleanup;
+            LOG_TRACE("TRACE_HANDLER_RESPONSE: Sending 400 Bad Request to connection %lu", safe_conn->connection_id);
+            client_connection_write(safe_conn, bad_request_response, strlen(bad_request_response));
+            client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+            keep_alive = 0;  /* Exit loop */
+            LOG_TRACE("TRACE_HANDLER_EXIT: Exiting loop due to parse failure");
+            break;
     }
     
     LOG_TRACE("TRACE_HANDLER_PARSE: HTTP request parsed successfully for connection %lu", safe_conn->connection_id);
@@ -144,23 +169,23 @@ void handle_client_thread_safe(void* client_data) {
         goto cleanup;
     }
     
-    /* Get API context from connection */
-    LOG_TRACE("TRACE_HANDLER_API: Getting API context for connection %lu...", safe_conn->connection_id);
-    struct api_context *api_ctx = NULL;
-    WITH_CONNECTION_LOCK(safe_conn, {
-        api_ctx = safe_conn->api_ctx;
-    });
-    
-    if (!api_ctx) {
-        LOG_ERROR("TRACE_HANDLER_ERROR: Connection %lu: No API context available", safe_conn->connection_id);
-        free_http_request(request);
-        client_connection_set_state(safe_conn, CONN_STATE_ERROR);
-        client_connection_release(safe_conn);
-        LOG_TRACE("TRACE_HANDLER_EXIT: Exiting handler due to missing API context");
-        goto cleanup;
-    }
-    
-    LOG_TRACE("TRACE_HANDLER_API: API context %p retrieved for connection %lu", (void*)api_ctx, safe_conn->connection_id);
+        /* Get API context from connection */
+        LOG_TRACE("TRACE_HANDLER_API: Getting API context for connection %lu...", safe_conn->connection_id);
+        struct api_context *api_ctx = NULL;
+        WITH_CONNECTION_LOCK(safe_conn, {
+            api_ctx = safe_conn->api_ctx;
+        });
+        
+        if (!api_ctx) {
+            LOG_ERROR("TRACE_HANDLER_ERROR: Connection %lu: No API context available", safe_conn->connection_id);
+            free_http_request(request);
+            client_connection_set_state(safe_conn, CONN_STATE_ERROR);
+            keep_alive = 0;  /* Exit loop */
+            LOG_TRACE("TRACE_HANDLER_EXIT: Exiting loop due to missing API context");
+            break;
+        }
+        
+        LOG_TRACE("TRACE_HANDLER_API: API context %p retrieved for connection %lu", (void*)api_ctx, safe_conn->connection_id);
     
     /* Check if this is an admin route (static file) first */
     http_response_t *response = NULL;
@@ -188,13 +213,13 @@ void handle_client_thread_safe(void* client_data) {
             "\r\n"
             "Internal Server Error";
         
-        LOG_TRACE("TRACE_HANDLER_RESPONSE: Sending 500 Internal Server Error to connection %lu", safe_conn->connection_id);
-        client_connection_write(safe_conn, error_response, strlen(error_response));
-        free_http_request(request);
-        client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
-        client_connection_release(safe_conn);
-        LOG_TRACE("TRACE_HANDLER_EXIT: Exiting handler due to API dispatch failure");
-        goto cleanup;
+            LOG_TRACE("TRACE_HANDLER_RESPONSE: Sending 500 Internal Server Error to connection %lu", safe_conn->connection_id);
+            client_connection_write(safe_conn, error_response, strlen(error_response));
+            free_http_request(request);
+            client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+            keep_alive = 0;  /* Exit loop */
+            LOG_TRACE("TRACE_HANDLER_EXIT: Exiting loop due to API dispatch failure");
+            break;
     }
     
     LOG_TRACE("TRACE_HANDLER_DISPATCH: Request processing successful for connection %lu, response status=%d", 
@@ -208,13 +233,13 @@ void handle_client_thread_safe(void* client_data) {
     char* response_str = serialize_http_response_keep_alive_with_length(response, request->keep_alive, &response_len);
     
     if (!response_str) {
-        LOG_ERROR("TRACE_HANDLER_ERROR: Connection %lu: Failed to serialize response", safe_conn->connection_id);
-        free_http_request(request);
-        free_http_response(response);
-        client_connection_set_state(safe_conn, CONN_STATE_ERROR);
-        client_connection_release(safe_conn);
-        LOG_TRACE("TRACE_HANDLER_EXIT: Exiting handler due to serialization failure");
-        goto cleanup;
+            LOG_ERROR("TRACE_HANDLER_ERROR: Connection %lu: Failed to serialize response", safe_conn->connection_id);
+            free_http_request(request);
+            free_http_response(response);
+            client_connection_set_state(safe_conn, CONN_STATE_ERROR);
+            keep_alive = 0;  /* Exit loop */
+            LOG_TRACE("TRACE_HANDLER_EXIT: Exiting loop due to serialization failure");
+            break;
     }
     
     LOG_TRACE("TRACE_HANDLER_BUILD: HTTP response serialized successfully for connection %lu, length=%zu", 
@@ -254,50 +279,57 @@ void handle_client_thread_safe(void* client_data) {
     free_http_request(request);
     free_http_response(response);
     
-    if (should_keep_alive) {
-        /* Keep connection alive - set to ACTIVE state for next request */
-        LOG_TRACE("TRACE_HANDLER_KEEPALIVE: Connection %lu requested keep-alive, continuing to next request", safe_conn->connection_id);
-        client_connection_set_state(safe_conn, CONN_STATE_ACTIVE);
+        /* Update keep_alive for loop control */
+        keep_alive = should_keep_alive;
         
-        /* Release reference and continue the loop to handle next request */
-        LOG_TRACE("TRACE_HANDLER_RELEASE: Releasing reference to connection %lu...", safe_conn->connection_id);
-        client_connection_release(safe_conn);
+        if (keep_alive) {
+            /* Keep connection alive - set to ACTIVE state for next request */
+            LOG_TRACE("TRACE_HANDLER_KEEPALIVE: Connection %lu requested keep-alive, continuing to next request", safe_conn->connection_id);
+            client_connection_set_state(safe_conn, CONN_STATE_ACTIVE);
+            
+            /* Continue to next iteration of the loop */
+            LOG_INFO("TRACE_HANDLER_CONTINUE: Continuing with keep-alive connection %lu", safe_conn->connection_id);
+        } else {
+            /* Mark connection as closing */
+            LOG_TRACE("TRACE_HANDLER_STATE: Setting connection %lu to CLOSING state...", safe_conn->connection_id);
+            client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
+        }
         
-        /* Loop back to handle the next request on this connection */
-        LOG_INFO("TRACE_HANDLER_CONTINUE: Continuing with keep-alive connection %lu", safe_conn->connection_id);
+        /* Stop request timer */
+        if (request_timer) {
+            metrics_timer_stop(request_timer);
+            request_timer = NULL;
+        }
         
-        /* Restart the handler for the same connection */
-        handle_client_thread_safe(client_data);
-        return;
-    } else {
-        /* Mark connection as closing */
-        LOG_TRACE("TRACE_HANDLER_STATE: Setting connection %lu to CLOSING state...", safe_conn->connection_id);
-        client_connection_set_state(safe_conn, CONN_STATE_CLOSING);
-    }
+        /* Calculate request time */
+        clock_gettime(CLOCK_MONOTONIC, &req_end_time);
+        double request_time = (req_end_time.tv_sec - req_start_time.tv_sec) * 1000.0;
+        request_time += (req_end_time.tv_nsec - req_start_time.tv_nsec) / 1000000.0;
+        LOG_DEBUG("Request #%d completed in %.2f ms", request_count, request_time);
+        
+    } /* End of while(keep_alive) loop */
     
     /* Release our reference */
     LOG_TRACE("TRACE_HANDLER_RELEASE: Releasing reference to connection %lu...", safe_conn->connection_id);
     client_connection_release(safe_conn);
     
-    LOG_INFO("TRACE_HANDLER_COMPLETE: Thread-safe handler completed successfully for connection %lu", safe_conn->connection_id);
+    LOG_INFO("TRACE_HANDLER_COMPLETE: Thread-safe handler completed successfully for connection %lu after %d requests", 
+             safe_conn->connection_id, request_count);
     
 cleanup:
-    /* Calculate execution time */
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    double execution_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
-    execution_time += (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
-    
-    /* Decrement active connections */
+    /* DECREMENT active connections ONCE when the TCP connection closes */
     if (active_connections) {
         metrics_gauge_dec(active_connections, 1.0);
+        LOG_DEBUG("TRACE_METRICS: Decremented active connections (connection closing)");
     }
     
-    /* Stop request timer */
-    if (request_timer) {
-        metrics_timer_stop(request_timer);
-    }
+    /* Calculate total connection lifetime */
+    clock_gettime(CLOCK_MONOTONIC, &conn_end_time);
+    double total_time = (conn_end_time.tv_sec - conn_start_time.tv_sec) * 1000.0;
+    total_time += (conn_end_time.tv_nsec - conn_start_time.tv_nsec) / 1000000.0;
     
-    LOG_DEBUG("Thread-safe handler execution time: %.2f ms", execution_time);
+    LOG_DEBUG("Thread-safe handler completed: %d requests in %.2f ms total", request_count, total_time);
+    LOG_TRACE("TRACE_HANDLER_END: Exiting handler");
 }
 
 /**

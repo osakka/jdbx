@@ -5,6 +5,45 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2025-06-08
+
+### 🚀 Adaptive Indexing & Connection Leak Fix
+
+This release introduces adaptive indexing capabilities and fixes a critical connection leak in the thread-safe handler.
+
+#### New Features
+- **ADAPTIVE INDEXING**: Automatic index creation based on query patterns
+  - Query pattern tracking with field path analysis
+  - Background index creation with configurable thresholds
+  - Dynamic thresholds for system vs user collections
+  - Performance metrics tracking (ROI, effectiveness scores)
+- **INDEX MAINTENANCE**: Automatic index updates on data changes
+  - Insert/update/delete hooks for all adaptive indexes
+  - Thread-safe operation with minimal overhead
+  - Comprehensive statistics tracking
+- **INDEX METRICS**: Performance monitoring and analysis
+  - Query improvement tracking
+  - Storage overhead monitoring
+  - Maintenance cost analysis
+  - Prometheus integration
+
+#### Critical Fixes
+- **CONNECTION LEAK**: Fixed recursive keep-alive handler causing connection leak
+  - Converted from recursion to loop-based implementation
+  - One increment/decrement per TCP connection
+  - Zero memory growth with unlimited keep-alive requests
+  - Comprehensive logging for connection lifecycle
+
+#### Performance Improvements
+- **QUERY TRACKING**: All database queries now tracked (including auth/RBAC)
+- **SSL HANDSHAKE**: Fixed missing SSL handshake on accepted connections
+- **THREAD SAFETY**: Improved connection handling with proper state management
+
+#### Code Quality
+- **SURGICAL PRECISION**: All changes made with minimal impact
+- **CLEAN BUILD**: Zero warnings policy maintained
+- **SINGLE SOURCE**: No duplicate implementations or redundant code
+
 ## [3.0.0] - 2025-06-05
 
 ### 🚀 High-Performance Database Transformation

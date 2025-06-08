@@ -1,7 +1,7 @@
 # JSONdb Source Code
 
-**Version**: 2.0.6  
-**Last Updated**: January 28, 2025
+**Version**: 3.1.0  
+**Last Updated**: June 8, 2025
 
 This directory contains the source code for the JSONdb project.
 
@@ -11,10 +11,13 @@ This directory contains the source code for the JSONdb project.
   - `api/`: API endpoints and request handling
   - `binary/`: Binary serialization format for persistence
   - `core/`: Core server functionality including the thread pool
-  - `database/`: Database operations and storage
+  - `database/`: Database operations, storage, adaptive indexing, and performance tracking
+  - `index/`: B+tree and hash index implementations
   - `js/`: JavaScript engine integration
+  - `lockfree/`: Lock-free data structures (skiplist, hazard pointers)
   - `query/`: Query language implementation
   - `rbac/`: Role-based access control with database-backed storage and UUID support
+  - `storage/`: Memory-mapped storage implementation
   - `tools/`: Command-line tools and utilities
   - `transaction/`: Transaction management
   - `utils/`: Utility functions and helpers
@@ -80,6 +83,11 @@ This sequence ensures proper dependency handling and resolves issues like socket
 3. **Time-Series Metrics**: Fixed document pattern with O(1) updates
 4. **Thread Pool**: Efficient request handling with configurable workers
 5. **RBAC System**: Database-backed with multiple implementation layers
+6. **Adaptive Indexing**: Automatic index creation based on query patterns
+7. **Index Maintenance**: Automatic index updates on data modifications
+8. **Index Metrics**: Performance tracking with ROI and effectiveness analysis
+9. **Connection Management**: Loop-based keep-alive handling with zero memory leaks
+10. **Query Pattern Tracking**: Field path extraction and performance monitoring
 
 ## Code Standards
 
