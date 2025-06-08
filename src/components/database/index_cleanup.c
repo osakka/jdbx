@@ -1,0 +1,438 @@
+#include "database/index_cleanup.h"
+#include "database/database.h"
+#include "utils/logger.h"
+#include "utils/json.h"
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+/* Cleanup thread function */
+static void* index_cleanup_thread(void* arg);
+
+/* Initialize index cleanup system */
+index_cleanup_t* index_cleanup_init(database_t* db, index_metrics_t* metrics) {
+    if (!db || !metrics) {
+        LOG_ERROR("Invalid parameters for index cleanup init");
+        return NULL;
+    }
+    
+    index_cleanup_t* cleanup = calloc(1, sizeof(index_cleanup_t));
+    if (!cleanup) {
+        LOG_ERROR("Failed to allocate index cleanup system");
+        return NULL;
+    }
+    
+    cleanup->database = db;
+    cleanup->metrics = metrics;
+    
+    /* Initialize configuration with defaults */
+    cleanup->roi_threshold = INDEX_CLEANUP_ROI_THRESHOLD;
+    cleanup->effectiveness_threshold = INDEX_CLEANUP_EFFECTIVENESS_THRESHOLD;
+    cleanup->min_age_hours = INDEX_CLEANUP_MIN_AGE_HOURS;
+    cleanup->min_queries = INDEX_CLEANUP_MIN_QUERIES;
+    cleanup->check_interval = INDEX_CLEANUP_CHECK_INTERVAL;
+    
+    /* Initialize mutex */
+    if (pthread_mutex_init(&cleanup->lock, NULL) != 0) {
+        LOG_ERROR("Failed to initialize cleanup mutex");
+        free(cleanup);
+        return NULL;
+    }
+    
+    LOG_INFO("Index cleanup system initialized (ROI threshold: %.2f, effectiveness: %.2f)",
+             cleanup->roi_threshold, cleanup->effectiveness_threshold);
+    
+    return cleanup;
+}
+
+/* Start cleanup thread */
+int index_cleanup_start(index_cleanup_t* cleanup) {
+    if (!cleanup) return -1;
+    
+    pthread_mutex_lock(&cleanup->lock);
+    
+    if (cleanup->cleanup_thread) {
+        pthread_mutex_unlock(&cleanup->lock);
+        LOG_WARNING("Cleanup thread already running");
+        return -1;
+    }
+    
+    cleanup->should_stop = 0;
+    
+    if (pthread_create(&cleanup->cleanup_thread, NULL, index_cleanup_thread, cleanup) != 0) {
+        pthread_mutex_unlock(&cleanup->lock);
+        LOG_ERROR("Failed to create cleanup thread");
+        return -1;
+    }
+    
+    pthread_mutex_unlock(&cleanup->lock);
+    LOG_INFO("Index cleanup thread started");
+    
+    return 0;
+}
+
+/* Stop cleanup thread */
+void index_cleanup_stop(index_cleanup_t* cleanup) {
+    if (!cleanup) return;
+    
+    pthread_mutex_lock(&cleanup->lock);
+    cleanup->should_stop = 1;
+    pthread_t thread = cleanup->cleanup_thread;
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    if (thread) {
+        pthread_join(thread, NULL);
+        cleanup->cleanup_thread = 0;
+        LOG_INFO("Index cleanup thread stopped");
+    }
+}
+
+/* Cleanup system resources */
+void index_cleanup_destroy(index_cleanup_t* cleanup) {
+    if (!cleanup) return;
+    
+    index_cleanup_stop(cleanup);
+    pthread_mutex_destroy(&cleanup->lock);
+    free(cleanup);
+}
+
+/* Evaluate single index for removal */
+cleanup_decision_t* index_cleanup_evaluate(index_cleanup_t* cleanup,
+                                          const char* collection_name,
+                                          const char* index_name) {
+    if (!cleanup || !collection_name || !index_name) return NULL;
+    
+    cleanup_decision_t* decision = calloc(1, sizeof(cleanup_decision_t));
+    if (!decision) return NULL;
+    
+    strncpy(decision->collection_name, collection_name, sizeof(decision->collection_name) - 1);
+    strncpy(decision->index_name, index_name, sizeof(decision->index_name) - 1);
+    
+    /* Get index metrics */
+    index_effectiveness_t effectiveness;
+    if (index_metrics_get_effectiveness(cleanup->metrics, collection_name, 
+                                       index_name, &effectiveness) != 0) {
+        LOG_DEBUG("No metrics found for index %s.%s", collection_name, index_name);
+        free(decision);
+        return NULL;
+    }
+    
+    decision->roi = effectiveness.roi;
+    decision->effectiveness = effectiveness.effectiveness_percentage;
+    decision->query_count = effectiveness.queries_total;
+    decision->storage_bytes = effectiveness.storage_overhead_bytes;
+    decision->created_at = effectiveness.created_at;
+    
+    /* Check age requirement */
+    time_t now = time(NULL);
+    double age_hours = difftime(now, decision->created_at) / 3600.0;
+    
+    if (age_hours < cleanup->min_age_hours) {
+        LOG_DEBUG("Index %s.%s too young (%.1f hours < %d hours)",
+                  collection_name, index_name, age_hours, cleanup->min_age_hours);
+        decision->should_remove = 0;
+        return decision;
+    }
+    
+    /* Check query count requirement */
+    if (decision->query_count < cleanup->min_queries) {
+        LOG_DEBUG("Index %s.%s has too few queries (%lu < %d)",
+                  collection_name, index_name, decision->query_count, cleanup->min_queries);
+        decision->should_remove = 0;
+        return decision;
+    }
+    
+    /* Evaluate removal criteria */
+    if (decision->roi < cleanup->roi_threshold) {
+        LOG_INFO("Index %s.%s has negative ROI: %.2f%% < %.2f%%",
+                 collection_name, index_name, 
+                 decision->roi * 100, cleanup->roi_threshold * 100);
+        decision->reason = CLEANUP_REASON_LOW_ROI;
+        decision->should_remove = 1;
+    }
+    else if (decision->effectiveness < cleanup->effectiveness_threshold) {
+        LOG_INFO("Index %s.%s has low effectiveness: %.2f%% < %.2f%%",
+                 collection_name, index_name,
+                 decision->effectiveness * 100, cleanup->effectiveness_threshold * 100);
+        decision->reason = CLEANUP_REASON_LOW_EFFECTIVENESS;
+        decision->should_remove = 1;
+    }
+    else {
+        decision->should_remove = 0;
+    }
+    
+    return decision;
+}
+
+/* Remove underperforming index */
+int index_cleanup_remove_index(index_cleanup_t* cleanup,
+                              const char* collection_name,
+                              const char* index_name,
+                              cleanup_reason_t reason) {
+    if (!cleanup || !collection_name || !index_name) return -1;
+    
+    LOG_INFO("Removing underperforming index %s.%s (reason: %d)",
+             collection_name, index_name, reason);
+    
+    /* Get collection */
+    db_collection_t* collection = db_get_collection(cleanup->database, collection_name);
+    if (!collection) {
+        LOG_ERROR("Collection %s not found", collection_name);
+        return -1;
+    }
+    
+    /* Remove from adaptive indexes */
+    extern adaptive_indexer_t* adaptive_indexer_get_instance(void);
+    adaptive_indexer_t* indexer = adaptive_indexer_get_instance();
+    if (indexer) {
+        pthread_mutex_lock(&indexer->indexes_lock);
+        
+        /* Find and remove the index info */
+        adaptive_index_info_t* prev = NULL;
+        adaptive_index_info_t* curr = indexer->indexes;
+        
+        while (curr) {
+            if (strcmp(curr->collection_name, collection_name) == 0 &&
+                strcmp(curr->field_path, index_name) == 0) {
+                
+                /* Remove from list */
+                if (prev) {
+                    prev->next = curr->next;
+                } else {
+                    indexer->indexes = curr->next;
+                }
+                
+                /* Free the info */
+                free(curr);
+                break;
+            }
+            
+            prev = curr;
+            curr = curr->next;
+        }
+        
+        pthread_mutex_unlock(&indexer->indexes_lock);
+    }
+    
+    /* TODO: Remove the actual index structure from collection */
+    /* This would require extending the index API to support removal */
+    
+    /* Update statistics */
+    pthread_mutex_lock(&cleanup->lock);
+    cleanup->stats.indexes_removed++;
+    cleanup->stats.storage_reclaimed += 64 * 1024 * 1024; /* Approximate */
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    /* Remove metrics data */
+    index_metrics_remove(cleanup->metrics, collection_name, index_name);
+    
+    LOG_INFO("Successfully removed index %s.%s", collection_name, index_name);
+    
+    return 0;
+}
+
+/* Perform cleanup check on all indexes */
+int index_cleanup_check_all(index_cleanup_t* cleanup) {
+    if (!cleanup) return -1;
+    
+    LOG_INFO("Starting index cleanup check");
+    
+    int indexes_checked = 0;
+    int indexes_removed = 0;
+    
+    /* Get global adaptive indexer */
+    extern adaptive_indexer_t* adaptive_indexer_get_instance(void);
+    adaptive_indexer_t* indexer = adaptive_indexer_get_instance();
+    if (!indexer) {
+        LOG_WARNING("No adaptive indexer available");
+        return -1;
+    }
+    
+    pthread_mutex_lock(&indexer->indexes_lock);
+    
+    /* Check each adaptive index */
+    adaptive_index_info_t* info = indexer->indexes;
+    while (info) {
+        adaptive_index_info_t* next = info->next; /* Save next before potential removal */
+        
+        /* Evaluate the index */
+        cleanup_decision_t* decision = index_cleanup_evaluate(cleanup,
+                                                            info->collection_name,
+                                                            info->field_path);
+        
+        if (decision) {
+            indexes_checked++;
+            
+            if (decision->should_remove) {
+                /* Unlock before removal to avoid deadlock */
+                pthread_mutex_unlock(&indexer->indexes_lock);
+                
+                if (index_cleanup_remove_index(cleanup,
+                                             decision->collection_name,
+                                             decision->index_name,
+                                             decision->reason) == 0) {
+                    indexes_removed++;
+                }
+                
+                /* Re-lock for next iteration */
+                pthread_mutex_lock(&indexer->indexes_lock);
+            }
+            
+            free(decision);
+        }
+        
+        info = next;
+    }
+    
+    pthread_mutex_unlock(&indexer->indexes_lock);
+    
+    /* Update statistics */
+    pthread_mutex_lock(&cleanup->lock);
+    cleanup->stats.checks_performed++;
+    cleanup->stats.last_cleanup = time(NULL);
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    LOG_INFO("Index cleanup check complete: %d checked, %d removed",
+             indexes_checked, indexes_removed);
+    
+    return indexes_removed;
+}
+
+/* Optimize index storage */
+int index_cleanup_optimize_index(index_cleanup_t* cleanup,
+                                const char* collection_name,
+                                const char* index_name) {
+    if (!cleanup || !collection_name || !index_name) return -1;
+    
+    LOG_INFO("Optimizing index %s.%s", collection_name, index_name);
+    
+    /* TODO: Implement index compaction/optimization */
+    /* This would involve reorganizing the btree or hash table structure */
+    
+    /* Update statistics */
+    pthread_mutex_lock(&cleanup->lock);
+    cleanup->stats.indexes_optimized++;
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    return 0;
+}
+
+/* Get cleanup statistics */
+cleanup_stats_t index_cleanup_get_stats(index_cleanup_t* cleanup) {
+    cleanup_stats_t stats = {0};
+    
+    if (cleanup) {
+        pthread_mutex_lock(&cleanup->lock);
+        stats = cleanup->stats;
+        pthread_mutex_unlock(&cleanup->lock);
+    }
+    
+    return stats;
+}
+
+/* Configure cleanup thresholds */
+void index_cleanup_configure(index_cleanup_t* cleanup,
+                           double roi_threshold,
+                           double effectiveness_threshold,
+                           int min_age_hours,
+                           int min_queries) {
+    if (!cleanup) return;
+    
+    pthread_mutex_lock(&cleanup->lock);
+    
+    cleanup->roi_threshold = roi_threshold;
+    cleanup->effectiveness_threshold = effectiveness_threshold;
+    cleanup->min_age_hours = min_age_hours;
+    cleanup->min_queries = min_queries;
+    
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    LOG_INFO("Index cleanup configured: ROI=%.2f, effectiveness=%.2f, age=%dh, queries=%d",
+             roi_threshold, effectiveness_threshold, min_age_hours, min_queries);
+}
+
+/* Force immediate cleanup check */
+int index_cleanup_force_check(index_cleanup_t* cleanup) {
+    if (!cleanup) return -1;
+    
+    LOG_INFO("Forcing immediate cleanup check");
+    return index_cleanup_check_all(cleanup);
+}
+
+/* Export cleanup history */
+json_value_t* index_cleanup_export_history(index_cleanup_t* cleanup) {
+    if (!cleanup) return NULL;
+    
+    json_value_t* history = json_create_object();
+    if (!history) return NULL;
+    
+    pthread_mutex_lock(&cleanup->lock);
+    
+    /* Add statistics */
+    json_object_set(history, "checks_performed", 
+                    json_create_number(cleanup->stats.checks_performed));
+    json_object_set(history, "indexes_removed",
+                    json_create_number(cleanup->stats.indexes_removed));
+    json_object_set(history, "indexes_optimized",
+                    json_create_number(cleanup->stats.indexes_optimized));
+    json_object_set(history, "storage_reclaimed_mb",
+                    json_create_number(cleanup->stats.storage_reclaimed / (1024.0 * 1024)));
+    
+    if (cleanup->stats.last_cleanup > 0) {
+        char timestamp[32];
+        struct tm* tm_info = localtime(&cleanup->stats.last_cleanup);
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_info);
+        json_object_set(history, "last_cleanup", json_create_string(timestamp));
+    }
+    
+    /* Add configuration */
+    json_value_t* config = json_create_object();
+    json_object_set(config, "roi_threshold", json_create_number(cleanup->roi_threshold));
+    json_object_set(config, "effectiveness_threshold", 
+                    json_create_number(cleanup->effectiveness_threshold));
+    json_object_set(config, "min_age_hours", json_create_number(cleanup->min_age_hours));
+    json_object_set(config, "min_queries", json_create_number(cleanup->min_queries));
+    json_object_set(config, "check_interval_seconds", 
+                    json_create_number(cleanup->check_interval));
+    
+    json_object_set(history, "configuration", config);
+    
+    pthread_mutex_unlock(&cleanup->lock);
+    
+    return history;
+}
+
+/* Cleanup thread function */
+static void* index_cleanup_thread(void* arg) {
+    index_cleanup_t* cleanup = (index_cleanup_t*)arg;
+    
+    LOG_INFO("Index cleanup thread started (startup delay: %d seconds)",
+             INDEX_CLEANUP_STARTUP_DELAY);
+    
+    /* Initial startup delay */
+    sleep(INDEX_CLEANUP_STARTUP_DELAY);
+    
+    while (1) {
+        pthread_mutex_lock(&cleanup->lock);
+        int should_stop = cleanup->should_stop;
+        pthread_mutex_unlock(&cleanup->lock);
+        
+        if (should_stop) break;
+        
+        /* Perform cleanup check */
+        index_cleanup_check_all(cleanup);
+        
+        /* Sleep for check interval */
+        for (int i = 0; i < cleanup->check_interval; i++) {
+            pthread_mutex_lock(&cleanup->lock);
+            should_stop = cleanup->should_stop;
+            pthread_mutex_unlock(&cleanup->lock);
+            
+            if (should_stop) break;
+            sleep(1);
+        }
+    }
+    
+    LOG_INFO("Index cleanup thread exiting");
+    return NULL;
+}

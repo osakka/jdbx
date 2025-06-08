@@ -1,6 +1,9 @@
 #include "init.h"
 #include "database/database.h"
 #include "database/system_schemas.h"
+#include "database/adaptive_indexer.h"
+#include "database/index_metrics.h"
+#include "database/index_cleanup.h"
 #include "js/js_native_storage.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +45,27 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
       return INIT_DATABASE_ERROR;
     }
     INIT_LOG_SUCCESS("DATABASE", "Native JavaScript storage system initialized for in-memory database");
+    
+    /* Initialize adaptive indexing for in-memory database */
+    adaptive_indexer_t* indexer = adaptive_indexer_init(db);
+    if (indexer) {
+      adaptive_indexer_start(indexer);
+      INIT_LOG_SUCCESS("DATABASE", "Adaptive indexing initialized for in-memory database");
+    }
+    
+    /* Initialize index metrics for in-memory database */
+    index_metrics_t* metrics = index_metrics_init();
+    if (metrics) {
+      INIT_LOG_SUCCESS("DATABASE", "Index metrics initialized for in-memory database");
+      
+      /* Initialize index cleanup for in-memory database */
+      index_cleanup_t* cleanup = index_cleanup_init(db, metrics);
+      if (cleanup) {
+        index_cleanup_start(cleanup);
+        index_cleanup_api_init(db, metrics);
+        INIT_LOG_SUCCESS("DATABASE", "Index cleanup initialized for in-memory database");
+      }
+    }
     
     *database_out = db;
     
@@ -88,6 +112,59 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
     return INIT_DATABASE_ERROR;
   }
   INIT_LOG_SUCCESS("DATABASE", "Native JavaScript storage system initialized");
+  
+  /* Initialize adaptive indexing system */
+  INIT_LOG_PROGRESS("DATABASE", "Initializing adaptive indexing system");
+  adaptive_indexer_t* indexer = adaptive_indexer_init(db);
+  if (!indexer) {
+    INIT_LOG_FAILURE("DATABASE", "Failed to initialize adaptive indexer");
+    db_close(db);
+    return INIT_DATABASE_ERROR;
+  }
+  
+  if (adaptive_indexer_start(indexer) != 0) {
+    INIT_LOG_FAILURE("DATABASE", "Failed to start adaptive indexer");
+    adaptive_indexer_destroy(indexer);
+    db_close(db);
+    return INIT_DATABASE_ERROR;
+  }
+  INIT_LOG_SUCCESS("DATABASE", "Adaptive indexing system initialized");
+  
+  /* Initialize index metrics system */
+  INIT_LOG_PROGRESS("DATABASE", "Initializing index metrics system");
+  index_metrics_t* metrics = index_metrics_init();
+  if (!metrics) {
+    INIT_LOG_FAILURE("DATABASE", "Failed to initialize index metrics");
+    adaptive_indexer_destroy(indexer);
+    db_close(db);
+    return INIT_DATABASE_ERROR;
+  }
+  INIT_LOG_SUCCESS("DATABASE", "Index metrics system initialized");
+  
+  /* Initialize index cleanup system */
+  INIT_LOG_PROGRESS("DATABASE", "Initializing index cleanup system");
+  index_cleanup_t* cleanup = index_cleanup_init(db, metrics);
+  if (!cleanup) {
+    INIT_LOG_FAILURE("DATABASE", "Failed to initialize index cleanup");
+    index_metrics_destroy(metrics);
+    adaptive_indexer_destroy(indexer);
+    db_close(db);
+    return INIT_DATABASE_ERROR;
+  }
+  
+  if (index_cleanup_start(cleanup) != 0) {
+    INIT_LOG_FAILURE("DATABASE", "Failed to start index cleanup");
+    index_cleanup_destroy(cleanup);
+    index_metrics_destroy(metrics);
+    adaptive_indexer_destroy(indexer);
+    db_close(db);
+    return INIT_DATABASE_ERROR;
+  }
+  INIT_LOG_SUCCESS("DATABASE", "Index cleanup system initialized");
+  
+  /* Initialize cleanup API */
+  extern void index_cleanup_api_init(database_t* db, index_metrics_t* metrics);
+  index_cleanup_api_init(db, metrics);
   
   /* Set output parameter */
   *database_out = db;

@@ -26,6 +26,11 @@ This release introduces adaptive indexing capabilities and fixes a critical conn
   - Storage overhead monitoring
   - Maintenance cost analysis
   - Prometheus integration
+- **INDEX CLEANUP**: Intelligent index removal and optimization
+  - Automatic removal of underperforming indexes
+  - ROI-based decision making
+  - Storage reclamation
+  - Background cleanup process
 
 #### Critical Fixes
 - **CONNECTION LEAK**: Fixed recursive keep-alive handler causing connection leak

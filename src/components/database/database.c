@@ -239,7 +239,6 @@ void db_close(database_t* db) {
 
 /* Create collection */
 int db_create_collection(database_t* db, const char* name) {
-    (void)db; /* Using global database */
     if (!g_database.initialized || !name) return -1;
     
     pthread_rwlock_wrlock(&g_database.lock);
@@ -325,7 +324,6 @@ int db_create_collection(database_t* db, const char* name) {
 
 /* Get collection */
 db_collection_t* db_get_collection(database_t* db, const char* name) {
-    (void)db; /* Using global database */
     if (!g_database.initialized || !name) return NULL;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -337,7 +335,6 @@ db_collection_t* db_get_collection(database_t* db, const char* name) {
 
 /* Check if collection exists */
 int db_collection_exists(database_t* db, const char* name) {
-    (void)db; /* Using global database */
     return db_get_collection(db, name) != NULL;
 }
 
@@ -563,7 +560,6 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
 /* Get document */
 json_value_t* db_get_document(database_t* db, const char* collection_name, 
                              const char* id) {
-    (void)db; /* Using global database */
     LOG_DEBUG("db_get_document: collection=%s, id=%s", collection_name, id);
     if (!g_database.initialized || !collection_name || !id) {
         LOG_ERROR("db_get_document: invalid params - init=%d, coll=%s, id=%s",
@@ -642,6 +638,7 @@ json_value_t* db_get_document(database_t* db, const char* collection_name,
 /* Update document */
 json_value_t* db_update_document(database_t* db, const char* collection_name,
                                 const char* id, json_value_t* document) {
+    (void)db; /* Using global database */
     if (!g_database.initialized || !collection_name || !id || !document) return NULL;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -734,6 +731,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
 
 /* Delete document */
 int db_delete_document(database_t* db, const char* collection_name, const char* id) {
+    (void)db; /* Using global database */
     if (!g_database.initialized || !collection_name || !id) return -1;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -841,10 +839,8 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     
     /* Try to use index-optimized query first */
     if (query && query->type == JSON_OBJECT && json_object_size(query) > 0) {
-    (void)db; /* Using global database */
         json_value_t* index_results = db_query_with_index(coll, query);
         if (index_results) {
-    (void)db; /* Using global database */
             return index_results;
         }
     }
@@ -855,14 +851,12 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     
     json_value_t* documents = json_create_array();
     if (!documents) {
-    (void)db; /* Using global database */
         json_free(results);
         return NULL;
     }
     
     /* Track seen document IDs to prevent duplicates */
     typedef struct seen_id {
-    (void)db; /* Using global database */
         char id[64];
         struct seen_id* next;
     } seen_id_t;
@@ -881,10 +875,8 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     
     int doc_num = 0;
     while (offset < header->free_offset) {
-    (void)db; /* Using global database */
         /* Check if we have enough space for a doc_entry header */
         if (offset + sizeof(doc_entry_t) > header->free_offset) {
-    (void)db; /* Using global database */
             break;
         }
         
@@ -900,7 +892,6 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         
         /* Skip deleted documents */
         if (entry->flags & DOC_FLAG_DELETED) {
-    (void)db; /* Using global database */
             uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
             offset += entry_size;
             offset = (offset + 7) & ~7; /* Align to 8 bytes */
@@ -912,7 +903,6 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         /* Validate entry sizes */
         if (entry->key_len == 0 || entry->value_len == 0 || 
             entry->key_len > 1024 || entry->value_len > 1024*1024) {
-    (void)db; /* Using global database */
             LOG_TRACE("db_query_documents: Invalid entry sizes at offset %lu: key_len=%u, value_len=%u", 
                       offset, entry->key_len, entry->value_len);
             offset += sizeof(doc_entry_t);
@@ -922,7 +912,6 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         /* Make sure we don't read past the end */
         uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
         if (offset + entry_size > header->free_offset) {
-    (void)db; /* Using global database */
             LOG_TRACE("db_query_documents: Entry at offset %lu would exceed bounds", offset);
             break;
         }
@@ -939,19 +928,15 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         json_value_t* doc = json_parse(json_data);
         
         if (doc && doc->type == JSON_OBJECT) {
-    (void)db; /* Using global database */
             /* Check if document matches query */
             int matches = 1;
             if (query && query->type == JSON_OBJECT) {
-    (void)db; /* Using global database */
                 /* Simple field matching */
                 for (size_t i = 0; i < query->value.object.size; i++) {
-    (void)db; /* Using global database */
                     json_object_entry_t* query_field = &query->value.object.entries[i];
                     json_value_t* doc_value = json_object_get(doc, query_field->key);
                     
                     if (!doc_value || !json_equals(doc_value, query_field->value)) {
-    (void)db; /* Using global database */
                         matches = 0;
                         break;
                     }
@@ -959,13 +944,10 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
             }
             
             if (matches) {
-    (void)db; /* Using global database */
                 json_value_t* result_doc = json_clone(doc);
                 if (result_doc) {
-    (void)db; /* Using global database */
                     /* Add the ID to the document if it doesn't have one */
                     if (!json_object_get(result_doc, "uuid") && !json_object_get(result_doc, "uuid")) {
-    (void)db; /* Using global database */
                         json_object_set(result_doc, "uuid", json_create_string(doc_id));
                     }
                     json_array_append(documents, result_doc);
@@ -986,12 +968,10 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     /* Increment read metrics */
     metric_t* read_ops = get_db_read_operations_metric();
     if (read_ops) {
-    (void)db; /* Using global database */
         metrics_counter_inc(read_ops, 1);
     }
     metric_t* db_ops = get_db_operations_metric();
     if (db_ops) {
-    (void)db; /* Using global database */
         metrics_counter_inc(db_ops, 1);
     }
     
@@ -1002,7 +982,6 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
 /* List collections */
 json_value_t* db_list_collections(database_t* db) {
     (void)db; /* Using global database */
-    (void)db; /* Using global database */
     if (!g_database.initialized) return NULL;
     
     json_value_t* array = json_create_array();
@@ -1011,12 +990,9 @@ json_value_t* db_list_collections(database_t* db) {
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i]) {
-    (void)db; /* Using global database */
             json_value_t* name = json_create_string(g_database.collections[i]->name);
             if (name) {
-    (void)db; /* Using global database */
                 json_array_append(array, name);
             }
         }
@@ -1029,7 +1005,6 @@ json_value_t* db_list_collections(database_t* db) {
 
 /* Rebuild indices for a collection from storage */
 static int rebuild_collection_indices(hp_collection_t* coll) {
-    (void)db; /* Using global database */
     if (!coll || !coll->storage || !coll->primary_index) return -1;
     
     LOG_INFO("Rebuilding indices for collection: %s", coll->name);
@@ -1042,10 +1017,8 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
     int indexed_count = 0;
     
     while (offset < header->free_offset) {
-    (void)db; /* Using global database */
         /* Check if we have enough space for a doc_entry header */
         if (offset + sizeof(doc_entry_t) > header->free_offset) {
-    (void)db; /* Using global database */
             break;
         }
         
@@ -1059,7 +1032,6 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
         
         /* Skip deleted documents */
         if (entry->flags & DOC_FLAG_DELETED) {
-    (void)db; /* Using global database */
             uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
             offset += entry_size;
             offset = (offset + 7) & ~7; /* Align to 8 bytes */
@@ -1071,7 +1043,6 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
         /* Validate entry sizes */
         if (entry->key_len == 0 || entry->value_len == 0 || 
             entry->key_len > 1024 || entry->value_len > 1024*1024) {
-    (void)db; /* Using global database */
             offset += sizeof(doc_entry_t);
             continue;
         }
@@ -1079,7 +1050,6 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
         /* Make sure we don't read past the end */
         uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
         if (offset + entry_size > header->free_offset) {
-    (void)db; /* Using global database */
             break;
         }
         
@@ -1088,10 +1058,8 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
         
         /* Add to primary index */
         if (hash_index_insert(coll->primary_index, key, entry->key_len, offset) == 0) {
-    (void)db; /* Using global database */
             indexed_count++;
         } else {
-    (void)db; /* Using global database */
             LOG_WARNING("Failed to index document at offset %lu", offset);
         }
         
@@ -1111,7 +1079,6 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
 
 /* Rebuild all indices */
 int db_rebuild_indices(database_t* db) {
-    (void)db; /* Using global database */
     if (!g_database.initialized) return -1;
     
     LOG_INFO("Rebuilding all database indices...");
@@ -1119,9 +1086,7 @@ int db_rebuild_indices(database_t* db) {
     pthread_rwlock_wrlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i]) {
-    (void)db; /* Using global database */
             rebuild_collection_indices(g_database.collections[i]);
         }
     }
@@ -1134,32 +1099,25 @@ int db_rebuild_indices(database_t* db) {
 
 /* Drop collection */
 int db_drop_collection(database_t* db, const char* name) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     if (!g_database.initialized || !name) return -1;
     
     pthread_rwlock_wrlock(&g_database.lock);
     
     /* Find and remove collection */
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i] && 
             strcmp(g_database.collections[i]->name, name) == 0) {
-    (void)db; /* Using global database */
             
             hp_collection_t* coll = g_database.collections[i];
             
             /* Clean up resources */
             if (coll->storage) {
-    (void)db; /* Using global database */
                 mmap_storage_destroy(coll->storage);
             }
             if (coll->primary_index) {
-    (void)db; /* Using global database */
                 hash_index_destroy(coll->primary_index);
             }
             if (coll->cache) {
-    (void)db; /* Using global database */
                 generic_cache_destroy(coll->cache);
             }
             pthread_rwlock_destroy(&coll->lock);
@@ -1175,7 +1133,6 @@ int db_drop_collection(database_t* db, const char* name) {
             
             /* Shift remaining collections */
             for (size_t j = i; j < g_database.num_collections - 1; j++) {
-    (void)db; /* Using global database */
                 g_database.collections[j] = g_database.collections[j + 1];
             }
             g_database.num_collections--;
@@ -1191,16 +1148,12 @@ int db_drop_collection(database_t* db, const char* name) {
 
 /* Persistence functions (no-op for mmap) */
 int db_save(database_t* db) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     if (!g_database.initialized) return -1;
     
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i] && g_database.collections[i]->storage) {
-    (void)db; /* Using global database */
             mmap_storage_sync(g_database.collections[i]->storage);
         }
     }
@@ -1210,25 +1163,20 @@ int db_save(database_t* db) {
 }
 
 int db_load(database_t* db) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     /* Collections are loaded on-demand */
     return 0;
 }
 
 /* Bootstrap functions */
 int db_needs_bootstrap(database_t* db) {
-    (void)db; /* Using global database */
     return db_collection_exists(db, "_system_config") ? 0 : 1;
 }
 
 int db_init_system_schemas(database_t* db) {
-    (void)db; /* Using global database */
     /* System schemas are automatically created on-demand in high-performance mode */
     
     /* Add welcome message to the database */
     if (!db_get_collection(db, "_system_config")) {
-    (void)db; /* Using global database */
         db_create_collection(db, "_system_config");
         
         /* Create welcome message document */
@@ -1247,27 +1195,20 @@ int db_init_system_schemas(database_t* db) {
 
 /* Cache management */
 int db_enable_cache(database_t* db, int capacity, int ttl) {
-    (void)db; /* Using global database */
     /* Cache is always enabled in high-performance mode */
     return 0;
 }
 
 int db_disable_cache(database_t* db) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     /* Cannot disable cache in high-performance mode */
     return -1;
 }
 
 int db_clear_cache(database_t* db) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i] && g_database.collections[i]->cache) {
-    (void)db; /* Using global database */
             generic_cache_clear(g_database.collections[i]->cache);
         }
     }
@@ -1278,8 +1219,6 @@ int db_clear_cache(database_t* db) {
 
 /* Additional API functions */
 json_value_t* db_list_collections_with_info(database_t* db) {
-    (void)db; /* Using global database */
-    (void)db; /* Using global database */
     if (!g_database.initialized) return NULL;
     
     json_value_t* array = json_create_array();
@@ -1288,20 +1227,16 @@ json_value_t* db_list_collections_with_info(database_t* db) {
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i]) {
-    (void)db; /* Using global database */
             hp_collection_t* coll = g_database.collections[i];
             
             json_value_t* info = json_create_object();
             if (info) {
-    (void)db; /* Using global database */
                 json_value_t* name = json_create_string(coll->name);
                 json_value_t* count = json_create_number((double)atomic_load(&coll->doc_count));
                 json_value_t* size = json_create_number((double)atomic_load(&coll->total_size));
                 
                 if (name && count && size) {
-    (void)db; /* Using global database */
                     json_object_set(info, "name", name);
                     json_object_set(info, "document_count", count);
                     json_object_set(info, "total_size", size);
@@ -1316,7 +1251,6 @@ json_value_t* db_list_collections_with_info(database_t* db) {
 }
 
 json_value_t* db_get_cache_stats(database_t* db) {
-    (void)db; /* Using global database */
     if (!g_database.initialized) return NULL;
     
     json_value_t* stats = json_create_object();
@@ -1327,9 +1261,7 @@ json_value_t* db_get_cache_stats(database_t* db) {
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
-    (void)db; /* Using global database */
         if (g_database.collections[i] && g_database.collections[i]->cache) {
-    (void)db; /* Using global database */
             uint64_t hits, misses, evictions;
             generic_cache_stats(g_database.collections[i]->cache, &hits, &misses, &evictions);
             total_hits += hits;
@@ -1345,7 +1277,6 @@ json_value_t* db_get_cache_stats(database_t* db) {
     json_value_t* evictions = json_create_number((double)total_evictions);
     
     if (hits && misses && evictions) {
-    (void)db; /* Using global database */
         json_object_set(stats, "hits", hits);
         json_object_set(stats, "misses", misses);
         json_object_set(stats, "evictions", evictions);
@@ -1355,7 +1286,6 @@ json_value_t* db_get_cache_stats(database_t* db) {
 }
 
 int db_configure_cache(database_t* db, int capacity, int ttl, const char* type, double max_memory_mb) {
-    (void)db; /* Using global database */
     UNUSED(db);
     UNUSED(capacity);
     UNUSED(ttl);
@@ -1372,7 +1302,6 @@ int db_configure_cache(database_t* db, int capacity, int ttl, const char* type, 
 
 /* Extract field value from JSON document */
 static json_value_t* extract_field_value(json_value_t* doc, const char* field) {
-    (void)db; /* Using global database */
     if (!doc || doc->type != JSON_OBJECT || !field) return NULL;
     
     /* Handle nested fields with dot notation */
@@ -1384,7 +1313,6 @@ static json_value_t* extract_field_value(json_value_t* doc, const char* field) {
     char* token = strtok(field_copy, ".");
     
     while (token && current && current->type == JSON_OBJECT) {
-    (void)db; /* Using global database */
         current = json_object_get(current, token);
         token = strtok(NULL, ".");
     }
@@ -1395,12 +1323,10 @@ static json_value_t* extract_field_value(json_value_t* doc, const char* field) {
 /* Create secondary index on field */
 index_t* db_create_index(database_t* db, const char* collection_name, const char* name,
                         const char* field_path, index_type_t type) {
-    (void)db; /* Using global database */
     UNUSED(db);
     UNUSED(type); /* For now, we only support B+tree indexes */
     
     if (!g_database.initialized || !collection_name || !name || !field_path) {
-    (void)db; /* Using global database */
         return NULL;
     }
     
@@ -1409,7 +1335,6 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     pthread_rwlock_unlock(&g_database.lock);
     
     if (!coll) {
-    (void)db; /* Using global database */
         LOG_ERROR("Collection not found: %s", collection_name);
         return NULL;
     }
@@ -1418,15 +1343,12 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     
     /* Check if index already exists */
     for (int i = 0; i < coll->num_indexes; i++) {
-    (void)db; /* Using global database */
         if (strcmp(coll->indexes[i].field_name, field_path) == 0) {
-    (void)db; /* Using global database */
             pthread_rwlock_unlock(&coll->lock);
             LOG_INFO("Index already exists on field: %s", field_path);
             /* Return a dummy index_t to indicate success */
             index_t* existing = calloc(1, sizeof(index_t));
             if (existing) {
-    (void)db; /* Using global database */
                 existing->name = strdup(name);
                 existing->field_path = strdup(field_path);
                 existing->type = type;
@@ -1437,7 +1359,6 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     
     /* Check if we have space for new index */
     if (coll->num_indexes >= MAX_INDEXES_PER_COLLECTION) {
-    (void)db; /* Using global database */
         pthread_rwlock_unlock(&coll->lock);
         LOG_ERROR("Maximum indexes reached for collection: %s", collection_name);
         return NULL;
@@ -1450,7 +1371,6 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     
     btree_disk_t* btree = btree_disk_create(index_path, 100, NULL);
     if (!btree) {
-    (void)db; /* Using global database */
         pthread_rwlock_unlock(&coll->lock);
         LOG_ERROR("Failed to create B+tree index: %s", index_path);
         return NULL;
@@ -1474,7 +1394,6 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     /* Return index_t structure for compatibility */
     index_t* result = calloc(1, sizeof(index_t));
     if (result) {
-    (void)db; /* Using global database */
         result->name = strdup(name);
         result->field_path = strdup(field_path);
         result->type = type;
@@ -1485,12 +1404,10 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
 
 /* Drop index */
 int db_drop_index(database_t* db, const char* collection_name, const char* name) {
-    (void)db; /* Using global database */
     UNUSED(db);
     UNUSED(name); /* We identify indexes by field name for now */
     
     if (!g_database.initialized || !collection_name || !name) {
-    (void)db; /* Using global database */
         return -1;
     }
     
@@ -1499,7 +1416,6 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
     pthread_rwlock_unlock(&g_database.lock);
     
     if (!coll) {
-    (void)db; /* Using global database */
         LOG_ERROR("Collection not found: %s", collection_name);
         return -1;
     }
@@ -1509,16 +1425,13 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
     /* Find and remove index - for now we use name as field name */
     int found = -1;
     for (int i = 0; i < coll->num_indexes; i++) {
-    (void)db; /* Using global database */
         if (strcmp(coll->indexes[i].field_name, name) == 0) {
-    (void)db; /* Using global database */
             found = i;
             break;
         }
     }
     
     if (found < 0) {
-    (void)db; /* Using global database */
         pthread_rwlock_unlock(&coll->lock);
         LOG_ERROR("Index not found with name: %s", name);
         return -1;
@@ -1529,7 +1442,6 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
     
     /* Shift remaining indexes */
     for (int i = found; i < coll->num_indexes - 1; i++) {
-    (void)db; /* Using global database */
         coll->indexes[i] = coll->indexes[i + 1];
     }
     coll->num_indexes--;
@@ -1542,9 +1454,7 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
 
 /* List indexes for collection */
 json_value_t* db_list_indexes(database_t* db, const char* collection_name) {
-    (void)db; /* Using global database */
     if (!g_database.initialized || !collection_name) {
-    (void)db; /* Using global database */
         return NULL;
     }
     
@@ -1553,7 +1463,6 @@ json_value_t* db_list_indexes(database_t* db, const char* collection_name) {
     pthread_rwlock_unlock(&g_database.lock);
     
     if (!coll) {
-    (void)db; /* Using global database */
         LOG_ERROR("Collection not found: %s", collection_name);
         return NULL;
     }
@@ -1572,9 +1481,7 @@ json_value_t* db_list_indexes(database_t* db, const char* collection_name) {
     
     /* Add secondary indexes */
     for (int i = 0; i < coll->num_indexes; i++) {
-    (void)db; /* Using global database */
         if (coll->indexes[i].active) {
-    (void)db; /* Using global database */
             json_value_t* index = json_create_object();
             json_object_set(index, "field", json_create_string(coll->indexes[i].field_name));
             json_object_set(index, "type", json_create_string("btree"));

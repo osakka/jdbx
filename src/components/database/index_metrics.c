@@ -896,3 +896,42 @@ double index_metrics_calculate_roi(double time_saved_ms, double time_spent_ms) {
     
     return ((time_saved_ms - time_spent_ms) / time_spent_ms) * 100.0;
 }
+
+/* Remove metrics for a specific index */
+int index_metrics_remove(index_metrics_t* metrics,
+                        const char* collection_name,
+                        const char* field_path) {
+    if (!metrics || !collection_name || !field_path) {
+        return -1;
+    }
+    
+    pthread_mutex_lock(&metrics->metrics_lock);
+    
+    /* Find the index to remove */
+    int found = -1;
+    for (size_t i = 0; i < metrics->metrics_count; i++) {
+        if (strcmp(metrics->metrics_array[i].collection_name, collection_name) == 0 &&
+            strcmp(metrics->metrics_array[i].field_path, field_path) == 0) {
+            found = i;
+            break;
+        }
+    }
+    
+    if (found >= 0) {
+        /* Remove by shifting remaining elements */
+        for (size_t i = found; i < metrics->metrics_count - 1; i++) {
+            metrics->metrics_array[i] = metrics->metrics_array[i + 1];
+        }
+        
+        metrics->metrics_count--;
+        
+        /* Update global stats */
+        metrics->total_indexes_tracked--;
+        
+        LOG_INFO("Removed metrics for index %s.%s", collection_name, field_path);
+    }
+    
+    pthread_mutex_unlock(&metrics->metrics_lock);
+    
+    return (found >= 0) ? 0 : -1;
+}

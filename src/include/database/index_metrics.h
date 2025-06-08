@@ -265,4 +265,15 @@ void index_metrics_format_bytes(uint64_t bytes, char* buffer, size_t buffer_size
  */
 double index_metrics_calculate_roi(double time_saved_ms, double time_spent_ms);
 
+/**
+ * Remove metrics for a specific index
+ * @param metrics The metrics system
+ * @param collection_name The collection name
+ * @param field_path The indexed field path
+ * @return 0 on success, -1 on error
+ */
+int index_metrics_remove(struct index_metrics_collector* metrics,
+                        const char* collection_name,
+                        const char* field_path);
+
 #endif /* INDEX_METRICS_H */

@@ -35,6 +35,11 @@ typedef struct {
 /* Global adaptive indexer instance */
 static adaptive_indexer_t* g_adaptive_indexer = NULL;
 
+/* Get global adaptive indexer instance */
+adaptive_indexer_t* adaptive_indexer_get_instance(void) {
+    return g_adaptive_indexer;
+}
+
 /* === Helper Functions === */
 
 /**

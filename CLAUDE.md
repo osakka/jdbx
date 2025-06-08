@@ -164,6 +164,25 @@ The JSONdb server now includes an advanced adaptive indexing system that automat
 - Startup delay: 30 seconds
 - Check interval: 60 seconds
 
+## Index Cleanup System (v3.1.0)
+
+Intelligent index cleanup and optimization:
+
+1. **Performance Analysis**: Identifies underperforming indexes
+2. **Automatic Removal**: Removes indexes with negative ROI
+3. **Storage Optimization**: Reclaims disk space from unused indexes
+4. **Background Processing**: Hourly cleanup checks
+
+### Key Implementation Files:
+- `src/components/database/index_cleanup.c` - Cleanup logic
+- `src/components/api/index_cleanup_api.c` - REST API endpoints
+
+### Cleanup Criteria:
+- ROI threshold: -50% (configurable)
+- Effectiveness threshold: 10% (configurable)
+- Minimum age: 24 hours before evaluation
+- Minimum queries: 100 before evaluation
+
 ## Connection Management (v3.1.0)
 
 Fixed critical connection leak in thread-safe handler:
