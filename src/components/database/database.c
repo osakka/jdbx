@@ -239,7 +239,7 @@ void db_close(database_t* db) {
 
 /* Create collection */
 int db_create_collection(database_t* db, const char* name) {
-    (void)db; // Currently unused
+    (void)db; /* Using global database */
     if (!g_database.initialized || !name) return -1;
     
     pthread_rwlock_wrlock(&g_database.lock);
@@ -268,7 +268,7 @@ int db_create_collection(database_t* db, const char* name) {
     
     /* Initialize storage with production configuration */
     const production_config_t* prod_config = production_config_get();
-    char storage_path[1024];
+    char storage_path[2048];
     snprintf(storage_path, sizeof(storage_path), "%s/%s.mmap", g_database.path, name);
     
     LOG_DEBUG("Creating collection '%s' with MMAP size: %s", name, 
@@ -284,7 +284,7 @@ int db_create_collection(database_t* db, const char* name) {
     }
     
     /* Initialize index */
-    char index_path[1024];
+    char index_path[2048];
     snprintf(index_path, sizeof(index_path), "%s/%s.idx", g_database.path, name);
     coll->primary_index = hash_index_create(index_path, NULL);
     
@@ -325,7 +325,7 @@ int db_create_collection(database_t* db, const char* name) {
 
 /* Get collection */
 db_collection_t* db_get_collection(database_t* db, const char* name) {
-    (void)db; // Currently unused
+    (void)db; /* Using global database */
     if (!g_database.initialized || !name) return NULL;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -560,9 +560,9 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
 }
 
 /* Get document */
-    (void)db; // Currently unused
 json_value_t* db_get_document(database_t* db, const char* collection_name, 
                              const char* id) {
+    (void)db; // Currently unused
     LOG_DEBUG("db_get_document: collection=%s, id=%s", collection_name, id);
     if (!g_database.initialized || !collection_name || !id) {
         LOG_ERROR("db_get_document: invalid params - init=%d, coll=%s, id=%s",
@@ -1081,9 +1081,9 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
     return 0;
 }
 
-    (void)db; // Currently unused
 /* Rebuild all indices */
 int db_rebuild_indices(database_t* db) {
+    (void)db; // Currently unused
     if (!g_database.initialized) return -1;
     
     LOG_INFO("Rebuilding all database indices...");
@@ -1101,10 +1101,10 @@ int db_rebuild_indices(database_t* db) {
     LOG_INFO("Database indices rebuilt successfully.");
     return 0;
 }
-    (void)db; // Currently unused
 
 /* Drop collection */
 int db_drop_collection(database_t* db, const char* name) {
+    (void)db; // Currently unused
     if (!g_database.initialized || !name) return -1;
     
     pthread_rwlock_wrlock(&g_database.lock);
@@ -1129,7 +1129,7 @@ int db_drop_collection(database_t* db, const char* name) {
             pthread_rwlock_destroy(&coll->lock);
             
             /* Remove files */
-            char path[1024];
+            char path[2048];
             snprintf(path, sizeof(path), "%s/%s.mmap", g_database.path, name);
             unlink(path);
             snprintf(path, sizeof(path), "%s/%s.idx", g_database.path, name);
@@ -1150,11 +1150,11 @@ int db_drop_collection(database_t* db, const char* name) {
     
     pthread_rwlock_unlock(&g_database.lock);
     return -1;
-    (void)db; // Currently unused
 }
 
 /* Persistence functions (no-op for mmap) */
 int db_save(database_t* db) {
+    (void)db; // Currently unused
     if (!g_database.initialized) return -1;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -1165,12 +1165,12 @@ int db_save(database_t* db) {
         }
     }
     
-    (void)db; // Currently unused
     pthread_rwlock_unlock(&g_database.lock);
     return 0;
 }
 
 int db_load(database_t* db) {
+    (void)db; // Currently unused
     /* Collections are loaded on-demand */
     return 0;
 }
@@ -1197,31 +1197,30 @@ int db_init_system_schemas(database_t* db) {
         
         db_insert_document(db, "_system_config", welcome_doc);
     }
-    (void)db; (void)capacity; (void)ttl; // Currently unused
     
     return 1; /* Return 1 for success */
 }
 
-    (void)db; // Currently unused
 /* Cache management */
 int db_enable_cache(database_t* db, int capacity, int ttl) {
+    (void)db; (void)capacity; (void)ttl; // Currently unused
     /* Cache is always enabled in high-performance mode */
     return 0;
-    (void)db; // Currently unused
 }
 
 int db_disable_cache(database_t* db) {
+    (void)db; // Currently unused
     /* Cannot disable cache in high-performance mode */
     return -1;
 }
 
 int db_clear_cache(database_t* db) {
+    (void)db; // Currently unused
     pthread_rwlock_rdlock(&g_database.lock);
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
         if (g_database.collections[i] && g_database.collections[i]->cache) {
             generic_cache_clear(g_database.collections[i]->cache);
-    (void)db; // Currently unused
         }
     }
     
@@ -1231,6 +1230,7 @@ int db_clear_cache(database_t* db) {
 
 /* Additional API functions */
 json_value_t* db_list_collections_with_info(database_t* db) {
+    (void)db; /* Using global database */
     if (!g_database.initialized) return NULL;
     
     json_value_t* array = json_create_array();
@@ -1253,7 +1253,6 @@ json_value_t* db_list_collections_with_info(database_t* db) {
                     json_object_set(info, "document_count", count);
                     json_object_set(info, "total_size", size);
                     json_array_append(array, info);
-    (void)db; // Currently unused
                 }
             }
         }
@@ -1264,6 +1263,7 @@ json_value_t* db_list_collections_with_info(database_t* db) {
 }
 
 json_value_t* db_get_cache_stats(database_t* db) {
+    (void)db; /* Using global database */
     if (!g_database.initialized) return NULL;
     
     json_value_t* stats = json_create_object();
@@ -1378,7 +1378,7 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     }
     
     /* Create B+tree for index */
-    char index_path[1024];
+    char index_path[2048];
     snprintf(index_path, sizeof(index_path), "%s/%s_%s.idx", 
              g_database.path, collection_name, name);
     
@@ -1417,6 +1417,7 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
 
 /* Drop index */
 int db_drop_index(database_t* db, const char* collection_name, const char* name) {
+    (void)db; // Currently unused
     UNUSED(db);
     UNUSED(name); /* We identify indexes by field name for now */
     
@@ -1456,7 +1457,6 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
     /* Shift remaining indexes */
     for (int i = found; i < coll->num_indexes - 1; i++) {
         coll->indexes[i] = coll->indexes[i + 1];
-    (void)db; // Currently unused
     }
     coll->num_indexes--;
     
@@ -1468,6 +1468,7 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
 
 /* List indexes for collection */
 json_value_t* db_list_indexes(database_t* db, const char* collection_name) {
+    (void)db; /* Using global database */
     if (!g_database.initialized || !collection_name) {
         return NULL;
     }

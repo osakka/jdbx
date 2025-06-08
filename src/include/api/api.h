@@ -179,4 +179,8 @@ void register_health_api_endpoints(api_context_t *ctx);
 void js_api_init(database_t* db);
 void js_api_cleanup();
 
+/* Index cleanup API initialization */
+struct index_metrics_collector;
+void index_cleanup_api_init(database_t* db, struct index_metrics_collector* metrics);
+
 #endif /* API_H */
