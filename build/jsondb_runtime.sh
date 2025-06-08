@@ -5,10 +5,11 @@
 # Go to the script's directory
 cd "$(dirname "$0")"
 
-# Environment file paths (absolute paths, in order of preference)
+# Environment file paths (in order of preference)
 ENV_FILES=(
-    "/opt/jsondb/build/var/jsondb.env"     # Running configuration
-    "/opt/jsondb/share/config/jsondb.env"  # Template defaults (if running config doesn't exist)
+    "${JSONDB_VAR_DIR}/jsondb.env"         # Running configuration
+    "${JSONDB_SHARE_DIR}/config/jsondb.env" # Template defaults (if running config doesn't exist)
+    "./jsondb.env"                          # Local directory override
 )
 
 # Load environment configuration
@@ -32,13 +33,46 @@ done
 : ${JSONDB_SSL_CERT:="/etc/ssl/certs/server.pem"}
 : ${JSONDB_SSL_KEY:="/etc/ssl/private/server.key"}
 
-# Use v2.0.0 binary format with .jdb extension
-: ${JSONDB_BASE_DIR:="/opt/jsondb"}
+# Advanced configuration options (v3.1.0)
+: ${JSONDB_THREAD_POOL_MIN:=4}
+: ${JSONDB_THREAD_POOL_MAX:=16}
+: ${JSONDB_THREAD_POOL_QUEUE_SIZE:=1024}
+: ${JSONDB_THREAD_POOL_IDLE_TIMEOUT:=60}
+: ${JSONDB_CACHE_ENABLED:=true}
+: ${JSONDB_CACHE_MAX_SIZE:=10485760}
+: ${JSONDB_CACHE_TTL:=300}
+: ${JSONDB_METRICS_ENABLED:=true}
+: ${JSONDB_METRICS_RETENTION:=15}
+: ${JSONDB_INDEX_QUERY_THRESHOLD:=10}
+: ${JSONDB_INDEX_TIME_THRESHOLD:=50}
+: ${JSONDB_INDEX_STARTUP_DELAY:=30}
+: ${JSONDB_INDEX_CHECK_INTERVAL:=60}
+
+# Determine base directory dynamically
+if [ -z "${JSONDB_BASE_DIR}" ]; then
+    # Try to find base directory from script location
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    if [ -d "${SCRIPT_DIR}/../src" ]; then
+        # Running from build directory
+        JSONDB_BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    elif [ -d "/opt/jsondb" ]; then
+        # Standard installation
+        JSONDB_BASE_DIR="/opt/jsondb"
+    else
+        # Use current directory as last resort
+        JSONDB_BASE_DIR="$(pwd)"
+    fi
+fi
+
+# Export base directory for child processes
+export JSONDB_BASE_DIR
+
+# Set derived directories
 : ${JSONDB_BUILD_DIR:="${JSONDB_BASE_DIR}/build"}
 : ${JSONDB_VAR_DIR:="${JSONDB_BUILD_DIR}/var"}
 : ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
 
-# Updated paths for v2.0.0 binary persistence
+# Configurable paths with dynamic defaults
 : ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/data"}
 : ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/rbac.json"}
 : ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb.log"}
@@ -47,6 +81,7 @@ done
 : ${JSONDB_VALIDATORS_DIR:="${JSONDB_VAR_DIR}/validators"}
 : ${JSONDB_TRANSFORMS_DIR:="${JSONDB_VAR_DIR}/transforms"}
 : ${JSONDB_METRICS_DIR:="${JSONDB_VAR_DIR}/metrics"}
+: ${JSONDB_DOC_PATH:="${JSONDB_BASE_DIR}/docs"}
 
 # Display current configuration
 echo "Using configuration:"
@@ -137,6 +172,11 @@ start_server() {
     fi
 
     # Start the server
+    # Export environment for the server
+    export JSONDB_BASE_PATH="${JSONDB_BASE_DIR}"
+    export JSONDB_DOC_PATH="${JSONDB_DOC_PATH}"
+    export JSONDB_VAR_PATH="${JSONDB_VAR_DIR}"
+    
     eval "./bin/jsondb_server \
         --daemon \
         --log-level=\"$JSONDB_LOG_LEVEL\" \
@@ -150,6 +190,19 @@ start_server() {
         --validators-dir=\"$JSONDB_VALIDATORS_DIR\" \
         --transforms-dir=\"$JSONDB_TRANSFORMS_DIR\" \
         --metrics-dir=\"$JSONDB_METRICS_DIR\" \
+        --thread-pool-min=\"$JSONDB_THREAD_POOL_MIN\" \
+        --thread-pool-max=\"$JSONDB_THREAD_POOL_MAX\" \
+        --thread-pool-queue-size=\"$JSONDB_THREAD_POOL_QUEUE_SIZE\" \
+        --thread-pool-idle-timeout=\"$JSONDB_THREAD_POOL_IDLE_TIMEOUT\" \
+        --cache-enabled=\"$JSONDB_CACHE_ENABLED\" \
+        --cache-max-size=\"$JSONDB_CACHE_MAX_SIZE\" \
+        --cache-ttl=\"$JSONDB_CACHE_TTL\" \
+        --metrics-enabled=\"$JSONDB_METRICS_ENABLED\" \
+        --metrics-retention=\"$JSONDB_METRICS_RETENTION\" \
+        --index-query-threshold=\"$JSONDB_INDEX_QUERY_THRESHOLD\" \
+        --index-time-threshold=\"$JSONDB_INDEX_TIME_THRESHOLD\" \
+        --index-startup-delay=\"$JSONDB_INDEX_STARTUP_DELAY\" \
+        --index-check-interval=\"$JSONDB_INDEX_CHECK_INTERVAL\" \
         $SSL_ARGS"
 
     # Wait for server to start (simplified)
@@ -254,9 +307,18 @@ show_usage() {
     echo "  --db-dir=PATH          Set database file path"
     echo "  --env-file=FILE        Use custom environment file"
     echo ""
+    echo "Advanced Options (v3.1.0):"
+    echo "  --thread-pool-min=N    Minimum threads (default: $JSONDB_THREAD_POOL_MIN)"
+    echo "  --thread-pool-max=N    Maximum threads (default: $JSONDB_THREAD_POOL_MAX)"
+    echo "  --cache-enabled=BOOL   Enable cache (default: $JSONDB_CACHE_ENABLED)"
+    echo "  --cache-max-size=SIZE  Cache size in bytes (default: $JSONDB_CACHE_MAX_SIZE)"
+    echo "  --metrics-enabled=BOOL Enable metrics (default: $JSONDB_METRICS_ENABLED)"
+    echo "  --no-ssl              Disable SSL/TLS encryption"
+    echo ""
     echo "Environment file locations (in order of preference):"
-    echo "  /opt/jsondb/var/jsondb.env           (running configuration)"
-    echo "  /opt/jsondb/share/config/jsondb.env  (template defaults)"
+    echo "  ${JSONDB_VAR_DIR}/jsondb.env         (running configuration)"
+    echo "  ${JSONDB_SHARE_DIR}/config/jsondb.env (template defaults)"
+    echo "  ./jsondb.env                          (local directory override)"
 }
 
 # Parse command line arguments
@@ -287,6 +349,24 @@ while [ $# -gt 0 ]; do
                 echo "Error: Custom environment file not found: $ENV_FILE"
                 exit 1
             fi
+            ;;
+        --thread-pool-min=*)
+            JSONDB_THREAD_POOL_MIN="${1#*=}"
+            ;;
+        --thread-pool-max=*)
+            JSONDB_THREAD_POOL_MAX="${1#*=}"
+            ;;
+        --cache-enabled=*)
+            JSONDB_CACHE_ENABLED="${1#*=}"
+            ;;
+        --cache-max-size=*)
+            JSONDB_CACHE_MAX_SIZE="${1#*=}"
+            ;;
+        --metrics-enabled=*)
+            JSONDB_METRICS_ENABLED="${1#*=}"
+            ;;
+        --no-ssl)
+            JSONDB_USE_SSL="false"
             ;;
         -h|--help)
             show_usage

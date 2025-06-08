@@ -25,7 +25,7 @@ static int random_level(void) {
 skiplist_t* skiplist_create(int (*compare)(const void*, size_t, const void*, size_t)) {
     skiplist_t* list = calloc(1, sizeof(skiplist_t));
     if (!list) {
-        LOG_ERROR("Failed to allocate skip list");
+        LOG_ERROR("Cannot allocate skip list.");
         return NULL;
     }
     

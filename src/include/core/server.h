@@ -128,6 +128,23 @@ typedef struct {
     char* key_path;
     ssl_context_t* ssl_context; /* SSL context for TLS connections */
 
+    /* Cache configuration */
+    int cache_enabled;           /* Enable/disable cache */
+    size_t cache_max_size;       /* Maximum cache size in bytes */
+    int cache_ttl;               /* Cache TTL in seconds */
+
+    /* Metrics configuration */
+    int metrics_enabled;         /* Enable/disable metrics */
+    int metrics_retention;       /* Number of data points to retain */
+
+    /* Adaptive indexing configuration */
+    int index_query_threshold;        /* Query count threshold for indexing */
+    int index_time_threshold;         /* Time threshold for indexing (ms) */
+    int index_query_threshold_system; /* Query threshold for system collections */
+    int index_time_threshold_system;  /* Time threshold for system collections (ms) */
+    int index_startup_delay;          /* Indexing startup delay (seconds) */
+    int index_check_interval;         /* Indexing check interval (seconds) */
+
     /* Status */
     int error;                   /* Error code */
 } server_config_t;

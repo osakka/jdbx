@@ -82,6 +82,23 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"no-ssl",     no_argument,    0, 'N'},
     {"ssl-cert",    required_argument, 0, 'C'},
     {"ssl-key",    required_argument, 0, 'K'},
+    /* Thread pool options */
+    {"thread-pool-min", required_argument, 0, 301},
+    {"thread-pool-max", required_argument, 0, 302},
+    {"thread-pool-queue-size", required_argument, 0, 303},
+    {"thread-pool-idle-timeout", required_argument, 0, 304},
+    /* Cache options */
+    {"cache-enabled", required_argument, 0, 305},
+    {"cache-max-size", required_argument, 0, 306},
+    {"cache-ttl", required_argument, 0, 307},
+    /* Metrics options */
+    {"metrics-enabled", required_argument, 0, 308},
+    {"metrics-retention", required_argument, 0, 309},
+    /* Indexing options */
+    {"index-query-threshold", required_argument, 0, 310},
+    {"index-time-threshold", required_argument, 0, 311},
+    {"index-startup-delay", required_argument, 0, 312},
+    {"index-check-interval", required_argument, 0, 313},
     {0, 0, 0, 0}
   };
   
@@ -160,6 +177,49 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 'K':
         ssl_key = optarg;
+        break;
+      /* Thread pool options */
+      case 301:
+        heap_config->thread_pool_min = atoi(optarg);
+        break;
+      case 302:
+        heap_config->thread_pool_max = atoi(optarg);
+        break;
+      case 303:
+        heap_config->thread_pool_queue_size = atoi(optarg);
+        break;
+      case 304:
+        heap_config->thread_pool_idle_timeout = atoi(optarg);
+        break;
+      /* Cache options */
+      case 305:
+        heap_config->cache_enabled = (strcmp(optarg, "true") == 0 || strcmp(optarg, "1") == 0);
+        break;
+      case 306:
+        heap_config->cache_max_size = atol(optarg);
+        break;
+      case 307:
+        heap_config->cache_ttl = atoi(optarg);
+        break;
+      /* Metrics options */
+      case 308:
+        heap_config->metrics_enabled = (strcmp(optarg, "true") == 0 || strcmp(optarg, "1") == 0);
+        break;
+      case 309:
+        heap_config->metrics_retention = atoi(optarg);
+        break;
+      /* Indexing options */
+      case 310:
+        heap_config->index_query_threshold = atoi(optarg);
+        break;
+      case 311:
+        heap_config->index_time_threshold = atoi(optarg);
+        break;
+      case 312:
+        heap_config->index_startup_delay = atoi(optarg);
+        break;
+      case 313:
+        heap_config->index_check_interval = atoi(optarg);
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
@@ -386,18 +446,35 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   /* Log all configuration values for debugging */
   INIT_LOG_DEBUG("CONFIG", "Final configuration settings:");
   INIT_LOG_DEBUG("CONFIG", " Port: %d", heap_config->port);
-  INIT_LOG_DEBUG("CONFIG", " Host: %s", heap_config->host ? heap_config->host : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Database path: %s", heap_config->db_path ? heap_config->db_path : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " RBAC file: %s", heap_config->rbac_path ? heap_config->rbac_path : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " PID file: %s", heap_config->pid_file ? heap_config->pid_file : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Log file: %s", heap_config->log_file ? heap_config->log_file : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Web root: %s", heap_config->web_root ? heap_config->web_root : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Validators dir: %s", heap_config->validators_dir ? heap_config->validators_dir : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Transforms dir: %s", heap_config->transforms_dir ? heap_config->transforms_dir : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " Metrics dir: %s", heap_config->metrics_dir ? heap_config->metrics_dir : "(null)");
+  INIT_LOG_DEBUG("CONFIG", " Host: %s", heap_config->host ? heap_config->host : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Database path: %s", heap_config->db_path ? heap_config->db_path : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " RBAC file: %s", heap_config->rbac_path ? heap_config->rbac_path : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " PID file: %s", heap_config->pid_file ? heap_config->pid_file : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Log file: %s", heap_config->log_file ? heap_config->log_file : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Web root: %s", heap_config->web_root ? heap_config->web_root : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Validators dir: %s", heap_config->validators_dir ? heap_config->validators_dir : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Transforms dir: %s", heap_config->transforms_dir ? heap_config->transforms_dir : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Metrics dir: %s", heap_config->metrics_dir ? heap_config->metrics_dir : "(null).");
   INIT_LOG_DEBUG("CONFIG", " SSL enabled: %s", heap_config->use_ssl ? "yes" : "no");
-  INIT_LOG_DEBUG("CONFIG", " SSL certificate: %s", heap_config->cert_path ? heap_config->cert_path : "(null)");
-  INIT_LOG_DEBUG("CONFIG", " SSL private key: %s", heap_config->key_path ? heap_config->key_path : "(null)");
+  INIT_LOG_DEBUG("CONFIG", " SSL certificate: %s", heap_config->cert_path ? heap_config->cert_path : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " SSL private key: %s", heap_config->key_path ? heap_config->key_path : "(null).");
+  /* Thread pool configuration */
+  INIT_LOG_DEBUG("CONFIG", " Thread pool min: %d", heap_config->thread_pool_min);
+  INIT_LOG_DEBUG("CONFIG", " Thread pool max: %d", heap_config->thread_pool_max);
+  INIT_LOG_DEBUG("CONFIG", " Thread pool queue size: %d", heap_config->thread_pool_queue_size);
+  INIT_LOG_DEBUG("CONFIG", " Thread pool idle timeout: %d", heap_config->thread_pool_idle_timeout);
+  /* Cache configuration */
+  INIT_LOG_DEBUG("CONFIG", " Cache enabled: %s", heap_config->cache_enabled ? "yes" : "no");
+  INIT_LOG_DEBUG("CONFIG", " Cache max size: %zu", heap_config->cache_max_size);
+  INIT_LOG_DEBUG("CONFIG", " Cache TTL: %d", heap_config->cache_ttl);
+  /* Metrics configuration */
+  INIT_LOG_DEBUG("CONFIG", " Metrics enabled: %s", heap_config->metrics_enabled ? "yes" : "no");
+  INIT_LOG_DEBUG("CONFIG", " Metrics retention: %d", heap_config->metrics_retention);
+  /* Indexing configuration */
+  INIT_LOG_DEBUG("CONFIG", " Index query threshold: %d", heap_config->index_query_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Index time threshold: %d", heap_config->index_time_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Index startup delay: %d", heap_config->index_startup_delay);
+  INIT_LOG_DEBUG("CONFIG", " Index check interval: %d", heap_config->index_check_interval);
   
   /* Set the output parameter */
   *config_out = heap_config;

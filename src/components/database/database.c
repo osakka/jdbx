@@ -118,7 +118,7 @@ hp_collection_t* find_collection_internal(const char* name) {
 static void load_existing_collections(const char* path) {
     DIR* dir = opendir(path);
     if (!dir) {
-        LOG_WARNING("Failed to open database directory: %s", path);
+        LOG_WARNING("Cannot open database directory: %s", path);
         return;
     }
     
@@ -157,14 +157,14 @@ static void load_existing_collections(const char* path) {
 /* Initialize database */
 database_t* db_init(const char* path) {
     if (g_database.initialized) {
-        LOG_INFO("Database already initialized");
+        LOG_INFO("Database already initialized.");
         return (database_t*)&g_database;
     }
     
     strncpy(g_database.path, path, sizeof(g_database.path) - 1);
     
     if (ensure_directory(path) != 0) {
-        LOG_ERROR("Failed to create database directory: %s", path);
+        LOG_ERROR("Cannot create database directory: %s", path);
         return NULL;
     }
     
@@ -234,11 +234,12 @@ void db_close(database_t* db) {
     //js_engine_cleanup();
     //transaction_cleanup();
     
-    LOG_INFO("Database closed");
+    LOG_INFO("Database closed.");
 }
 
 /* Create collection */
 int db_create_collection(database_t* db, const char* name) {
+    (void)db; // Currently unused
     if (!g_database.initialized || !name) return -1;
     
     pthread_rwlock_wrlock(&g_database.lock);
@@ -252,7 +253,7 @@ int db_create_collection(database_t* db, const char* name) {
     /* Check limit */
     if (g_database.num_collections >= MAX_COLLECTIONS) {
         pthread_rwlock_unlock(&g_database.lock);
-        LOG_ERROR("Maximum collections reached");
+        LOG_ERROR("Maximum collections reached.");
         return -1;
     }
     
@@ -278,7 +279,7 @@ int db_create_collection(database_t* db, const char* name) {
     if (!coll->storage) {
         free(coll);
         pthread_rwlock_unlock(&g_database.lock);
-        LOG_ERROR("Failed to create storage for collection: %s", name);
+        LOG_ERROR("Cannot create storage for collection: %s", name);
         return -1;
     }
     
@@ -291,7 +292,7 @@ int db_create_collection(database_t* db, const char* name) {
         mmap_storage_destroy(coll->storage);
         free(coll);
         pthread_rwlock_unlock(&g_database.lock);
-        LOG_ERROR("Failed to create index for collection: %s", name);
+        LOG_ERROR("Cannot create index for collection: %s", name);
         return -1;
     }
     
@@ -324,6 +325,7 @@ int db_create_collection(database_t* db, const char* name) {
 
 /* Get collection */
 db_collection_t* db_get_collection(database_t* db, const char* name) {
+    (void)db; // Currently unused
     if (!g_database.initialized || !name) return NULL;
     
     pthread_rwlock_rdlock(&g_database.lock);
@@ -361,7 +363,7 @@ static void generate_doc_id(char* id_buf, size_t buf_size) {
 /* Insert document */
 json_value_t* db_insert_document(database_t* db, const char* collection_name, 
                                 json_value_t* document) {
-    LOG_TRACE("db_insert_document: collection=%s, doc=%p", collection_name, document);
+    TRACE_DB("db_insert_document: collection=%s, doc=%p", collection_name, document);
     if (!g_database.initialized || !collection_name || !document) {
         LOG_ERROR("db_insert_document: invalid params - init=%d, coll=%s, doc=%p", 
                   g_database.initialized, collection_name, document);
@@ -422,14 +424,14 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     /* Clone document after adding ID to return to caller */
     json_value_t* result_doc = json_clone(document);
     if (!result_doc) {
-        LOG_ERROR("db_insert_document: failed to clone document");
+        LOG_ERROR("db_insert_document: failed to clone document.");
         return NULL;
     }
     
     /* Serialize document */
     char* json_str = json_stringify(document);
     if (!json_str) {
-        LOG_ERROR("Failed to serialize document");
+        LOG_ERROR("Cannot serialize document.");
         json_free(result_doc);
         return NULL;
     }
@@ -454,7 +456,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     /* size_t entry_size = sizeof(doc_entry_t) + strlen(doc_id) + doc_size; - not used */
     uint64_t offset = coll->storage->header->free_offset;
     
-    LOG_TRACE("db_insert_document: storing doc_id=%s at offset=%lu, size=%zu", 
+    TRACE_DB("db_insert_document: storing doc_id=%s at offset=%lu, size=%zu", 
               doc_id, offset, doc_size);
     if (mmap_storage_put(coll->storage, doc_id, strlen(doc_id), json_str, doc_size) != 0) {
         LOG_ERROR("db_insert_document: mmap_storage_put failed for doc_id=%s", doc_id);
@@ -465,7 +467,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     }
     
     /* Update primary index with the actual storage offset */
-    LOG_TRACE("db_insert_document: updating primary index for doc_id=%s at offset=%lu", 
+    TRACE_DB("db_insert_document: updating primary index for doc_id=%s at offset=%lu", 
               doc_id, offset);
     if (hash_index_insert(coll->primary_index, doc_id, strlen(doc_id), offset) != 0) {
         LOG_ERROR("db_insert_document: hash_index_insert failed for doc_id=%s", doc_id);
@@ -473,7 +475,7 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
         buffer_pool_free_safe(json_str);
         return NULL;
     }
-    LOG_TRACE("db_insert_document: primary index updated successfully");
+    TRACE_DB("db_insert_document: primary index updated successfully.");
     
     /* Update secondary indexes */
     for (int i = 0; i < coll->num_indexes; i++) {
@@ -497,42 +499,42 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
         
         /* Insert into B+tree index */
         if (btree_disk_insert(coll->indexes[i].btree, field_str, strlen(field_str), offset) != 0) {
-            LOG_WARNING("Failed to update secondary index %s for doc %s", 
+            LOG_WARNING("Cannot update secondary index %s for doc %s", 
                        coll->indexes[i].field_name, doc_id);
         }
     }
-    LOG_TRACE("db_insert_document: about to skip stats update");
+    TRACE_DB("db_insert_document: about to skip stats update.");
     
     /* Update stats */
     atomic_fetch_add(&coll->doc_count, 1);
     atomic_fetch_add(&coll->total_size, doc_size);
-    LOG_TRACE("db_insert_document: stats updated - count=%lu, size=%lu", 
+    TRACE_DB("db_insert_document: stats updated - count=%lu, size=%lu", 
               (unsigned long)atomic_load(&coll->doc_count),
               (unsigned long)atomic_load(&coll->total_size));
     // For now, skip stats to get admin login working
     
     /* Add to cache */
-    LOG_TRACE("db_insert_document: checking cache - cache pointer: %p", coll->cache);
+    TRACE_DB("db_insert_document: checking cache - cache pointer: %p", coll->cache);
     if (coll->cache) {
-        LOG_TRACE("db_insert_document: adding to cache");
+        TRACE_DB("db_insert_document: adding to cache.");
         json_value_t* cached_doc = json_clone(document);
         if (cached_doc) {
             generic_cache_put(coll->cache, doc_id, strlen(doc_id), 
                             &cached_doc, sizeof(void*));
         }
-        LOG_TRACE("db_insert_document: cache updated");
+        TRACE_DB("db_insert_document: cache updated.");
     }
-    LOG_TRACE("db_insert_document: cache operations completed");
+    TRACE_DB("db_insert_document: cache operations completed.");
     
-    LOG_TRACE("db_insert_document: unlocking collection");
+    TRACE_DB("db_insert_document: unlocking collection.");
     pthread_rwlock_unlock(&coll->lock);
-    LOG_TRACE("db_insert_document: about to free json_str=%p", json_str);
+    TRACE_DB("db_insert_document: about to free json_str=%p", json_str);
     /* Free json_str using buffer pool aware function */
     if (json_str) {
         buffer_pool_free_safe(json_str);
-        LOG_TRACE("db_insert_document: json_str freed successfully");
+        TRACE_DB("db_insert_document: json_str freed successfully.");
     } else {
-        LOG_ERROR("db_insert_document: json_str is NULL, not freeing");
+        LOG_ERROR("db_insert_document: json_str is NULL, not freeing.");
     }
     
     /* Run JS triggers */
@@ -552,12 +554,13 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     json_object_set(result_doc, "uuid", json_create_string(doc_id));
     
     /* Return the cloned document */
-    LOG_TRACE("db_insert_document: returning cloned document with _id: %s", doc_id);
-    LOG_TRACE("db_insert_document: exiting function");
+    TRACE_DB("db_insert_document: returning cloned document with _id: %s", doc_id);
+    TRACE_DB("db_insert_document: exiting function.");
     return result_doc;
 }
 
 /* Get document */
+    (void)db; // Currently unused
 json_value_t* db_get_document(database_t* db, const char* collection_name, 
                              const char* id) {
     LOG_DEBUG("db_get_document: collection=%s, id=%s", collection_name, id);
@@ -856,11 +859,12 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     }
     
     /* Track seen document IDs to prevent duplicates */
-    typedef struct seen_id {
-        char id[64];
-        struct seen_id* next;
-    } seen_id_t;
-    seen_id_t* seen_ids = NULL;
+    /* Track seen document IDs to prevent duplicates */
+    // typedef struct seen_id {
+    //     char id[64];
+    //     struct seen_id* next;
+    // } seen_id_t;
+    // seen_id_t* seen_ids = NULL;
     
     /* For now, implement a simple full scan through mmap storage */
     pthread_rwlock_rdlock(&coll->lock);
@@ -870,7 +874,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     char* base = (char*)coll->storage->base_addr;
     uint64_t offset = header->data_offset;
     
-    LOG_TRACE("db_query_documents: Starting scan from offset %lu to %lu", 
+    TRACE_DB("db_query_documents: Starting scan from offset %lu to %lu", 
               offset, header->free_offset);
     
     int doc_num = 0;
@@ -884,7 +888,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         
         /* Validate magic number */
         if (entry->magic != 0x444F4355) { /* "DOCU" */
-            LOG_TRACE("db_query_documents: Invalid magic at offset %lu: 0x%x", 
+            TRACE_DB("db_query_documents: Invalid magic at offset %lu: 0x%x", 
                       offset, entry->magic);
             offset += 4; /* Try next aligned position */
             continue;
@@ -903,7 +907,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         /* Validate entry sizes */
         if (entry->key_len == 0 || entry->value_len == 0 || 
             entry->key_len > 1024 || entry->value_len > 1024*1024) {
-            LOG_TRACE("db_query_documents: Invalid entry sizes at offset %lu: key_len=%u, value_len=%u", 
+            TRACE_DB("db_query_documents: Invalid entry sizes at offset %lu: key_len=%u, value_len=%u", 
                       offset, entry->key_len, entry->value_len);
             offset += sizeof(doc_entry_t);
             continue;
@@ -912,7 +916,7 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
         /* Make sure we don't read past the end */
         uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
         if (offset + entry_size > header->free_offset) {
-            LOG_TRACE("db_query_documents: Entry at offset %lu would exceed bounds", offset);
+            TRACE_DB("db_query_documents: Entry at offset %lu would exceed bounds", offset);
             break;
         }
         
@@ -1060,7 +1064,7 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
         if (hash_index_insert(coll->primary_index, key, entry->key_len, offset) == 0) {
             indexed_count++;
         } else {
-            LOG_WARNING("Failed to index document at offset %lu", offset);
+            LOG_WARNING("Cannot index document at offset %lu", offset);
         }
         
         /* Move to next entry */
@@ -1077,6 +1081,7 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
     return 0;
 }
 
+    (void)db; // Currently unused
 /* Rebuild all indices */
 int db_rebuild_indices(database_t* db) {
     if (!g_database.initialized) return -1;
@@ -1093,9 +1098,10 @@ int db_rebuild_indices(database_t* db) {
     
     pthread_rwlock_unlock(&g_database.lock);
     
-    LOG_INFO("Database indices rebuilt successfully");
+    LOG_INFO("Database indices rebuilt successfully.");
     return 0;
 }
+    (void)db; // Currently unused
 
 /* Drop collection */
 int db_drop_collection(database_t* db, const char* name) {
@@ -1144,6 +1150,7 @@ int db_drop_collection(database_t* db, const char* name) {
     
     pthread_rwlock_unlock(&g_database.lock);
     return -1;
+    (void)db; // Currently unused
 }
 
 /* Persistence functions (no-op for mmap) */
@@ -1158,6 +1165,7 @@ int db_save(database_t* db) {
         }
     }
     
+    (void)db; // Currently unused
     pthread_rwlock_unlock(&g_database.lock);
     return 0;
 }
@@ -1183,20 +1191,23 @@ int db_init_system_schemas(database_t* db) {
         json_value_t* welcome_doc = json_create_object();
         json_object_set(welcome_doc, "type", json_create_string("welcome_message"));
         json_object_set(welcome_doc, "title", json_create_string("Welcome to JSONdb"));
-        json_object_set(welcome_doc, "message", json_create_string("# Welcome to JSONdb!\n\nCongratulations! Your JSONdb instance is now running successfully.\n\n## Quick Start\n\n### 1. Create Collections\nUse the **Browser** tab to create new collections and add documents.\n\n### 2. Monitor Performance\nCheck the **Metrics** tab to monitor your database performance and JavaScript execution.\n\n### 3. Manage Access\nUse the **RBAC** tab to manage users, roles, and permissions.\n\n### 4. Database Operations\nThe **Operations** tab provides tools for backup, export, and maintenance.\n\n### 5. API Documentation\nExplore the **API** tab for complete REST API documentation.\n\n## Features\n\n- **High Performance**: Memory-mapped storage with O(log n) B+tree indexes\n- **JavaScript Integration**: Custom validators, transformers, and functions\n- **RBAC Security**: Role-based access control with JWT authentication\n- **Real-time Metrics**: Performance monitoring and analytics\n- **RESTful API**: Complete HTTP API for all operations\n\n## Getting Help\n\nFor documentation and examples, check the `/opt/jsondb/docs/` directory.\n\nHappy coding! 🚀"));
+        json_object_set(welcome_doc, "message", json_create_string("# Welcome to JSONdb!\n\nCongratulations! Your JSONdb instance is now running successfully.\n\n## Quick Start\n\n### 1. Create Collections\nUse the **Browser** tab to create new collections and add documents.\n\n### 2. Monitor Performance\nCheck the **Metrics** tab to monitor your database performance and JavaScript execution.\n\n### 3. Manage Access\nUse the **RBAC** tab to manage users, roles, and permissions.\n\n### 4. Database Operations\nThe **Operations** tab provides tools for backup, export, and maintenance.\n\n### 5. API Documentation\nExplore the **API** tab for complete REST API documentation.\n\n## Features\n\n- **High Performance**: Memory-mapped storage with O(log n) B+tree indexes\n- **JavaScript Integration**: Custom validators, transformers, and functions\n- **RBAC Security**: Role-based access control with JWT authentication\n- **Real-time Metrics**: Performance monitoring and analytics\n- **RESTful API**: Complete HTTP API for all operations\n\n## Getting Help\n\nFor documentation and examples, check the `docs/` directory in your JSONdb installation.\n\nHappy coding! 🚀"));
         json_object_set(welcome_doc, "created_at", json_create_string("2025-06-06T00:00:00Z"));
         json_object_set(welcome_doc, "version", json_create_string("3.0.0"));
         
         db_insert_document(db, "_system_config", welcome_doc);
     }
+    (void)db; (void)capacity; (void)ttl; // Currently unused
     
     return 1; /* Return 1 for success */
 }
 
+    (void)db; // Currently unused
 /* Cache management */
 int db_enable_cache(database_t* db, int capacity, int ttl) {
     /* Cache is always enabled in high-performance mode */
     return 0;
+    (void)db; // Currently unused
 }
 
 int db_disable_cache(database_t* db) {
@@ -1210,6 +1221,7 @@ int db_clear_cache(database_t* db) {
     for (size_t i = 0; i < g_database.num_collections; i++) {
         if (g_database.collections[i] && g_database.collections[i]->cache) {
             generic_cache_clear(g_database.collections[i]->cache);
+    (void)db; // Currently unused
         }
     }
     
@@ -1241,6 +1253,7 @@ json_value_t* db_list_collections_with_info(database_t* db) {
                     json_object_set(info, "document_count", count);
                     json_object_set(info, "total_size", size);
                     json_array_append(array, info);
+    (void)db; // Currently unused
                 }
             }
         }
@@ -1372,7 +1385,7 @@ index_t* db_create_index(database_t* db, const char* collection_name, const char
     btree_disk_t* btree = btree_disk_create(index_path, 100, NULL);
     if (!btree) {
         pthread_rwlock_unlock(&coll->lock);
-        LOG_ERROR("Failed to create B+tree index: %s", index_path);
+        LOG_ERROR("Cannot create B+tree index: %s", index_path);
         return NULL;
     }
     
@@ -1443,6 +1456,7 @@ int db_drop_index(database_t* db, const char* collection_name, const char* name)
     /* Shift remaining indexes */
     for (int i = found; i < coll->num_indexes - 1; i++) {
         coll->indexes[i] = coll->indexes[i + 1];
+    (void)db; // Currently unused
     }
     coll->num_indexes--;
     

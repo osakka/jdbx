@@ -93,7 +93,7 @@ static void client_connection_destroy_internal(client_connection_t *conn) {
     memset(conn, 0, sizeof(client_connection_t)); /* Zero for safety */
     free(conn);
     
-    LOG_TRACE("Connection destruction complete");
+    TRACE_NET("Connection destruction complete.");
 }
 
 /* === PUBLIC CONNECTION LIFECYCLE FUNCTIONS === */
@@ -104,34 +104,34 @@ client_connection_t* client_connection_create(
     struct api_context *api_ctx,
     int use_ssl
 ) {
-    LOG_TRACE("TRACE_CONN_CREATE: Starting connection creation for fd=%d, use_ssl=%d", socket_fd, use_ssl);
+    TRACE_NET("TRACE_CONN_CREATE: Starting connection creation for fd=%d, use_ssl=%d", socket_fd, use_ssl);
     
     if (socket_fd < 0 || !client_addr || !api_ctx) {
-        LOG_ERROR("TRACE_CONN_CREATE: Invalid parameters for connection creation: fd=%d, addr=%p, api=%p",
+        LOG_ERROR("Invalid parameters for connection creation: fd=%d, addr=%p, api=%p",
                   socket_fd, (void*)client_addr, (void*)api_ctx);
         return NULL;
     }
     
-    LOG_TRACE("TRACE_CONN_CREATE: Client address: %s:%d", 
+    TRACE_NET("TRACE_CONN_CREATE: Client address: %s:%d", 
               inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port));
     
     /* Allocate connection structure */
-    LOG_TRACE("TRACE_CONN_CREATE: Allocating connection structure...");
+    TRACE_NET("TRACE_CONN_CREATE: Allocating connection structure...");
     client_connection_t *conn = calloc(1, sizeof(client_connection_t));
     if (!conn) {
-        LOG_ERROR("TRACE_CONN_CREATE: Failed to allocate memory for client connection");
+        LOG_ERROR("Failed to allocate memory for client connection");
         return NULL;
     }
     
-    LOG_TRACE("TRACE_CONN_CREATE: Connection allocated at %p", (void*)conn);
+    TRACE_NET("TRACE_CONN_CREATE: Connection allocated at %p", (void*)conn);
     
     /* Initialize immutable fields */
     if (g_connection_manager) {
         conn->connection_id = atomic_fetch_add(&g_connection_manager->next_connection_id, 1);
-        LOG_TRACE("TRACE_CONN_CREATE: Assigned connection_id=%lu from manager", conn->connection_id);
+        TRACE_NET("TRACE_CONN_CREATE: Assigned connection_id=%lu from manager", conn->connection_id);
     } else {
         conn->connection_id = (uint64_t)time(NULL) * 1000000 + (socket_fd % 1000000);
-        LOG_TRACE("TRACE_CONN_CREATE: Generated connection_id=%lu (no manager)", conn->connection_id);
+        TRACE_NET("TRACE_CONN_CREATE: Generated connection_id=%lu (no manager)", conn->connection_id);
     }
     
     conn->client_address = *client_addr;
@@ -139,29 +139,29 @@ client_connection_t* client_connection_create(
     conn->use_ssl = use_ssl;
     get_current_time(&conn->created_at);
     
-    LOG_TRACE("TRACE_CONN_CREATE: Initializing atomic fields...");
+    TRACE_NET("TRACE_CONN_CREATE: Initializing atomic fields...");
     /* Initialize atomic fields */
     atomic_init(&conn->ref_count, 1); /* Start with 1 reference */
     atomic_init(&conn->cleanup_in_progress, false);
     atomic_init(&conn->is_destroyed, false);
     
-    LOG_TRACE("TRACE_CONN_CREATE: Initializing mutex...");
+    TRACE_NET("TRACE_CONN_CREATE: Initializing mutex...");
     /* Initialize mutex and condition variable */
     if (pthread_mutex_init(&conn->state_mutex, NULL) != 0) {
-        LOG_ERROR("TRACE_CONN_CREATE: Failed to initialize connection mutex: %s", strerror(errno));
+        LOG_ERROR("Failed to initialize connection mutex: %s", strerror(errno));
         free(conn);
         return NULL;
     }
     
-    LOG_TRACE("TRACE_CONN_CREATE: Initializing condition variable...");
+    TRACE_NET("TRACE_CONN_CREATE: Initializing condition variable...");
     if (pthread_cond_init(&conn->cleanup_complete, NULL) != 0) {
-        LOG_ERROR("TRACE_CONN_CREATE: Failed to initialize connection condition variable: %s", strerror(errno));
+        LOG_ERROR("Failed to initialize connection condition variable: %s", strerror(errno));
         pthread_mutex_destroy(&conn->state_mutex);
         free(conn);
         return NULL;
     }
     
-    LOG_TRACE("TRACE_CONN_CREATE: Initializing mutable state with lock...");
+    TRACE_NET("TRACE_CONN_CREATE: Initializing mutable state with lock...");
     /* Initialize mutable state (protected by mutex) */
     WITH_CONNECTION_LOCK(conn, {
         conn->state = CONN_STATE_INITIALIZING;
@@ -172,21 +172,21 @@ client_connection_t* client_connection_create(
         if (g_connection_manager) {
             conn->request_buffer_size = g_connection_manager->max_request_buffer_size;
             conn->response_buffer_size = g_connection_manager->max_response_buffer_size;
-            LOG_TRACE("TRACE_CONN_CREATE: Using manager buffer sizes: req=%zu, resp=%zu", 
+            TRACE_NET("TRACE_CONN_CREATE: Using manager buffer sizes: req=%zu, resp=%zu", 
                       conn->request_buffer_size, conn->response_buffer_size);
         } else {
             conn->request_buffer_size = 8192;  /* Default 8KB */
             conn->response_buffer_size = 65536; /* Default 64KB */
-            LOG_TRACE("TRACE_CONN_CREATE: Using default buffer sizes: req=%zu, resp=%zu", 
+            TRACE_NET("TRACE_CONN_CREATE: Using default buffer sizes: req=%zu, resp=%zu", 
                       conn->request_buffer_size, conn->response_buffer_size);
         }
         
-        LOG_TRACE("TRACE_CONN_CREATE: Allocating buffers...");
+        TRACE_NET("TRACE_CONN_CREATE: Allocating buffers...");
         conn->request_buffer = malloc(conn->request_buffer_size);
         conn->response_buffer = malloc(conn->response_buffer_size);
         
         if (!conn->request_buffer || !conn->response_buffer) {
-            LOG_ERROR("TRACE_CONN_CREATE: Failed to allocate connection buffers");
+            LOG_ERROR("Failed to allocate connection buffers");
             if (conn->request_buffer) free(conn->request_buffer);
             if (conn->response_buffer) free(conn->response_buffer);
             pthread_mutex_destroy(&conn->state_mutex);
@@ -195,7 +195,7 @@ client_connection_t* client_connection_create(
             return NULL;
         }
         
-        LOG_TRACE("TRACE_CONN_CREATE: Buffers allocated: req=%p, resp=%p", 
+        TRACE_NET("TRACE_CONN_CREATE: Buffers allocated: req=%p, resp=%p", 
                   (void*)conn->request_buffer, (void*)conn->response_buffer);
         
         conn->request_bytes_received = 0;
@@ -207,21 +207,21 @@ client_connection_t* client_connection_create(
         
         /* Transition to active state */
         conn->state = CONN_STATE_ACTIVE;
-        LOG_TRACE("TRACE_CONN_CREATE: Connection state set to ACTIVE");
+        TRACE_NET("TRACE_CONN_CREATE: Connection state set to ACTIVE.");
     });
     
     /* Register with connection manager if available */
     if (g_connection_manager) {
-        LOG_TRACE("TRACE_CONN_CREATE: Registering connection with manager...");
+        TRACE_NET("TRACE_CONN_CREATE: Registering connection with manager...");
         if (connection_manager_register(conn) != 0) {
-            LOG_WARNING("TRACE_CONN_CREATE: Failed to register connection with manager");
+            LOG_ERROR("Failed to register connection with manager");
             /* Continue anyway - connection is still usable */
         } else {
-            LOG_TRACE("TRACE_CONN_CREATE: Connection registered with manager successfully");
+            TRACE_NET("TRACE_CONN_CREATE: Connection registered with manager successfully.");
         }
     }
     
-    LOG_INFO("TRACE_CONN_CREATE: Created connection %lu for fd %d successfully", conn->connection_id, socket_fd);
+    TRACE_NET("Created connection %lu for fd %d successfully", conn->connection_id, socket_fd);
     return conn;
 }
 
@@ -327,7 +327,7 @@ int client_connection_set_state(client_connection_t *conn, connection_state_t ne
         if (result == 0) {
             conn->state = new_state;
             get_current_time(&conn->last_activity);
-            LOG_TRACE("Connection %lu state: %d -> %d", conn->connection_id, old_state, new_state);
+            TRACE_NET("Connection %lu state: %d -> %d", conn->connection_id, old_state, new_state);
         }
     });
     
@@ -387,14 +387,14 @@ ssize_t client_connection_read(client_connection_t *conn, void *buffer, size_t b
     }
     
     /* Validate socket before polling */
-    LOG_TRACE("TRACE_CONN_READ_POLL: Preparing to poll socket_fd=%d for connection %lu", 
+    TRACE_NET("TRACE_CONN_READ_POLL: Preparing to poll socket_fd=%d for connection %lu", 
               socket_fd, conn->connection_id);
     
     /* Check if socket is valid using getsockopt */
     int sock_error = 0;
     socklen_t err_len = sizeof(sock_error);
     if (getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &sock_error, &err_len) < 0) {
-        LOG_ERROR("TRACE_CONN_READ_ERROR: getsockopt failed for fd=%d: %s", 
+        LOG_ERROR("getsockopt failed for fd=%d: %s", 
                   socket_fd, strerror(errno));
         client_connection_set_error(conn, errno, "Socket validation failed");
         client_connection_set_state(conn, CONN_STATE_ERROR);
@@ -402,7 +402,7 @@ ssize_t client_connection_read(client_connection_t *conn, void *buffer, size_t b
     }
     
     if (sock_error != 0) {
-        LOG_ERROR("TRACE_CONN_READ_ERROR: Socket has pending error for fd=%d: %s", 
+        LOG_ERROR("Socket has pending error for fd=%d: %s", 
                   socket_fd, strerror(sock_error));
         client_connection_set_error(conn, sock_error, strerror(sock_error));
         client_connection_set_state(conn, CONN_STATE_ERROR);
@@ -417,23 +417,23 @@ ssize_t client_connection_read(client_connection_t *conn, void *buffer, size_t b
         .revents = 0
     };
     
-    LOG_TRACE("TRACE_CONN_READ_POLL: Calling poll() with timeout=%dms on fd=%d", 
+    TRACE_NET("TRACE_CONN_READ_POLL: Calling poll() with timeout=%dms on fd=%d", 
               timeout_ms, socket_fd);
     
     int poll_result = poll(&pfd, 1, timeout_ms);
     
-    LOG_TRACE("TRACE_CONN_READ_POLL: poll() returned %d, revents=0x%x, errno=%d", 
+    TRACE_NET("TRACE_CONN_READ_POLL: poll() returned %d, revents=0x%x, errno=%d", 
               poll_result, pfd.revents, errno);
     
     if (poll_result < 0) {
-        LOG_ERROR("TRACE_CONN_READ_ERROR: Poll failed: %s (errno=%d)", 
+        LOG_ERROR("Poll failed: %s (errno=%d)", 
                   strerror(errno), errno);
         client_connection_set_error(conn, errno, "Poll failed during read");
         client_connection_set_state(conn, CONN_STATE_ERROR);
         return -1;
     } else if (poll_result == 0) {
         /* Timeout */
-        LOG_WARNING("TRACE_CONN_READ_TIMEOUT: Poll timed out after %dms", timeout_ms);
+        LOG_DEBUG("Poll timed out after %dms", timeout_ms);
         client_connection_set_state(conn, CONN_STATE_ACTIVE);
         errno = ETIMEDOUT;
         return -1;
@@ -441,7 +441,7 @@ ssize_t client_connection_read(client_connection_t *conn, void *buffer, size_t b
     
     /* Check for error conditions */
     if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        LOG_ERROR("TRACE_CONN_READ_ERROR: Socket error detected by poll: revents=0x%x (POLLERR=%d, POLLHUP=%d, POLLNVAL=%d)", 
+        LOG_ERROR("Socket error detected by poll: revents=0x%x (POLLERR=%d, POLLHUP=%d, POLLNVAL=%d)", 
                   pfd.revents, !!(pfd.revents & POLLERR), !!(pfd.revents & POLLHUP), !!(pfd.revents & POLLNVAL));
         client_connection_set_error(conn, ECONNRESET, "Socket error during read");
         client_connection_set_state(conn, CONN_STATE_ERROR);
@@ -449,15 +449,15 @@ ssize_t client_connection_read(client_connection_t *conn, void *buffer, size_t b
         return -1;
     }
     
-    LOG_TRACE("TRACE_CONN_READ_READY: Socket ready for reading (revents=0x%x)", pfd.revents);
+    TRACE_NET("TRACE_CONN_READ_READY: Socket ready for reading (revents=0x%x)", pfd.revents);
     
     /* Perform the read */
-    LOG_TRACE("TRACE_CONN_READ_SYSCALL: Calling read() on fd=%d for %zu bytes", 
+    TRACE_NET("TRACE_CONN_READ_SYSCALL: Calling read() on fd=%d for %zu bytes", 
               socket_fd, buffer_size);
     
     bytes_read = read(socket_fd, buffer, buffer_size);
     
-    LOG_TRACE("TRACE_CONN_READ_RESULT: read() returned %zd, errno=%d (%s)", 
+    TRACE_NET("TRACE_CONN_READ_RESULT: read() returned %zd, errno=%d (%s)", 
               bytes_read, errno, bytes_read < 0 ? strerror(errno) : "success");
     
     if (bytes_read < 0) {
@@ -575,32 +575,32 @@ int client_connection_get_error(client_connection_t *conn, int *error_code, char
 
 int connection_manager_init(size_t max_connections, size_t max_request_buffer, 
                            size_t max_response_buffer, uint32_t timeout_seconds) {
-    LOG_INFO("TRACE_CONNMGR_INIT: Starting connection manager initialization...");
-    LOG_INFO("TRACE_CONNMGR_INIT: Parameters: max_conn=%zu, req_buf=%zu, resp_buf=%zu, timeout=%us",
+    LOG_INFO("Starting connection manager initialization...");
+    LOG_DEBUG("Connection manager parameters: max_conn=%zu, req_buf=%zu, resp_buf=%zu, timeout=%us",
              max_connections, max_request_buffer, max_response_buffer, timeout_seconds);
     
     if (g_connection_manager) {
-        LOG_WARNING("TRACE_CONNMGR_INIT: Connection manager already initialized");
+        LOG_DEBUG("Connection manager already initialized");
         return 0;
     }
     
-    LOG_TRACE("TRACE_CONNMGR_INIT: Allocating connection manager structure...");
+    TRACE_NET("TRACE_CONNMGR_INIT: Allocating connection manager structure...");
     g_connection_manager = calloc(1, sizeof(connection_manager_t));
     if (!g_connection_manager) {
-        LOG_ERROR("TRACE_CONNMGR_INIT: Failed to allocate memory for connection manager");
+        LOG_ERROR("Failed to allocate memory for connection manager");
         return -1;
     }
     
-    LOG_TRACE("TRACE_CONNMGR_INIT: Initializing manager mutex...");
+    TRACE_NET("TRACE_CONNMGR_INIT: Initializing manager mutex...");
     /* Initialize manager mutex */
     if (pthread_mutex_init(&g_connection_manager->manager_mutex, NULL) != 0) {
-        LOG_ERROR("TRACE_CONNMGR_INIT: Failed to initialize manager mutex: %s", strerror(errno));
+        LOG_ERROR("Failed to initialize manager mutex: %s", strerror(errno));
         free(g_connection_manager);
         g_connection_manager = NULL;
         return -1;
     }
     
-    LOG_TRACE("TRACE_CONNMGR_INIT: Initializing atomic fields...");
+    TRACE_NET("TRACE_CONNMGR_INIT: Initializing atomic fields...");
     /* Initialize fields */
     atomic_init(&g_connection_manager->next_connection_id, 1);
     atomic_init(&g_connection_manager->active_count, 0);
@@ -610,20 +610,20 @@ int connection_manager_init(size_t max_connections, size_t max_request_buffer,
     g_connection_manager->max_response_buffer_size = max_response_buffer;
     g_connection_manager->connection_timeout_seconds = timeout_seconds;
     
-    LOG_TRACE("TRACE_CONNMGR_INIT: Allocating connection tracking array for %zu connections...", max_connections);
+    TRACE_NET("TRACE_CONNMGR_INIT: Allocating connection tracking array for %zu connections...", max_connections);
     /* Allocate connection tracking array */
     g_connection_manager->active_connections = calloc(max_connections, sizeof(client_connection_t*));
     if (!g_connection_manager->active_connections) {
-        LOG_ERROR("TRACE_CONNMGR_INIT: Failed to allocate connection tracking array");
+        LOG_ERROR("Failed to allocate connection tracking array");
         pthread_mutex_destroy(&g_connection_manager->manager_mutex);
         free(g_connection_manager);
         g_connection_manager = NULL;
         return -1;
     }
     
-    LOG_INFO("TRACE_CONNMGR_INIT: Connection manager initialized successfully: max_connections=%zu, timeout=%us", 
+    LOG_INFO("Connection manager initialized successfully: max_connections=%zu, timeout=%us", 
              max_connections, timeout_seconds);
-    LOG_TRACE("TRACE_CONNMGR_INIT: Manager address=%p, active_connections array=%p", 
+    TRACE_NET("TRACE_CONNMGR_INIT: Manager address=%p, active_connections array=%p", 
               (void*)g_connection_manager, (void*)g_connection_manager->active_connections);
     return 0;
 }
@@ -728,7 +728,7 @@ int connection_manager_cleanup_expired(void) {
 void connection_manager_shutdown(void) {
     if (!g_connection_manager) return;
     
-    LOG_INFO("Shutting down connection manager");
+    LOG_INFO("Shutting down connection manager.");
     
     pthread_mutex_lock(&g_connection_manager->manager_mutex);
     
@@ -752,5 +752,5 @@ void connection_manager_shutdown(void) {
     free(g_connection_manager);
     g_connection_manager = NULL;
     
-    LOG_INFO("Connection manager shutdown complete");
+    LOG_INFO("Connection manager shutdown complete.");
 }

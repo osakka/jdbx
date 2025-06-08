@@ -185,7 +185,7 @@ init_status_t init_socket(server_config_t* config) {
           }
         } else {
           if (g_logger) {
-            LOG_WARNING("[INIT:SOCKET] Socket connect test timed out - listener might not be working");
+            LOG_WARNING("[INIT:SOCKET] Socket connect test timed out - listener might not be working.");
           } else {
             fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test timed out - listener might not be working\n");
           }

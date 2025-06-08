@@ -43,7 +43,7 @@ static pthread_mutex_t g_transaction_log_mutex = PTHREAD_MUTEX_INITIALIZER;
  */
 int binary_transaction_log_init(const char* path) {
   if (!path) {
-    LOG_ERROR("Invalid transaction log path");
+    LOG_ERROR("Invalid transaction log path.");
     return 0;
   }
   
@@ -58,7 +58,7 @@ int binary_transaction_log_init(const char* path) {
   /* Open transaction log file */
   g_transaction_log_fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (g_transaction_log_fd < 0) {
-    LOG_ERROR("open transaction log file: %s (error: %s)",
+    LOG_ERROR("Failed to open transaction log file %s: %s",
          path, strerror(errno));
     pthread_mutex_unlock(&g_transaction_log_mutex);
     return 0;
@@ -99,24 +99,24 @@ int binary_transaction_log_operation(uint32_t transaction_id,
                   const char* collection, const char* document_id,
                   json_value_t* document) {
   if (g_transaction_log_fd < 0) {
-    LOG_ERROR("Transaction log not initialized");
+    LOG_ERROR("Transaction log not initialized.");
     return 0;
   }
   
   if (!collection) {
-    LOG_ERROR("Invalid collection name");
+    LOG_ERROR("Invalid collection name.");
     return 0;
   }
   
   /* For operations that require document ID */
   if ((op_type == BINARY_TRANS_OP_UPDATE || op_type == BINARY_TRANS_OP_DELETE) && !document_id) {
-    LOG_ERROR("Document ID required for update/delete operations");
+    LOG_ERROR("Document ID required for update/delete operations.");
     return 0;
   }
   
   /* For operations that require document data */
   if ((op_type == BINARY_TRANS_OP_INSERT || op_type == BINARY_TRANS_OP_UPDATE) && !document) {
-    LOG_ERROR("Document data required for insert/update operations");
+    LOG_ERROR("Document data required for insert/update operations.");
     return 0;
   }
   
@@ -203,7 +203,7 @@ int binary_transaction_log_operation(uint32_t transaction_id,
  */
 int binary_transaction_log_event(uint32_t transaction_id, binary_transaction_op_type_t op_type) {
   if (op_type != BINARY_TRANS_OP_BEGIN && op_type != BINARY_TRANS_OP_COMMIT && op_type != BINARY_TRANS_OP_ROLLBACK) {
-    LOG_ERROR("Invalid operation type for transaction event");
+    LOG_ERROR("Invalid operation type for transaction event.");
     return 0;
   }
   
@@ -246,7 +246,7 @@ static int read_transaction_log_entry(int fd, binary_transaction_header_t* heade
                   sizeof(*header) - sizeof(uint32_t));
   
   if (calculated_checksum != header->checksum) {
-    LOG_ERROR("Transaction header checksum mismatch");
+    LOG_ERROR("Transaction header checksum mismatch.");
     return 0;
   }
   
@@ -254,7 +254,7 @@ static int read_transaction_log_entry(int fd, binary_transaction_header_t* heade
   if (header->collection_name_len > 0) {
     *collection_name = (char*)malloc(header->collection_name_len + 1);
     if (!*collection_name) {
-      LOG_ERROR("Out of memory");
+      LOG_ERROR("Out of memory.");
       return 0;
     }
     
@@ -275,7 +275,7 @@ static int read_transaction_log_entry(int fd, binary_transaction_header_t* heade
   if (header->document_id_len > 0) {
     *document_id = (char*)malloc(header->document_id_len + 1);
     if (!*document_id) {
-      LOG_ERROR("Out of memory");
+      LOG_ERROR("Out of memory.");
       free(*collection_name);
       *collection_name = NULL;
       return 0;
@@ -300,7 +300,7 @@ static int read_transaction_log_entry(int fd, binary_transaction_header_t* heade
   if (header->document_size > 0) {
     *document_data = (char*)malloc(header->document_size + 1);
     if (!*document_data) {
-      LOG_ERROR("Out of memory");
+      LOG_ERROR("Out of memory.");
       free(*collection_name);
       *collection_name = NULL;
       free(*document_id);
@@ -337,14 +337,14 @@ static int read_transaction_log_entry(int fd, binary_transaction_header_t* heade
  */
 int binary_transaction_log_replay(const char* path, database_t* db) {
   if (!path || !db) {
-    LOG_ERROR("Invalid parameters for transaction log replay");
+    LOG_ERROR("Invalid parameters for transaction log replay.");
     return 0;
   }
   
   /* Open transaction log file */
   int fd = open(path, O_RDONLY);
   if (fd < 0) {
-    LOG_ERROR("open transaction log file: %s (error: %s)",
+    LOG_ERROR("Failed to open transaction log file %s: %s",
          path, strerror(errno));
     return 0;
   }
@@ -453,6 +453,6 @@ int binary_transaction_log_replay(const char* path, database_t* db) {
  * Initialize binary transaction operations
  */
 void binary_transaction_init() {
-  LOG_INFO("Initializing binary transaction operations");
+  LOG_INFO("Initializing binary transaction operations.");
   /* Any initialization can be done here */
 }

@@ -63,10 +63,10 @@ void js_api_init(database_t *db) {
 
   if (g_js_engine == NULL) {
     fprintf(stderr, "Warning: Failed to initialize JavaScript engine\n");
-    LOG_ERROR("initialize JavaScript engine");
+    LOG_ERROR("initialize JavaScript engine.");
   } else {
     printf("JavaScript engine initialized\n");
-    LOG_INFO("JavaScript engine initialized");
+    LOG_INFO("JavaScript engine initialized.");
   }
 #else /* JavaScript functionality disabled */
   fprintf(stderr, "JavaScript support is not available (disabled in this build)\n");

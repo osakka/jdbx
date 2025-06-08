@@ -30,6 +30,12 @@
 
 /*==============================================================================
  * Path Defaults (relative to install directory unless absolute)
+ * 
+ * These paths can be overridden using environment variables:
+ * - JSONDB_BASE_PATH: Base installation directory (auto-detected by default)
+ * - JSONDB_DOC_PATH: Documentation directory
+ * - JSONDB_VAR_PATH: Variable data directory
+ * - Individual path overrides (e.g., JSONDB_DB_DIR, JSONDB_LOG_FILE, etc.)
  *============================================================================*/
 
 /** Default database file path */
@@ -89,6 +95,9 @@
  * Performance Defaults
  *============================================================================*/
 
+/** Default cache enabled flag */
+#define DEFAULT_CACHE_ENABLED 1
+
 /** Default cache size */
 #define DEFAULT_CACHE_SIZE (1024 * 1024 * 10)  /* 10 MB */
 
@@ -110,6 +119,38 @@
 
 /** Default thread idle timeout in seconds */
 #define DEFAULT_THREAD_POOL_IDLE_TIMEOUT 60
+
+/*==============================================================================
+ * Metrics Defaults
+ *============================================================================*/
+
+/** Default metrics enabled flag */
+#define DEFAULT_METRICS_ENABLED 1
+
+/** Default metrics retention (number of data points) */
+#define DEFAULT_METRICS_RETENTION 15
+
+/*==============================================================================
+ * Adaptive Indexing Defaults
+ *============================================================================*/
+
+/** Default query threshold for indexing (number of queries) */
+#define DEFAULT_INDEX_QUERY_THRESHOLD 10
+
+/** Default time threshold for indexing (milliseconds) */
+#define DEFAULT_INDEX_TIME_THRESHOLD 50
+
+/** Default query threshold for system collections */
+#define DEFAULT_INDEX_QUERY_THRESHOLD_SYSTEM 5
+
+/** Default time threshold for system collections (milliseconds) */
+#define DEFAULT_INDEX_TIME_THRESHOLD_SYSTEM 10
+
+/** Default indexing startup delay (seconds) */
+#define DEFAULT_INDEX_STARTUP_DELAY 30
+
+/** Default indexing check interval (seconds) */
+#define DEFAULT_INDEX_CHECK_INTERVAL 60
 
 /*==============================================================================
  * Component-specific Defaults

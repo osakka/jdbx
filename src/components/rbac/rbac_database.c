@@ -27,7 +27,7 @@
 
 /* Initialize RBAC database collections */
 static int init_rbac_collections(struct database* db) {
-  LOG_TRACE("RBAC_DB: Initializing RBAC collections");
+  TRACE_RBAC("Initializing RBAC collections.");
   
   const char* collections[] = {
     RBAC_USERS_COLLECTION,
@@ -39,21 +39,21 @@ static int init_rbac_collections(struct database* db) {
   };
   
   for (size_t i = 0; i < sizeof(collections) / sizeof(collections[0]); i++) {
-    LOG_TRACE("RBAC_DB: Checking collection %zu: %s", i, collections[i]);
+    TRACE_RBAC("Checking collection %zu: %s", i, collections[i]);
     if (!db_collection_exists(db, collections[i])) {
-      LOG_TRACE("RBAC_DB: Creating collection: %s", collections[i]);
+      TRACE_RBAC("Creating collection: %s", collections[i]);
       if (db_create_collection(db, collections[i]) != 0) {
-        LOG_ERROR("RBAC_DB: Failed to create collection: %s", collections[i]);
+        LOG_ERROR("Cannot create collection: %s", collections[i]);
         return 0;
       }
-      LOG_TRACE("RBAC_DB: Collection created: %s", collections[i]);
+      TRACE_RBAC("Collection created: %s", collections[i]);
     } else {
-      LOG_TRACE("RBAC_DB: Collection already exists: %s", collections[i]);
+      TRACE_RBAC("Collection already exists: %s", collections[i]);
     }
-    LOG_TRACE("RBAC_DB: Collection %s processed", collections[i]);
+    TRACE_RBAC("Collection %s processed", collections[i]);
   }
   
-  LOG_TRACE("RBAC_DB: All RBAC collections initialized");
+  TRACE_RBAC("All RBAC collections initialized.");
   return 1;
 }
 
@@ -65,18 +65,18 @@ static int create_default_admin_user(struct database* db, const char* admin_role
 
 /* Initialize RBAC system with database backend */
 rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
-  LOG_TRACE("RBAC_DB: Initializing database-backed RBAC system");
-  LOG_TRACE("RBAC_DB: Database pointer: %p", db);
-  LOG_TRACE("RBAC_DB: JWT secret: %s", jwt_secret ? "[PROVIDED]" : "[NULL]");
+  TRACE_RBAC("Initializing database-backed RBAC system.");
+  TRACE_RBAC("Database pointer: %p", db);
+  TRACE_RBAC("JWT secret: %s", jwt_secret ? "[PROVIDED]" : "[NULL]");
   
   if (!db) {
-    LOG_ERROR("RBAC_DB: Database is NULL");
+    LOG_ERROR("Database is NULL.");
     return NULL;
   }
   
   /* Initialize RBAC collections */
   if (!init_rbac_collections(db)) {
-    LOG_ERROR("RBAC_DB: Failed to initialize RBAC collections");
+    LOG_ERROR("Cannot initialize RBAC collections.");
     return NULL;
   }
   
@@ -85,7 +85,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   /* Create RBAC system structure */
   rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
   if (!rbac) {
-    LOG_ERROR("RBAC_DB: Failed to allocate memory for RBAC system");
+    LOG_ERROR("Cannot allocate memory for RBAC system.");
     return NULL;
   }
   
@@ -96,7 +96,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   rbac->jwt_secret = jwt_secret ? strdup(jwt_secret) : strdup("change-this-secret-in-production");
   
   if (!rbac->users || !rbac->roles || !rbac->jwt_secret) {
-    LOG_ERROR("RBAC_DB: Failed to initialize RBAC fields");
+    LOG_ERROR("Cannot initialize RBAC fields.");
     if (rbac->users) json_free(rbac->users);
     if (rbac->roles) json_free(rbac->roles);
     if (rbac->jwt_secret) free(rbac->jwt_secret);
@@ -107,7 +107,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   /* Create default roles and admin user */
   char* admin_role_id = NULL;
   if (!create_default_admin_role(db, &admin_role_id)) {
-    LOG_ERROR("RBAC_DB: Failed to create default admin role");
+    LOG_ERROR("Cannot create default admin role.");
     json_free(rbac->users);
     json_free(rbac->roles);
     free(rbac);
@@ -115,7 +115,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   }
   
   if (!create_default_user_role(db)) {
-    LOG_ERROR("RBAC_DB: Failed to create default user role");
+    LOG_ERROR("Cannot create default user role.");
     json_free(rbac->users);
     json_free(rbac->roles);
     if (admin_role_id) free(admin_role_id);
@@ -124,7 +124,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   }
   
   if (!create_default_admin_user(db, admin_role_id)) {
-    LOG_ERROR("RBAC_DB: Failed to create default admin user");
+    LOG_ERROR("Cannot create default admin user.");
     json_free(rbac->users);
     json_free(rbac->roles);
     if (admin_role_id) free(admin_role_id);
@@ -134,13 +134,13 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   
   if (admin_role_id) free(admin_role_id);
   
-  LOG_TRACE("RBAC_DB: Database-backed RBAC system initialized");
+  TRACE_RBAC("Database-backed RBAC system initialized.");
   return rbac;
 }
 
 /* Create default admin role */
 int create_default_admin_role(struct database* db, char** admin_role_id_out) {
-  LOG_TRACE("RBAC_DB: Creating default admin role");
+  TRACE_RBAC("Creating default admin role.");
   
   /* No need to check by old ID since we're not preserving compatibility */
   
@@ -153,7 +153,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-      LOG_TRACE("RBAC_DB: Admin role already exists by name");
+      TRACE_RBAC("Admin role already exists by name.");
       /* Get the UUID from the existing role */
       json_value_t* existing_role = json_array_get(documents, 0);
       json_value_t* role_uuid = json_object_get(existing_role, "uuid");
@@ -163,12 +163,12 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
       
       if (role_uuid && role_uuid->type == JSON_STRING && admin_role_id_out) {
         *admin_role_id_out = strdup(role_uuid->value.string);
-        LOG_TRACE("RBAC_DB: Using existing admin role ID: %s", role_uuid->value.string);
+        TRACE_RBAC("Using existing admin role ID: %s", role_uuid->value.string);
         json_free(results);
         return 1; /* Success - role already exists */
       }
       
-      LOG_ERROR("RBAC_DB: Admin role exists but has no ID");
+      LOG_ERROR("Admin role exists but has no ID.");
       json_free(results);
       return 0;
     }
@@ -222,33 +222,33 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   json_free(admin_role);
   
   if (!result) {
-    LOG_ERROR("RBAC_DB: Failed to create admin role");
+    LOG_ERROR("Cannot create admin role.");
     return 0;
   }
   
   /* Store the generated ID for later use */
-  LOG_TRACE("RBAC_DB: Insert result: %s", json_stringify(result));
+  TRACE_RBAC("Insert result: %s", json_stringify(result));
   json_value_t* id_val = json_object_get(result, "uuid");
   if (id_val && id_val->type == JSON_STRING) {
-    LOG_TRACE("RBAC_DB: Admin role created with ID: %s", id_val->value.string);
+    TRACE_RBAC("Admin role created with ID: %s", id_val->value.string);
     if (admin_role_id_out) {
       *admin_role_id_out = strdup(id_val->value.string);
     }
   } else {
-    LOG_ERROR("RBAC_DB: Failed to get _id from insert result");
+    LOG_ERROR("Cannot get _id from insert result.");
     json_free(result);
     return 0;
   }
   
   json_free(result);
   
-  LOG_TRACE("RBAC_DB: Admin role created successfully");
+  TRACE_RBAC("Admin role created successfully.");
   return 1;
 }
 
 /* Create default user role */
 int create_default_user_role(struct database* db) {
-  LOG_TRACE("RBAC_DB: Creating default user role");
+  TRACE_RBAC("Creating default user role.");
   
   /* Check if any role with name "user" exists to prevent duplicates */
   json_value_t* query = json_create_object();
@@ -259,7 +259,7 @@ int create_default_user_role(struct database* db) {
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-      LOG_TRACE("RBAC_DB: User role already exists by name");
+      TRACE_RBAC("User role already exists by name.");
       json_free(results);
       return 1;  /* OK for user role to exist */
     }
@@ -305,29 +305,29 @@ int create_default_user_role(struct database* db) {
   json_free(user_role);
   
   if (!result) {
-    LOG_ERROR("RBAC_DB: Failed to create user role");
+    LOG_ERROR("Cannot create user role.");
     return 0;
   }
   
   /* Store the generated ID for later use */
-  LOG_TRACE("RBAC_DB: User role insert result: %s", json_stringify(result));
+  TRACE_RBAC("User role insert result: %s", json_stringify(result));
   json_value_t* id_val = json_object_get(result, "uuid");
   if (id_val && id_val->type == JSON_STRING) {
-    LOG_TRACE("RBAC_DB: User role created with ID: %s", id_val->value.string);
+    TRACE_RBAC("User role created with ID: %s", id_val->value.string);
   }
   
   json_free(result);
   
-  LOG_TRACE("RBAC_DB: User role created successfully");
+  TRACE_RBAC("User role created successfully.");
   return 1;
 }
 
 /* Create default admin user */
 int create_default_admin_user(struct database* db, const char* admin_role_id) {
-  LOG_TRACE("RBAC_DB: Creating default admin user");
+  TRACE_RBAC("Creating default admin user.");
   
   if (!admin_role_id) {
-    LOG_ERROR("RBAC_DB: Admin role ID not provided");
+    LOG_ERROR("Admin role ID not provided.");
     return 0;
   }
   
@@ -340,7 +340,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-      LOG_TRACE("RBAC_DB: Admin user already exists by username");
+      TRACE_RBAC("Admin user already exists by username.");
       
       /* Check if admin user has correct role ID */
       json_value_t* admin_user = json_array_get(documents, 0);
@@ -364,7 +364,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
         }
         
         if (needs_update) {
-          LOG_INFO("RBAC_DB: Fixing admin user roles - replacing 'admin' with role ID");
+          LOG_INFO("Fixing admin user roles - replacing 'admin' with role ID.");
           
           /* Get admin role ID */
           json_value_t* role_query = json_create_object();
@@ -391,7 +391,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
                 db_update_document(db, RBAC_USERS_COLLECTION, user_id, updated_user);
                 json_free(updated_user);
                 
-                LOG_INFO("RBAC_DB: Admin user roles updated with role ID: %s", admin_role_id);
+                LOG_INFO("Admin user roles updated with role ID: %s", admin_role_id);
               }
             }
             json_free(role_results);
@@ -405,7 +405,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
     json_free(results);
   }
   
-  LOG_TRACE("RBAC_DB: Using admin role ID: %s", admin_role_id);
+  TRACE_RBAC("Using admin role ID: %s", admin_role_id);
   
   /* Create admin user document - let database generate UUID */
   json_value_t* admin_user = json_create_object();
@@ -417,7 +417,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   /* Hash the default password "admin" */
   char* password_hash = hash_password("admin");
   if (!password_hash) {
-    LOG_ERROR("RBAC_DB: Failed to hash password");
+    LOG_ERROR("Cannot hash password.");
     json_free(admin_user);
     return 0;
   }
@@ -444,22 +444,22 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   json_free(admin_user);
   
   if (!user_result) {
-    LOG_ERROR("RBAC_DB: Failed to create admin user");
+    LOG_ERROR("Cannot create admin user.");
     return 0;
   }
   
   const char* user_id = json_get_string(json_object_get(user_result, "uuid"));
-  LOG_TRACE("RBAC_DB: Admin user created with ID: %s", user_id ? user_id : "(null)");
+  TRACE_RBAC("Admin user created with ID: %s", user_id ? user_id : "(null).");
   json_free(user_result);
   return 1;
 }
 
 /* Get user by username from database */
 rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char* username) {
-  LOG_TRACE("RBAC_DB: Getting user by username: %s", username);
+  TRACE_RBAC("Getting user by username: %s", username);
   
   if (!db || !username) {
-    LOG_ERROR("RBAC_DB: Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
@@ -471,14 +471,14 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_free(query);
   
   if (!result) {
-    LOG_ERROR("RBAC_DB: Query failed");
+    LOG_ERROR("Query failed.");
     return NULL;
   }
   
   /* Check if user found */
   json_value_t* docs = json_object_get(result, "documents");
   if (!docs || docs->value.array.size == 0) {
-    LOG_TRACE("RBAC_DB: User not found: %s", username);
+    TRACE_RBAC("User not found: %s", username);
     json_free(result);
     return NULL;
   }
@@ -489,7 +489,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   /* Create rbac_user_t structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!user) {
-    LOG_ERROR("RBAC_DB: Failed to allocate memory for user");
+    LOG_ERROR("Cannot allocate memory for user.");
     json_free(result);
     return NULL;
   }
@@ -513,23 +513,23 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   
   json_free(result);
   
-  LOG_TRACE("RBAC_DB: User found with ID: %s", user->id);
+  TRACE_RBAC("User found with ID: %s", user->id);
   return user;
 }
 
 /* Create new user in database */
 rbac_user_t* rbac_database_create_user(struct database* db, const char* username, const char* password) {
-  LOG_TRACE("RBAC_DB: Creating user: %s", username);
+  TRACE_RBAC("Creating user: %s", username);
   
   if (!db || !username || !password) {
-    LOG_ERROR("RBAC_DB: Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
   /* Check if user already exists */
   rbac_user_t* existing = rbac_db_get_user_by_username(db, username);
   if (existing) {
-    LOG_ERROR("RBAC_DB: User already exists: %s", username);
+    LOG_ERROR("User already exists: %s", username);
     rbac_free_user(existing);
     return NULL;
   }
@@ -537,7 +537,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   /* Hash password */
   char* password_hash = hash_password(password);
   if (!password_hash) {
-    LOG_ERROR("RBAC_DB: Failed to hash password");
+    LOG_ERROR("Cannot hash password.");
     return NULL;
   }
   
@@ -561,7 +561,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   json_free(user_doc);
   
   if (!insert_result) {
-    LOG_ERROR("RBAC_DB: Failed to insert user");
+    LOG_ERROR("Cannot insert user.");
     free(password_hash);
     return NULL;
   }
@@ -569,7 +569,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   /* Get the actual ID from the insert result */
   const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
   if (!actual_id) {
-    LOG_ERROR("RBAC_DB: Failed to get user ID from insert result");
+    LOG_ERROR("Cannot get user ID from insert result.");
     json_free(insert_result);
     free(password_hash);
     return NULL;
@@ -578,7 +578,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   /* Create rbac_user_t structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!user) {
-    LOG_ERROR("RBAC_DB: Failed to allocate memory for user");
+    LOG_ERROR("Cannot allocate memory for user.");
     json_free(insert_result);
     free(password_hash);
     return NULL;
@@ -591,16 +591,16 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   
   json_free(insert_result);
   
-  LOG_TRACE("RBAC_DB: User created with ID: %s", user->id);
+  TRACE_RBAC("User created with ID: %s", user->id);
   return user;
 }
 
 /* Create new role in database */
 rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename, const char* description) {
-  LOG_TRACE("RBAC_DB: Creating role: %s", rolename);
+  TRACE_RBAC("Creating role: %s", rolename);
   
   if (!db || !rolename) {
-    LOG_ERROR("RBAC_DB: Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
@@ -613,7 +613,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-      LOG_ERROR("RBAC_DB: Role already exists: %s", rolename);
+      LOG_ERROR("Role already exists: %s", rolename);
       json_free(results);
       return NULL;
     }
@@ -639,14 +639,14 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   json_free(role_doc);
   
   if (!insert_result) {
-    LOG_ERROR("RBAC_DB: Failed to insert role");
+    LOG_ERROR("Cannot insert role.");
     return NULL;
   }
   
   /* Get the actual ID from the insert result */
   const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
   if (!actual_id) {
-    LOG_ERROR("RBAC_DB: Failed to get role ID from insert result");
+    LOG_ERROR("Cannot get role ID from insert result.");
     json_free(insert_result);
     return NULL;
   }
@@ -654,7 +654,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   /* Create rbac_role_t structure */
   rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
   if (!role) {
-    LOG_ERROR("RBAC_DB: Failed to allocate memory for role");
+    LOG_ERROR("Cannot allocate memory for role.");
     json_free(insert_result);
     return NULL;
   }
@@ -665,7 +665,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   
   json_free(insert_result);
   
-  LOG_TRACE("RBAC_DB: Role created with ID: %s", role->id);
+  TRACE_RBAC("Role created with ID: %s", role->id);
   return role;
 }
 
@@ -691,11 +691,11 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   else if (permission & RBAC_DELETE) permission_str = "DELETE";
   else if (permission & RBAC_ADMIN) permission_str = "ADMIN";
   
-  LOG_TRACE("RBAC_DB: Checking permission - user: %s, resource: %s:%s, permission: %s",
+  TRACE_RBAC("Checking permission - user: %s, resource: %s:%s, permission: %s",
        user_id, resource_type_str, resource_id, permission_str);
   
   if (!db || !user_id || !resource_id) {
-    LOG_ERROR("RBAC_DB: Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return 0;
   }
   
@@ -721,7 +721,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
         time_t expiry = (time_t)expires_at->value.number;
         
         if (now < expiry) {
-          LOG_TRACE("RBAC_DB: Using cached permissions");
+          TRACE_RBAC("Using cached permissions.");
           json_value_t* perms = json_object_get(cache_doc, "permissions");
           
           if (perms && perms->type == JSON_ARRAY) {
@@ -729,14 +729,14 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
               json_value_t* perm = perms->value.array.items[i];
               if (perm->type == JSON_STRING && 
                 strcmp(perm->value.string, permission_str) == 0) {
-                LOG_TRACE("RBAC_DB: Permission granted (cached)");
+                TRACE_RBAC("Permission granted (cached).");
                 json_free(cache_result);
                 return 1;
               }
             }
           }
           
-          LOG_TRACE("RBAC_DB: Permission denied (cached)");
+          TRACE_RBAC("Permission denied (cached).");
           json_free(cache_result);
           return 0;
         }
@@ -746,32 +746,32 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   }
   
   /* Cache miss or expired - compute permissions */
-  LOG_TRACE("RBAC_DB: Computing permissions from database");
+  TRACE_RBAC("Computing permissions from database.");
   
   /* TODO: Implement full permission resolution algorithm */
   /* For now, just check if user has admin role */
   json_value_t* user_query = json_create_object();
   json_object_set(user_query, "uuid", json_create_string(user_id));
   
-  LOG_TRACE("RBAC_DB: Querying user with _id: %s", user_id);
+  TRACE_RBAC("Querying user with _id: %s", user_id);
   
   json_value_t* user_result = db_query_documents(db, RBAC_USERS_COLLECTION, user_query);
   json_free(user_query);
   
   if (!user_result) {
-    LOG_ERROR("RBAC_DB: Failed to query user");
+    LOG_ERROR("Cannot query user.");
     return 0;
   }
   
   json_value_t* user_docs = json_object_get(user_result, "documents");
   if (!user_docs || user_docs->value.array.size == 0) {
-    LOG_ERROR("RBAC_DB: User not found with id: %s", user_id);
-    LOG_TRACE("RBAC_DB: Query result: %s", json_stringify(user_result));
+    LOG_ERROR("User not found with id: %s", user_id);
+    TRACE_RBAC("Query result: %s", json_stringify(user_result));
     json_free(user_result);
     return 0;
   }
   
-  LOG_TRACE("RBAC_DB: Found %zu users", user_docs->value.array.size);
+  TRACE_RBAC("Found %zu users", user_docs->value.array.size);
   
   /* Get user's roles and check permissions */
   json_value_t* user_doc = user_docs->value.array.items[0];
@@ -780,7 +780,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   int has_permission = 0;
   
   if (user_roles && user_roles->type == JSON_ARRAY) {
-    LOG_TRACE("RBAC_DB: User has %zu roles", user_roles->value.array.size);
+    TRACE_RBAC("User has %zu roles", user_roles->value.array.size);
     
     /* Check each role's permissions */
     for (size_t i = 0; i < user_roles->value.array.size; i++) {
@@ -788,12 +788,12 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
       if (role_id_val->type != JSON_STRING) continue;
       
       const char* role_id = role_id_val->value.string;
-      LOG_TRACE("RBAC_DB: Checking role: %s", role_id);
+      TRACE_RBAC("Checking role: %s", role_id);
       
       /* Query the role */
       json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
       if (!role_doc) {
-        LOG_TRACE("RBAC_DB: Role not found: %s", role_id);
+        TRACE_RBAC("Role not found: %s", role_id);
         continue;
       }
       
@@ -804,13 +804,13 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
         char perm_key[64];
         snprintf(perm_key, sizeof(perm_key), "%d:%s", (int)resource_type, resource_id);
         
-        LOG_TRACE("RBAC_DB: Looking for permission key: %s", perm_key);
+        TRACE_RBAC("Looking for permission key: %s", perm_key);
         
         /* Check exact match first */
         json_value_t* perm_value = json_object_get(permissions, perm_key);
         if (perm_value && perm_value->type == JSON_NUMBER) {
           int perm_mask = (int)perm_value->value.number;
-          LOG_TRACE("RBAC_DB: Found exact permission: %d (checking for %d)", perm_mask, permission);
+          TRACE_RBAC("Found exact permission: %d (checking for %d)", perm_mask, permission);
           if (perm_mask & permission) {
             has_permission = 1;
             json_free(role_doc);
@@ -823,7 +823,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
         perm_value = json_object_get(permissions, perm_key);
         if (perm_value && perm_value->type == JSON_NUMBER) {
           int perm_mask = (int)perm_value->value.number;
-          LOG_TRACE("RBAC_DB: Found wildcard permission: %d (checking for %d)", perm_mask, permission);
+          TRACE_RBAC("Found wildcard permission: %d (checking for %d)", perm_mask, permission);
           if (perm_mask & permission) {
             has_permission = 1;
             json_free(role_doc);
@@ -838,7 +838,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
             for (size_t j = 0; j < system_perms->value.array.size; j++) {
               json_value_t* sys_perm = system_perms->value.array.items[j];
               if (sys_perm->type == JSON_STRING && strcmp(sys_perm->value.string, "*") == 0) {
-                LOG_TRACE("RBAC_DB: User has system:* permission");
+                TRACE_RBAC("User has system:* permission.");
                 has_permission = 1;
                 break;
               }
@@ -852,11 +852,11 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
       if (has_permission) break;
     }
   } else {
-    LOG_TRACE("RBAC_DB: User has no roles");
+    TRACE_RBAC("User has no roles.");
   }
   
   json_free(user_result);
   
-  LOG_TRACE("RBAC_DB: Permission %s", has_permission ? "granted" : "denied");
+  TRACE_RBAC("Permission %s", has_permission ? "granted" : "denied");
   return has_permission;
 }

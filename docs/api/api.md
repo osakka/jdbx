@@ -2,9 +2,9 @@
 
 Complete REST API reference for JSONdb server.
 
-**Version**: 2.0.8  
-**Last Updated**: May 31, 2025  
-**Base URL**: `http://localhost:5000`
+**Version**: 3.1.0  
+**Last Updated**: June 8, 2025  
+**Base URL**: `https://localhost:5000` (SSL enabled by default)
 
 ## Table of Contents
 1. [Authentication](#authentication)
@@ -257,7 +257,7 @@ Creates a new collection.
 
 - **URL**: `/api/collections`
 - **Method**: `POST`
-- **Auth Required**: Yes
+- **Auth Required**: Yes (admin)
 - **Request Body**:
   ```json
   {
@@ -294,7 +294,7 @@ Queries documents in a collection with optional filters and pagination.
 
 - **URL**: `/api/collections/{collection_name}/documents`
 - **Method**: `GET`
-- **Auth Required**: Yes
+- **Auth Required**: No (temporarily disabled for testing)
 - **Query Parameters**: 
   - `query` - JSON query object (see Query Language documentation)
   - `page` - Page number (for offset pagination)
@@ -348,7 +348,7 @@ Creates a new document in a collection.
 
 - **URL**: `/api/collections/{collection_name}/documents`
 - **Method**: `POST`
-- **Auth Required**: Yes
+- **Auth Required**: No (temporarily disabled for testing)
 - **Request Body**: JSON document
 - **Success Response**: `201 Created`
   ```json
@@ -367,7 +367,7 @@ Updates an existing document (complete replacement).
 
 - **URL**: `/api/collections/{collection_name}/documents/{document_id}`
 - **Method**: `PUT`
-- **Auth Required**: Yes
+- **Auth Required**: No (temporarily disabled for testing)
 - **Request Body**: Complete JSON document
 - **Success Response**: `200 OK`
   ```json
@@ -386,7 +386,7 @@ Deletes a document from a collection.
 
 - **URL**: `/api/collections/{collection_name}/documents/{document_id}`
 - **Method**: `DELETE`
-- **Auth Required**: Yes
+- **Auth Required**: No (temporarily disabled for testing)
 - **Success Response**: `204 No Content`
 - **Error Responses**:
   - `404 Not Found`: Document or collection not found
@@ -838,6 +838,11 @@ Lists available metric types.
 
 ## Configuration
 
+JSONdb implements a three-tier configuration system with the following priority:
+1. **Environment File** (lowest): `/opt/jsondb/share/config/jsondb.env`
+2. **Binary Flags** (medium): Command-line arguments
+3. **Database Config** (highest): `_system_config` collection
+
 ### Get Configuration
 
 Returns current server configuration.
@@ -849,22 +854,48 @@ Returns current server configuration.
   ```json
   {
     "port": 5000,
-    "ssl_enabled": false,
-    "db_path": "/opt/jsondb/build/var/database.jdb",
+    "ssl_enabled": true,
+    "ssl_cert": "/etc/ssl/certs/server.pem",
+    "ssl_key": "/etc/ssl/private/server.key",
+    "db_path": "var/data/jsondb/db.jdb",
     "cache_enabled": true,
-    "cache_size": 1000,
-    "log_level": "INFO"
+    "cache_size": 10485760,
+    "log_level": "INFO",
+    "thread_pool": {
+      "min_threads": 4,
+      "max_threads": 16,
+      "queue_size": 1024,
+      "idle_timeout": 60
+    }
   }
   ```
 
 ### Update Configuration
 
-Updates server configuration.
+Updates server configuration in database (highest priority tier).
 
 - **URL**: `/api/config`
 - **Method**: `PUT`
 - **Auth Required**: Yes (admin)
 - **Request Body**: Configuration object
+- **Success Response**: `200 OK`
+
+### Reload Configuration
+
+Reloads configuration from database tier.
+
+- **URL**: `/api/config/reload`
+- **Method**: `POST`
+- **Auth Required**: Yes (admin)
+- **Success Response**: `200 OK`
+
+### Get Default Configuration
+
+Returns default configuration values.
+
+- **URL**: `/api/config/defaults`
+- **Method**: `GET`
+- **Auth Required**: Yes (admin)
 - **Success Response**: `200 OK`
 
 ## Schema Validation
@@ -1390,12 +1421,16 @@ curl -X POST http://localhost:5000/api/transactions/txn-123/commit \
 
 ## Notes
 
-1. **Binary Persistence**: Database is automatically saved to `/opt/jsondb/build/var/database.jdb`
-2. **Metrics Storage**: Metrics are stored in the `_system_metrics` collection with automatic retention
-3. **Session Management**: Sessions have sliding timeouts that extend on activity (default: 30 minutes)
-4. **RBAC Collections**: User data is stored in system collections: `_users`, `_roles`, `_sessions`
-5. **Authentication**: Collection and document endpoints require proper authentication and authorization
-6. **Rate Limiting**: API requests are rate limited (default: 1000 requests per hour per user)
+1. **Binary Persistence**: Database is automatically saved to `var/data/jsondb/db.jdb` using binary format with TLV encoding
+2. **Adaptive Indexing**: v3.1.0 includes automatic index creation based on query patterns (10+ queries, 50ms+ average time)
+3. **Three-Tier Configuration**: Environment → CLI flags → Database config (highest priority)
+4. **Metrics Storage**: Metrics are stored in the `_system_metrics` collection with configurable retention (default: 15 data points)
+5. **Session Management**: Sessions have sliding timeouts that extend on activity (default: 30 minutes)
+6. **RBAC Collections**: User data is stored in system collections: `_users`, `_roles`, `_sessions`
+7. **JavaScript Integration**: Scripts stored in `_validators`, `_transformers`, `_functions` collections
+8. **SSL by Default**: SSL/TLS is enabled by default on port 5000 with configurable certificate paths
+9. **Thread Pool**: Configurable thread pool (default 4-16 threads) for handling concurrent requests
+10. **Connection Management**: Fixed connection leak issues in v3.1.0 with loop-based keep-alive handling
 
 ## Related Documentation
 

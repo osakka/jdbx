@@ -124,7 +124,7 @@ int rbac_db_exists(database_t* db) {
 /* Convert user document to rbac_user_t */
 static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
   if (!user_doc || user_doc->type != JSON_OBJECT) {
-    LOG_ERROR("RBAC_DB: Invalid user document");
+    LOG_ERROR("Invalid user document.");
     return NULL;
   }
   
@@ -142,7 +142,7 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
     !username_val || username_val->type != JSON_STRING ||
     !password_hash_val || password_hash_val->type != JSON_STRING ||
     !roles_val || roles_val->type != JSON_ARRAY) {
-    LOG_ERROR("RBAC_DB: Missing or invalid user fields - id=%p, username=%p, password_hash=%p, roles=%p",
+    LOG_ERROR("Missing or invalid user fields - id=%p, username=%p, password_hash=%p, roles=%p",
          id_val, username_val, password_hash_val, roles_val);
     return NULL;
   }
@@ -150,7 +150,7 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
   /* Create user structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!user) {
-    LOG_ERROR("RBAC_DB: Failed to allocate memory for user");
+    LOG_ERROR("Cannot allocate memory for user.");
     return NULL;
   }
   
@@ -168,7 +168,7 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
     }
   }
   
-  LOG_TRACE("RBAC_DB: Successfully created rbac_user_t - id: %s, username: %s, roles: %zu",
+  TRACE_RBAC("RBAC_DB: Successfully created rbac_user_t - id: %s, username: %s, roles: %zu",
        user->id, user->username, user->roles->value.array.size);
   
   return user;
@@ -229,7 +229,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
   
   /* Check if RBAC collections exist */
   if (!rbac_db_exists(db)) {
-    LOG_WARNING("RBAC collections not found in database");
+    LOG_WARNING("RBAC collections not found in database.");
     return NULL;
   }
   
@@ -457,7 +457,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Insert user document */
   json_value_t* insert_result = db_insert_document(db, RBAC_USERS_COLLECTION, user_doc);
   if (!insert_result) {
-    LOG_ERROR("insert user document into database");
+    LOG_ERROR("insert user document into database.");
     free(id);
     free(password_hash);
     return NULL;
@@ -587,10 +587,10 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
 
 /* Get a user from the database by username */
 rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) {
-  LOG_TRACE("RBAC_DB: rbac_db_get_user_by_username called with username: %s", username);
+  TRACE_RBAC("RBAC_DB: rbac_db_get_user_by_username called with username: %s", username);
   
   if (!db || !username) {
-    LOG_ERROR("RBAC_DB: Invalid parameters - db=%p, username=%s", db, username ? username : "NULL");
+    LOG_ERROR("Invalid parameters - db=%p, username=%s", db, username ? username : "NULL");
     return NULL;
   }
   
@@ -603,7 +603,7 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
-    LOG_ERROR("RBAC_DB: Query failed or invalid result type");
+    LOG_ERROR("Query failed or invalid result type.");
     if (result) json_free(result);
     return NULL;
   }
@@ -611,12 +611,12 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   /* Get documents array from result */
   json_value_t* documents = json_object_get(result, "documents");
   if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
-    LOG_TRACE("RBAC_DB: No users found matching username: %s", username);
+    TRACE_RBAC("RBAC_DB: No users found matching username: %s", username);
     json_free(result);
     return NULL;
   }
   
-  LOG_TRACE("RBAC_DB: Found %zu users matching username: %s", documents->value.array.size, username);
+  TRACE_RBAC("RBAC_DB: Found %zu users matching username: %s", documents->value.array.size, username);
   
   /* Get first matching user */
   json_value_t* user_doc = documents->value.array.items[0];
@@ -624,9 +624,9 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   /* Convert to rbac_user_t */
   rbac_user_t* user = user_doc_to_rbac_user(user_doc);
   if (user) {
-    LOG_TRACE("RBAC_DB: Successfully converted user document to rbac_user_t - id: %s", user->id);
+    TRACE_RBAC("RBAC_DB: Successfully converted user document to rbac_user_t - id: %s", user->id);
   } else {
-    LOG_ERROR("RBAC_DB: Failed to convert user document to rbac_user_t");
+    LOG_ERROR("Cannot convert user document to rbac_user_t.");
   }
   
   json_free(result);
@@ -697,7 +697,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Insert role document */
   json_value_t* insert_result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_doc);
   if (!insert_result) {
-    LOG_ERROR("insert role document into database");
+    LOG_ERROR("insert role document into database.");
     free(id);
     return NULL;
   }
@@ -910,7 +910,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
   free(actual_doc_id);
   
   if (!update_result) {
-    LOG_ERROR("update role document in database");
+    LOG_ERROR("update role document in database.");
     return 0;
   }
   
@@ -1035,7 +1035,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     if (update_result) {
       json_free(update_result);
     } else {
-      LOG_ERROR("update user document");
+      LOG_ERROR("update user document.");
       json_free(user_doc);
       json_free(role_doc);
       free(actual_user_id);
@@ -1051,7 +1051,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     if (update_result) {
       json_free(update_result);
     } else {
-      LOG_ERROR("update role document");
+      LOG_ERROR("update role document.");
       json_free(user_doc);
       json_free(role_doc);
       free(actual_user_id);
@@ -1153,7 +1153,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     if (update_result) {
       json_free(update_result);
     } else {
-      LOG_ERROR("update user document");
+      LOG_ERROR("update user document.");
       json_free(user_doc);
       json_free(role_doc);
       return 0;
@@ -1181,7 +1181,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     if (update_result) {
       json_free(update_result);
     } else {
-      LOG_ERROR("update role document");
+      LOG_ERROR("update role document.");
       json_free(user_doc);
       json_free(role_doc);
       return 0;
@@ -1260,7 +1260,7 @@ int rbac_db_grant_permission(database_t* db, const char* role_id, rbac_resource_
   /* Update role document */
   json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
   if (!update_result) {
-    LOG_ERROR("update role document");
+    LOG_ERROR("update role document.");
     free(key);
     json_free(role_doc);
     return 0;
@@ -1326,7 +1326,7 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
   /* Update role document */
   json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
   if (!update_result) {
-    LOG_ERROR("update role document");
+    LOG_ERROR("update role document.");
     free(key);
     json_free(role_doc);
     return 0;
@@ -1342,32 +1342,32 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
 /* Check if a user has a permission for a resource in the database */
 int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_type_t resource_type,
               const char* resource_id, rbac_permission_t permission) {
-  LOG_TRACE("RBAC_DB: check_permission called - user_id=%s, resource_type=%d, resource_id=%s, permission=%d",
+  TRACE_RBAC("RBAC_DB: check_permission called - user_id=%s, resource_type=%d, resource_id=%s, permission=%d",
        user_id, resource_type, resource_id, permission);
        
   if (!db || !user_id || !resource_id) {
-    LOG_ERROR("RBAC_DB: Invalid parameters for permission check");
+    LOG_ERROR("Invalid parameters for permission check.");
     return 0;
   }
   
   /* Get user document */
   json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
   if (!user_doc) {
-    LOG_ERROR("RBAC_DB: User %s not found", user_id);
+    LOG_ERROR("User %s not found", user_id);
     return 0;
   }
   
-  LOG_TRACE("RBAC_DB: User document retrieved for %s", user_id);
+  TRACE_RBAC("RBAC_DB: User document retrieved for %s", user_id);
   
   /* Get user roles */
   json_value_t* roles = json_object_get(user_doc, "roles");
   if (!roles || roles->type != JSON_ARRAY) {
-    LOG_ERROR("RBAC_DB: User %s has no roles or invalid roles format", user_id);
+    LOG_ERROR("User %s has no roles or invalid roles format", user_id);
     json_free(user_doc);
     return 0;
   }
   
-  LOG_TRACE("RBAC_DB: User %s has %zu roles", user_id, roles->value.array.size);
+  TRACE_RBAC("RBAC_DB: User %s has %zu roles", user_id, roles->value.array.size);
   
   /* Create resource permission key */
   char* key = get_resource_permission_key(resource_type, resource_id);
@@ -1384,7 +1384,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     return 0;
   }
   
-  LOG_TRACE("RBAC_DB: Looking for permission keys: %s or %s", key, wildcard_key);
+  TRACE_RBAC("RBAC_DB: Looking for permission keys: %s or %s", key, wildcard_key);
   
   /* Check permission in each role */
   int has_permission = 0;
@@ -1399,24 +1399,24 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     /* Get role document */
     json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
     if (!role_doc || role_doc->type != JSON_OBJECT) {
-      LOG_TRACE("RBAC_DB: Role %s not found or invalid", role_id);
+      TRACE_RBAC("RBAC_DB: Role %s not found or invalid", role_id);
       continue;
     }
     
-    LOG_TRACE("RBAC_DB: Checking permissions in role %s", role_id);
+    TRACE_RBAC("RBAC_DB: Checking permissions in role %s", role_id);
     
     /* Get role permissions */
     json_value_t* permissions = json_object_get(role_doc, "permissions");
     if (!permissions || permissions->type != JSON_OBJECT) {
-      LOG_TRACE("RBAC_DB: Role %s has no permissions or invalid format", role_id);
+      TRACE_RBAC("RBAC_DB: Role %s has no permissions or invalid format", role_id);
       json_free(role_doc);
       continue;
     }
     
     /* Log all permission keys in the role */
-    LOG_TRACE("RBAC_DB: Role %s has %zu permission entries", role_id, permissions->value.object.size);
+    TRACE_RBAC("RBAC_DB: Role %s has %zu permission entries", role_id, permissions->value.object.size);
     for (size_t j = 0; j < permissions->value.object.size; j++) {
-      LOG_TRACE("RBAC_DB: Permission key: %s", permissions->value.object.entries[j].key);
+      TRACE_RBAC("RBAC_DB: Permission key: %s", permissions->value.object.entries[j].key);
     }
     
     /* Check specific resource permission */
@@ -1425,13 +1425,13 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
       int perm;
       if (perm_val->type == JSON_INTEGER) {
         perm = (int)perm_val->value.integer;
-        LOG_TRACE("RBAC_DB: Found INTEGER permission for key %s: %d (checking for %d)", key, perm, permission);
+        TRACE_RBAC("RBAC_DB: Found INTEGER permission for key %s: %d (checking for %d)", key, perm, permission);
       } else {
         perm = (int)perm_val->value.number;
-        LOG_TRACE("RBAC_DB: Found NUMBER permission for key %s: %d (checking for %d)", key, perm, permission);
+        TRACE_RBAC("RBAC_DB: Found NUMBER permission for key %s: %d (checking for %d)", key, perm, permission);
       }
       if ((perm & permission) == permission) {
-        LOG_TRACE("RBAC_DB: Permission granted!");
+        TRACE_RBAC("RBAC_DB: Permission granted!");
         has_permission = 1;
         json_free(role_doc);
         break;
@@ -1440,27 +1440,27 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     
     /* Check wildcard resource permission */
     perm_val = json_object_get(permissions, wildcard_key);
-    LOG_TRACE("RBAC_DB: Looking up wildcard key %s, result: %p", wildcard_key, perm_val);
+    TRACE_RBAC("RBAC_DB: Looking up wildcard key %s, result: %p", wildcard_key, perm_val);
     if (perm_val) {
-      LOG_TRACE("RBAC_DB: Wildcard permission value type: %d (JSON_NUMBER=%d)", perm_val->type, JSON_NUMBER);
+      TRACE_RBAC("RBAC_DB: Wildcard permission value type: %d (JSON_NUMBER=%d)", perm_val->type, JSON_NUMBER);
     }
     if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
       int perm;
       if (perm_val->type == JSON_INTEGER) {
         perm = (int)perm_val->value.integer;
-        LOG_TRACE("RBAC_DB: Found INTEGER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+        TRACE_RBAC("RBAC_DB: Found INTEGER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
       } else {
         perm = (int)perm_val->value.number;
-        LOG_TRACE("RBAC_DB: Found NUMBER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+        TRACE_RBAC("RBAC_DB: Found NUMBER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
       }
       if ((perm & permission) == permission) {
-        LOG_TRACE("RBAC_DB: Permission granted via wildcard!");
+        TRACE_RBAC("RBAC_DB: Permission granted via wildcard!");
         has_permission = 1;
         json_free(role_doc);
         break;
       }
     } else {
-      LOG_TRACE("RBAC_DB: No permission found for wildcard key %s", wildcard_key);
+      TRACE_RBAC("RBAC_DB: No permission found for wildcard key %s", wildcard_key);
     }
     
     json_free(role_doc);
@@ -1480,6 +1480,6 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
 int rbac_db_migrate_from_file(database_t* db, rbac_system_t* rbac) {
   (void)db;
   (void)rbac;
-  LOG_WARNING("RBAC_db_migrate_from_file is deprecated and will be removed in a future release");
+  LOG_WARNING("RBAC_db_migrate_from_file is deprecated and will be removed in a future release.");
   return 0; /* Always fail - migration is no longer supported */
 }

@@ -268,12 +268,12 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
 
   transaction_manager_t* manager = (transaction_manager_t*)malloc(sizeof(transaction_manager_t));
   if (!manager) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     return NULL;
   }
 
   /* Initialize fields */
-  LOG_DEBUG("Initializing transaction manager fields");
+  LOG_DEBUG("Initializing transaction manager fields.");
   manager->active_transactions = NULL;
   manager->count = 0;
   manager->capacity = capacity > 0 ? capacity : 100; // Default capacity
@@ -282,7 +282,7 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
   manager->log = NULL; /* Initialize log as needed */
 
   if (pthread_mutex_init(&manager->lock, NULL) != 0) {
-    LOG_ERROR("initialize transaction manager mutex");
+    LOG_ERROR("initialize transaction manager mutex.");
     free(manager);
     return NULL;
   }
@@ -291,7 +291,7 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
   LOG_DEBUG("Allocating array for %d active transactions", manager->capacity);
   manager->active_transactions = (transaction_t**)malloc(manager->capacity * sizeof(transaction_t*));
   if (!manager->active_transactions) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     pthread_mutex_destroy(&manager->lock);
     free(manager);
     return NULL;
@@ -305,7 +305,7 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
     manager->tx_hash_size, sizeof(transaction_hash_entry_t*));
 
   if (!manager->tx_hash_table) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(manager->active_transactions);
     pthread_mutex_destroy(&manager->lock);
     free(manager);
@@ -320,7 +320,7 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
 /* Free a transaction manager */
 void transaction_manager_free(transaction_manager_t* manager) {
   if (!manager) {
-    LOG_WARNING("Attempted to free NULL transaction manager");
+    LOG_WARNING("Attempted to free NULL transaction manager.");
     return;
   }
 
@@ -328,11 +328,11 @@ void transaction_manager_free(transaction_manager_t* manager) {
 
   /* Free active transactions */
   if (manager->active_transactions) {
-    LOG_DEBUG("Freeing active transactions");
+    LOG_DEBUG("Freeing active transactions.");
 
     for (int i = 0; i < manager->count; i++) {
       if (manager->active_transactions[i]) {
-        LOG_TRACE("Freeing transaction %s (state: %d)",
+        LOG_DEBUG("Freeing transaction %s (state: %d)",
              manager->active_transactions[i]->id ?
              manager->active_transactions[i]->id : "unknown",
              manager->active_transactions[i]->state);
@@ -372,7 +372,7 @@ void transaction_manager_free(transaction_manager_t* manager) {
           operation = next;
         }
 
-        LOG_TRACE("Freed %d operations for transaction %s",
+        LOG_DEBUG("Freed %d operations for transaction %s",
              op_count,
              manager->active_transactions[i]->id ?
              manager->active_transactions[i]->id : "unknown");
@@ -393,7 +393,7 @@ void transaction_manager_free(transaction_manager_t* manager) {
           savepoint = next;
         }
 
-        LOG_TRACE("Freed %d savepoints for transaction %s",
+        LOG_DEBUG("Freed %d savepoints for transaction %s",
              sp_count,
              manager->active_transactions[i]->id ?
              manager->active_transactions[i]->id : "unknown");
@@ -403,30 +403,30 @@ void transaction_manager_free(transaction_manager_t* manager) {
       }
     }
 
-    LOG_DEBUG("Freeing transaction array");
+    LOG_DEBUG("Freeing transaction array.");
     free(manager->active_transactions);
   }
 
   /* Free hash table */
-  LOG_DEBUG("Freeing transaction hash table");
+  LOG_DEBUG("Freeing transaction hash table.");
   transaction_hash_table_free(manager);
 
   /* Free lock manager if present */
   if (manager->lock_manager) {
-    LOG_DEBUG("Lock manager present but free function is commented out");
+    LOG_DEBUG("Lock manager present but free function is commented out.");
     /* lock_manager_free(manager->lock_manager); */
   }
 
   /* Free log if present */
   if (manager->log) {
-    LOG_DEBUG("Transaction log present but free function is commented out");
+    LOG_DEBUG("Transaction log present but free function is commented out.");
     /* transaction_log_free(manager->log); */
   }
 
-  LOG_DEBUG("Destroying transaction manager mutex");
+  LOG_DEBUG("Destroying transaction manager mutex.");
   pthread_mutex_destroy(&manager->lock);
 
-  LOG_INFO("Transaction manager freed");
+  LOG_INFO("Transaction manager freed.");
   free(manager);
 }
 
@@ -504,18 +504,18 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
   }
 
   /* Create a new transaction */
-  LOG_DEBUG("Allocating memory for transaction structure");
+  LOG_DEBUG("Allocating memory for transaction structure.");
   transaction_t* transaction = (transaction_t*)malloc(sizeof(transaction_t));
   if (!transaction) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     return NULL;
   }
 
   /* Generate a transaction ID */
-  LOG_DEBUG("Generating transaction ID");
+  LOG_DEBUG("Generating transaction ID.");
   transaction->id = generate_transaction_id();
   if (!transaction->id) {
-    LOG_ERROR("generate transaction ID");
+    LOG_ERROR("generate transaction ID.");
     free(transaction);
     return NULL;
   }
@@ -524,14 +524,14 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
   LOG_DEBUG("Setting transaction user ID to '%s'", user_id);
   transaction->user_id = strdup(user_id);
   if (!transaction->user_id) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(transaction->id);
     free(transaction);
     return NULL;
   }
 
   /* Initialize transaction fields */
-  LOG_DEBUG("Initializing transaction fields");
+  LOG_DEBUG("Initializing transaction fields.");
   transaction->state = TRANSACTION_ACTIVE;
   transaction->isolation_level = isolation_level;
   transaction->start_time = time(NULL);
@@ -542,7 +542,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
   transaction->savepoints = NULL;
 
   if (pthread_mutex_init(&transaction->lock, NULL) != 0) {
-    LOG_ERROR("initialize transaction mutex");
+    LOG_ERROR("initialize transaction mutex.");
     free(transaction->user_id);
     free(transaction->id);
     free(transaction);
@@ -585,10 +585,10 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
 
     if (!new_hash_table) {
       /* Hash table resize failed - continue with the existing hash table */
-      LOG_WARNING("Failed to resize transaction hash table, continuing with existing table");
+      LOG_WARNING("Cannot resize transaction hash table, continuing with existing table.");
     } else {
       /* Rebuild the hash table with the new size */
-      LOG_DEBUG("Rebuilding transaction hash table with new size");
+      LOG_DEBUG("Rebuilding transaction hash table with new size.");
       int rehashed_entries = 0;
 
       for (int i = 0; i < manager->tx_hash_size; i++) {
@@ -619,7 +619,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
     /* Update the transaction array */
     manager->active_transactions = new_array;
     manager->capacity = new_capacity;
-    LOG_INFO("Transaction array and hash table resized");
+    LOG_INFO("Transaction array and hash table resized.");
   }
 
   /* Add transaction to the list */
@@ -632,7 +632,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
     LOG_DEBUG("Adding transaction %s to hash table", transaction->id);
     if (!transaction_hash_table_add(manager, transaction)) {
       /* Failed to add to hash table, but continue anyway with degraded performance */
-      LOG_WARNING("Failed to add transaction %s to hash table - lookups will be slower",
+      LOG_WARNING("Cannot add transaction %s to hash table - lookups will be slower",
            transaction->id);
     }
   }
@@ -691,7 +691,7 @@ int transaction_commit(transaction_manager_t* manager, transaction_t* transactio
     LOG_DEBUG("Writing transaction %s commit to log", transaction->id);
     transaction_log_write_state_change(manager->log, transaction);
   } else {
-    LOG_TRACE("No transaction log available, skipping log entry");
+    LOG_DEBUG("No transaction log available, skipping log entry.");
   }
 
   /* Remove from hash table if available - no need to keep committed transactions in fast lookup */
@@ -753,7 +753,7 @@ int transaction_rollback(transaction_manager_t* manager, transaction_t* transact
     LOG_DEBUG("Writing transaction %s rollback to log", transaction->id);
     transaction_log_write_state_change(manager->log, transaction);
   } else {
-    LOG_TRACE("No transaction log available, skipping log entry");
+    LOG_DEBUG("No transaction log available, skipping log entry.");
   }
 
   /* Remove from hash table if available - no need to keep aborted transactions in fast lookup */

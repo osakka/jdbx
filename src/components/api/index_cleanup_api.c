@@ -15,7 +15,7 @@ static index_cleanup_t* g_index_cleanup = NULL;
 /* Initialize cleanup system with database and metrics */
 void index_cleanup_api_init(database_t* db, index_metrics_t* metrics) {
     if (!db || !metrics) {
-        LOG_ERROR("Invalid parameters for index cleanup API init");
+        LOG_ERROR("Invalid parameters for index cleanup API init.");
         return;
     }
     
@@ -23,7 +23,7 @@ void index_cleanup_api_init(database_t* db, index_metrics_t* metrics) {
         g_index_cleanup = index_cleanup_init(db, metrics);
         if (g_index_cleanup) {
             index_cleanup_start(g_index_cleanup);
-            LOG_INFO("Index cleanup API initialized");
+            LOG_INFO("Index cleanup API initialized.");
         }
     }
 }
@@ -33,20 +33,19 @@ void index_cleanup_api_shutdown(void) {
     if (g_index_cleanup) {
         index_cleanup_destroy(g_index_cleanup);
         g_index_cleanup = NULL;
-        LOG_INFO("Index cleanup API shutdown");
+        LOG_INFO("Index cleanup API shutdown.");
     }
 }
 
 /* GET /api/indexes/cleanup/status - Get cleanup system status */
 http_response_t* api_handle_index_cleanup_status(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; (void)request; // Currently unused
+    
     if (!g_index_cleanup) {
         return create_http_response(503,
                                   "{\"error\":\"Index cleanup not initialized\"}", 
                                   "application/json");
     }
-    
-    /* Get cleanup statistics */
-    cleanup_stats_t stats = index_cleanup_get_stats(g_index_cleanup);
     
     /* Export cleanup history */
     json_value_t* status = index_cleanup_export_history(g_index_cleanup);
@@ -74,6 +73,8 @@ http_response_t* api_handle_index_cleanup_status(api_context_t* ctx, http_reques
 
 /* POST /api/indexes/cleanup/configure - Configure cleanup thresholds */
 http_response_t* api_handle_index_cleanup_configure(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; // Currently unused
+    
     if (!g_index_cleanup) {
         return create_http_response(503,
                                   "{\"error\":\"Index cleanup not initialized\"}", 
@@ -133,6 +134,8 @@ http_response_t* api_handle_index_cleanup_configure(api_context_t* ctx, http_req
 
 /* POST /api/indexes/cleanup/check - Force immediate cleanup check */
 http_response_t* api_handle_index_cleanup_check(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; (void)request; // Currently unused
+    
     if (!g_index_cleanup) {
         return create_http_response(503,
                                   "{\"error\":\"Index cleanup not initialized\"}", 
@@ -152,6 +155,8 @@ http_response_t* api_handle_index_cleanup_check(api_context_t* ctx, http_request
 
 /* POST /api/indexes/{collection}/{index}/evaluate - Evaluate specific index */
 http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; // Currently unused
+    
     if (!g_index_cleanup) {
         return create_http_response(503,
                                   "{\"error\":\"Index cleanup not initialized\"}", 
@@ -245,6 +250,8 @@ http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_requ
 
 /* DELETE /api/indexes/{collection}/{index} - Manually remove an index */
 http_response_t* api_handle_index_cleanup_remove(api_context_t* ctx, http_request_t* request) {
+    (void)ctx; // Currently unused
+    
     if (!g_index_cleanup) {
         return create_http_response(503,
                                   "{\"error\":\"Index cleanup not initialized\"}", 

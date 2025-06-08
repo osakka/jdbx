@@ -83,7 +83,7 @@ int binary_verify_header(const binary_header_t* header) {
 void* binary_malloc(size_t size) {
   void* ptr = malloc(size);
   if (!ptr) {
-    LOG_ERROR("allocate %zu bytes", size);
+    LOG_ERROR("Cannot allocate %zu bytes", size);
   }
   return ptr;
 }
@@ -102,7 +102,7 @@ int binary_resize_buffer(void** buffer, size_t current_size, size_t new_size) {
   TRACE_MEMORY("Resizing buffer from %p (size=%zu) to size=%zu", *buffer, current_size, new_size);
   void* new_buffer = realloc(*buffer, new_size);
   if (!new_buffer) {
-    LOG_ERROR("resize buffer from %zu to %zu bytes", current_size, new_size);
+    LOG_ERROR("Cannot resize buffer from %zu to %zu bytes", current_size, new_size);
     TRACE_MEMORY("Failed to resize buffer %p from %zu to %zu bytes", *buffer, current_size, new_size);
     return 0;
   }
@@ -302,7 +302,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
   *offset += sizeof(binary_value_header_t);
   
   if (*offset > size) {
-    LOG_ERROR("Buffer overrun during deserialization");
+    LOG_ERROR("Buffer overrun during deserialization.");
     return NULL;
   }
   
@@ -312,7 +312,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_BOOLEAN: {
       if (*offset + sizeof(uint8_t) > size) {
-        LOG_ERROR("Buffer overrun during boolean deserialization");
+        LOG_ERROR("Buffer overrun during boolean deserialization.");
         return NULL;
       }
       uint8_t value = *((uint8_t*)buffer + *offset);
@@ -322,7 +322,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_INTEGER: {
       if (*offset + sizeof(int64_t) > size) {
-        LOG_ERROR("Buffer overrun during integer deserialization");
+        LOG_ERROR("Buffer overrun during integer deserialization.");
         return NULL;
       }
       int64_t value = *((int64_t*)((uint8_t*)buffer + *offset));
@@ -332,7 +332,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_DOUBLE: {
       if (*offset + sizeof(double) > size) {
-        LOG_ERROR("Buffer overrun during double deserialization");
+        LOG_ERROR("Buffer overrun during double deserialization.");
         return NULL;
       }
       double value = *((double*)((uint8_t*)buffer + *offset));
@@ -342,7 +342,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_STRING: {
       if (*offset + sizeof(uint32_t) > size) {
-        LOG_ERROR("Buffer overrun during string length deserialization");
+        LOG_ERROR("Buffer overrun during string length deserialization.");
         return NULL;
       }
       
@@ -350,14 +350,14 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       *offset += sizeof(uint32_t);
       
       if (*offset + str_len > size) {
-        LOG_ERROR("Buffer overrun during string data deserialization");
+        LOG_ERROR("Buffer overrun during string data deserialization.");
         return NULL;
       }
       
       /* Copy string data */
       char* str = (char*)malloc(str_len + 1);
       if (!str) {
-        LOG_ERROR("allocate string memory");
+        LOG_ERROR("Cannot allocate string memory.");
         return NULL;
       }
       
@@ -372,7 +372,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_ARRAY: {
       if (*offset + sizeof(uint32_t) > size) {
-        LOG_ERROR("Buffer overrun during array size deserialization");
+        LOG_ERROR("Buffer overrun during array size deserialization.");
         return NULL;
       }
       
@@ -380,7 +380,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       *offset += sizeof(uint32_t);
       
       if (*offset + sizeof(uint32_t) > size) {
-        LOG_ERROR("Buffer overrun during array length deserialization");
+        LOG_ERROR("Buffer overrun during array length deserialization.");
         return NULL;
       }
       
@@ -389,7 +389,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
       json_value_t* array = json_create_array();
       if (!array) {
-        LOG_ERROR("create JSON array");
+        LOG_ERROR("Cannot create JSON array.");
         return NULL;
       }
       
@@ -397,7 +397,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       for (uint32_t i = 0; i < array_size; i++) {
         json_value_t* element = deserialize_json_value(buffer, size, offset);
         if (!element) {
-          LOG_ERROR("deserialize array element %u", i);
+          LOG_ERROR("Cannot deserialize array element %u", i);
           json_free(array);
           return NULL;
         }
@@ -410,7 +410,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
     case BIN_TYPE_OBJECT: {
       if (*offset + sizeof(uint32_t) > size) {
-        LOG_ERROR("Buffer overrun during object size deserialization");
+        LOG_ERROR("Buffer overrun during object size deserialization.");
         return NULL;
       }
       
@@ -418,7 +418,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       *offset += sizeof(uint32_t);
       
       if (*offset + sizeof(uint32_t) > size) {
-        LOG_ERROR("Buffer overrun during object field count deserialization");
+        LOG_ERROR("Buffer overrun during object field count deserialization.");
         return NULL;
       }
       
@@ -427,14 +427,14 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
       
       json_value_t* object = json_create_object();
       if (!object) {
-        LOG_ERROR("create JSON object");
+        LOG_ERROR("Cannot create JSON object.");
         return NULL;
       }
       
       /* Read object fields */
       for (uint32_t i = 0; i < object_size; i++) {
         if (*offset + sizeof(uint32_t) > size) {
-          LOG_ERROR("Buffer overrun during object key length deserialization");
+          LOG_ERROR("Buffer overrun during object key length deserialization.");
           json_free(object);
           return NULL;
         }
@@ -443,7 +443,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
         *offset += sizeof(uint32_t);
         
         if (*offset + key_len > size) {
-          LOG_ERROR("Buffer overrun during object key deserialization");
+          LOG_ERROR("Buffer overrun during object key deserialization.");
           json_free(object);
           return NULL;
         }
@@ -451,7 +451,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
         /* Copy key string */
         char* key = (char*)malloc(key_len + 1);
         if (!key) {
-          LOG_ERROR("allocate key memory");
+          LOG_ERROR("Cannot allocate key memory.");
           json_free(object);
           return NULL;
         }
@@ -463,7 +463,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
         /* Read value */
         json_value_t* value = deserialize_json_value(buffer, size, offset);
         if (!value) {
-          LOG_ERROR("deserialize object value for key '%s'", key);
+          LOG_ERROR("Cannot deserialize object value for key '%s'", key);
           free(key);
           json_free(object);
           return NULL;
@@ -487,7 +487,7 @@ static json_value_t* deserialize_json_value(void* buffer, size_t size, size_t* o
 /* Serialize database to binary format */
 int binary_serialize_database(const char* path, void* db) {
   if (!path || !db) {
-    LOG_ERROR("Invalid parameters for binary serialization");
+    LOG_ERROR("Invalid parameters for binary serialization.");
     return 0;
   }
   
@@ -506,7 +506,7 @@ int binary_serialize_database(const char* path, void* db) {
   /* Create file */
   int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd < 0) {
-    LOG_ERROR("create binary database file: %s (error: %s)",
+    LOG_ERROR("Cannot create binary database file %s: %s",
          path, strerror(errno));
     return 0;
   }
@@ -519,7 +519,7 @@ int binary_serialize_database(const char* path, void* db) {
   header.timestamp = (uint64_t)time(NULL);
   
   if (write(fd, &header, sizeof(header)) != sizeof(header)) {
-    LOG_ERROR("write binary header: %s", strerror(errno));
+    LOG_ERROR("Cannot write binary header: %s", strerror(errno));
     close(fd);
     return 0;
   }
@@ -528,11 +528,11 @@ int binary_serialize_database(const char* path, void* db) {
   uint32_t collection_count = 0;
   size_t current_offset = sizeof(binary_header_t);
   
-  LOG_TRACE("Starting serialization at offset %zu", current_offset);
+  TRACE_BIN("Starting serialization at offset %zu", current_offset);
   
   /* Iterate through collections manually */
   size_t coll_count = json_object_size(database->collections);
-  LOG_TRACE("Found %zu collections to serialize", coll_count);
+  TRACE_BIN("Found %zu collections to serialize", coll_count);
   
   for (size_t i = 0; i < coll_count; i++) {
     TRACE_MEMORY("Starting collection iteration %zu/%zu: temp_buffer=%p, temp_size=%zu", 
@@ -547,7 +547,7 @@ int binary_serialize_database(const char* path, void* db) {
     
     collection_count++;
     
-    LOG_TRACE("Collection %zu: '%s', %zu documents, starting at offset %zu", 
+    TRACE_BIN("Collection %zu: '%s', %zu documents, starting at offset %zu", 
          i, collection_name, json_array_size(collection_data), current_offset);
     
     /* Write collection header placeholder */
@@ -558,12 +558,12 @@ int binary_serialize_database(const char* path, void* db) {
     coll_header.document_count = (uint32_t)json_array_size(collection_data);
     coll_header.data_offset = current_offset + sizeof(binary_collection_header_t) + coll_header.name_length;
     
-    LOG_TRACE("Collection '%s' header: name_len=%d, doc_count=%d, data_offset=%zu", 
+    TRACE_BIN("Collection '%s' header: name_len=%d, doc_count=%d, data_offset=%zu", 
          collection_name, coll_header.name_length, coll_header.document_count, coll_header.data_offset);
     
     /* Write collection header */
     if (write(fd, &coll_header, sizeof(coll_header)) != sizeof(coll_header)) {
-      LOG_ERROR("write collection header: %s", strerror(errno));
+      LOG_ERROR("Cannot write collection header: %s", strerror(errno));
       close(fd);
       return 0;
     }
@@ -572,7 +572,7 @@ int binary_serialize_database(const char* path, void* db) {
     
     /* Write collection name */
     if (write(fd, collection_name, coll_header.name_length) != coll_header.name_length) {
-      LOG_ERROR("write collection name: %s", strerror(errno));
+      LOG_ERROR("Cannot write collection name: %s", strerror(errno));
       close(fd);
       return 0;
     }
@@ -614,7 +614,7 @@ int binary_serialize_database(const char* path, void* db) {
                      old_temp_buffer, old_temp_size, estimated_size);
         void* new_buffer = realloc(temp_buffer, estimated_size);
         if (!new_buffer) {
-          LOG_ERROR("allocate document serialization buffer (size=%zu)", estimated_size);
+          LOG_ERROR("Cannot allocate document serialization buffer (size=%zu)", estimated_size);
           TRACE_MEMORY("Failed to reallocate temp_buffer %p to size %zu", old_temp_buffer, estimated_size);
           if (temp_buffer) {
             TRACE_MEMORY("Freeing failed temp_buffer %p (size=%zu)", temp_buffer, temp_size);
@@ -628,7 +628,7 @@ int binary_serialize_database(const char* path, void* db) {
                      new_buffer, estimated_size);
         temp_buffer = new_buffer;
         temp_size = estimated_size;
-        LOG_TRACE("Buffer allocated/resized to %zu bytes", temp_size);
+        TRACE_BIN("Buffer allocated/resized to %zu bytes", temp_size);
       }
       
       /* Serialize document and get actual size */
@@ -644,7 +644,7 @@ int binary_serialize_database(const char* path, void* db) {
         size_t required_size = doc_size + 2048; /* Extra margin for safety */
         void* new_buffer = realloc(temp_buffer, required_size);
         if (!new_buffer) {
-          LOG_ERROR("Failed to reallocate buffer for document overflow (size=%zu)", required_size);
+          LOG_ERROR("Cannot reallocate buffer for document overflow (size=%zu)", required_size);
           TRACE_MEMORY("Buffer overflow detected: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
           free(temp_buffer);
           close(fd);
@@ -653,7 +653,7 @@ int binary_serialize_database(const char* path, void* db) {
         
         temp_buffer = new_buffer;
         temp_size = required_size;
-        LOG_INFO("Successfully reallocated buffer to %zu bytes for large document", temp_size);
+        LOG_INFO("reallocated buffer to %zu bytes for large document", temp_size);
         
         /* Re-serialize with new buffer */
         doc_size = serialize_json_value(document, temp_buffer, 0);
@@ -681,13 +681,13 @@ int binary_serialize_database(const char* path, void* db) {
       LOG_DEBUG("Document: %s, collection: %s, size: %lu", 
            doc_id, collection_name, (unsigned long)doc_size);
       
-      LOG_TRACE("Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
+      TRACE_BIN("Collection '%s' document %zu: serialized_size=%zu, header_size=%u, writing at offset %zu", 
            collection_name, j, doc_size, doc_header->size, current_offset);
       
       /* Write document */
       TRACE_MEMORY("About to write %zu bytes from temp_buffer %p to file", doc_size, temp_buffer);
       if (write(fd, temp_buffer, doc_size) != (ssize_t)doc_size) {
-        LOG_ERROR("write document: %s", strerror(errno));
+        LOG_ERROR("Cannot write document: %s", strerror(errno));
         TRACE_MEMORY("Write failed: freeing temp_buffer %p (size=%zu)", temp_buffer, temp_size);
         free(temp_buffer);
         close(fd);
@@ -696,7 +696,7 @@ int binary_serialize_database(const char* path, void* db) {
       TRACE_MEMORY("Successfully wrote %zu bytes from temp_buffer %p", doc_size, temp_buffer);
       
       current_offset += doc_size;
-      LOG_TRACE("After writing document %zu, current_offset=%zu", j, current_offset);
+      TRACE_BIN("After writing document %zu, current_offset=%zu", j, current_offset);
       TRACE_MEMORY("Document write complete, temp_buffer %p still valid", temp_buffer);
       
       /* CRITICAL MEMORY VALIDATION - Check buffer integrity after write */
@@ -731,10 +731,10 @@ int binary_serialize_database(const char* path, void* db) {
         TRACE_MEMORY("About to continue loop to j=%zu", j + 1);
       } else {
         TRACE_MEMORY("This was the last document in collection %s", collection_name);
-        TRACE_MEMORY("About to exit document loop - validating state");
+        TRACE_MEMORY("About to exit document loop - validating state.");
         TRACE_MEMORY("collection_name=%p, collection_data=%p", collection_name, collection_data);
         TRACE_MEMORY("temp_buffer=%p, temp_size=%zu", temp_buffer, temp_size);
-        TRACE_MEMORY("Document loop exit validation complete");
+        TRACE_MEMORY("Document loop exit validation complete.");
         TRACE_MEMORY("About to increment j=%zu to %zu and exit loop", j, j + 1);
       }
       
@@ -742,8 +742,8 @@ int binary_serialize_database(const char* path, void* db) {
     }
     
     TRACE_MEMORY("Exited document loop for collection '%s'", collection_name);
-    TRACE_MEMORY("About to log collection completion");
-    LOG_TRACE("Finished collection '%s', final offset=%zu", collection_name, current_offset);
+    TRACE_MEMORY("About to log collection completion.");
+    TRACE_BIN("Finished collection '%s', final offset=%zu", collection_name, current_offset);
     TRACE_MEMORY("Collection '%s' complete: temp_buffer=%p, temp_size=%zu, current_offset=%zu", 
                  collection_name, temp_buffer, temp_size, current_offset);
     
@@ -766,44 +766,44 @@ int binary_serialize_database(const char* path, void* db) {
   /* Free temp buffer */
   if (temp_buffer) {
     TRACE_MEMORY("About to free temp_buffer %p (size=%zu)", temp_buffer, temp_size);
-    LOG_TRACE("Freeing buffer at %p (size=%zu)", temp_buffer, temp_size);
+    TRACE_BIN("Freeing buffer at %p (size=%zu)", temp_buffer, temp_size);
     free(temp_buffer);
     temp_buffer = NULL;
     temp_size = 0;
-    TRACE_MEMORY("temp_buffer freed successfully");
-    LOG_TRACE("Buffer freed successfully");
+    TRACE_MEMORY("temp_buffer freed successfully.");
+    TRACE_BIN("Buffer freed successfully.");
   }
   
   /* Update header */
   LOG_DEBUG("Header: size=%zu, collections=%u", current_offset, collection_count);
   header.db_size = current_offset;
   header.collection_count = collection_count;
-  LOG_TRACE("Calculating checksum");
+  TRACE_BIN("Calculating checksum.");
   header.checksum = binary_calculate_checksum(&header, sizeof(header) - sizeof(uint32_t));
   LOG_DEBUG("Checksum: 0x%08x", header.checksum);
   
   /* Write updated header */
-  LOG_TRACE("Seeking to start");
+  TRACE_BIN("Seeking to start.");
   lseek(fd, 0, SEEK_SET);
-  LOG_TRACE("Writing header");
+  TRACE_BIN("Writing header.");
   if (write(fd, &header, sizeof(header)) != sizeof(header)) {
-    LOG_ERROR("update binary header: %s", strerror(errno));
+    LOG_ERROR("Cannot update binary header: %s", strerror(errno));
     close(fd);
     return 0;
   }
-  LOG_TRACE("Header written");
+  TRACE_BIN("Header written.");
   
   /* Close file */
-  LOG_TRACE("Closing fd %d", fd);
+  TRACE_BIN("Closing fd %d", fd);
   close(fd);
-  LOG_TRACE("File closed");
+  TRACE_BIN("File closed.");
   
   /* Reset modified flag - but check if database is valid first */
-  LOG_TRACE("Checking database pointer");
+  TRACE_BIN("Checking database pointer.");
   if (database) {
-    LOG_TRACE("Resetting modified flag: db=%p", database);
+    TRACE_BIN("Resetting modified flag: db=%p", database);
     database->is_modified = 0;
-    LOG_TRACE("Modified flag reset");
+    TRACE_BIN("Modified flag reset.");
   } else {
     LOG_ERROR("Database pointer is NULL when trying to reset is_modified flag!");
   }
@@ -811,21 +811,21 @@ int binary_serialize_database(const char* path, void* db) {
   LOG_INFO("Serialized: %s (%llu bytes)",
        path, (unsigned long long)header.db_size);
   
-  LOG_TRACE("Serialization complete");
+  TRACE_BIN("Serialization complete.");
   return 1;
 }
 
 /* Deserialize database from binary format */
 void* binary_deserialize_database(const char* path) {
   if (!path) {
-    LOG_ERROR("Invalid path for binary deserialization");
+    LOG_ERROR("Invalid path for binary deserialization.");
     return NULL;
   }
   
   /* Open file */
   int fd = open(path, O_RDONLY);
   if (fd < 0) {
-    LOG_ERROR("open binary database file: %s (error: %s)",
+    LOG_ERROR("Cannot open binary database file %s: %s",
          path, strerror(errno));
     return NULL;
   }
@@ -833,7 +833,7 @@ void* binary_deserialize_database(const char* path) {
   /* Read header */
   binary_header_t header;
   if (read(fd, &header, sizeof(header)) != sizeof(header)) {
-    LOG_ERROR("read binary header: %s", strerror(errno));
+    LOG_ERROR("Cannot read binary header: %s", strerror(errno));
     close(fd);
     return NULL;
   }
@@ -848,7 +848,7 @@ void* binary_deserialize_database(const char* path) {
   /* Allocate database */
   database_t* db = (database_t*)malloc(sizeof(database_t));
   if (!db) {
-    LOG_ERROR("allocate database structure");
+    LOG_ERROR("Cannot allocate database structure.");
     close(fd);
     return NULL;
   }
@@ -862,43 +862,43 @@ void* binary_deserialize_database(const char* path) {
   db->cache_enabled = 0;
   
   /* Read collections */
-  LOG_DEBUG("MULTI_COL_DESER: Starting deserialization of %d collections", header.collection_count);
+  LOG_DEBUG("Starting deserialization of %d collections", header.collection_count);
   
   for (uint32_t i = 0; i < header.collection_count; i++) {
     /* Get current file position */
     off_t current_pos = lseek(fd, 0, SEEK_CUR);
-    LOG_DEBUG("MULTI_COL_DESER: Reading collection %d header at position %ld", i, current_pos);
+    LOG_DEBUG("Reading collection %d header at position %ld", i, current_pos);
     
     /* Read collection header */
     binary_collection_header_t coll_header;
     ssize_t header_bytes = read(fd, &coll_header, sizeof(coll_header));
     if (header_bytes != sizeof(coll_header)) {
-      LOG_ERROR("read collection header: %s (read %ld bytes, expected %zu)", 
+      LOG_ERROR("Cannot read collection header: %s (read %ld bytes, expected %zu)", 
            strerror(errno), header_bytes, sizeof(coll_header));
       db_close(db);
       close(fd);
       return NULL;
     }
     
-    LOG_DEBUG("MULTI_COL_DESER: Collection %d header: name_length=%d, document_count=%d, data_offset=%lu", 
+    LOG_DEBUG("Collection %d header: name_length=%d, document_count=%d, data_offset=%lu", 
          i, coll_header.name_length, coll_header.document_count, coll_header.data_offset);
     
     /* Read collection name */
     char* collection_name = (char*)malloc(coll_header.name_length + 1);
     if (!collection_name) {
-      LOG_ERROR("allocate collection name");
+      LOG_ERROR("Cannot allocate collection name.");
       db_close(db);
       close(fd);
       return NULL;
     }
     
     current_pos = lseek(fd, 0, SEEK_CUR);
-    LOG_DEBUG("MULTI_COL_DESER: Reading collection name (%d bytes) at position %ld", 
+    LOG_DEBUG("Reading collection name (%d bytes) at position %ld", 
          coll_header.name_length, current_pos);
     
     ssize_t name_bytes = read(fd, collection_name, coll_header.name_length);
     if (name_bytes != coll_header.name_length) {
-      LOG_ERROR("read collection name: %s (read %ld bytes, expected %d)", 
+      LOG_ERROR("Cannot read collection name: %s (read %ld bytes, expected %d)", 
            strerror(errno), name_bytes, coll_header.name_length);
       free(collection_name);
       db_close(db);
@@ -911,7 +911,7 @@ void* binary_deserialize_database(const char* path) {
     /* Create collection */
     json_value_t* collection = json_create_array();
     if (!collection) {
-      LOG_ERROR("create collection");
+      LOG_ERROR("Cannot create collection.");
       free(collection_name);
       db_close(db);
       close(fd);
@@ -923,7 +923,7 @@ void* binary_deserialize_database(const char* path) {
       /* Read document header to get the size */
       binary_value_header_t doc_header;
       if (read(fd, &doc_header, sizeof(doc_header)) != sizeof(doc_header)) {
-        LOG_ERROR("read document header: %s", strerror(errno));
+        LOG_ERROR("Cannot read document header: %s", strerror(errno));
         free(collection_name);
         db_close(db);
         close(fd);
@@ -941,7 +941,7 @@ void* binary_deserialize_database(const char* path) {
       size_t total_size = sizeof(doc_header) + doc_header.size;
       void* doc_buffer = malloc(total_size);
       if (!doc_buffer) {
-        LOG_ERROR("allocate document buffer");
+        LOG_ERROR("Cannot allocate document buffer.");
         free(collection_name);
         db_close(db);
         close(fd);
@@ -953,7 +953,7 @@ void* binary_deserialize_database(const char* path) {
       
       /* Read the document data */
       if (read(fd, (uint8_t*)doc_buffer + sizeof(doc_header), doc_header.size) != doc_header.size) {
-        LOG_ERROR("read document data: %s", strerror(errno));
+        LOG_ERROR("Cannot read document data: %s", strerror(errno));
         free(doc_buffer);
         free(collection_name);
         db_close(db);
@@ -967,7 +967,7 @@ void* binary_deserialize_database(const char* path) {
       free(doc_buffer);
       
       if (!document) {
-        LOG_ERROR("deserialize document");
+        LOG_ERROR("Cannot deserialize document.");
         continue;
       }
       
@@ -993,7 +993,7 @@ void* binary_deserialize_database(const char* path) {
     /* immediately after the last document. If we're not at the expected */
     /* position, there's a size calculation mismatch that we need to handle. */
     
-    LOG_DEBUG("MULTI_COL_DESER: After collection '%s', actual_pos=%ld, expected next collection at sequential position", 
+    LOG_DEBUG("After collection '%s', actual_pos=%ld, expected next collection at sequential position", 
          collection_name, actual_pos);
     
     /* If this is not the last collection, we'll validate positioning on next iteration */
@@ -1022,7 +1022,7 @@ int binary_serialize_collection(void* collection, void* buffer, size_t* size) {
   (void)collection; /* Suppress unused parameter warning */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_WARNING("Binary_serialize_collection not fully implemented");
+  LOG_WARNING("Binary_serialize_collection not fully implemented.");
   return 0;
 }
 
@@ -1035,7 +1035,7 @@ void* binary_deserialize_collection(void* buffer, size_t size) {
   /* Implementation depends on the collection structure */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_WARNING("Binary_deserialize_collection not fully implemented");
+  LOG_WARNING("Binary_deserialize_collection not fully implemented.");
   return NULL;
 }
 
@@ -1049,7 +1049,7 @@ int binary_serialize_document(void* document, void* buffer, size_t* size) {
   (void)document;  /* Suppress unused parameter warning */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_WARNING("Binary_serialize_document not fully implemented");
+  LOG_WARNING("Binary_serialize_document not fully implemented.");
   return 0;
 }
 
@@ -1062,7 +1062,7 @@ void* binary_deserialize_document(void* buffer, size_t size) {
   /* Implementation depends on the document structure */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_WARNING("Binary_deserialize_document not fully implemented");
+  LOG_WARNING("Binary_deserialize_document not fully implemented.");
   return NULL;
 }
 
@@ -1076,7 +1076,7 @@ int binary_serialize_index(void* index, void* buffer, size_t* size) {
   (void)index;   /* Suppress unused parameter warning */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_DEBUG("Binary_serialize_index not implemented");
+  LOG_DEBUG("Binary_serialize_index not implemented.");
   return 0;
 }
 
@@ -1089,7 +1089,7 @@ void* binary_deserialize_index(void* buffer, size_t size) {
   /* Implementation depends on the index structure */
   (void)buffer;   /* Suppress unused parameter warning */
   (void)size;    /* Suppress unused parameter warning */
-  LOG_DEBUG("Binary_deserialize_index not implemented");
+  LOG_DEBUG("Binary_deserialize_index not implemented.");
   return NULL;
 }
 

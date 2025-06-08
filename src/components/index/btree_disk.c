@@ -298,7 +298,7 @@ static int insert_non_full(btree_disk_t* tree, btree_node_t* node,
             if (tree->compare(key, key_len, split_key, node->key_lengths[index]) > 0) {
                 child = load_node(tree, node->pointers[index + 1]);
                 if (!child) {
-                    LOG_ERROR("Failed to load child node after split");
+                    LOG_ERROR("Cannot load child node after split.");
                     return -1;
                 }
             }
@@ -421,7 +421,7 @@ int btree_disk_insert(btree_disk_t* tree, const void* key, size_t key_len,
     if (skiplist_insert(tree->write_buffer, key, key_len, &entry, sizeof(void*))) {
         atomic_fetch_add(&tree->current_buffer_size, entry_size);
         tree->num_keys++;
-        LOG_DEBUG("Successfully added to write buffer");
+        LOG_DEBUG("Successfully added to write buffer.");
         return 0;
     }
     
@@ -455,14 +455,14 @@ int btree_disk_search(btree_disk_t* tree, const void* key, size_t key_len,
         }
         free(entry_ptr);
     } else {
-        LOG_DEBUG("Key not found in write buffer, searching tree");
+        LOG_DEBUG("Key not found in write buffer, searching tree.");
     }
     
     /* Search in tree */
     LOG_DEBUG("Searching for key in B+tree, root_page_id=%lu", tree->root_page_id);
     btree_node_t* node = load_node(tree, tree->root_page_id);
     if (!node) {
-        LOG_ERROR("Failed to load root node, root_page_id=%lu", tree->root_page_id);
+        LOG_ERROR("Cannot load root node, root_page_id=%lu", tree->root_page_id);
         return -1;
     }
     

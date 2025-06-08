@@ -67,8 +67,6 @@ api_route_t routes[] = {
   {"/api/roles/", HTTP_DELETE, api_handle_role_delete, 1},
   
   /* Configuration routes */
-  {"/api/config", HTTP_GET, api_handle_config_get, 1},
-  {"/api/config", HTTP_PUT, api_handle_config_update, 1},
   
   /* Metrics routes */
   {"/api/metrics", HTTP_GET, health_api_handle_metrics, 1},
@@ -212,7 +210,7 @@ api_route_t routes[] = {
 api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const char* jwt_secret) {
   if (!db || !rbac || !jwt_secret) {
     if (g_logger) {
-      LOG_ERROR("API context creation failed: Missing required components");
+      LOG_ERROR("API context creation failed: Missing required components.");
     }
     return NULL;
   }
@@ -220,7 +218,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
   api_context_t* ctx = (api_context_t*)malloc(sizeof(api_context_t));
   if (!ctx) {
     if (g_logger) {
-      LOG_ERROR("API context creation failed: Memory allocation failed");
+      LOG_ERROR("API context creation failed: Memory allocation failed.");
     }
     return NULL;
   }
@@ -232,7 +230,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
   if (!ctx->jwt_secret) {
     free(ctx);
     if (g_logger) {
-      LOG_ERROR("API context creation failed: JWT secret copy failed");
+      LOG_ERROR("API context creation failed: JWT secret copy failed.");
     }
     return NULL;
   }
@@ -243,7 +241,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     free((void*)ctx->jwt_secret);
     free(ctx);
     if (g_logger) {
-      LOG_ERROR("API context creation failed: Transaction manager creation failed");
+      LOG_ERROR("API context creation failed: Transaction manager creation failed.");
     }
     return NULL;
   }
@@ -262,7 +260,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     free((void*)ctx->jwt_secret);
     free(ctx);
     if (g_logger) {
-      LOG_ERROR("API context creation failed: Routes array allocation failed");
+      LOG_ERROR("API context creation failed: Routes array allocation failed.");
     }
     return NULL;
   }
@@ -373,14 +371,14 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
 /* Authenticate request */
 int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
-    if (g_logger) LOG_ERROR("Authentication failed: Invalid context or request");
+    if (g_logger) LOG_ERROR("Authentication failed: Invalid context or request.");
     return 0;
   }
   
   /* Extract token */
   char* token = api_extract_token(request);
   if (!token) {
-    if (g_logger) LOG_ERROR("Authentication failed: No token found in request");
+    if (g_logger) LOG_ERROR("Authentication failed: No token found in request.");
     return 0;
   }
   
@@ -400,7 +398,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     }
     
     if (is_hex) {
-      if (g_logger) LOG_DEBUG("Allowing admin token authentication for hex token");
+      if (g_logger) LOG_DEBUG("Allowing admin token authentication for hex token.");
       free(token);
       return 1;
     }
@@ -424,18 +422,18 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
   
   /* Cache miss - verify JWT secret is set */
   if (!ctx->jwt_secret) {
-    if (g_logger) LOG_ERROR("Authentication failed: JWT secret not set in API context");
+    if (g_logger) LOG_ERROR("Authentication failed: JWT secret not set in API context.");
     free(token);
     return 0;
   }
   
   /* Verify token */
-  if (g_logger) LOG_DEBUG("JWT cache miss - verifying token");
+  if (g_logger) LOG_DEBUG("JWT cache miss - verifying token.");
   
   int result = jwt_verify(token, ctx->jwt_secret);
   
   if (result) {
-    if (g_logger) LOG_DEBUG("Token authentication successful");
+    if (g_logger) LOG_DEBUG("Token authentication successful.");
     
     /* Decode token to cache payload */
     jwt_token_t* decoded = jwt_decode(token);
@@ -457,7 +455,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     }
   } else {
     if (g_logger) {
-      LOG_ERROR("Token verification failed");
+      LOG_ERROR("Token verification failed.");
       LOG_DEBUG("Token: %.30s...", token);
       
       /* Verify token parts */
@@ -488,7 +486,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
         
         jwt_free(decoded);
       } else {
-        LOG_ERROR("decode token for debugging");
+        LOG_ERROR("decode token for debugging.");
       }
     }
   }
@@ -501,13 +499,13 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
 /* Route matching */
 static int route_matches(const char* route, const char* path) {
   if (g_logger) {
-    LOG_TRACE("ROUTE_MATCH_CHECK: route='%s', path='%s'", route ? route : "NULL", path ? path : "NULL");
+    TRACE_API("ROUTE_MATCH_CHECK: route='%s', path='%s'", route ? route : "NULL", path ? path : "NULL");
   }
   
   /* Exact match */
   if (strcmp(route, path) == 0) {
     if (g_logger) {
-      LOG_TRACE("ROUTE_MATCH_EXACT: route='%s' matches path='%s'", route, path);
+      TRACE_API("ROUTE_MATCH_EXACT: route='%s' matches path='%s'", route, path);
     }
     return 1;
   }
@@ -548,14 +546,14 @@ static int route_matches(const char* route, const char* path) {
   if (route[route_len - 1] == '/') {
     int prefix_match = strncmp(route, path, route_len) == 0;
     if (g_logger) {
-      LOG_TRACE("ROUTE_MATCH_PREFIX: route='%s' (len=%zu) vs path='%s', match=%d", 
+      TRACE_API("ROUTE_MATCH_PREFIX: route='%s' (len=%zu) vs path='%s', match=%d", 
           route, route_len, path, prefix_match);
     }
     return prefix_match;
   }
   
   if (g_logger) {
-    LOG_TRACE("ROUTE_MATCH_NONE: route='%s' does not match path='%s'", route, path);
+    TRACE_API("ROUTE_MATCH_NONE: route='%s' does not match path='%s'", route, path);
   }
   return 0;
 }
@@ -564,14 +562,14 @@ static int route_matches(const char* route, const char* path) {
 http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) {
   
   if (g_logger) {
-    LOG_TRACE("API_DISPATCH_ENTRY: ctx=%p, request=%p", (void*)ctx, (void*)request);
+    TRACE_API("API_DISPATCH_ENTRY: ctx=%p, request=%p", (void*)ctx, (void*)request);
   }
   
   if (!ctx || !request) {
     if (g_logger) {
-      LOG_ERROR("API dispatch failed: Invalid context or request");
+      LOG_ERROR("API dispatch failed: Invalid context or request.");
       LOG_ERROR("Context=%p, Request=%p", (void*)ctx, (void*)request);
-      LOG_TRACE("API_DISPATCH_EXIT: returning 500 - invalid params");
+      TRACE_API("API_DISPATCH_EXIT: returning 500 - invalid params.");
     }
     printf("API dispatch failed: Invalid context or request. Context=%p, Request=%p\n", (void*)ctx, (void*)request);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -579,7 +577,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   }
   
   if (!request->path) {
-    if (g_logger) LOG_ERROR("API dispatch failed: Request has NULL path");
+    if (g_logger) LOG_ERROR("API dispatch failed: Request has NULL path.");
     printf("API dispatch failed: Request has NULL path\n");
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Internal server error\"}", "application/json");
@@ -598,7 +596,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
               
   /* Handle OPTIONS requests (CORS preflight) */
   if (request->method == HTTP_OPTIONS) {
-    if (g_logger) LOG_DEBUG("Handling OPTIONS preflight request for CORS");
+    if (g_logger) LOG_DEBUG("Handling OPTIONS preflight request for CORS.");
     
     http_response_t* response = create_http_response(HTTP_OK, "", "text/plain");
     
@@ -614,7 +612,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   
   /* Find matching route */
   if (g_logger) {
-    LOG_TRACE("API_ROUTE_SEARCH: Searching %d routes for %s %s", 
+    TRACE_API("API_ROUTE_SEARCH: Searching %d routes for %s %s", 
         ctx->num_routes, 
         request->method == HTTP_GET ? "GET" :
         request->method == HTTP_POST ? "POST" :
@@ -625,20 +623,20 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   
   for (int i = 0; i < ctx->num_routes; i++) {
     if (g_logger) {
-      LOG_TRACE("API_ROUTE_CHECK[%d]: route='%s', method=%d (want %d)", 
+      TRACE_API("API_ROUTE_CHECK[%d]: route='%s', method=%d (want %d)", 
           i, ctx->routes[i].path, ctx->routes[i].method, request->method);
     }
     
     if (route_matches(ctx->routes[i].path, request->path) && ctx->routes[i].method == request->method) {
       if (g_logger) {
-        LOG_TRACE("API_ROUTE_MATCHED[%d]: route='%s' matched!", i, ctx->routes[i].path);
+        TRACE_API("API_ROUTE_MATCHED[%d]: route='%s' matched!", i, ctx->routes[i].path);
       }
       if (g_logger) LOG_DEBUG("Found matching route: %s (requires_auth: %d)", 
                 ctx->routes[i].path, ctx->routes[i].requires_auth);
       
       /* Check if route requires authentication */
       if (ctx->routes[i].requires_auth) {
-        if (g_logger) LOG_DEBUG("Route requires authentication, checking token");
+        if (g_logger) LOG_DEBUG("Route requires authentication, checking token.");
         if (!api_authenticate_request_sliding(ctx, request)) {
           if (g_logger) LOG_WARNING("Authentication failed for route: %s", ctx->routes[i].path);
           return create_http_response(HTTP_UNAUTHORIZED, 
@@ -650,7 +648,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       if (g_logger) LOG_DEBUG("Handler function pointer: %p", (void*)ctx->routes[i].handler);
       
       /* Call handler */
-      if (g_logger) LOG_DEBUG("About to call handler function");
+      if (g_logger) LOG_DEBUG("About to call handler function.");
       
       /* Increment request counter */
       metric_t* request_counter = get_server_requests_metric();
@@ -676,14 +674,14 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   /* No matching route */
   if (g_logger) {
     LOG_WARNING("No matching route found for: %s", request->path);
-    LOG_TRACE("Available routes:");
+    TRACE_API("Available routes:");
     // Show last 20 routes since RBAC routes are added at the end
     int start = ctx->num_routes > 20 ? ctx->num_routes - 20 : 0;
     for (int i = start; i < ctx->num_routes; i++) {
-      LOG_TRACE(" Route %d: %s (method: %d)", i, ctx->routes[i].path, ctx->routes[i].method);
+      TRACE_API(" Route %d: %s (method: %d)", i, ctx->routes[i].path, ctx->routes[i].method);
     }
     if (start > 0) {
-      LOG_TRACE(" ... showing last 20 of %d routes", ctx->num_routes);
+      TRACE_API(" ... showing last 20 of %d routes", ctx->num_routes);
     }
   }
   return create_http_response(HTTP_NOT_FOUND, 
@@ -747,7 +745,7 @@ http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* r
   
   if (!response_str || !response) {
     if (g_logger) {
-      LOG_ERROR("create token pair");
+      LOG_ERROR("create token pair.");
     }
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -755,7 +753,7 @@ http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* r
   }
   
   if (g_logger) {
-    LOG_DEBUG("JWT tokens generated successfully");
+    LOG_DEBUG("JWT tokens generated successfully.");
   }
   
   /* Create session record */
@@ -788,7 +786,7 @@ http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* r
         free(session_id);
       } else {
         if (g_logger) {
-          LOG_WARNING("Failed to create session for user: %s", user->username);
+          LOG_WARNING("Cannot create session for user: %s", user->username);
         }
       }
     }
@@ -836,7 +834,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   char* user_id = NULL;
   if (!jwt_verify_refresh_token(refresh_token, ctx->jwt_secret, &user_id)) {
     if (g_logger) {
-      LOG_ERROR("Invalid refresh token or token expired");
+      LOG_ERROR("Invalid refresh token or token expired.");
     }
     json_free(body);
     return create_http_response(HTTP_UNAUTHORIZED,
@@ -871,7 +869,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   
   if (!response_str || !response) {
     if (g_logger) {
-      LOG_ERROR("create new token pair");
+      LOG_ERROR("create new token pair.");
     }
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -879,7 +877,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   }
   
   if (g_logger) {
-    LOG_DEBUG("New JWT tokens generated successfully");
+    LOG_DEBUG("New JWT tokens generated successfully.");
   }
   
   /* Free resources */
@@ -895,39 +893,39 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
 
 /* Register handler */
 http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request) {
-  LOG_TRACE("REGISTER_TRACE: Entering api_handle_register");
-  LOG_TRACE("REGISTER_TRACE: ctx=%p, request=%p, request->body=%p", ctx, request, request ? request->body : NULL);
+  TRACE_API("REGISTER_TRACE: Entering api_handle_register.");
+  TRACE_API("REGISTER_TRACE: ctx=%p, request=%p, request->body=%p", ctx, request, request ? request->body : NULL);
   
   if (!ctx || !request || !request->body) {
-    LOG_ERROR("REGISTER_TRACE: Invalid parameters - ctx=%p, request=%p, body=%p", 
+    LOG_ERROR("Invalid parameters - ctx=%p, request=%p, body=%p", 
          ctx, request, request ? request->body : NULL);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  LOG_TRACE("REGISTER_TRACE: Request body: %s", request->body);
-  LOG_TRACE("REGISTER_TRACE: RBAC system pointer: %p", ctx->rbac);
+  TRACE_API("REGISTER_TRACE: Request body: %s", request->body);
+  TRACE_API("REGISTER_TRACE: RBAC system pointer: %p", ctx->rbac);
   
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    LOG_ERROR("REGISTER_TRACE: Failed to parse body or body not object");
+    LOG_ERROR("Failed to parse body or body not object.");
     if (body) json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
   
-  LOG_TRACE("REGISTER_TRACE: Body parsed successfully");
+  TRACE_API("REGISTER_TRACE: Body parsed successfully.");
   
   /* Extract username and password */
   json_value_t* username_val = json_object_get(body, "username");
   json_value_t* password_val = json_object_get(body, "password");
   
-  LOG_TRACE("REGISTER_TRACE: username_val=%p, password_val=%p", username_val, password_val);
+  TRACE_API("REGISTER_TRACE: username_val=%p, password_val=%p", username_val, password_val);
   
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
-    LOG_ERROR("REGISTER_TRACE: Missing or invalid username/password");
+    LOG_ERROR("Missing or invalid username/password.");
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username and password required\"}", "application/json");
@@ -936,34 +934,34 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   const char* username = username_val->value.string;
   const char* password = password_val->value.string;
   
-  LOG_TRACE("REGISTER_TRACE: Attempting to register user: %s", username);
-  LOG_TRACE("REGISTER_TRACE: About to call rbac_get_user_by_username");
+  TRACE_API("REGISTER_TRACE: Attempting to register user: %s", username);
+  TRACE_API("REGISTER_TRACE: About to call rbac_get_user_by_username.");
   
   /* Check if user already exists */
   if (rbac_get_user_by_username(ctx->rbac, username)) {
-    LOG_TRACE("REGISTER_TRACE: User already exists");
+    TRACE_API("REGISTER_TRACE: User already exists.");
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username already exists\"}", "application/json");
   }
   
-  LOG_TRACE("REGISTER_TRACE: User does not exist, creating new user");
-  LOG_TRACE("REGISTER_TRACE: About to call rbac_create_user");
+  TRACE_API("REGISTER_TRACE: User does not exist, creating new user.");
+  TRACE_API("REGISTER_TRACE: About to call rbac_create_user.");
   
   /* Create user */
   rbac_user_t* user = rbac_create_user(ctx->rbac, username, password);
   
-  LOG_TRACE("REGISTER_TRACE: rbac_create_user returned: %p", user);
+  TRACE_API("REGISTER_TRACE: rbac_create_user returned: %p", user);
   
   if (!user) {
-    LOG_ERROR("REGISTER_TRACE: Failed to create user");
+    LOG_ERROR("Failed to create user.");
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create user\"}", "application/json");
   }
   
   /* Create response */
-  LOG_TRACE("REGISTER_TRACE: Creating response for user: id=%s, username=%s", user->id, user->username);
+  TRACE_API("REGISTER_TRACE: Creating response for user: id=%s, username=%s", user->id, user->username);
   
   json_value_t* response = json_create_object();
   json_object_set(response, "user_id", json_create_string(user->id));
@@ -973,7 +971,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_free(response);
   json_free(body);
   
-  LOG_TRACE("REGISTER_TRACE: Registration successful, returning response");
+  TRACE_API("REGISTER_TRACE: Registration successful, returning response.");
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -1304,7 +1302,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   LOG_DEBUG("Parsing JSON body for collection %s: %.100s...", collection_name, request->body);
   json_value_t* document = json_parse(request->body);
   if (!document) {
-    LOG_ERROR("Failed to parse JSON for collection %s. Body: %.200s", collection_name, request->body);
+    LOG_ERROR("Cannot parse JSON for collection %s. Body: %.200s", collection_name, request->body);
     free(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid JSON: Failed to parse request body\"}", "application/json");
@@ -1347,23 +1345,23 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  LOG_INFO("DELETE_TRACE: Handling DELETE request for path: %s", request->path);
+  LOG_DEBUG("Handling DELETE request for path: %s", request->path);
   
   /* Extract collection name and document ID from path */
   const char* path = request->path;
   if (strncmp(path, "/api/collections/", 17) != 0) {
-    LOG_ERROR("DELETE_TRACE: Path doesn't start with /api/collections/");
+    LOG_DEBUG("Path doesn't start with /api/collections/");
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
   
   path += 17;
-  LOG_INFO("DELETE_TRACE: After prefix removal: %s", path);
+  LOG_DEBUG("After prefix removal: %s", path);
   
   /* Split path into collection name and document ID */
   const char* slash = strchr(path, '/');
   if (!slash || strncmp(slash, "/documents/", 11) != 0) {
-    LOG_ERROR("DELETE_TRACE: Invalid path format. Expected /documents/, got: %s", slash ? slash : "NULL");
+    LOG_DEBUG("Invalid path format. Expected /documents/, got: %s", slash ? slash : "NULL");
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
@@ -1371,7 +1369,7 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
   char* collection_name = strndup(path, slash - path);
   const char* document_id = slash + 11;
   
-  LOG_INFO("DELETE_TRACE: Collection: %s, Document ID: %s", document_id);
+  LOG_DEBUG("Collection: %s, Document ID: %s", document_id);
   
   /* Delete document */
   int result = db_delete_document(ctx->db, collection_name, document_id);
@@ -2940,20 +2938,7 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
 }
 
-/* Configuration handlers */
-http_response_t* api_handle_config_get(api_context_t* ctx, http_request_t* request) {
-  (void)request; /* Avoid unused parameter warning */
-  (void)ctx; /* Avoid unused parameter warning */
-  /* Placeholder implementation */
-  return create_http_response(HTTP_OK, "{\"config\":{\"port\":8080}}", "application/json");
-}
-
-http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* request) {
-  (void)request; /* Avoid unused parameter warning */
-  (void)ctx; /* Avoid unused parameter warning */
-  /* Placeholder implementation */
-  return create_http_response(HTTP_OK, "{\"config\":{\"port\":8080}}", "application/json");
-}
+/* Configuration handlers are now in config_api.c */
 
 /* Metrics handler for authenticated users accessing /api/metrics endpoints */
 http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* request) {

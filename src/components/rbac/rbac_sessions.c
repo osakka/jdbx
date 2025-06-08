@@ -13,17 +13,17 @@
 /* Create a new session */
 char* rbac_db_create_session(struct database* db, const char* user_id, const char* token,
               time_t expires_at, const char* ip_address, const char* user_agent) {
-  LOG_TRACE("RBAC_DB: Creating session for user: %s", user_id);
+  TRACE_RBAC("RBAC_DB: Creating session for user: %s", user_id);
   
   if (!db || !user_id || !token) {
-    LOG_ERROR("RBAC_DB: Invalid parameters for session creation");
+    LOG_DEBUG("Invalid parameters for session creation");
     return NULL;
   }
   
   /* Create session document */
   json_value_t* session_doc = json_create_object();
   if (!session_doc) {
-    LOG_ERROR("RBAC_DB: Failed to create session document");
+    LOG_DEBUG("Failed to create session document");
     return NULL;
   }
   
@@ -69,7 +69,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_free(session_doc);
   
   if (!result) {
-    LOG_ERROR("RBAC_DB: Failed to insert session");
+    LOG_DEBUG("Failed to insert session");
     return NULL;
   }
   
@@ -86,20 +86,20 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_free(result);
   
   if (!session_id_copy) {
-    LOG_ERROR("RBAC_DB: Failed to get session ID from insert result");
+    LOG_DEBUG("Failed to get session ID from insert result");
     return NULL;
   }
   
-  LOG_TRACE("RBAC_DB: Session created with ID: %s", session_id_copy);
+  TRACE_RBAC("RBAC_DB: Session created with ID: %s", session_id_copy);
   return session_id_copy;
 }
 
 /* Validate session and update last seen */
 char* rbac_db_validate_session(struct database* db, const char* token) {
-  LOG_TRACE("RBAC_DB: Validating session with token");
+  TRACE_RBAC("RBAC_DB: Validating session with token.");
   
   if (!db || !token) {
-    LOG_ERROR("RBAC_DB: Invalid parameters for session validation");
+    LOG_DEBUG("Invalid parameters for session validation");
     return NULL;
   }
   
@@ -112,7 +112,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   json_free(query);
   
   if (!results) {
-    LOG_TRACE("RBAC_DB: No active session found for token");
+    TRACE_RBAC("RBAC_DB: No active session found for token.");
     return NULL;
   }
   
@@ -164,13 +164,13 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   
   json_free(results);
   
-  LOG_TRACE("RBAC_DB: Session validated for user: %s", user_id ? user_id : "NULL");
+  TRACE_RBAC("RBAC_DB: Session validated for user: %s", user_id ? user_id : "NULL");
   return user_id;
 }
 
 /* Cleanup expired sessions */
 int rbac_db_cleanup_sessions(struct database* db) {
-  LOG_TRACE("RBAC_DB: Cleaning up expired sessions");
+  TRACE_RBAC("RBAC_DB: Cleaning up expired sessions.");
   
   if (!db) {
     return 0;
@@ -184,7 +184,7 @@ int rbac_db_cleanup_sessions(struct database* db) {
 
 /* Get active sessions for a user */
 json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id) {
-  LOG_TRACE("RBAC_DB: Getting sessions for user: %s", user_id);
+  TRACE_RBAC("RBAC_DB: Getting sessions for user: %s", user_id);
   
   if (!db || !user_id) {
     return json_create_array();
@@ -218,7 +218,7 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
 
 /* Invalidate a session */
 int rbac_db_invalidate_session(struct database* db, const char* session_id) {
-  LOG_TRACE("RBAC_DB: Invalidating session: %s", session_id);
+  TRACE_RBAC("RBAC_DB: Invalidating session: %s", session_id);
   
   if (!db || !session_id) {
     return 0;

@@ -101,13 +101,13 @@ static void free_cache_entry(jwt_cache_entry_t* entry) {
 /* Initialize global JWT cache */
 int jwt_cache_init(size_t max_entries) {
     if (g_jwt_cache) {
-        LOG_WARNING("JWT cache already initialized");
+        LOG_WARNING("JWT cache already initialized.");
         return 0;
     }
     
     g_jwt_cache = calloc(1, sizeof(jwt_cache_t));
     if (!g_jwt_cache) {
-        LOG_ERROR("Failed to allocate JWT cache");
+        LOG_ERROR("Cannot allocate JWT cache.");
         return -1;
     }
     
@@ -116,7 +116,7 @@ int jwt_cache_init(size_t max_entries) {
     if (!g_jwt_cache->buckets) {
         free(g_jwt_cache);
         g_jwt_cache = NULL;
-        LOG_ERROR("Failed to allocate JWT cache buckets");
+        LOG_ERROR("Cannot allocate JWT cache buckets.");
         return -1;
     }
     
@@ -129,7 +129,7 @@ int jwt_cache_init(size_t max_entries) {
         free(g_jwt_cache->buckets);
         free(g_jwt_cache);
         g_jwt_cache = NULL;
-        LOG_ERROR("Failed to initialize JWT cache lock");
+        LOG_ERROR("Cannot initialize JWT cache lock.");
         return -1;
     }
     
@@ -189,11 +189,11 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                 lru_move_to_head(g_jwt_cache, entry);
                 pthread_rwlock_unlock(&g_jwt_cache->lock);
                 
-                LOG_TRACE("JWT cache hit for user: %s", entry->username);
+                TRACE_RBAC("JWT cache hit for user: %s", entry->username);
                 return claims;
             } else {
                 /* Entry expired */
-                LOG_TRACE("JWT cache entry expired for user: %s", entry->username);
+                TRACE_RBAC("JWT cache entry expired for user: %s", entry->username);
                 break;
             }
         }
@@ -202,7 +202,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
     
     g_jwt_cache->misses++;
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    LOG_TRACE("JWT cache miss");
+    TRACE_RBAC("JWT cache miss.");
     return NULL;
 }
 
@@ -225,7 +225,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
             existing->cached_at = now;
             lru_move_to_head(g_jwt_cache, existing);
             pthread_rwlock_unlock(&g_jwt_cache->lock);
-            LOG_TRACE("JWT cache updated for user: %s", username);
+            TRACE_RBAC("JWT cache updated for user: %s", username);
             return;
         }
         existing = existing->next;
@@ -249,7 +249,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
             if (curr) {
                 *prev = curr->next;
                 lru_remove(g_jwt_cache, lru);
-                LOG_TRACE("JWT cache evicting entry for user: %s", lru->username);
+                TRACE_RBAC("JWT cache evicting entry for user: %s", lru->username);
                 free_cache_entry(lru);
                 g_jwt_cache->current_entries--;
                 g_jwt_cache->evictions++;
@@ -289,7 +289,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     g_jwt_cache->current_entries++;
     
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    LOG_TRACE("JWT cached for user: %s", username);
+    TRACE_RBAC("JWT cached for user: %s", username);
 }
 
 /* Invalidate cache entries for a specific user */

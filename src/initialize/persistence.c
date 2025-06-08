@@ -23,7 +23,7 @@ init_status_t init_persistence_thread(database_t* database) {
   /* Initialize metrics persistence */
   INIT_LOG_PROGRESS("PERSISTENCE", "Initializing metrics persistence");
   if (!metrics_persistence_init(database)) {
-    INIT_LOG_WARNING("PERSISTENCE", "Failed to initialize metrics persistence (non-fatal)");
+    INIT_LOG_WARNING("PERSISTENCE", "Failed to initialize metrics persistence (non-fatal).");
     /* Don't fail server startup if metrics persistence fails */
   } else {
     INIT_LOG_SUCCESS("PERSISTENCE", "Metrics persistence initialized");

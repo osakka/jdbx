@@ -436,3 +436,28 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   
   return response;
 }
+/* Transaction visualization handlers - stub implementations */
+http_response_t* api_handle_visualization_transaction_history(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  return create_http_response(HTTP_OK, 
+    "{\"transaction_history\":[],\"message\":\"Transaction history visualization not yet implemented\"}", 
+    "application/json");
+}
+
+http_response_t* api_handle_visualization_transaction_metrics(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  return create_http_response(HTTP_OK, 
+    "{\"transaction_metrics\":{},\"message\":\"Transaction metrics visualization not yet implemented\"}", 
+    "application/json");
+}
+
+http_response_t* api_handle_visualization_transaction_relationships(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  return create_http_response(HTTP_OK, 
+    "{\"transaction_relationships\":[],\"message\":\"Transaction relationships visualization not yet implemented\"}", 
+    "application/json");
+}
+

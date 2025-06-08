@@ -59,8 +59,8 @@ init_status_t init_daemon(server_config_t* config) {
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
       LOG_DEBUG("[DAEMON] Pre-daemonize state: PID=%d, working directory: %s", getpid(), cwd);
     }
-    LOG_DEBUG("[DAEMON] PID file path: %s", config->pid_file ? config->pid_file : "(none)");
-    LOG_DEBUG("[DAEMON] Logger file path: %s", config->log_file ? config->log_file : "(none)");
+    LOG_DEBUG("[DAEMON] PID file path: %s", config->pid_file ? config->pid_file : "(none).");
+    LOG_DEBUG("[DAEMON] Logger file path: %s", config->log_file ? config->log_file : "(none).");
   }
   
   /* Mark this as the parent process that will fork the daemon */
@@ -99,7 +99,7 @@ init_status_t init_daemon(server_config_t* config) {
     /* Close and reopen the logger to work properly in daemon context */
     if (g_logger) {
       if (g_logger->log_level >= LOG_LEVEL_DEBUG) {
-        LOG_DEBUG("[DAEMON] Reinitializing logger to work in daemon context");
+        LOG_DEBUG("[DAEMON] Reinitializing logger to work in daemon context.");
       }
       logger_close();
     }

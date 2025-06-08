@@ -10,6 +10,9 @@
 /* External function for batch API */
 extern void register_batch_api_routes(void);
 
+/* External function for config API */
+extern void register_config_api_routes(api_context_t* ctx);
+
 /* Initialize API context and register routes */
 init_status_t init_api(server_config_t* config, database_t* database, 
           rbac_system_t* rbac, api_context_t** api_ctx_out) {
@@ -72,7 +75,7 @@ init_status_t init_api(server_config_t* config, database_t* database,
             routes_added, api_ctx->num_routes);
   } else {
     if (g_logger) {
-      LOG_WARNING("[INIT:API] Cannot register RBAC API routes - missing context, database or RBAC system");
+      LOG_WARNING("[INIT:API] Cannot register RBAC API routes - missing context, database or RBAC system.");
     } else {
       fprintf(stderr, "[INIT:API] WARNING: Cannot register RBAC API routes - missing context, database or RBAC system\n");
     }
@@ -89,11 +92,16 @@ init_status_t init_api(server_config_t* config, database_t* database,
     INIT_LOG_SUCCESS("API", "Health API endpoints registered");
   } else {
     if (g_logger) {
-      LOG_WARNING("[INIT:API] API context not available, health endpoints not registered");
+      LOG_WARNING("[INIT:API] API context not available, health endpoints not registered.");
     } else {
       fprintf(stderr, "[INIT:API] WARNING: API context not available, health endpoints not registered\n");
     }
   }
+  
+  /* Register configuration API endpoints */
+  INIT_LOG_PROGRESS("API", "Registering configuration API endpoints");
+  register_config_api_routes(api_ctx);
+  INIT_LOG_SUCCESS("API", "Configuration API endpoints registered");
   
   /* TODO: Register batch API endpoints */
   /* Batch API will be integrated into main API routes */

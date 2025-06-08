@@ -34,8 +34,8 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
   
   /* Use database-backed RBAC implementation */
   INIT_LOG_PROGRESS("RBAC", "Initializing database-backed RBAC system");
-  LOG_TRACE("RBAC_TRACE: Database pointer: %p", database);
-  LOG_TRACE("RBAC_TRACE: JWT secret: %s", config->jwt_secret ? "***" : "NULL");
+  TRACE_RBAC("RBAC_TRACE: Database pointer: %p", database);
+  TRACE_RBAC("RBAC_TRACE: JWT secret: %s", config->jwt_secret ? "***" : "NULL");
   
   /* Initialize with database backend */
   rbac_system_t* rbac = rbac_database_init(database, config->jwt_secret);
@@ -45,7 +45,7 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
   }
   INIT_LOG_SUCCESS("RBAC", "Database-backed RBAC system initialized");
   
-  LOG_TRACE("RBAC_TRACE: RBAC system pointer: %p", rbac);
+  TRACE_RBAC("RBAC_TRACE: RBAC system pointer: %p", rbac);
   
   /* Initialize reference counting wrapper */
   rbac_refcount_t* rbac_ref = rbac_to_refcount(rbac);

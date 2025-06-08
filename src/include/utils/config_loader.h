@@ -61,19 +61,51 @@ void config_free(server_config_t* config);
  */
 void config_init_defaults(server_config_t* config);
 
-/**
- * Load configuration overrides from database
- * This provides the highest priority configuration (after defaults, env, flags)
- * @param config Pointer to the configuration structure
- * @return 1 on success, 0 on failure (non-fatal - database config is optional)
- */
-int config_load_from_database(server_config_t* config);
+/* Forward declarations for database types */
+typedef struct database database_t;
+typedef struct json_value json_value_t;
 
 /**
- * Save configuration changes to database
- * @param config Pointer to the configuration structure  
- * @return 1 on success, 0 on failure
+ * Load configuration from database
+ * @param db Pointer to the database
+ * @return JSON configuration object (caller must free) or NULL
  */
-int config_save_to_database(const server_config_t* config);
+json_value_t* config_load_from_database(database_t* db);
+
+/**
+ * Save configuration to database
+ * @param db Pointer to the database
+ * @param config JSON configuration object
+ * @return 0 on success, -1 on failure
+ */
+int config_save_to_database(database_t* db, json_value_t* config);
+
+/**
+ * Apply database configuration settings to server config
+ * @param config Server configuration structure
+ * @param db Database to load configuration from
+ * @return 0 on success, -1 on failure
+ */
+int config_apply_database_settings(server_config_t* config, database_t* db);
+
+/**
+ * Convert server configuration to JSON
+ * @param config Server configuration structure
+ * @return JSON representation (caller must free)
+ */
+json_value_t* config_to_json(server_config_t* config);
+
+/**
+ * Register configuration change callback
+ * @param callback Function to call on configuration changes
+ * @param user_data User data to pass to callback
+ * @return 0 on success, -1 on failure
+ */
+int config_register_callback(void (*callback)(const char*, json_value_t*, json_value_t*), void* user_data);
+
+/**
+ * Cleanup configuration subsystem
+ */
+void config_cleanup(void);
 
 #endif /* CONFIG_LOADER_H */

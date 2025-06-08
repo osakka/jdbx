@@ -15,7 +15,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
        metric_type ? metric_type : "performance", (long)start_time, (long)end_time);
 
   if (!manager || !manager->log) {
-    LOG_ERROR("Invalid transaction manager or log is NULL");
+    LOG_ERROR("Invalid transaction manager or log is NULL.");
     return NULL;
   }
 

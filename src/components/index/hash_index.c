@@ -98,7 +98,7 @@ static int split_bucket(hash_index_t* index, uint32_t bucket_index) {
     /* Create new bucket */
     uint64_t new_bucket_offset = allocate_bucket(index);
     if (new_bucket_offset == 0) {
-        LOG_ERROR("Failed to allocate new bucket during split");
+        LOG_ERROR("Cannot allocate new bucket during split.");
         pthread_rwlock_unlock(&index->dir_lock);
         return -1;
     }
@@ -303,7 +303,7 @@ hash_index_t* hash_index_create(const char* path,
     for (uint32_t i = 0; i < index->directory_size; i++) {
         uint64_t bucket_offset = allocate_bucket(index);
         if (bucket_offset == 0) {
-            LOG_ERROR("Failed to allocate initial bucket %u", i);
+            LOG_ERROR("Cannot allocate initial bucket %u", i);
             /* Clean up already allocated buckets */
             free(index->directory);
             mmap_storage_destroy(index->storage);
@@ -443,7 +443,7 @@ retry:
         pthread_rwlock_unlock(&index->dir_lock);
         
         if (split_bucket(index, bucket_index) != 0) {
-            LOG_ERROR("Failed to split bucket %u", bucket_index);
+            LOG_ERROR("Cannot split bucket %u", bucket_index);
             return -1;
         }
         
@@ -485,7 +485,7 @@ retry:
     
     /* CRITICAL DEBUG: Check if we're about to corrupt bucket 11 */
     if (bucket_index == 11 && bucket->num_entries == 32) {
-        LOG_INFO("CRITICAL: About to add 33rd entry to bucket 11");
+        LOG_ERROR("About to add 33rd entry to bucket 11.");
         LOG_INFO("  entry_offset=%u, should be > 144", entry_offset);
         LOG_INFO("  header_size=%u, data_size=%u", header_size, data_size);
         
@@ -504,7 +504,7 @@ retry:
     
     /* Post-insert check for bucket 11 */
     if (bucket_index == 11 && bucket->num_entries == 33) {
-        LOG_INFO("CRITICAL: After adding 33rd entry to bucket 11");
+        LOG_ERROR("After adding 33rd entry to bucket 11.");
         /* Check if we corrupted offset 144 */
         hash_entry_t* first_entry = (hash_entry_t*)((char*)bucket + 144);
         LOG_INFO("  Entry at offset 144 now has key_len=%u", first_entry->key_len);

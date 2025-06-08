@@ -278,8 +278,9 @@ function transform(document, context) {
 ### Execution Limits
 
 - **Timeout**: 5 seconds maximum execution time
-- **Memory**: 64MB memory limit per execution
+- **Memory**: 64MB memory limit per execution (enforced by QuickJS engine)
 - **CPU**: Limited CPU cycles to prevent blocking
+- **Engine**: Uses QuickJS for fast, secure JavaScript execution
 
 ### Optimization Tips
 

@@ -1,5 +1,6 @@
 #include "init.h"
 #include "utils/logger.h"
+#include "utils/config_loader.h"
 #include "core/server_thread_safe.h"
 #include "rbac/jwt_cache.h"
 #include "utils/production_config.h"
@@ -183,7 +184,7 @@ int main(int argc, char** argv) {
    * Moving database, RBAC and API initialization AFTER daemon and socket initialization
    * to ensure everything happens in the final process context
    */
-  LOG_DEBUG("Using improved initialization sequence");
+  LOG_DEBUG("Using improved initialization sequence.");
   
   /* Database, RBAC, and API will be initialized after socket setup */
   database = NULL;
@@ -198,7 +199,7 @@ int main(int argc, char** argv) {
    * 3. Finally initialize thread pool and run server
    */
   
-  LOG_DEBUG("Initializing Writing PID if FG mode");
+  LOG_DEBUG("Initializing Writing PID if FG mode.");
   /* Write PID file if in foreground mode */
   if (config->verbose_mode && config->pid_file) {
     /* Debug logging in verbose mode */
@@ -233,11 +234,11 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize daemon process if in daemon mode */
-  LOG_DEBUG("Initializing Daemonization");
+  LOG_DEBUG("Initializing Daemonization.");
   if (!config->verbose_mode) {
     /* Using our enhanced daemon initialization with proper logging */
     if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
-      LOG_DEBUG("[DAEMON] Starting daemon mode initialization");
+      LOG_DEBUG("[DAEMON] Starting daemon mode initialization.");
     }
     
     status = init_daemon(config);
@@ -261,7 +262,7 @@ int main(int argc, char** argv) {
   init_register_cleanup();
   
   /* Initialize socket - AFTER daemon process is fully established */
-  LOG_DEBUG("Initializing Socket");
+  LOG_DEBUG("Initializing Socket.");
   status = init_socket(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
@@ -278,7 +279,7 @@ int main(int argc, char** argv) {
   production_config_init(config_level);
   
   /* Now that we have a socket and proper daemon context, initialize the database */
-  LOG_DEBUG("Initializing Database");
+  LOG_DEBUG("Initializing Database.");
   status = init_database(config, &database);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
@@ -286,12 +287,18 @@ int main(int argc, char** argv) {
     return 1;
   }
   
+  /* Apply database configuration (highest priority) */
+  LOG_INFO("Applying database configuration settings.");
+  if (config_apply_database_settings(config, database) != 0) {
+    LOG_WARNING("No database configuration found or failed to apply - using defaults.");
+  }
+  
   /* Enable thread-safe mode with comprehensive tracing */
-  LOG_INFO("Enabling thread-safe connection management for enhanced stability");
+  LOG_INFO("Enabling thread-safe connection management for enhanced stability.");
   server_enable_thread_safe_mode();
   
   /* Initialize thread pool before other initialization */
-  LOG_DEBUG("Initializing Thread Pool");
+  LOG_DEBUG("Initializing Thread Pool.");
   status = init_threads(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize thread pool");
@@ -300,7 +307,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize thread-safe server components */
-  LOG_DEBUG("Initializing thread-safe server components");
+  LOG_DEBUG("Initializing thread-safe server components.");
   if (server_init_thread_safe(config) != 0) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize thread-safe server components");
     free(config);
@@ -308,7 +315,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize metrics system */
-  LOG_DEBUG("Initializing Metrics");
+  LOG_DEBUG("Initializing Metrics.");
   status = init_metrics(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize metrics system");
@@ -317,7 +324,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize RBAC AFTER thread pool and database are ready, but BEFORE API */
-  LOG_DEBUG("Initializing RBAC");
+  LOG_DEBUG("Initializing RBAC.");
   status = init_rbac(config, database, &rbac, &rbac_ref);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize RBAC system");
@@ -326,7 +333,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize JWT cache for performance */
-  LOG_DEBUG("Initializing JWT cache");
+  LOG_DEBUG("Initializing JWT cache.");
   if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
     INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
     free(config);
@@ -334,7 +341,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize API context with properly initialized RBAC */
-  LOG_DEBUG("Initializing API");
+  LOG_DEBUG("Initializing API.");
   status = init_api(config, database, rbac, &api_ctx);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize API context");
@@ -346,14 +353,14 @@ int main(int argc, char** argv) {
   config->api_ctx = api_ctx;
   
   /* Initialize persistence thread AFTER daemonization and all other components */
-  LOG_DEBUG("Initializing Persistence Thread");
+  LOG_DEBUG("Initializing Persistence Thread.");
   status = init_persistence_thread(database);
   if (status != INIT_OK) {
-    LOG_WARNING("Failed to initialize persistence thread - continuing without automatic persistence");
+    LOG_WARNING("Cannot initialize persistence thread - continuing without automatic persistence.");
     /* This is not fatal - we can continue without automatic persistence */
   }
   
-  LOG_INFO("All components initialized in the correct sequence");
+  LOG_INFO("All components initialized in the correct sequence.");
   
   /* Run server main loop */
   INIT_LOG_PROGRESS("MAIN", "All components initialized, starting server main loop");

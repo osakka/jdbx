@@ -46,20 +46,20 @@ static index_collection_t* g_index_collection = NULL;
 static document_index_t* create_document_index(size_t initial_capacity) {
   document_index_t* index = (document_index_t*)malloc(sizeof(document_index_t));
   if (!index) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     return NULL;
   }
   
   index->ids = (char**)malloc(initial_capacity * sizeof(char*));
   if (!index->ids) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(index);
     return NULL;
   }
   
   index->positions = (int*)malloc(initial_capacity * sizeof(int));
   if (!index->positions) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(index->ids);
     free(index);
     return NULL;
@@ -111,19 +111,19 @@ static void free_document_index(document_index_t* index) {
  */
 static int initialize_index_collection(size_t initial_capacity) {
   if (g_index_collection) {
-    LOG_WARNING("Index collection already initialized");
+    LOG_WARNING("Index collection already initialized.");
     return 1;
   }
   
   g_index_collection = (index_collection_t*)malloc(sizeof(index_collection_t));
   if (!g_index_collection) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     return 0;
   }
   
   g_index_collection->indices = (document_index_t**)malloc(initial_capacity * sizeof(document_index_t*));
   if (!g_index_collection->indices) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(g_index_collection);
     g_index_collection = NULL;
     return 0;
@@ -131,7 +131,7 @@ static int initialize_index_collection(size_t initial_capacity) {
   
   g_index_collection->collection_names = (char**)malloc(initial_capacity * sizeof(char*));
   if (!g_index_collection->collection_names) {
-    LOG_ERROR("Out of memory");
+    LOG_ERROR("Out of memory.");
     free(g_index_collection->indices);
     free(g_index_collection);
     g_index_collection = NULL;
@@ -180,7 +180,7 @@ void free_index_collection() {
   free(g_index_collection);
   g_index_collection = NULL;
   
-  LOG_INFO("Index collection freed");
+  LOG_INFO("Index collection freed.");
 }
 
 /**
@@ -215,7 +215,7 @@ static document_index_t* get_or_create_index(const char* collection_name) {
       g_index_collection->indices, new_capacity * sizeof(document_index_t*));
     if (!new_indices) {
       pthread_mutex_unlock(&g_index_collection->lock);
-      LOG_ERROR("resize index collection indices");
+      LOG_ERROR("resize index collection indices.");
       return NULL;
     }
     g_index_collection->indices = new_indices;
@@ -224,7 +224,7 @@ static document_index_t* get_or_create_index(const char* collection_name) {
       g_index_collection->collection_names, new_capacity * sizeof(char*));
     if (!new_names) {
       pthread_mutex_unlock(&g_index_collection->lock);
-      LOG_ERROR("resize index collection names");
+      LOG_ERROR("resize index collection names.");
       return NULL;
     }
     g_index_collection->collection_names = new_names;
@@ -282,7 +282,7 @@ static int add_to_index(document_index_t* index, const char* id, int position) {
     char** new_ids = (char**)realloc(index->ids, new_capacity * sizeof(char*));
     if (!new_ids) {
       pthread_mutex_unlock(&index->lock);
-      LOG_ERROR("resize document index IDs");
+      LOG_ERROR("resize document index IDs.");
       return 0;
     }
     index->ids = new_ids;
@@ -290,7 +290,7 @@ static int add_to_index(document_index_t* index, const char* id, int position) {
     int* new_positions = (int*)realloc(index->positions, new_capacity * sizeof(int));
     if (!new_positions) {
       pthread_mutex_unlock(&index->lock);
-      LOG_ERROR("resize document index positions");
+      LOG_ERROR("resize document index positions.");
       return 0;
     }
     index->positions = new_positions;
@@ -454,14 +454,14 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   LOG_INFO("Collection '%s'" ? collection_name : "NULL");
   
   if (!db || !collection_name || !document || document->type != JSON_OBJECT) {
-    LOG_ERROR("Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
   /* Clone document outside of lock */
   json_value_t* doc_copy = json_clone(document);
   if (!doc_copy) {
-    LOG_ERROR("clone document for insertion");
+    LOG_ERROR("clone document for insertion.");
     return NULL;
   }
   
@@ -473,7 +473,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   if (!id || id->type != JSON_STRING) {
     generated_id = generate_uuid();
     if (!generated_id) {
-      LOG_ERROR("generate UUID for document");
+      LOG_ERROR("generate UUID for document.");
       json_free(doc_copy);
       return NULL;
     }
@@ -496,7 +496,7 @@ json_value_t* indexed_db_insert_document(database_t* db, const char* collection_
   /* Create result object */
   json_value_t* result = json_create_object();
   if (!result) {
-    LOG_ERROR("create result object");
+    LOG_ERROR("create result object.");
     json_free(doc_copy);
     if (generated_id) free(generated_id);
     return NULL;
@@ -543,7 +543,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
        id ? id : "NULL");
   
   if (!db || !collection_name || !id) {
-    LOG_ERROR("Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
@@ -564,7 +564,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
     if (rebuild_collection_index(db, collection_name) && find_in_index(index, id, &position)) {
       LOG_INFO("Document found in rebuilt index at position %d", position);
     } else {
-      LOG_WARNING("Document still not found after rebuilding index");
+      LOG_WARNING("Document still not found after rebuilding index.");
       return NULL;
     }
   }
@@ -591,7 +591,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
     pthread_rwlock_unlock(&db->rwlock);
     
     /* Rebuild index - position is out of bounds */
-    LOG_INFO("Rebuilding index for collection '%s' due to invalid position");
+    LOG_INFO("Rebuilding index for collection '%s' due to invalid position.");
     rebuild_collection_index(db, collection_name);
     return NULL;
   }
@@ -612,7 +612,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
     pthread_rwlock_unlock(&db->rwlock);
     
     /* Rebuild index - ID mismatch */
-    LOG_INFO("Rebuilding index for collection '%s' due to ID mismatch");
+    LOG_INFO("Rebuilding index for collection '%s' due to ID mismatch.");
     rebuild_collection_index(db, collection_name);
     return NULL;
   }
@@ -624,7 +624,7 @@ json_value_t* indexed_db_get_document(database_t* db, const char* collection_nam
   pthread_rwlock_unlock(&db->rwlock);
   
   if (!doc_clone) {
-    LOG_ERROR("clone document");
+    LOG_ERROR("clone document.");
     return NULL;
   }
   
@@ -639,23 +639,23 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   LOG_INFO("Collection '%s'" ? collection_name : "NULL");
   
   if (!db || !collection_name) {
-    LOG_ERROR("Invalid parameters");
+    LOG_ERROR("Invalid parameters.");
     return NULL;
   }
   
   /* Create empty query if not provided */
   int empty_query = 0;
   if (!query_json) {
-    LOG_DEBUG("Empty query");
+    LOG_DEBUG("Empty query.");
     query_json = json_create_object();
     empty_query = 1;
   }
   
   /* Parse query */
-  LOG_DEBUG("Parsing query");
+  LOG_DEBUG("Parsing query.");
   query_parse_result_t query_result = query_parse(query_json);
   if (query_result.error) {
-    LOG_ERROR("Query parse error: %s", query_result.error);
+    LOG_ERROR("Query parsing failed: %s", query_result.error);
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);
@@ -681,7 +681,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   /* Create documents array for query */
   json_value_t* documents_copy = json_create_array();
   if (!documents_copy) {
-    LOG_ERROR("create documents array");
+    LOG_ERROR("create documents array.");
     pthread_rwlock_unlock(&db->rwlock);
     query_free_parse_result(&query_result);
     if (empty_query) {
@@ -706,7 +706,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
         json_array_append(documents_copy, doc);
         used_index = 1;
         
-        LOG_DEBUG("Direct ID lookup succeeded via index");
+        LOG_DEBUG("Direct ID lookup succeeded via index.");
       }
     }
   }
@@ -762,10 +762,10 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
               if (cloned_doc) {
                 json_array_append(documents_copy, cloned_doc);
               } else {
-                LOG_ERROR("parse document JSON in batch processing");
+                LOG_ERROR("parse document JSON in batch processing.");
               }
             } else {
-              LOG_ERROR("stringify document in batch processing");
+              LOG_ERROR("stringify document in batch processing.");
             }
           } else {
             LOG_WARNING("Skipping invalid document in collection at index %zu", processed + i);
@@ -778,7 +778,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
       free(batch);
     } else {
       /* Fallback to traditional one-by-one copying with safer handling */
-      LOG_WARNING("Using fallback document copying method - this may be slower");
+      LOG_WARNING("Using fallback document copying method - this may be slower.");
       for (size_t i = 0; i < collection_size; i++) {
         pthread_rwlock_rdlock(&db->rwlock);
         
@@ -798,7 +798,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
               if (cloned_doc) {
                 json_array_append(documents_copy, cloned_doc);
               } else {
-                LOG_ERROR("parse document JSON in fallback processing");
+                LOG_ERROR("parse document JSON in fallback processing.");
               }
             } else {
               LOG_ERROR("stringify document at index %zu", i);
@@ -829,7 +829,7 @@ json_value_t* indexed_db_query_documents(database_t* db, const char* collection_
   /* Create response object */
   json_value_t* response = json_create_object();
   if (!response) {
-    LOG_ERROR("create response object");
+    LOG_ERROR("create response object.");
     query_free_parse_result(&query_result);
     if (empty_query) {
       json_free(query_json);

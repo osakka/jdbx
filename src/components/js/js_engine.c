@@ -181,10 +181,10 @@ js_engine_t* js_engine_init(database_t *db) {
     return NULL;
   }
   
-  LOG_DEBUG("Skipping QuickJS standard library to debug initialization issue");
+  LOG_DEBUG("Skipping QuickJS standard library to debug initialization issue.");
   
   /* Create a simple console object without using std library */
-  LOG_DEBUG("Creating minimal console object");
+  LOG_DEBUG("Creating minimal console object.");
   const char *console_code = 
     "globalThis.console = {\n"
     " log: function() { return 'console.log called'; }\n"
@@ -192,34 +192,34 @@ js_engine_t* js_engine_init(database_t *db) {
   
   JSValue console_ret = JS_Eval(engine->ctx, console_code, strlen(console_code), "<console>", JS_EVAL_TYPE_GLOBAL);
   if (JS_IsException(console_ret)) {
-    LOG_ERROR("create console object");
+    LOG_ERROR("create console object.");
     JSValue exception = JS_GetException(engine->ctx);
     const char *str = JS_ToCString(engine->ctx, exception);
-    LOG_ERROR("Console error: %s", str ? str : "unknown");
+    LOG_ERROR("Console object creation failed: %s", str ? str : "unknown");
     JS_FreeCString(engine->ctx, str);
     JS_FreeValue(engine->ctx, exception);
   } else {
-    LOG_DEBUG("Console object created");
+    LOG_DEBUG("Console object created.");
   }
   JS_FreeValue(engine->ctx, console_ret);
   
   /* Register database functions */
-  LOG_DEBUG("Skipping database function registration for debugging");
+  LOG_DEBUG("Skipping database function registration for debugging.");
   // js_register_db_functions(engine);
-  // LOG_DEBUG("Database functions registered");
+  // LOG_DEBUG("Database functions registered.");
   
   /* Test the context with a simple eval */
-  LOG_DEBUG("Testing JS context with simple eval");
+  LOG_DEBUG("Testing JS context with simple eval.");
   JSValue test = JS_Eval(engine->ctx, "123", 3, "<test>", JS_EVAL_TYPE_GLOBAL);
   if (JS_IsException(test)) {
-    LOG_ERROR("JS context test failed - context may be corrupted");
+    LOG_ERROR("JS context test failed - context may be corrupted.");
     JSValue exception = JS_GetException(engine->ctx);
     const char *str = JS_ToCString(engine->ctx, exception);
-    LOG_ERROR("Test error: %s", str ? str : "unknown");
+    LOG_ERROR("JavaScript context test failed: %s", str ? str : "unknown");
     JS_FreeCString(engine->ctx, str);
     JS_FreeValue(engine->ctx, exception);
   } else {
-    LOG_DEBUG("JS context test passed");
+    LOG_DEBUG("JS context test passed.");
   }
   JS_FreeValue(engine->ctx, test);
   
@@ -278,11 +278,11 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
   
   JSValue val = JS_Eval(engine->ctx, script, strlen(script), "<input>", JS_EVAL_TYPE_GLOBAL);
   
-  LOG_DEBUG("JS_Eval returned, checking result");
+  LOG_DEBUG("JS_Eval returned, checking result.");
   
   /* Check if the evaluation failed */
   if (JS_IsException(val)) {
-    LOG_DEBUG("Exception detected");
+    LOG_DEBUG("Exception detected.");
     
     /* Try to get the exception */
     JSValue exception = JS_GetException(engine->ctx);
@@ -303,10 +303,10 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     /* Set the error message */
     if (error_msg) {
       js_set_error(engine, error_msg);
-      LOG_ERROR("JavaScript evaluation error: %s", error_msg);
+      LOG_ERROR("JavaScript evaluation failed: %s", error_msg);
       JS_FreeCString(engine->ctx, error_msg);
     } else {
-      LOG_ERROR("JavaScript evaluation failed but could not get error details");
+      LOG_ERROR("JavaScript evaluation failed but could not get error details.");
       js_set_error(engine, "JavaScript evaluation failed");
     }
     
@@ -315,7 +315,7 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     return 0;
   }
   
-  LOG_DEBUG("No exception, eval successful");
+  LOG_DEBUG("No exception, eval successful.");
   
   if (result) {
     if (JS_IsNull(val) || JS_IsUndefined(val)) {
@@ -1138,7 +1138,7 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
 #ifdef USE_QUICKJS
   if (!engine->ctx || !engine->rt) {
     if (g_logger) {
-      LOG_ERROR("JavaScript engine context is invalid");
+      LOG_ERROR("JavaScript engine context is invalid.");
     } else {
       fprintf(stderr, "Error: JavaScript engine context is invalid\n");
     }

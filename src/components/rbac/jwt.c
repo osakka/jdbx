@@ -457,17 +457,17 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   json_free(header_json);
   
   if (!header_str) {
-    LOG_ERROR("JWT: Failed to stringify header JSON");
+    LOG_DEBUG("Failed to stringify header JSON.");
     return NULL;
   }
   
-  LOG_DEBUG("JWT: Header string created: %s", header_str);
+  LOG_DEBUG("Header string created: %s", header_str);
   
   /* Base64url encode header */
   char* header_enc = base64_url_encode((unsigned char*)header_str, strlen(header_str));
   buffer_pool_free_safe(header_str);
   
-  LOG_DEBUG("JWT: Header encoded");
+  LOG_DEBUG("Header encoded.");
   
   if (!header_enc) {
     return NULL;
@@ -787,10 +787,10 @@ int jwt_verify(const char* token_str, const char* secret) {
   /* Decode token */
   jwt_token_t* token = jwt_decode(token_str);
   if (!token) {
-    LOG_ERROR("JWT: Failed to decode token");
+    LOG_DEBUG("Failed to decode token.");
     return 0;
   }
-  LOG_TRACE("JWT: Token decoded successfully - sub: %s, exp: %ld", 
+  TRACE_RBAC("JWT: Token decoded successfully - sub: %s, exp: %ld", 
        token->payload->sub ? token->payload->sub : "NULL", 
        (long)token->payload->exp);
   
@@ -887,21 +887,21 @@ int jwt_verify(const char* token_str, const char* secret) {
 jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, time_t expiry) {
   TRACE_AUTH("Creating refresh token for user: %s", user_id ? user_id : "NULL");
   if (!secret || !user_id) {
-    LOG_ERROR("Refresh token creation failed: invalid parameters");
+    LOG_ERROR("Refresh token creation failed: invalid parameters.");
     return NULL;
   }
   
   /* Create new token */
-  TRACE_AUTH("Creating refresh token structure");
+  TRACE_AUTH("Creating refresh token structure.");
   jwt_token_t* token = jwt_create(secret);
   if (!token) {
-    LOG_ERROR("Refresh token creation failed: unable to create token structure");
+    LOG_ERROR("Refresh token creation failed: unable to create token structure.");
     return NULL;
   }
-  TRACE_AUTH("Refresh token structure created");
+  TRACE_AUTH("Refresh token structure created.");
   
   /* Set token claims */
-  TRACE_AUTH("Setting refresh token claims");
+  TRACE_AUTH("Setting refresh token claims.");
   jwt_set_subject(token, user_id);
   jwt_set_issuer(token, "jsondb");
   
@@ -912,9 +912,9 @@ jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, t
   jwt_set_expiration(token, expiry);
   
   /* Add refresh token claim */
-  TRACE_AUTH("Adding refresh token type claim");
+  TRACE_AUTH("Adding refresh token type claim.");
   jwt_add_claim(token, "type", json_create_string("refresh"));
-  TRACE_AUTH("Refresh token creation completed");
+  TRACE_AUTH("Refresh token creation completed.");
   
   return token;
 }
@@ -923,50 +923,50 @@ jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, t
 char* jwt_create_token_pair(const char* secret, const char* user_id, const char* username, json_value_t** response_json) {
   TRACE_AUTH("Creating token pair for user: %s", username ? username : "NULL");
   if (!secret || !user_id || !username || !response_json) {
-    LOG_ERROR("Token pair creation failed: invalid parameters");
+    LOG_ERROR("Token pair creation failed: invalid parameters.");
     return NULL;
   }
   
   /* Create access token */
-  TRACE_AUTH("Creating access token");
+  TRACE_AUTH("Creating access token.");
   jwt_token_t* access_token = jwt_create(secret);
   if (!access_token) {
-    LOG_ERROR("Token pair creation failed: unable to create access token");
+    LOG_ERROR("Token pair creation failed: unable to create access token.");
     return NULL;
   }
-  TRACE_AUTH("Access token created");
+  TRACE_AUTH("Access token created.");
   
   /* Set access token claims */
-  TRACE_AUTH("Setting access token claims");
+  TRACE_AUTH("Setting access token claims.");
   jwt_set_subject(access_token, user_id);
   jwt_set_issuer(access_token, "jsondb");
   jwt_set_expiration(access_token, time(NULL) + (30 * 60)); /* 30 minutes */
   jwt_add_claim(access_token, "username", json_create_string(username));
   jwt_add_claim(access_token, "type", json_create_string("access"));
-  TRACE_AUTH("Access token claims set");
+  TRACE_AUTH("Access token claims set.");
   
   /* Create refresh token */
-  TRACE_AUTH("Creating refresh token");
+  TRACE_AUTH("Creating refresh token.");
   jwt_token_t* refresh_token = jwt_create_refresh_token(secret, user_id, 0); /* Use default expiry */
   if (!refresh_token) {
-    LOG_ERROR("Token pair creation failed: unable to create refresh token");
+    LOG_ERROR("Token pair creation failed: unable to create refresh token.");
     jwt_free(access_token);
     return NULL;
   }
-  TRACE_AUTH("Refresh token created");
+  TRACE_AUTH("Refresh token created.");
   
   /* Encode tokens */
-  TRACE_AUTH("Encoding access token");
+  TRACE_AUTH("Encoding access token.");
   char* access_token_str = jwt_encode(access_token, secret);
-  TRACE_AUTH("Encoding refresh token");
+  TRACE_AUTH("Encoding refresh token.");
   char* refresh_token_str = jwt_encode(refresh_token, secret);
-  TRACE_AUTH("Both tokens encoded successfully");
+  TRACE_AUTH("Both tokens encoded successfully.");
   
   /* Free token structures */
-  TRACE_AUTH("Freeing token structures");
+  TRACE_AUTH("Freeing token structures.");
   jwt_free(access_token);
   jwt_free(refresh_token);
-  TRACE_AUTH("Token structures freed");
+  TRACE_AUTH("Token structures freed.");
   
   if (!access_token_str || !refresh_token_str) {
     if (access_token_str) buffer_pool_free(access_token_str);

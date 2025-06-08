@@ -20,7 +20,7 @@ extern logger_config_t* g_logger;
 /* Update session expiration time for sliding sessions */
 static void extend_session_expiration(api_context_t* ctx, const char* token) {
   if (!token || !ctx || !ctx->db) {
-    if (g_logger) LOG_DEBUG("Session extension skipped: invalid parameters");
+    if (g_logger) LOG_DEBUG("Session extension skipped: invalid parameters.");
     return;
   }
   
@@ -35,14 +35,14 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_free(query);
   
   if (!results) {
-    if (g_logger) LOG_DEBUG("No results from session query");
+    if (g_logger) LOG_DEBUG("No results from session query.");
     return;
   }
   
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
-    if (g_logger) LOG_DEBUG("No active sessions found for token");
+    if (g_logger) LOG_DEBUG("No active sessions found for token.");
     json_free(results);
     return;
   }
@@ -96,7 +96,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
 /* Enhanced authentication function with sliding sessions and comprehensive logging */
 int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
-    if (g_logger) LOG_ERROR("AUTH_FLOW: Authentication failed - Invalid context or request (ctx=%p, request=%p)", 
+    if (g_logger) TRACE_AUTH("Authentication failed - Invalid context or request (ctx=%p, request=%p)", 
         (void*)ctx, (void*)request);
     return 0;
   }
@@ -105,13 +105,13 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   const char* client_ip = request->remote_addr ? request->remote_addr : "unknown";
   
   if (g_logger) {
-    LOG_INFO("AUTH_FLOW_START: client=%s, path=%s, method=%s", 
+    TRACE_AUTH("Authentication flow start - client=%s, path=%s, method=%s", 
         client_ip, request->path ? request->path : "unknown", 
         request->method == HTTP_GET ? "GET" :
         request->method == HTTP_POST ? "POST" :
         request->method == HTTP_PUT ? "PUT" :
         request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN");
-    LOG_TRACE("AUTH_FLOW_DETAILS: user_agent=%s, origin=%s", 
+    TRACE_API("AUTH_FLOW_DETAILS: user_agent=%s, origin=%s", 
         request->user_agent ? request->user_agent : "none",
         request->origin ? request->origin : "none");
   }
@@ -120,8 +120,8 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   char* token = api_extract_token(request);
   if (!token) {
     if (g_logger) {
-      LOG_WARNING("AUTH_FLOW_FAILED: No token found - client=%s, path=%s", client_ip, request->path);
-      LOG_TRACE("AUTH_FLOW_HEADERS: authorization=%s, cookie_header=%s", 
+      LOG_DEBUG("No token found - client=%s, path=%s", client_ip, request->path);
+      TRACE_API("AUTH_FLOW_HEADERS: authorization=%s, cookie_header=%s", 
           request->authorization ? request->authorization : "none",
           request->cookie_header ? request->cookie_header : "none");
     }
@@ -129,9 +129,9 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   }
   
   if (g_logger) {
-    LOG_INFO("AUTH_FLOW_TOKEN_EXTRACTED: client=%s, token_prefix=%.20s..., token_length=%zu", 
+    TRACE_AUTH("Token extracted - client=%s, token_prefix=%.20s..., token_length=%zu", 
         client_ip, token, strlen(token));
-    LOG_TRACE("AUTH_FLOW_TOKEN_SOURCE: authorization_header=%s", 
+    TRACE_API("AUTH_FLOW_TOKEN_SOURCE: authorization_header=%s", 
         request->authorization ? "present" : "absent");
   }
   
@@ -150,7 +150,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     
     if (is_hex) {
       if (g_logger) {
-        LOG_INFO("AUTH_FLOW_ADMIN_TOKEN: client=%s, allowing hex admin token authentication", client_ip);
+        LOG_INFO("Admin token authentication allowed - client=%s", client_ip);
       }
       free(token);
       return 1;
@@ -180,7 +180,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   /* Verify JWT secret is set */
   if (!ctx->jwt_secret) {
     if (g_logger) {
-      LOG_ERROR("AUTH_FLOW_FAILED: JWT secret not set - client=%s, ctx=%p", client_ip, (void*)ctx);
+      LOG_ERROR("JWT secret not set - client=%s, ctx=%p", client_ip, (void*)ctx);
     }
     free(token);
     return 0;
@@ -188,7 +188,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   /* Log session lookup attempt */
   if (g_logger) {
-    LOG_TRACE("AUTH_FLOW_SESSION_LOOKUP: client=%s, searching for active session with token", client_ip);
+    TRACE_API("AUTH_FLOW_SESSION_LOOKUP: client=%s, searching for active session with token", client_ip);
   }
   
   /* Check if session exists in database before JWT verification */
@@ -238,15 +238,15 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   }
   
   if (g_logger) {
-    LOG_INFO("AUTH_FLOW_SESSION_STATUS: client=%s, session_found=%s, session_id=%s, user=%s", 
+    TRACE_AUTH("Session status - client=%s, session_found=%s, session_id=%s, user=%s", 
         client_ip, session_found ? "yes" : "no", session_id, session_user);
-    LOG_TRACE("AUTH_FLOW_SESSION_TIMES: client=%s, expires=%s, created=%s, last_seen=%s", 
+    TRACE_API("AUTH_FLOW_SESSION_TIMES: client=%s, expires=%s, created=%s, last_seen=%s", 
         client_ip, session_expires, session_created, session_last_seen);
   }
   
   /* Verify token with enhanced logging */
   if (g_logger) {
-    LOG_TRACE("AUTH_FLOW_JWT_VERIFY: client=%s, using jwt_secret_length=%zu", 
+    TRACE_API("AUTH_FLOW_JWT_VERIFY: client=%s, using jwt_secret_length=%zu", 
         client_ip, strlen(ctx->jwt_secret));
   }
   
@@ -254,7 +254,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   if (result) {
     if (g_logger) {
-      LOG_INFO("AUTH_FLOW_SUCCESS: client=%s, token_valid=yes, session_found=%s, user=%s", 
+      LOG_INFO("Authentication successful - client=%s, token_valid=yes, session_found=%s, user=%s", 
           client_ip, session_found ? "yes" : "no", session_user);
     }
     
@@ -283,21 +283,21 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     
   } else {
     if (g_logger) {
-      LOG_ERROR("AUTH_FLOW_FAILED: client=%s, token_verification_failed, session_found=%s", 
+      LOG_DEBUG("Token verification failed - client=%s, session_found=%s", 
           client_ip, session_found ? "yes" : "no");
-      LOG_DEBUG("AUTH_FLOW_TOKEN_DEBUG: client=%s, token=%.30s...", client_ip, token);
+      TRACE_AUTH("Token debug - client=%s, token=%.30s...", client_ip, token);
       
       /* Detailed token analysis for debugging */
       jwt_token_t* decoded = jwt_decode(token);
       if (decoded) {
         if (decoded->header) {
-          LOG_DEBUG("AUTH_FLOW_TOKEN_HEADER: client=%s, alg=%s, typ=%s", client_ip,
+          TRACE_AUTH("Token header - client=%s, alg=%s, typ=%s", client_ip,
                decoded->header->alg ? decoded->header->alg : "NULL",
                decoded->header->typ ? decoded->header->typ : "NULL");
         }
         
         if (decoded->payload) {
-          LOG_DEBUG("AUTH_FLOW_TOKEN_PAYLOAD: client=%s, iss=%s, sub=%s, exp=%ld", client_ip,
+          TRACE_AUTH("Token payload - client=%s, iss=%s, sub=%s, exp=%ld", client_ip,
                decoded->payload->iss ? decoded->payload->iss : "NULL",
                decoded->payload->sub ? decoded->payload->sub : "NULL",
                decoded->payload->exp);
@@ -305,31 +305,31 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
           /* Check for token expiration with detailed logging */
           time_t current_time = time(NULL);
           if (decoded->payload->exp > 0 && current_time > decoded->payload->exp) {
-            LOG_ERROR("AUTH_FLOW_TOKEN_EXPIRED: client=%s, current_time=%ld, exp=%ld, diff=%ld_seconds", 
+            LOG_DEBUG("Token expired - client=%s, current_time=%ld, exp=%ld, diff=%ld_seconds", 
                 client_ip, current_time, decoded->payload->exp, current_time - decoded->payload->exp);
           } else if (decoded->payload->exp > 0) {
-            LOG_DEBUG("AUTH_FLOW_TOKEN_VALID_TIME: client=%s, current_time=%ld, exp=%ld, remaining=%ld_seconds",
+            TRACE_AUTH("Token valid time - client=%s, current_time=%ld, exp=%ld, remaining=%ld_seconds",
                 client_ip, current_time, decoded->payload->exp, decoded->payload->exp - current_time);
           } else {
-            LOG_WARNING("AUTH_FLOW_TOKEN_NO_EXPIRY: client=%s, token has no expiration time", client_ip);
+            TRACE_AUTH("Token has no expiration time - client=%s", client_ip);
           }
         }
         
         jwt_free(decoded);
       } else {
-        LOG_ERROR("AUTH_FLOW_TOKEN_DECODE_FAILED: client=%s, unable to decode token for analysis", client_ip);
+        LOG_DEBUG("Unable to decode token for analysis - client=%s", client_ip);
       }
       
       /* If session exists but token is invalid, this might be the double-login issue */
       if (session_found) {
-        LOG_WARNING("AUTH_FLOW_MISMATCH: client=%s, session_exists_but_token_invalid - possible double-login issue", client_ip);
-        LOG_WARNING("AUTH_FLOW_MISMATCH_DETAILS: session_id=%s, user=%s, expires=%s", session_id, session_user, session_expires);
+        LOG_WARNING("Session exists but token invalid - possible double-login issue - client=%s", client_ip);
+        LOG_DEBUG("Session mismatch details - session_id=%s, user=%s, expires=%s", session_id, session_user, session_expires);
       }
     }
   }
   
   if (g_logger) {
-    LOG_INFO("AUTH_FLOW_END: client=%s, result=%s, user=%s", 
+    TRACE_AUTH("Authentication flow end - client=%s, result=%s, user=%s", 
         client_ip, result ? "success" : "failure", session_user);
   }
   

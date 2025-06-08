@@ -8,23 +8,24 @@ extern logger_config_t* g_logger;
 /* Forward declaration */
 static void* persistence_thread_main(void* arg);
 
-/* Initialize persistence thread structure */
+/* Initialize persistence thread structure - currently unused */
+__attribute__((unused))
 static persistence_thread_t* persistence_init(void) {
   persistence_thread_t* persistence = malloc(sizeof(persistence_thread_t));
   if (!persistence) {
-    if (g_logger) LOG_ERROR("allocate persistence thread structure");
+    if (g_logger) LOG_ERROR("allocate persistence thread structure.");
     return NULL;
   }
   
   /* Initialize mutex and condition variable */
   if (pthread_mutex_init(&persistence->mutex, NULL) != 0) {
-    if (g_logger) LOG_ERROR("initialize persistence mutex");
+    if (g_logger) LOG_ERROR("initialize persistence mutex.");
     free(persistence);
     return NULL;
   }
   
   if (pthread_cond_init(&persistence->condition, NULL) != 0) {
-    if (g_logger) LOG_ERROR("initialize persistence condition variable");
+    if (g_logger) LOG_ERROR("initialize persistence condition variable.");
     pthread_mutex_destroy(&persistence->mutex);
     free(persistence);
     return NULL;
@@ -40,7 +41,7 @@ static persistence_thread_t* persistence_init(void) {
   memset(persistence->last_error_message, 0, sizeof(persistence->last_error_message));
   persistence->last_error_time = 0;
   
-  if (g_logger) LOG_TRACE("Initialized");
+  if (g_logger) TRACE_DB("Initialized.");
   return persistence;
 }
 
@@ -52,14 +53,14 @@ static void persistence_cleanup(persistence_thread_t* persistence) {
   pthread_cond_destroy(&persistence->condition);
   free(persistence);
   
-  if (g_logger) LOG_TRACE("Cleaned up");
+  if (g_logger) TRACE_DB("Cleaned up.");
 }
 
 /* Check if save is needed based on buffer thresholds */
 static int should_save_now(persistence_thread_t* persistence, int force_periodic) {
   time_t current_time = time(NULL);
   
-  if (g_logger) LOG_TRACE("Should_save_now called - ops=%d (threshold=%d), size=%zu (threshold=%d), force_periodic=%d",
+  if (g_logger) TRACE_DB("Should_save_now called - ops=%d (threshold=%d), size=%zu (threshold=%d), force_periodic=%d",
              persistence->operations_count, PERSISTENCE_BUFFER_OPS_THRESHOLD,
              persistence->data_size_estimate, PERSISTENCE_BUFFER_SIZE_THRESHOLD,
              force_periodic);
@@ -109,19 +110,19 @@ static void* persistence_thread_main(void* arg) {
   
   pthread_mutex_lock(&persistence->mutex);
   
-  if (g_logger) LOG_TRACE("Main loop started");
+  if (g_logger) TRACE_DB("Main loop started.");
   
   while (!persistence->shutdown) {
     struct timespec timeout;
     clock_gettime(CLOCK_REALTIME, &timeout);
     timeout.tv_sec += 1; /* Check every 1 second */
     
-    if (g_logger) LOG_TRACE("Waiting on condition variable...");
+    if (g_logger) TRACE_DB("Waiting on condition variable...");
     
     /* Wait for notification or timeout */
     pthread_cond_timedwait(&persistence->condition, &persistence->mutex, &timeout);
     
-    if (g_logger) LOG_TRACE("Woke up from condition wait");
+    if (g_logger) TRACE_DB("Woke up from condition wait.");
     
     if (persistence->shutdown) break;
     
@@ -130,7 +131,7 @@ static void* persistence_thread_main(void* arg) {
     int should_save_periodic = should_save_now(persistence, 1);
     
     /* TEMP: Debug persistence condition */
-    if (g_logger) LOG_TRACE("Checking save conditions: should_save_buffer=%d, should_save_periodic=%d, db->is_modified=%d, save_in_progress=%d, ops=%d", 
+    if (g_logger) TRACE_DB("Checking save conditions: should_save_buffer=%d, should_save_periodic=%d, db->is_modified=%d, save_in_progress=%d, ops=%d", 
                 should_save_buffer, should_save_periodic, db->is_modified, persistence->save_in_progress, persistence->operations_count);
     
     if ((should_save_buffer || should_save_periodic) && db->is_modified && !persistence->save_in_progress) {
@@ -139,24 +140,24 @@ static void* persistence_thread_main(void* arg) {
       /* Unlock during save operation to avoid blocking other operations */
       pthread_mutex_unlock(&persistence->mutex);
       
-      if (g_logger) LOG_DEBUG("Triggering save");
+      if (g_logger) LOG_DEBUG("Triggering save.");
       
       /* Perform the save operation */
-      if (g_logger) LOG_TRACE("Calling save");
+      if (g_logger) TRACE_DB("Calling save.");
       int save_result = db_save(db);
-      if (g_logger) LOG_TRACE("Save result: %d", save_result);
+      if (g_logger) TRACE_DB("Save result: %d", save_result);
       
       /* Lock again and update state */
-      if (g_logger) LOG_TRACE("Re-locking mutex");
+      if (g_logger) TRACE_DB("Re-locking mutex.");
       pthread_mutex_lock(&persistence->mutex);
-      if (g_logger) LOG_TRACE("Mutex re-locked");
+      if (g_logger) TRACE_DB("Mutex re-locked.");
       
       if (save_result) {
-        if (g_logger) LOG_DEBUG("Save completed");
+        if (g_logger) LOG_DEBUG("Save completed.");
         reset_buffer_counters(persistence);
         persistence->last_save_failed = 0;
       } else {
-        if (g_logger) LOG_ERROR("Persistence thread save failed");
+        if (g_logger) LOG_ERROR("Persistence thread save failed.");
         persistence->last_save_failed = 1;
         persistence->last_error_time = time(NULL);
         snprintf(persistence->last_error_message, sizeof(persistence->last_error_message),
@@ -172,22 +173,22 @@ static void* persistence_thread_main(void* arg) {
   
   pthread_mutex_unlock(&persistence->mutex);
   
-  if (g_logger) LOG_TRACE("Thread shutting down");
+  if (g_logger) TRACE_DB("Thread shutting down.");
   return NULL;
 }
 
 /* Start persistence thread for a database */
 int db_start_persistence_thread(database_t* db) {
   if (!db) {
-    if (g_logger) LOG_ERROR("Invalid NULL parameter");
+    if (g_logger) LOG_ERROR("Invalid NULL parameter.");
     return 0;
   }
   
-  LOG_DEBUG("Starting persistence thread for database");
+  LOG_DEBUG("Starting persistence thread for database.");
   
   /* For now, just return success since we're using a different database implementation
    * that doesn't support the persistence thread in the same way */
-  LOG_INFO("Persistence thread bypassed - using simpler persistence model");
+  LOG_INFO("Persistence thread bypassed - using simpler persistence model.");
   return 1;
   
   /* Create the persistence thread */
@@ -226,7 +227,7 @@ void db_stop_persistence_thread(database_t* db) {
   persistence_cleanup(persistence);
   db->persistence = NULL;
   
-  if (g_logger) LOG_DEBUG("Thread stopped");
+  if (g_logger) LOG_DEBUG("Thread stopped.");
 }
 
 /* Notify persistence thread of data changes - returns 1 on success, 0 on error */
@@ -254,7 +255,7 @@ int db_notify_data_change_sync(database_t* db, size_t estimated_size) {
   
   /* Check if immediate save is needed */
   if (should_save_now(persistence, 0)) {
-    if (g_logger) LOG_DEBUG("Signaling immediate save");
+    if (g_logger) LOG_DEBUG("Signaling immediate save.");
     pthread_cond_signal(&persistence->condition);
     
     /* Wait for save to complete if needed */

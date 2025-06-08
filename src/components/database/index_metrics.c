@@ -23,12 +23,16 @@ static metric_t* g_index_effectiveness_gauge = NULL;
 
 /**
  * Get current timestamp in milliseconds
+ *
+ * NOTE: Currently unused but kept for future use
  */
+#if 0
 static double get_timestamp_ms(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (double)(tv.tv_sec * 1000) + (double)(tv.tv_usec / 1000.0);
 }
+#endif
 
 /**
  * Calculate days between two timestamps
@@ -64,13 +68,13 @@ int index_metrics_init(void) {
     /* Allocate collector */
     g_metrics_collector = calloc(1, sizeof(index_metrics_collector_t));
     if (!g_metrics_collector) {
-        LOG_ERROR("Failed to allocate index metrics collector");
+        LOG_ERROR("Cannot allocate index metrics collector.");
         return -1;
     }
     
     /* Initialize collector */
     if (pthread_mutex_init(&g_metrics_collector->metrics_lock, NULL) != 0) {
-        LOG_ERROR("Failed to initialize metrics lock");
+        LOG_ERROR("Cannot initialize metrics lock.");
         free(g_metrics_collector);
         g_metrics_collector = NULL;
         return -1;
@@ -80,7 +84,7 @@ int index_metrics_init(void) {
     g_metrics_collector->metrics_array = calloc(g_metrics_collector->metrics_capacity, 
                                                sizeof(index_performance_metrics_t));
     if (!g_metrics_collector->metrics_array) {
-        LOG_ERROR("Failed to allocate metrics array");
+        LOG_ERROR("Cannot allocate metrics array.");
         pthread_mutex_destroy(&g_metrics_collector->metrics_lock);
         free(g_metrics_collector);
         g_metrics_collector = NULL;
@@ -94,9 +98,14 @@ int index_metrics_init(void) {
     index_metrics_register_prometheus_metrics();
     
     g_metrics_initialized = 1;
-    LOG_INFO("Index metrics system initialized");
+    LOG_INFO("Index metrics system initialized.");
     
     return 0;
+}
+
+/* Get the global metrics collector instance */
+index_metrics_collector_t* index_metrics_get_collector(void) {
+    return g_metrics_collector;
 }
 
 void index_metrics_cleanup(void) {
@@ -117,7 +126,7 @@ void index_metrics_cleanup(void) {
     g_metrics_collector = NULL;
     
     g_metrics_initialized = 0;
-    LOG_INFO("Index metrics system cleaned up");
+    LOG_INFO("Index metrics system cleaned up.");
 }
 
 int index_metrics_start_tracking(const char* collection_name,
@@ -146,7 +155,7 @@ int index_metrics_start_tracking(const char* collection_name,
                                                         new_capacity * sizeof(index_performance_metrics_t));
         if (!new_array) {
             pthread_mutex_unlock(&g_metrics_collector->metrics_lock);
-            LOG_ERROR("Failed to expand metrics array");
+            LOG_ERROR("Cannot expand metrics array.");
             return -1;
         }
         g_metrics_collector->metrics_array = new_array;
@@ -235,7 +244,7 @@ int index_metrics_record_query(const char* collection_name,
         metrics_histogram_observe(g_index_query_duration_seconds, query_time_ms / 1000.0);
     }
     
-    LOG_TRACE("Recorded query for index %s.%s: %.2fms, %lu docs", 
+    TRACE_DB("Recorded query for index %s.%s: %.2fms, %lu docs", 
               collection_name, field_path, query_time_ms, documents_returned);
     
     return 0;
@@ -538,7 +547,7 @@ int index_metrics_register_prometheus_metrics(void) {
     extern metrics_registry_t* g_metrics_registry;
     
     if (!g_metrics_registry) {
-        LOG_WARNING("Metrics registry not available for index metrics");
+        LOG_WARNING("Metrics registry not available for index metrics.");
         return -1;
     }
     
@@ -576,7 +585,7 @@ int index_metrics_register_prometheus_metrics(void) {
     
     /* No need to manually register - metrics_create_* functions handle registration */
     
-    LOG_INFO("Registered Prometheus metrics for index performance");
+    LOG_INFO("Registered Prometheus metrics for index performance.");
     
     return 0;
 }
@@ -898,7 +907,7 @@ double index_metrics_calculate_roi(double time_saved_ms, double time_spent_ms) {
 }
 
 /* Remove metrics for a specific index */
-int index_metrics_remove(index_metrics_t* metrics,
+int index_metrics_remove(index_metrics_collector_t* metrics,
                         const char* collection_name,
                         const char* field_path) {
     if (!metrics || !collection_name || !field_path) {

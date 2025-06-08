@@ -11,7 +11,7 @@ This directory contains the source code for the JSONdb project.
   - `api/`: API endpoints and request handling
   - `binary/`: Binary serialization format for persistence
   - `core/`: Core server functionality including the thread pool
-  - `database/`: Database operations, storage, adaptive indexing, and performance tracking
+  - `database/`: Database operations, storage, adaptive indexing (v3.1.0), and performance tracking
   - `index/`: B+tree and hash index implementations
   - `js/`: JavaScript engine integration
   - `lockfree/`: Lock-free data structures (skiplist, hazard pointers)

@@ -351,26 +351,26 @@ rbac_system_t* rbac_load(const char* path) {
 
 /* Create user */
 rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const char* password) {
-  LOG_TRACE("RBAC_TRACE: rbac_create_user called with rbac=%p, username=%s", rbac, username ? username : "NULL");
+  TRACE_RBAC("RBAC_TRACE: rbac_create_user called with rbac=%p, username=%s", rbac, username ? username : "NULL");
   
   if (!rbac || !username || !password) {
-    LOG_ERROR("RBAC_TRACE: Invalid parameters in rbac_create_user");
+    LOG_DEBUG("Invalid parameters in rbac_create_user");
     return NULL;
   }
   
   /* If database is available, use database backend */
   if (rbac->db) {
-    LOG_TRACE("RBAC_TRACE: Using database backend for user creation");
+    TRACE_RBAC("RBAC_TRACE: Using database backend for user creation.");
     return rbac_database_create_user(rbac->db, username, password);
   }
   
   /* Fallback to in-memory storage */
   if (!rbac->users) {
-    LOG_ERROR("RBAC_TRACE: rbac->users is NULL!");
+    LOG_DEBUG("rbac->users is NULL!");
     return NULL;
   }
   
-  LOG_TRACE("RBAC_TRACE: Using in-memory storage, checking if username already exists among %zu users", rbac->users->value.object.size);
+  TRACE_RBAC("RBAC_TRACE: Using in-memory storage, checking if username already exists among %zu users", rbac->users->value.object.size);
   
   /* Check if username already exists */
   for (size_t i = 0; i < rbac->users->value.object.size; i++) {
@@ -379,67 +379,67 @@ rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const c
       json_value_t* user_username = json_object_get(user, "username");
       if (user_username && user_username->type == JSON_STRING && 
         strcmp(user_username->value.string, username) == 0) {
-        LOG_TRACE("RBAC_TRACE: Username already exists");
+        TRACE_RBAC("RBAC_TRACE: Username already exists.");
         return NULL; /* Username already exists */
       }
     }
   }
   
-  LOG_TRACE("RBAC_TRACE: Username is unique, creating user ID");
+  TRACE_RBAC("RBAC_TRACE: Username is unique, creating user ID.");
   
   /* Create user ID */
   char* id = generate_uuid();
   if (!id) {
-    LOG_ERROR("RBAC_TRACE: Failed to generate UUID");
+    LOG_DEBUG("Failed to generate UUID");
     return NULL;
   }
   
-  LOG_TRACE("RBAC_TRACE: Generated user ID: %s", id);
-  LOG_TRACE("RBAC_TRACE: Hashing password");
+  TRACE_RBAC("RBAC_TRACE: Generated user ID: %s", id);
+  TRACE_RBAC("RBAC_TRACE: Hashing password.");
   
   /* Hash password */
   char* password_hash = hash_password(password);
   if (!password_hash) {
-    LOG_ERROR("RBAC_TRACE: Failed to hash password");
+    LOG_DEBUG("Failed to hash password");
     free(id);
     return NULL;
   }
   
-  LOG_TRACE("RBAC_TRACE: Password hashed successfully");
+  TRACE_RBAC("RBAC_TRACE: Password hashed successfully.");
   
   /* Create user object */
-  LOG_TRACE("RBAC_TRACE: Creating user JSON object");
+  TRACE_RBAC("RBAC_TRACE: Creating user JSON object.");
   json_value_t* user = json_create_object();
   if (!user) {
-    LOG_ERROR("RBAC_TRACE: Failed to create user JSON object");
+    LOG_DEBUG("Failed to create user JSON object");
     free(id);
     free(password_hash);
     return NULL;
   }
   
   /* Set user properties */
-  LOG_TRACE("RBAC_TRACE: Setting user properties");
+  TRACE_RBAC("RBAC_TRACE: Setting user properties.");
   json_object_set(user, "id", json_create_string(id));
   json_object_set(user, "username", json_create_string(username));
   json_object_set(user, "password_hash", json_create_string(password_hash));
   json_object_set(user, "roles", json_create_array());
   
   /* Add user to RBAC system */
-  LOG_TRACE("RBAC_TRACE: Adding user to RBAC system");
+  TRACE_RBAC("RBAC_TRACE: Adding user to RBAC system.");
   json_object_set(rbac->users, id, user);
   
   /* Create user structure */
-  LOG_TRACE("RBAC_TRACE: Creating user structure");
+  TRACE_RBAC("RBAC_TRACE: Creating user structure.");
   rbac_user_t* result = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!result) {
-    LOG_ERROR("RBAC_TRACE: Failed to allocate memory for user structure");
+    LOG_DEBUG("Failed to allocate memory for user structure");
     free(id);
     free(password_hash);
     return NULL;
   }
   
   /* Set user fields */
-  LOG_TRACE("RBAC_TRACE: Setting user fields");
+  TRACE_RBAC("RBAC_TRACE: Setting user fields.");
   result->id = id;
   result->username = strdup(username);
   result->password_hash = password_hash;
@@ -537,47 +537,47 @@ rbac_user_t* rbac_get_user(rbac_system_t* rbac, const char* user_id) {
 
 /* Get user by username */
 rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username) {
-  LOG_TRACE("RBAC_TRACE: rbac_get_user_by_username called with rbac=%p, username=%s", rbac, username ? username : "NULL");
+  TRACE_RBAC("RBAC_TRACE: rbac_get_user_by_username called with rbac=%p, username=%s", rbac, username ? username : "NULL");
   
   if (!rbac || !username) {
-    LOG_ERROR("RBAC_TRACE: Invalid parameters in rbac_get_user_by_username");
+    LOG_DEBUG("Invalid parameters in rbac_get_user_by_username");
     return NULL;
   }
   
   /* If database is available, use database backend */
   if (rbac->db) {
-    LOG_TRACE("RBAC_TRACE: Using database backend for user lookup");
+    TRACE_RBAC("RBAC_TRACE: Using database backend for user lookup.");
     return rbac_database_get_user_by_username(rbac->db, username);
   }
   
   /* Fallback to in-memory storage */
   if (!rbac->users) {
-    LOG_ERROR("RBAC_TRACE: rbac->users is NULL!");
+    LOG_DEBUG("rbac->users is NULL!");
     return NULL;
   }
   
-  LOG_TRACE("RBAC_TRACE: Using in-memory storage, searching through %zu users", rbac->users->value.object.size);
+  TRACE_RBAC("RBAC_TRACE: Using in-memory storage, searching through %zu users", rbac->users->value.object.size);
   
   /* Find user by username */
   for (size_t i = 0; i < rbac->users->value.object.size; i++) {
     const char* user_id = rbac->users->value.object.entries[i].key;
     json_value_t* user = rbac->users->value.object.entries[i].value;
     
-    LOG_TRACE("RBAC_TRACE: Checking user %zu: id=%s", i, user_id);
+    TRACE_RBAC("RBAC_TRACE: Checking user %zu: id=%s", i, user_id);
     
     if (user->type == JSON_OBJECT) {
       json_value_t* user_username = json_object_get(user, "username");
       if (user_username && user_username->type == JSON_STRING) {
-        LOG_TRACE("RBAC_TRACE: Found username: %s", user_username->value.string);
+        TRACE_RBAC("RBAC_TRACE: Found username: %s", user_username->value.string);
         if (strcmp(user_username->value.string, username) == 0) {
-          LOG_TRACE("RBAC_TRACE: Username match found, getting full user object");
+          TRACE_RBAC("RBAC_TRACE: Username match found, getting full user object.");
           return rbac_get_user(rbac, user_id);
         }
       }
     }
   }
   
-  LOG_TRACE("RBAC_TRACE: No user found with username: %s", username);
+  TRACE_RBAC("RBAC_TRACE: No user found with username: %s", username);
   return NULL;
 }
 
@@ -587,24 +587,24 @@ rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username
  * This fixes the segmentation fault issue with the original implementation
  */
 static int verify_password(const char* password, const char* password_hash) {
-  LOG_TRACE("RBAC: verify_password called - password=%s, hash=%s", 
+  TRACE_RBAC("RBAC: verify_password called - password=%s, hash=%s", 
        password ? password : "NULL", 
        password_hash ? password_hash : "NULL");
   
   if (!password || !password_hash) {
-    LOG_ERROR("RBAC: verify_password - NULL password or hash");
+    LOG_DEBUG("verify_password - NULL password or hash.");
     return 0;
   }
   
   /* Special case for admin user in the development environment */
   if (strcmp(password, "admin") == 0) {
-    LOG_TRACE("RBAC: Accepting 'admin' password for development");
+    TRACE_RBAC("RBAC: Accepting 'admin' password for development.");
     return 1; /* Accept 'admin' password for development - RESTORE auth later */
   }
   
   /* Check if hash is in the $pbkdf2$ format: $pbkdf2$iterations$salt$hash */
   if (strncmp(password_hash, "$pbkdf2$", 8) == 0) {
-    LOG_TRACE("RBAC: Password hash is in PBKDF2 format");
+    TRACE_RBAC("RBAC: Password hash is in PBKDF2 format.");
     
     /* Parse the hash */
     int iterations;
@@ -612,15 +612,15 @@ static int verify_password(const char* password, const char* password_hash) {
     char stored_hash_hex[HASH_LENGTH * 2 + 1];
     
     if (sscanf(password_hash, "$pbkdf2$%d$%32s$%64s", &iterations, salt_hex, stored_hash_hex) != 3) {
-      LOG_ERROR("RBAC: Invalid PBKDF2 hash format");
+      LOG_DEBUG("Invalid PBKDF2 hash format.");
       return 0; /* Invalid format */
     }
     
-    LOG_TRACE("RBAC: PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
+    TRACE_RBAC("RBAC: PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
          iterations, salt_hex, stored_hash_hex);
     
     /* TODO: Implement pbkdf2_hmac_sha256 - for now just accept admin password */
-    LOG_TRACE("RBAC: TODO - pbkdf2_hmac_sha256 not implemented, accepting admin password");
+    TRACE_RBAC("RBAC: TODO - pbkdf2_hmac_sha256 not implemented, accepting admin password.");
     if (strcmp(password, "admin") == 0) {
       return 1;
     }
@@ -674,42 +674,42 @@ static int verify_password(const char* password, const char* password_hash) {
 
 /* Authenticate user */
 int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char* password) {
-  LOG_TRACE("RBAC_TRACE: rbac_authenticate_user called with username=%s", username ? username : "NULL");
+  TRACE_RBAC("RBAC_TRACE: rbac_authenticate_user called with username=%s", username ? username : "NULL");
   
   if (!rbac || !username || !password) {
-    LOG_ERROR("RBAC_TRACE: Invalid parameters in rbac_authenticate_user");
+    LOG_DEBUG("Invalid parameters in rbac_authenticate_user");
     return 0;
   }
   
   /* Get user by username */
-  LOG_TRACE("RBAC_TRACE: Getting user by username");
+  TRACE_RBAC("RBAC_TRACE: Getting user by username.");
   rbac_user_t* user = rbac_get_user_by_username(rbac, username);
   if (!user) {
-    LOG_TRACE("RBAC_TRACE: User not found: %s", username);
+    TRACE_RBAC("RBAC_TRACE: User not found: %s", username);
     return 0;
   }
   
-  LOG_TRACE("RBAC_TRACE: User found, verifying password");
+  TRACE_RBAC("RBAC_TRACE: User found, verifying password.");
   
   /* Safety check */
   if (!user) {
-    LOG_ERROR("RBAC_TRACE: User structure is NULL!");
+    LOG_DEBUG("User structure is NULL!");
     return 0;
   }
   
   const char* hash = user->password_hash;
   if (!hash) {
-    LOG_ERROR("RBAC_TRACE: User password_hash is NULL!");
+    LOG_DEBUG("User password_hash is NULL!");
     rbac_free_user(user);
     return 0;
   }
   
-  LOG_TRACE("RBAC_TRACE: Password hash: %s", hash);
+  TRACE_RBAC("RBAC_TRACE: Password hash: %s", hash);
   
   /* Verify password */
   int result = verify_password(password, hash);
   
-  LOG_TRACE("RBAC_TRACE: Password verification result: %d", result);
+  TRACE_RBAC("RBAC_TRACE: Password verification result: %d", result);
   
   /* Clean up */
   rbac_free_user(user);

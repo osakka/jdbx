@@ -151,7 +151,7 @@ static const char* get_request_user_id(http_request_t* request) {
   static char user_id_buffer[256]; /* Static buffer to hold the user ID */
   
   if (!request || !request->authorization) {
-    LOG_TRACE("RBAC_API: No authorization header in request");
+    TRACE_API("RBAC_API: No authorization header in request.");
     return NULL;
   }
   
@@ -166,18 +166,18 @@ static const char* get_request_user_id(http_request_t* request) {
     token_str = auth;
   }
   
-  LOG_TRACE("RBAC_API: Extracting user_id from token");
+  TRACE_API("RBAC_API: Extracting user_id from token.");
   
   /* Decode the JWT to get the user_id from the 'sub' claim */
   jwt_token_t* token = jwt_decode(token_str);
   if (!token) {
-    LOG_TRACE("RBAC_API: Failed to decode JWT token");
+    TRACE_API("RBAC_API: Failed to decode JWT token.");
     return NULL;
   }
   
   /* Get the subject (user_id) from the token */
   if (!token->payload || !token->payload->sub) {
-    LOG_TRACE("RBAC_API: No subject (user_id) in JWT token");
+    TRACE_API("RBAC_API: No subject (user_id) in JWT token.");
     jwt_free(token);
     return NULL;
   }
@@ -186,7 +186,7 @@ static const char* get_request_user_id(http_request_t* request) {
   strncpy(user_id_buffer, token->payload->sub, sizeof(user_id_buffer) - 1);
   user_id_buffer[sizeof(user_id_buffer) - 1] = '\0';
   
-  LOG_TRACE("RBAC_API: Extracted user_id from token: %s", user_id_buffer);
+  TRACE_API("RBAC_API: Extracted user_id from token: %s", user_id_buffer);
   
   jwt_free(token);
   return user_id_buffer;
@@ -231,19 +231,19 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
   
   /* Check if user has admin permission */
   const char* user_id = get_request_user_id(request);
-  LOG_TRACE("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
+  TRACE_API("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
   
   if (!user_id) {
-    LOG_ERROR("RBAC_API: No user_id available for permission check");
+    LOG_DEBUG("No user_id available for permission check");
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
   /* Check admin permission */
   int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN);
-  LOG_TRACE("RBAC_API: Permission check result: %d", has_permission);
+  TRACE_API("RBAC_API: Permission check result: %d", has_permission);
   
   if (!has_permission) {
-    LOG_TRACE("RBAC_API: User %s does not have admin permission", user_id);
+    TRACE_API("RBAC_API: User %s does not have admin permission", user_id);
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
@@ -418,19 +418,19 @@ http_response_t* api_handle_rbac_create_user(api_context_t* ctx, http_request_t*
   
   /* Check if user has admin permission */
   const char* user_id = get_request_user_id(request);
-  LOG_TRACE("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
+  TRACE_API("RBAC_API: Checking admin permission for user_id: %s", user_id ? user_id : "NULL");
   
   if (!user_id) {
-    LOG_ERROR("RBAC_API: No user_id available for permission check");
+    LOG_DEBUG("No user_id available for permission check");
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
   /* Check admin permission */
   int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_USER, "*", RBAC_ADMIN);
-  LOG_TRACE("RBAC_API: Permission check result: %d", has_permission);
+  TRACE_API("RBAC_API: Permission check result: %d", has_permission);
   
   if (!has_permission) {
-    LOG_TRACE("RBAC_API: User %s does not have admin permission", user_id);
+    TRACE_API("RBAC_API: User %s does not have admin permission", user_id);
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
@@ -678,19 +678,19 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
   
   /* Check if user has admin permission */
   const char* user_id = get_request_user_id(request);
-  LOG_TRACE("RBAC_API: GET /api/rbac/roles - checking permission for user: %s", user_id ? user_id : "NULL");
+  TRACE_API("RBAC_API: GET /api/rbac/roles - checking permission for user: %s", user_id ? user_id : "NULL");
   
   if (!user_id) {
-    LOG_ERROR("RBAC_API: No user_id available for permission check");
+    LOG_DEBUG("No user_id available for permission check");
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
   /* Check read permission on roles */
   int has_permission = rbac_db_check_permission(ctx->db, user_id, RBAC_ROLE, "*", RBAC_READ);
-  LOG_TRACE("RBAC_API: Role permission check result: %d", has_permission);
+  TRACE_API("RBAC_API: Role permission check result: %d", has_permission);
   
   if (!has_permission) {
-    LOG_TRACE("RBAC_API: User %s does not have role read permission", user_id);
+    TRACE_API("RBAC_API: User %s does not have role read permission", user_id);
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   

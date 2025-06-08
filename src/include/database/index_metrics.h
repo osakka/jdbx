@@ -93,6 +93,12 @@ typedef struct index_metrics_collector {
 int index_metrics_init(void);
 
 /**
+ * Get the global metrics collector instance
+ * @return Pointer to the global metrics collector or NULL if not initialized
+ */
+index_metrics_collector_t* index_metrics_get_collector(void);
+
+/**
  * Cleanup the index metrics collection system
  */
 void index_metrics_cleanup(void);

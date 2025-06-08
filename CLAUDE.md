@@ -376,3 +376,18 @@ Regular code audits ensure quality:
 6. **Update Documentation**: Keep READMEs current
 7. **Commit Changes**: Use descriptive commit messages
 8. **Tag Releases**: When appropriate with comprehensive messages
+
+## Recent Updates (v3.1.0 - June 8, 2025)
+
+### Major Improvements
+1. **Adaptive Indexing System**: Automatic index creation based on query patterns
+2. **Connection Leak Fix**: Resolved critical memory growth in keep-alive connections
+3. **Configuration Management**: Complete three-tier configuration system
+4. **Logging Standards**: 100% compliance with redundant prefix removal
+5. **Documentation Accuracy**: Fixed version inconsistencies, default values, and API documentation
+
+### Code Quality
+- Zero compiler warnings with -Wall -Wextra
+- All backup files moved to trash/
+- Single source of truth maintained
+- Comprehensive documentation updates

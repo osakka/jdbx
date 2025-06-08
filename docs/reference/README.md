@@ -47,9 +47,12 @@
 |---------|---------|-------------|
 | Port | 5000 | Server listen port |
 | Host | 0.0.0.0 | Bind address |
-| Database Path | /opt/jsondb/build/var | Data directory |
+| Database Path | var/data/jsondb/db.jdb | Database file path |
 | Log Level | INFO | Logging verbosity |
-| Cache Size | 50MB | Document cache size |
+| Cache Size | 10MB | Document cache size |
+| SSL Enabled | true | SSL/TLS encryption enabled |
+| Thread Pool Min | 4 | Minimum thread pool size |
+| Thread Pool Max | 16 | Maximum thread pool size |
 
 ### Common Query Operators
 
@@ -85,22 +88,30 @@
 ## Configuration Files
 
 ### System Configuration
-Location: `_system_config` collection
+Location: `_system_config` collection (highest priority in 3-tier config system)
 
 ```json
 {
   "server": {
     "port": 5000,
     "host": "0.0.0.0",
-    "ssl": false
+    "ssl": true,
+    "ssl_cert": "/etc/ssl/certs/server.pem",
+    "ssl_key": "/etc/ssl/private/server.key"
   },
   "database": {
-    "path": "/opt/jsondb/build/var",
+    "path": "var/data/jsondb/db.jdb",
     "mmap_size": "10GB"
   },
   "cache": {
     "enabled": true,
-    "size": "1GB"
+    "size": "10MB"
+  },
+  "thread_pool": {
+    "min_threads": 4,
+    "max_threads": 16,
+    "queue_size": 1024,
+    "idle_timeout": 60
   }
 }
 ```
@@ -170,11 +181,17 @@ See [REST API Reference](../api/rest-api.md) for complete documentation.
 # Custom port
 jsondb_server --port 8080
 
-# Custom config
-jsondb_server --config /path/to/config.json
+# Disable SSL
+jsondb_server --no-ssl
+
+# Custom SSL certificates
+jsondb_server --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
 
 # Debug mode
 jsondb_server --log-level DEBUG
+
+# Thread pool configuration
+jsondb_server --thread-pool-min 8 --thread-pool-max 32
 ```
 
 ## File Formats

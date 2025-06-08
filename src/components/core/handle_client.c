@@ -97,7 +97,7 @@ static int client_setup_ssl(client_conn_t* client) {
   ssl_context_t* ssl_ctx = server_get_ssl_context();
   if (!ssl_ctx) {
     if (g_logger) {
-      LOG_ERROR("No SSL context available for client connection");
+      LOG_ERROR("No SSL context available for client connection.");
     }
     return -1;
   }
@@ -106,7 +106,7 @@ static int client_setup_ssl(client_conn_t* client) {
   ssl_error_t error = ssl_connection_create(ssl_ctx, client->client_fd, &client->ssl_conn);
   if (error != SSL_SUCCESS) {
     if (g_logger) {
-      LOG_ERROR("Failed to create SSL connection: %s", ssl_error_string(error));
+      LOG_ERROR("Cannot create SSL connection: %s", ssl_error_string(error));
     }
     return -1;
   }
@@ -147,17 +147,17 @@ static void client_cleanup_ssl(client_conn_t* client) {
 void handle_client(void* client_data) {
   /* Ultra-early crash detection logging */
   if (g_logger) {
-    LOG_TRACE("HANDLE_CLIENT_ENTRY: client_data=%p", client_data);
+    TRACE_NET("HANDLE_CLIENT_ENTRY: client_data=%p", client_data);
   }
   
   /* Get start time for performance tracking */
   struct timespec start_time, end_time;
   if (g_logger) {
-    LOG_TRACE("HANDLE_CLIENT_CLOCK_START");
+    TRACE_NET("HANDLE_CLIENT_CLOCK_START.");
   }
   clock_gettime(CLOCK_MONOTONIC, &start_time);
   if (g_logger) {
-    LOG_TRACE("HANDLE_CLIENT_CLOCK_SUCCESS");
+    TRACE_NET("HANDLE_CLIENT_CLOCK_SUCCESS.");
   }
   
   /* Start request timer for metrics */
@@ -204,10 +204,10 @@ void handle_client(void* client_data) {
 
   /* Comprehensive connection lifecycle logging */
   if (g_logger) {
-    LOG_INFO("CONNECTION_START: fd=%d, thread=%lu, tid=%d, client=%s:%d, ssl=%s", 
+    LOG_INFO("Connection started - fd=%d, thread=%lu, tid=%d, client=%s:%d, ssl=%s", 
         client_fd, (unsigned long)tid, system_tid, client_ip, client_port,
         client->use_ssl ? "enabled" : "disabled");
-    LOG_TRACE("CONNECTION_DETAILS: api_ctx=%p, client_struct=%p", 
+    TRACE_NET("CONNECTION_DETAILS: api_ctx=%p, client_struct=%p", 
         client->api_ctx, (void*)client);
   } else {
     printf("Thread %lu (tid=%d) handling client connection (fd=%d, %s:%d)\n", 
@@ -238,7 +238,7 @@ void handle_client(void* client_data) {
     
     if (client_setup_ssl(client) != 0) {
       if (g_logger) {
-        LOG_ERROR("Failed to set up SSL connection for client fd=%d", client_fd);
+        LOG_ERROR("Cannot set up SSL connection for client fd=%d", client_fd);
       }
       close(client_fd);
       client->client_fd = 0;
@@ -279,7 +279,7 @@ void handle_client(void* client_data) {
 
   /* Read request with enhanced error tracking */
   if (g_logger) {
-    LOG_TRACE("CONNECTION_READ_START: fd=%d, attempting to read %d bytes", 
+    TRACE_NET("CONNECTION_READ_START: fd=%d, attempting to read %d bytes", 
         client_fd, BUFFER_SIZE);
   }
   
@@ -299,7 +299,7 @@ void handle_client(void* client_data) {
     }
     
     if (g_logger) {
-      LOG_WARNING("CONNECTION_READ_FAILED: fd=%d, bytes=%d, errno=%d, reason=%s, client=%s:%d", 
+      LOG_DEBUG("Connection read failed - fd=%d, bytes=%d, errno=%d, reason=%s, client=%s:%d", 
           client_fd, bytes_read, errno, error_reason, client_ip, client_port);
     } else {
       perror("read failed");
@@ -311,7 +311,7 @@ void handle_client(void* client_data) {
   }
   
   if (g_logger) {
-    LOG_TRACE("CONNECTION_READ_SUCCESS: fd=%d, bytes_read=%d", client_fd, bytes_read);
+    TRACE_NET("CONNECTION_READ_SUCCESS: fd=%d, bytes_read=%d", client_fd, bytes_read);
   }
 
   /* Null-terminate buffer */
@@ -402,7 +402,7 @@ void handle_client(void* client_data) {
   
   /* Debug request */
   if (g_logger) {
-    LOG_TRACE("REQUEST_RECEIVED: method=%d (%s), path='%s', content_length=%zu", 
+    TRACE_NET("REQUEST_RECEIVED: method=%d (%s), path='%s', content_length=%zu", 
         request->method,
         request->method == HTTP_GET ? "GET" :
         request->method == HTTP_POST ? "POST" :
@@ -427,7 +427,7 @@ void handle_client(void* client_data) {
     }
     
     if (request->body) {
-      LOG_TRACE("REQUEST_BODY: %.200s", request->body);
+      TRACE_NET("REQUEST_BODY: %.200s", request->body);
     }
   }
 
@@ -576,7 +576,7 @@ void handle_client(void* client_data) {
   
   /* Dispatch request to API handler */
   if (g_logger) {
-    LOG_TRACE("API_DISPATCH: Dispatching %s %s to API handler", 
+    TRACE_NET("API_DISPATCH: Dispatching %s %s to API handler", 
         request->method == HTTP_GET ? "GET" :
         request->method == HTTP_POST ? "POST" :
         request->method == HTTP_PUT ? "PUT" :
@@ -587,14 +587,14 @@ void handle_client(void* client_data) {
   http_response_t* response = api_dispatch_request(client->api_ctx, request);
   
   if (g_logger) {
-    LOG_TRACE("API_DISPATCH_RESULT: response=%p, status=%d", 
+    TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
         (void*)response, response ? (int)response->status : -1);
   }
   
   /* If no response from API handler, return 404 */
   if (!response) {
     if (g_logger) {
-      LOG_TRACE("API_DISPATCH: No response from API handler, returning 404");
+      TRACE_NET("API_DISPATCH: No response from API handler, returning 404.");
     }
     response = create_http_response(HTTP_NOT_FOUND, 
       "{\"error\":\"Not found\"}", "application/json");
@@ -620,11 +620,11 @@ void handle_client(void* client_data) {
           continue;
         } else if (errno == EPIPE || errno == ECONNRESET) {
           /* Connection closed by client */
-          LOG_DEBUG("Client closed connection during write");
+          LOG_DEBUG("Client closed connection during write.");
           break;
         } else {
           /* Other error */
-          LOG_ERROR("Write error: %s", strerror(errno));
+          LOG_ERROR("Write operation failed: %s", strerror(errno));
           break;
         }
       } else if (result == 0) {
@@ -653,7 +653,7 @@ void handle_client(void* client_data) {
   /* Free client data with safety checks */
   if (client) {
     if (g_logger) {
-      LOG_TRACE("CONNECTION_NORMAL_CLEANUP: client=%p, performing safe cleanup", (void*)client);
+      TRACE_NET("CONNECTION_NORMAL_CLEANUP: client=%p, performing safe cleanup", (void*)client);
     }
     
     /* Basic pointer validation before normal cleanup */
@@ -667,11 +667,11 @@ void handle_client(void* client_data) {
       client = NULL;
       
       if (g_logger) {
-        LOG_TRACE("CONNECTION_NORMAL_FREED: client structure freed successfully");
+        TRACE_NET("CONNECTION_NORMAL_FREED: client structure freed successfully.");
       }
     } else {
       if (g_logger) {
-        LOG_ERROR("CONNECTION_NORMAL_SKIP: Invalid client pointer %p, skipping free", (void*)client);
+        LOG_DEBUG("Invalid client pointer %p, skipping free", (void*)client);
       }
     }
   }
@@ -703,7 +703,7 @@ cleanup:
                               (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
   
   if (g_logger) {
-    LOG_INFO("CONNECTION_END: fd=%d, thread=%lu, tid=%d, client=%s:%d, duration=%.3fs", 
+    LOG_INFO("Connection ended - fd=%d, thread=%lu, tid=%d, client=%s:%d, duration=%.3fs", 
         client_fd, (unsigned long)tid, system_tid, client_ip, client_port, connection_duration);
     
     /* Log detailed connection state for debugging */
@@ -713,7 +713,7 @@ cleanup:
       socklen_t len = sizeof(socket_error);
       int gso_result = getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &socket_error, &len);
       
-      LOG_TRACE("CONNECTION_STATE: fd=%d, getsockopt_result=%d, socket_error=%d, ssl_cleanup=%s", 
+      TRACE_NET("CONNECTION_STATE: fd=%d, getsockopt_result=%d, socket_error=%d, ssl_cleanup=%s", 
           client_fd, gso_result, socket_error, 
           (client && client->ssl_conn) ? "required" : "not_needed");
     }
@@ -722,7 +722,7 @@ cleanup:
   /* Cleanup SSL connection if active */
   if (client && client->ssl_conn) {
     if (g_logger) {
-      LOG_TRACE("CONNECTION_SSL_CLEANUP: fd=%d, cleaning up SSL connection", client_fd);
+      TRACE_NET("CONNECTION_SSL_CLEANUP: fd=%d, cleaning up SSL connection", client_fd);
     }
     client_cleanup_ssl(client);
   }
@@ -730,7 +730,7 @@ cleanup:
   /* Close file descriptor if still open */
   if (client_fd > 0) {
     if (g_logger) {
-      LOG_TRACE("CONNECTION_FD_CLOSE: fd=%d, closing file descriptor", client_fd);
+      TRACE_NET("CONNECTION_FD_CLOSE: fd=%d, closing file descriptor", client_fd);
     }
     close(client_fd);
     if (client) {
@@ -741,7 +741,7 @@ cleanup:
   /* Enhanced client structure cleanup with memory safety checks */
   if (client) {
     if (g_logger) {
-      LOG_TRACE("CONNECTION_STRUCT_CLEANUP_START: client=%p, performing safety checks", (void*)client);
+      TRACE_NET("CONNECTION_STRUCT_CLEANUP_START: client=%p, performing safety checks", (void*)client);
     }
     
     /* Memory safety validation before cleanup */
@@ -750,7 +750,7 @@ cleanup:
     /* Check for obvious pointer corruption */
     if ((uintptr_t)client < 0x1000 || (uintptr_t)client > 0x7fffffffffff) {
       if (g_logger) {
-        LOG_ERROR("CONNECTION_MEMORY_ERROR: Invalid client pointer detected: %p", (void*)client);
+        LOG_ERROR("Invalid client pointer detected: %p", (void*)client);
       }
       cleanup_safe = 0;
     }
@@ -760,7 +760,7 @@ cleanup:
       /* Check file descriptor validity */
       if (client->client_fd < 0 || client->client_fd > 65535) {
         if (g_logger) {
-          LOG_WARNING("CONNECTION_MEMORY_WARNING: Invalid client_fd=%d in structure %p", 
+          LOG_WARNING("Invalid client_fd=%d in structure %p", 
                client->client_fd, (void*)client);
         }
       }
@@ -769,14 +769,14 @@ cleanup:
       if (client->api_ctx) {
         if ((uintptr_t)client->api_ctx < 0x1000 || (uintptr_t)client->api_ctx > 0x7fffffffffff) {
           if (g_logger) {
-            LOG_WARNING("CONNECTION_MEMORY_WARNING: Invalid api_ctx pointer=%p in client %p", 
+            LOG_WARNING("Invalid api_ctx pointer=%p in client %p", 
                  (void*)client->api_ctx, (void*)client);
           }
         }
       }
       
       if (g_logger) {
-        LOG_TRACE("CONNECTION_STRUCT_VALIDATED: client=%p, fd=%d, api_ctx=%p, ssl_conn=%p", 
+        TRACE_NET("CONNECTION_STRUCT_VALIDATED: client=%p, fd=%d, api_ctx=%p, ssl_conn=%p", 
              (void*)client, client->client_fd, (void*)client->api_ctx, (void*)client->ssl_conn);
       }
     }
@@ -784,7 +784,7 @@ cleanup:
     /* Perform safe cleanup if validation passed */
     if (cleanup_safe) {
       if (g_logger) {
-        LOG_TRACE("CONNECTION_STRUCT_FREE: client=%p, freeing client structure", (void*)client);
+        TRACE_NET("CONNECTION_STRUCT_FREE: client=%p, freeing client structure", (void*)client);
       }
       
       /* Zero out critical fields before freeing to detect use-after-free */
@@ -800,49 +800,49 @@ cleanup:
       client = NULL;
       
       if (g_logger) {
-        LOG_TRACE("CONNECTION_STRUCT_FREED: structure freed successfully");
+        TRACE_NET("CONNECTION_STRUCT_FREED: structure freed successfully.");
       }
     } else {
       if (g_logger) {
-        LOG_ERROR("CONNECTION_CLEANUP_SKIPPED: Unsafe client structure %p not freed to prevent crash", 
+        LOG_WARNING("Unsafe client structure %p not freed to prevent crash", 
              (void*)client);
       }
     }
   } else {
     if (g_logger) {
-      LOG_TRACE("CONNECTION_STRUCT_NULL: client structure already NULL, no cleanup needed");
+      TRACE_NET("CONNECTION_STRUCT_NULL: client structure already NULL, no cleanup needed.");
     }
   }
   
   /* Decrement active connections */
   if (g_logger) {
-    LOG_TRACE("METRICS_CLEANUP_START: active_connections=%p, request_timer=%p", 
+    TRACE_NET("METRICS_CLEANUP_START: active_connections=%p, request_timer=%p", 
         (void*)active_connections, (void*)request_timer);
   }
   
   if (active_connections) {
     if (g_logger) {
-      LOG_TRACE("METRICS_GAUGE_DEC_START: active_connections=%p", (void*)active_connections);
+      TRACE_NET("METRICS_GAUGE_DEC_START: active_connections=%p", (void*)active_connections);
     }
     metrics_gauge_dec(active_connections, 1.0);
     if (g_logger) {
-      LOG_TRACE("METRICS_GAUGE_DEC_SUCCESS");
+      TRACE_NET("METRICS_GAUGE_DEC_SUCCESS.");
     }
   }
   
   /* Stop request timer if active */
   if (request_timer) {
     if (g_logger) {
-      LOG_TRACE("METRICS_TIMER_STOP_START: request_timer=%p", (void*)request_timer);
+      TRACE_NET("METRICS_TIMER_STOP_START: request_timer=%p", (void*)request_timer);
     }
     metrics_timer_stop(request_timer);
     if (g_logger) {
-      LOG_TRACE("METRICS_TIMER_STOP_SUCCESS");
+      TRACE_NET("METRICS_TIMER_STOP_SUCCESS.");
     }
   }
   
   if (g_logger) {
-    LOG_TRACE("CONNECTION_CLEANUP_COMPLETE: thread=%lu, tid=%d", 
+    TRACE_NET("CONNECTION_CLEANUP_COMPLETE: thread=%lu, tid=%d", 
         (unsigned long)tid, system_tid);
   }
 }

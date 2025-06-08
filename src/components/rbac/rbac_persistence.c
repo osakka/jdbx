@@ -16,14 +16,14 @@
  */
 int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   if (!db || !rbac) {
-    LOG_ERROR("NULL database or RBAC system passed to rbac_database_persist");
+    LOG_ERROR("NULL database or RBAC system passed to rbac_database_persist.");
     return 0;
   }
   
-  LOG_INFO("RBAC save");
+  LOG_INFO("RBAC save.");
   
   /* STAGE 1: Initialize RBAC collections if they don't exist */
-  LOG_DEBUG("STAGE 1: Initializing RBAC collections");
+  LOG_DEBUG("STAGE 1: Initializing RBAC collections.");
   rbac_db_status_t status = rbac_db_init_collections(db);
   if (!status.success) {
     LOG_ERROR("initialize RBAC collections: %s", 
@@ -31,13 +31,13 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     if (status.error_message) free(status.error_message);
     return 0;
   }
-  LOG_DEBUG("STAGE 1: Successfully initialized RBAC collections");
+  LOG_DEBUG("STAGE 1: Successfully initialized RBAC collections.");
   
   /* Skip the problematic clearing of existing users and roles */
-  LOG_INFO("Skipping deletion of existing RBAC data to avoid hanging");
+  LOG_INFO("Skipping deletion of existing RBAC data to avoid hanging.");
   
   /* STAGE 2: Skip creating default roles - this is handled by rbac_database_init */
-  LOG_DEBUG("STAGE 2: Skipping default role creation (handled by rbac_database_init)");
+  LOG_DEBUG("STAGE 2: Skipping default role creation (handled by rbac_database_init).");
   
   /* STAGE 3: Save users with detailed step logging */
   LOG_INFO("STAGE 3: Saving %zu users to database", rbac->users->value.object.size);
@@ -169,7 +169,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   json_free(query);
   
   if (!users_result || users_result->type != JSON_ARRAY || users_result->value.array.size == 0) {
-    LOG_INFO("No users found - creating default admin user");
+    LOG_INFO("No users found - creating default admin user.");
     
     /* Create default admin user */
     json_value_t* admin_user = json_create_object();
@@ -185,9 +185,9 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     /* Insert admin user */
     json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, admin_user);
     if (!result) {
-      LOG_ERROR("create default admin user");
+      LOG_ERROR("create default admin user.");
     } else {
-      LOG_INFO("Created default admin user");
+      LOG_INFO("Created default admin user.");
       json_free(result);
     }
   }
@@ -196,6 +196,6 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     json_free(users_result);
   }
   
-  LOG_INFO("RBAC save completed");
+  LOG_INFO("RBAC save completed.");
   return 1;
 }

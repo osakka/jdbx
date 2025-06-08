@@ -43,16 +43,16 @@ static js_script_type_t js_script_type_from_string(const char *type_str) {
 /* Initialize native JavaScript storage system */
 int js_native_storage_init(database_t *db) {
     if (!db) {
-        LOG_ERROR("Database pointer is NULL");
+        LOG_ERROR("Database pointer is NULL.");
         return 0;
     }
 
-    LOG_INFO("Initializing native JavaScript storage system");
+    LOG_INFO("Initializing native JavaScript storage system.");
 
     /* Create validators collection */
     if (!db_collection_exists(db, JS_VALIDATORS_COLLECTION)) {
         if (db_create_collection(db, JS_VALIDATORS_COLLECTION) != 0) {
-            LOG_ERROR("Failed to create JavaScript validators collection");
+            LOG_ERROR("Cannot create JavaScript validators collection.");
             return 0;
         }
         LOG_DEBUG("Created collection: %s", JS_VALIDATORS_COLLECTION);
@@ -61,7 +61,7 @@ int js_native_storage_init(database_t *db) {
     /* Create transformers collection */
     if (!db_collection_exists(db, JS_TRANSFORMERS_COLLECTION)) {
         if (db_create_collection(db, JS_TRANSFORMERS_COLLECTION) != 0) {
-            LOG_ERROR("Failed to create JavaScript transformers collection");
+            LOG_ERROR("Cannot create JavaScript transformers collection.");
             return 0;
         }
         LOG_DEBUG("Created collection: %s", JS_TRANSFORMERS_COLLECTION);
@@ -70,7 +70,7 @@ int js_native_storage_init(database_t *db) {
     /* Create functions collection */
     if (!db_collection_exists(db, JS_FUNCTIONS_COLLECTION)) {
         if (db_create_collection(db, JS_FUNCTIONS_COLLECTION) != 0) {
-            LOG_ERROR("Failed to create JavaScript functions collection");
+            LOG_ERROR("Cannot create JavaScript functions collection.");
             return 0;
         }
         LOG_DEBUG("Created collection: %s", JS_FUNCTIONS_COLLECTION);
@@ -79,19 +79,19 @@ int js_native_storage_init(database_t *db) {
     /* Create execution metrics collection */
     if (!db_collection_exists(db, JS_EXECUTION_METRICS_COLLECTION)) {
         if (db_create_collection(db, JS_EXECUTION_METRICS_COLLECTION) != 0) {
-            LOG_ERROR("Failed to create JavaScript execution metrics collection");
+            LOG_ERROR("Cannot create JavaScript execution metrics collection.");
             return 0;
         }
         LOG_DEBUG("Created collection: %s", JS_EXECUTION_METRICS_COLLECTION);
     }
 
-    LOG_INFO("Native JavaScript storage system initialized successfully");
+    LOG_INFO("Native JavaScript storage system initialized successfully.");
     return 1;
 }
 
 /* Generate unique script ID using standard document ID format */
 void js_native_generate_script_id(char *buffer, size_t buffer_size) {
-    time_t now = time(NULL);
+//     time_t now = time(NULL);
     int random_part = rand() % 10000;
     
     struct timespec ts;
@@ -104,7 +104,7 @@ void js_native_generate_script_id(char *buffer, size_t buffer_size) {
 js_script_metadata_t* js_native_create_script_metadata(void) {
     js_script_metadata_t *metadata = calloc(1, sizeof(js_script_metadata_t));
     if (!metadata) {
-        LOG_ERROR("Failed to allocate memory for script metadata");
+        LOG_ERROR("Cannot allocate memory for script metadata.");
         return NULL;
     }
 
@@ -274,7 +274,7 @@ js_script_metadata_t* js_native_script_metadata_from_json(json_value_t *json) {
 /* Store JavaScript script in native database storage */
 int js_native_store_script(database_t *db, const char *user_id, js_script_metadata_t *metadata) {
     if (!db || !user_id || !metadata) {
-        LOG_ERROR("Invalid parameters for storing JavaScript script");
+        LOG_ERROR("Invalid parameters for storing JavaScript script.");
         return 0;
     }
 
@@ -297,7 +297,7 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
     /* Convert to JSON */
     json_value_t *script_doc = js_native_script_metadata_to_json(metadata);
     if (!script_doc) {
-        LOG_ERROR("Failed to convert script metadata to JSON");
+        LOG_ERROR("Cannot convert script metadata to JSON.");
         return 0;
     }
 
@@ -306,7 +306,7 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
     json_free(script_doc);
 
     if (!result) {
-        LOG_ERROR("Failed to store JavaScript script in database");
+        LOG_ERROR("Cannot store JavaScript script in database.");
         return 0;
     }
 
@@ -319,7 +319,7 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
 /* Retrieve JavaScript script by ID */
 js_script_metadata_t* js_native_get_script(database_t *db, const char *script_id) {
     if (!db || !script_id) {
-        LOG_ERROR("Invalid parameters for retrieving JavaScript script");
+        LOG_ERROR("Invalid parameters for retrieving JavaScript script.");
         return NULL;
     }
 
@@ -347,7 +347,7 @@ js_script_metadata_t* js_native_get_script(database_t *db, const char *script_id
 int js_native_check_execution_permission(database_t *db, const char *user_id, 
                                         const char *script_id, const char *operation) {
     if (!db || !user_id || !script_id) {
-        LOG_ERROR("Invalid parameters for permission check");
+        LOG_ERROR("Invalid parameters for permission check.");
         return 0;
     }
     
@@ -397,7 +397,7 @@ int js_native_check_execution_permission(database_t *db, const char *user_id,
 /* Record script execution metrics */
 int js_native_record_execution_metrics(database_t *db, js_execution_context_t *context) {
     if (!db || !context) {
-        LOG_ERROR("Invalid parameters for recording execution metrics");
+        LOG_ERROR("Invalid parameters for recording execution metrics.");
         return 0;
     }
 
@@ -445,7 +445,7 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
     json_free(metrics_doc);
 
     if (!result) {
-        LOG_ERROR("Failed to record JavaScript execution metrics");
+        LOG_ERROR("Cannot record JavaScript execution metrics.");
         return 0;
     }
 
@@ -463,7 +463,7 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
 json_value_t* js_native_find_triggered_scripts(database_t *db, const char *collection_name,
                                                const char *operation, json_value_t *document) {
     if (!db || !collection_name || !operation) {
-        LOG_ERROR("Invalid parameters for finding triggered scripts");
+        LOG_ERROR("Invalid parameters for finding triggered scripts.");
         return NULL;
     }
 
@@ -614,7 +614,7 @@ int js_native_validate_script_syntax(js_engine_t *engine, const char *script_cod
 json_value_t* js_native_list_scripts(database_t *db, js_script_type_t type, 
                                      const char *collection_name, const char *user_id) {
     if (!db) {
-        LOG_ERROR("Database pointer is NULL");
+        LOG_ERROR("Database pointer is NULL.");
         return NULL;
     }
 
@@ -648,7 +648,7 @@ int js_native_execute_script(js_engine_t *engine, database_t *db, const char *sc
                             const char *user_id, json_value_t *input_data, 
                             json_value_t **output_data, js_execution_context_t *context) {
     if (!engine || !db || !script_id || !user_id || !context) {
-        LOG_ERROR("Invalid parameters for script execution");
+        LOG_ERROR("Invalid parameters for script execution.");
         return 0;
     }
 
@@ -716,7 +716,7 @@ int js_native_execute_script(js_engine_t *engine, database_t *db, const char *sc
 /* Get global JavaScript execution metrics */
 json_value_t* js_native_get_global_metrics(database_t *db, time_t from_time, time_t to_time) {
     if (!db) {
-        LOG_ERROR("Database pointer is NULL");
+        LOG_ERROR("Database pointer is NULL.");
         return NULL;
     }
 
@@ -797,7 +797,7 @@ int js_native_execute_validators(js_engine_t *engine, database_t *db, const char
                                json_value_t *document, const char *user_id, 
                                json_value_t **validation_errors) {
     if (!engine || !db || !collection_name || !document || !user_id) {
-        LOG_ERROR("Invalid parameters for executing validators");
+        LOG_ERROR("Invalid parameters for executing validators.");
         return 0;
     }
 
@@ -865,7 +865,7 @@ json_value_t* js_native_execute_transformers(js_engine_t *engine, database_t *db
                                             const char *collection_name, json_value_t *document,
                                             const char *operation, const char *user_id) {
     if (!engine || !db || !collection_name || !document || !operation || !user_id) {
-        LOG_ERROR("Invalid parameters for executing transformers");
+        LOG_ERROR("Invalid parameters for executing transformers.");
         return json_clone(document); /* Return original document on error */
     }
 
@@ -918,7 +918,7 @@ json_value_t* js_native_execute_transformers(js_engine_t *engine, database_t *db
 int js_native_update_script(database_t *db, const char *user_id, const char *script_id, 
                            js_script_metadata_t *metadata) {
     if (!db || !user_id || !script_id || !metadata) {
-        LOG_ERROR("Invalid parameters for updating JavaScript script");
+        LOG_ERROR("Invalid parameters for updating JavaScript script.");
         return 0;
     }
 
@@ -959,7 +959,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
     /* Convert to JSON */
     json_value_t *script_doc = js_native_script_metadata_to_json(metadata);
     if (!script_doc) {
-        LOG_ERROR("Failed to convert script metadata to JSON for update");
+        LOG_ERROR("Cannot convert script metadata to JSON for update.");
         return 0;
     }
 
@@ -968,7 +968,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
     json_free(script_doc);
 
     if (!result) {
-        LOG_ERROR("Failed to update JavaScript script in database");
+        LOG_ERROR("Cannot update JavaScript script in database.");
         return 0;
     }
 
@@ -980,7 +980,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
 /* Delete JavaScript script */
 int js_native_delete_script(database_t *db, const char *user_id, const char *script_id) {
     if (!db || !user_id || !script_id) {
-        LOG_ERROR("Invalid parameters for deleting JavaScript script");
+        LOG_ERROR("Invalid parameters for deleting JavaScript script.");
         return 0;
     }
 
@@ -1014,7 +1014,7 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
     /* Delete from database */
     int result = db_delete_document(db, collection_name, script_id);
     if (!result) {
-        LOG_ERROR("Failed to delete JavaScript script from database");
+        LOG_ERROR("Cannot delete JavaScript script from database.");
         return 0;
     }
 
@@ -1026,7 +1026,7 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
 json_value_t* js_native_get_script_statistics(database_t *db, const char *script_id, 
                                               time_t from_time, time_t to_time) {
     if (!db || !script_id) {
-        LOG_ERROR("Invalid parameters for script statistics");
+        LOG_ERROR("Invalid parameters for script statistics.");
         return NULL;
     }
 
@@ -1116,7 +1116,7 @@ json_value_t* js_native_execute_tagged_functions(js_engine_t *engine, database_t
                                                 json_value_t *input_data, 
                                                 const char *tag, const char *user_id) {
     if (!engine || !db || !collection_name || !tag || !user_id) {
-        LOG_ERROR("Invalid parameters for executing tagged functions");
+        LOG_ERROR("Invalid parameters for executing tagged functions.");
         return NULL;
     }
 

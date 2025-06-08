@@ -719,12 +719,12 @@ timer_context_t* metrics_timer_start(metric_t* timer) {
 /* Stop a timer */
 void metrics_timer_stop(timer_context_t* context) {
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_ENTRY: context=%p", (void*)context);
+    TRACE_METRICS("TIMER_STOP_ENTRY: context=%p", (void*)context);
   }
   
   if (!context || !context->metric || context->metric->type != METRIC_TYPE_TIMER) {
     if (g_logger) {
-      LOG_TRACE("TIMER_STOP_INVALID: context=%p, metric=%p, type=%d", 
+      TRACE_METRICS("TIMER_STOP_INVALID: context=%p, metric=%p, type=%d", 
           (void*)context, context ? (void*)context->metric : NULL, 
           (context && context->metric) ? (int)context->metric->type : -1);
     }
@@ -732,34 +732,34 @@ void metrics_timer_stop(timer_context_t* context) {
   }
   
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_VALID: context=%p, metric=%p", (void*)context, (void*)context->metric);
+    TRACE_METRICS("TIMER_STOP_VALID: context=%p, metric=%p", (void*)context, (void*)context->metric);
   }
   
   /* Calculate elapsed time */
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_ELAPSED_START");
+    TRACE_METRICS("TIMER_STOP_ELAPSED_START.");
   }
   double elapsed = metrics_elapsed_time(context->start_time);
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_ELAPSED_SUCCESS: elapsed=%f", elapsed);
+    TRACE_METRICS("TIMER_STOP_ELAPSED_SUCCESS: elapsed=%f", elapsed);
   }
   
   /* Update timer */
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_OBSERVE_START");
+    TRACE_METRICS("TIMER_STOP_OBSERVE_START.");
   }
   metrics_timer_observe(context->metric, elapsed);
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_OBSERVE_SUCCESS");
+    TRACE_METRICS("TIMER_STOP_OBSERVE_SUCCESS.");
   }
   
   /* Free context */
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_FREE_START: context=%p", (void*)context);
+    TRACE_METRICS("TIMER_STOP_FREE_START: context=%p", (void*)context);
   }
   free(context);
   if (g_logger) {
-    LOG_TRACE("TIMER_STOP_FREE_SUCCESS");
+    TRACE_METRICS("TIMER_STOP_FREE_SUCCESS.");
   }
 }
 

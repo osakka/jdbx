@@ -15,19 +15,19 @@
 #include <time.h>
 #include <stdlib.h>
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
-  LOG_DEBUG("LOGIN: Starting login handler");
+  LOG_DEBUG("Starting login handler.");
   
   if (!ctx || !request || !request->body) {
-    LOG_DEBUG("LOGIN: Invalid request parameters");
+    LOG_ERROR("Invalid request parameters.");
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  LOG_DEBUG("LOGIN: Parsing request body: %s", request->body);
+  LOG_DEBUG("Parsing request body: %s", request->body);
   
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
-  LOG_DEBUG("LOGIN: JSON parsing completed");
+  LOG_DEBUG("JSON parsing completed.");
   if (!body || body->type != JSON_OBJECT) {
     if (body) json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -48,11 +48,11 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   const char* username = username_val->value.string;
   const char* password = password_val->value.string;
   
-  LOG_DEBUG("LOGIN: Extracted credentials - username: %s, password: %s", username, password);
+  LOG_DEBUG("Extracted credentials - username: %s, password: %s", username, password);
   
   /* For admin user with admin password, always succeed */
   if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
-    LOG_DEBUG("LOGIN: Admin credentials matched, creating proper JWT tokens");
+    LOG_INFO("Admin credentials matched, creating proper JWT tokens.");
     
     /* Look up the admin user to get their actual ID */
     json_value_t* query = json_create_object();
@@ -86,13 +86,13 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     const char* user_id = id_val->value.string;
     
     /* Create proper JWT token pair */
-    LOG_DEBUG("LOGIN: About to call jwt_create_token_pair");
+    LOG_DEBUG("About to call jwt_create_token_pair.");
     json_value_t* response_obj = NULL;
     char* response_str = jwt_create_token_pair(ctx->jwt_secret, user_id, username, &response_obj);
-    LOG_DEBUG("LOGIN: jwt_create_token_pair returned, checking result");
+    LOG_DEBUG("jwt_create_token_pair returned, checking result.");
     
     if (!response_str || !response_obj) {
-      LOG_ERROR("LOGIN: Failed to create simple response");
+      LOG_ERROR("Failed to create simple response.");
       json_free(results);
       json_free(body);
       if (response_obj) json_free(response_obj);
@@ -100,7 +100,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                    "{\"error\":\"Failed to create response\"}", "application/json");
     }
     
-    LOG_DEBUG("LOGIN: Simple response created successfully");
+    LOG_DEBUG("Simple response created successfully.");
     
     /* Create session record for the access token */
     if (ctx->db && response_obj) {
@@ -109,7 +109,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         const char* access_token = token_val->value.string;
         
         /* First, invalidate any existing active sessions for this user */
-        LOG_DEBUG("LOGIN: Checking for existing sessions for user: %s", user_id);
+        LOG_DEBUG("Checking for existing sessions for user: %s", user_id);
         json_value_t* session_query = json_create_object();
         json_object_set(session_query, "user_id", json_create_string(user_id));
         json_object_set(session_query, "active", json_create_boolean(1));
@@ -121,7 +121,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
           json_value_t* documents = json_object_get(existing_sessions, "documents");
           if (documents && documents->type == JSON_ARRAY) {
             int session_count = json_array_size(documents);
-            LOG_DEBUG("LOGIN: Found %d existing active sessions for user", session_count);
+            LOG_DEBUG("Found %d existing active sessions for user", session_count);
             
             /* Invalidate each existing session */
             for (size_t i = 0; i < documents->value.array.size; i++) {
@@ -132,7 +132,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               }
               if (session_id_val && session_id_val->type == JSON_STRING) {
                 const char* old_session_id = session_id_val->value.string;
-                LOG_DEBUG("LOGIN: Invalidating old session: %s", old_session_id);
+                LOG_INFO("Invalidating old session: %s", old_session_id);
                 rbac_db_invalidate_session(ctx->db, old_session_id);
               }
             }
@@ -150,10 +150,10 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                             expires_at, ip_address, user_agent);
         
         if (session_id) {
-          LOG_DEBUG("LOGIN: New session created with ID: %s", session_id);
+          LOG_INFO("New session created with ID: %s", session_id);
           buffer_pool_free(session_id);
         } else {
-          LOG_WARNING("LOGIN: Failed to create session for user: %s", username);
+          LOG_ERROR("Failed to create session for user: %s", username);
         }
       }
     }
@@ -163,7 +163,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     json_free(body);
     
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
-    LOG_DEBUG("LOGIN: Returning successful response without JWT");
+    LOG_DEBUG("Returning successful response without JWT.");
     
     /* Clean up response string */
     buffer_pool_free_safe(response_str);
