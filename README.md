@@ -43,6 +43,7 @@ JSONdb is a high-performance document database built specifically for JSON data,
   - **Adaptive indexing** - automatic index creation based on query patterns
   - **Index maintenance** - automatic updates on insert/update/delete operations
   - **Index metrics** - ROI tracking, effectiveness scores, and Prometheus integration
+  - **Index cleanup** - automatic removal of underperforming indexes
   - **Production configuration** profiles (dev/small/medium/large)
   - **Batch operations API** for 50K+ docs/sec ingestion
   - **Binary persistence format** with 4-6x improvement over JSON

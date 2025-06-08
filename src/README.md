@@ -86,8 +86,9 @@ This sequence ensures proper dependency handling and resolves issues like socket
 6. **Adaptive Indexing**: Automatic index creation based on query patterns
 7. **Index Maintenance**: Automatic index updates on data modifications
 8. **Index Metrics**: Performance tracking with ROI and effectiveness analysis
-9. **Connection Management**: Loop-based keep-alive handling with zero memory leaks
-10. **Query Pattern Tracking**: Field path extraction and performance monitoring
+9. **Index Cleanup**: Automatic removal of underperforming indexes with configurable thresholds
+10. **Connection Management**: Loop-based keep-alive handling with zero memory leaks
+11. **Query Pattern Tracking**: Field path extraction and performance monitoring
 
 ## Code Standards
 
