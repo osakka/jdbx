@@ -5,6 +5,33 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2025-06-09
+
+### 🧹 Code Quality & Workspace Hygiene
+
+This release focuses on achieving zero compiler warnings and maintaining a clean, organized workspace.
+
+#### Code Quality Improvements
+- **ZERO WARNINGS**: Achieved clean compilation with -Wall -Wextra
+  - Fixed all unused parameter warnings with proper (void) casts
+  - Resolved implicit function declaration for `index_cleanup_api_init()`
+  - Fixed string truncation warnings by increasing buffer sizes to 2048
+  - Added missing function declarations to API headers
+- **WORKSPACE CLEANUP**: Comprehensive file organization
+  - Removed all object files (.o) from source directories
+  - Cleaned up temporary build artifacts (build.log, gdb.log)
+  - Moved obsolete patch files to trash/
+  - Removed duplicate js_extensions directory
+- **SINGLE SOURCE**: Maintained strict adherence to principles
+  - Verified all patches integrated into main codebase
+  - No duplicate implementations or parallel code
+  - Clean git status with proper organization
+
+#### Documentation Updates
+- **CLAUDE.md**: Updated to v3.1.1 with code quality summary
+- **README files**: Verified all versions are current
+- **CHANGELOG**: Added comprehensive v3.1.1 entry
+
 ## [3.1.0] - 2025-06-08
 
 ### 🚀 Adaptive Indexing & Connection Leak Fix

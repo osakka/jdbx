@@ -2,8 +2,8 @@
 
 Welcome to the comprehensive documentation for JSONdb - a high-performance document database built for JSON data.
 
-**Version**: 3.1.0  
-**Last Updated**: June 8, 2025
+**Version**: 3.1.1  
+**Last Updated**: June 9, 2025
 
 ## 📚 Documentation Overview
 
@@ -97,7 +97,7 @@ All documentation follows our [Style Guide](development/style-guide.md):
 
 ## 🛠 Version Information
 
-This documentation covers JSONdb v3.1.0 and later.
+This documentation covers JSONdb v3.1.1 and later.
 
 **Major Version Documentation**:
 - [v3.x](https://github.com/jsondb/jsondb/tree/v3.0/docs) (Current)

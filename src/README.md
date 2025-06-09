@@ -1,7 +1,7 @@
 # JSONdb Source Code
 
-**Version**: 3.1.0  
-**Last Updated**: June 8, 2025
+**Version**: 3.1.1  
+**Last Updated**: June 9, 2025
 
 This directory contains the source code for the JSONdb project.
 

@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 8, 2025 (v3.1.0)
+**Last Updated**: June 9, 2025 (v3.1.1)
 
 ## Core Principles
 
@@ -377,17 +377,29 @@ Regular code audits ensure quality:
 7. **Commit Changes**: Use descriptive commit messages
 8. **Tag Releases**: When appropriate with comprehensive messages
 
-## Recent Updates (v3.1.0 - June 8, 2025)
+## Recent Updates (v3.1.1 - June 9, 2025)
 
-### Major Improvements
+### Code Quality Improvements
+1. **Zero Compiler Warnings**: Achieved clean compilation with -Wall -Wextra
+   - Fixed all unused parameter warnings with proper (void) casts
+   - Resolved implicit function declaration warnings
+   - Fixed string truncation warnings by increasing buffer sizes
+   - Added missing function declarations to headers
+
+2. **Workspace Hygiene**: Comprehensive cleanup
+   - Removed all object files (.o) from source directories
+   - Cleaned up temporary files and build artifacts
+   - Moved obsolete patch files to trash/
+   - Removed duplicate js_extensions directory
+
+3. **Single Source of Truth**: Maintained strict adherence
+   - No duplicate implementations
+   - All patches integrated into main codebase
+   - Clean git status with proper file organization
+
+### Previous Updates (v3.1.0 - June 8, 2025)
 1. **Adaptive Indexing System**: Automatic index creation based on query patterns
 2. **Connection Leak Fix**: Resolved critical memory growth in keep-alive connections
 3. **Configuration Management**: Complete three-tier configuration system
 4. **Logging Standards**: 100% compliance with redundant prefix removal
 5. **Documentation Accuracy**: Fixed version inconsistencies, default values, and API documentation
-
-### Code Quality
-- Zero compiler warnings with -Wall -Wextra
-- All backup files moved to trash/
-- Single source of truth maintained
-- Comprehensive documentation updates
