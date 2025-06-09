@@ -226,17 +226,20 @@ The project follows strict logging standards:
    LOG_DEBUG("Processing request from %s", client_ip);
    ```
 
-## SSL/TLS Implementation (v2.0.10)
+## SSL/TLS Implementation (v3.1.0)
 
 The JSONdb server includes complete SSL/TLS support with production-ready security:
 
-1. **SSL Configuration**: Three-tier configuration support (env → CLI → database)
-2. **Default Security**: SSL enabled by default on port 5000
-3. **Certificate Management**: Supports standard certificate paths (/etc/ssl/certs/, /etc/ssl/private/)
-4. **Runtime Selection**: Can be enabled/disabled via environment, CLI flags, or database config
-5. **Secure by Default**: HTTP connections rejected when SSL is enabled
-6. **TLS Version Support**: Modern TLS 1.3 with backward compatibility
-7. **Integration**: Seamlessly integrated with existing authentication and RBAC systems
+1. **SSL Enforcement**: Properly rejects HTTP connections when SSL enabled (HTTP 400 response)
+2. **Large File Support**: Fixed SSL_write buffer handling for files larger than SSL buffer
+3. **Connection Stability**: Fixed SSL_read retry logic for non-blocking sockets  
+4. **Single Handler**: All connections use unified handle_client() with full SSL support
+5. **No Adapters**: Removed all wrapper functions for true single source of truth
+6. **SSL Configuration**: Three-tier configuration support (env → CLI → database)
+7. **Default Security**: SSL enabled by default on port 5000
+8. **Certificate Management**: Supports standard certificate paths (/etc/ssl/certs/, /etc/ssl/private/)
+9. **Runtime Selection**: Can be enabled/disabled via environment, CLI flags, or database config
+10. **TLS Version Support**: Modern TLS 1.3 with backward compatibility
 
 ### SSL Configuration Options:
 - Environment: `JSONDB_USE_SSL=true`, `JSONDB_SSL_CERT=/path/to/cert.pem`, `JSONDB_SSL_KEY=/path/to/key.pem`
@@ -244,7 +247,8 @@ The JSONdb server includes complete SSL/TLS support with production-ready securi
 - Runtime: Via runtime script or direct binary execution
 
 ### Key Implementation Files:
-- `src/components/utils/ssl.c` - SSL context management and TLS operations
+- `src/components/utils/ssl.c` - SSL read/write with proper retry handling
+- `src/components/core/handle_client.c` - Unified client handler with SSL support
 - `src/initialize/socket.c` - SSL socket initialization and integration
 - `src/include/utils/ssl.h` - SSL interface definitions and error handling
 
