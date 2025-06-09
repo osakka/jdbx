@@ -47,7 +47,7 @@ static int verify_socket_binding(server_config_t *config);
 static int create_thread_pool(server_config_t *config);
 static void set_server_state(server_state_t new_state, const char *message);
 static void* accept_loop(void *arg);
-static void simple_handle_client(int client_fd, struct api_context *api_ctx);
+/* simple_handle_client removed - using unified handle_client from handle_client.c */
 
 /* External functions */
 extern init_status_t init_socket(server_config_t* config);
@@ -366,9 +366,8 @@ static void* accept_loop(void *arg) {
         thread_pool_add_work(config->thread_pool, handle_client_wrapper, client_conn);
       } else {
         /* Fallback to direct handling */
-        simple_handle_client(client_fd, config->api_ctx);
-        close(client_fd);
-        free(client_conn);
+        /* Call the unified handle_client directly */
+        handle_client(client_conn);
       }
     }
   }
@@ -398,14 +397,7 @@ static void set_server_state(server_state_t new_state, const char *message) {
 /**
  * Simple client handler for fallback
  */
-static void simple_handle_client(int client_fd, struct api_context *api_ctx) {
-  /* Mark unused parameter */
-  (void)api_ctx;
-  
-  /* Simple response */
-  const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 19\r\n\r\nServer is running!\r\n";
-  write(client_fd, response, strlen(response));
-}
+/* simple_handle_client removed - using unified handle_client from handle_client.c */
 
 /**
  * Request server shutdown

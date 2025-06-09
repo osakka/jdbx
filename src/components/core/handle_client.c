@@ -238,8 +238,17 @@ void handle_client(void* client_data) {
     
     if (client_setup_ssl(client) != 0) {
       if (g_logger) {
-        LOG_ERROR("Cannot set up SSL connection for client fd=%d", client_fd);
+        LOG_ERROR("SSL handshake failed for client fd=%d - rejecting connection", client_fd);
       }
+      /* Send HTTP error response before closing */
+      const char* ssl_required_response = 
+        "HTTP/1.1 400 Bad Request\r\n"
+        "Content-Type: text/plain\r\n"
+        "Connection: close\r\n"
+        "Content-Length: 47\r\n"
+        "\r\n"
+        "SSL/TLS required. Please use HTTPS connection.\n";
+      send(client_fd, ssl_required_response, strlen(ssl_required_response), MSG_NOSIGNAL);
       close(client_fd);
       client->client_fd = 0;
       goto cleanup;

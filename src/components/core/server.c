@@ -223,15 +223,11 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
   }
   
-  /* Use thread-safe accept loop if enabled, otherwise use standard version */
-  if (server_is_thread_safe_mode_enabled()) {
-    if (g_logger) {
-      LOG_INFO("Using thread-safe accept loop for enhanced connection stability.");
-    }
-    server_accept_loop_thread_safe_direct(config);
-  } else {
-    accept_thread_func(config);
+  /* Always use the standard accept loop which supports SSL properly */
+  if (g_logger) {
+    LOG_INFO("Starting accept loop with SSL support enabled=%d", config->use_ssl);
   }
+  accept_thread_func(config);
   
   /* Clean up resources */
   if (g_logger) {
