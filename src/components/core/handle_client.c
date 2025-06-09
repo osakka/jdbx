@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 /* Forward declarations for SSL support */
 static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_size);
@@ -34,18 +35,36 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
   }
   
   if (client->use_ssl && client->ssl_conn) {
-    /* SSL read */
+    /* SSL read with retry handling for non-blocking sockets */
     size_t bytes_read = 0;
-    ssl_error_t error = ssl_read(client->ssl_conn, buffer, buffer_size - 1, &bytes_read);
+    int retries = 0;
+    const int max_retries = 50;  /* 50 * 100ms = 5 seconds max */
     
-    if (error != SSL_SUCCESS) {
+    while (retries < max_retries) {
+      ssl_error_t error = ssl_read(client->ssl_conn, buffer, buffer_size - 1, &bytes_read);
+      
+      if (error == SSL_SUCCESS) {
+        /* Success - either got data or connection closed cleanly */
+        return (int)bytes_read;
+      }
+      
+      if (error == SSL_ERROR_IO && errno == EAGAIN) {
+        /* SSL needs to retry - wait a bit and try again */
+        retries++;
+        usleep(100000);  /* 100ms */
+        continue;
+      }
+      
+      /* Real error */
       if (g_logger) {
         LOG_ERROR("SSL read failed: %s", ssl_error_string(error));
       }
       return -1;
     }
     
-    return (int)bytes_read;
+    /* Timeout after max retries */
+    errno = ETIMEDOUT;
+    return -1;
   } else {
     /* Plain socket read */
     return read(client->client_fd, buffer, buffer_size - 1);
@@ -65,7 +84,7 @@ static int client_write_data(client_conn_t* client, const char* data, size_t dat
   }
   
   if (client->use_ssl && client->ssl_conn) {
-    /* SSL write */
+    /* SSL write - now handles all retries internally */
     size_t bytes_written = 0;
     ssl_error_t error = ssl_write(client->ssl_conn, data, data_len, &bytes_written);
     
@@ -557,8 +576,8 @@ void handle_client(void* client_data) {
             break;
           }
         } else if (result == 0) {
-          /* No bytes written, connection may be closed */
-          LOG_ERROR("[FILE_SERVING] No bytes written for %s, connection may be closed (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
+          /* No bytes written, connection closed */
+          LOG_ERROR("[FILE_SERVING] No bytes written for %s, connection closed (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
           break;
         } else {
           bytes_sent += result;
@@ -576,9 +595,15 @@ void handle_client(void* client_data) {
     free_http_response(response);
     free_http_request(request);
     
+    /* Clean up SSL connection if needed */
+    if (client->use_ssl) {
+      client_cleanup_ssl(client);
+    }
+    
     /* Ensure all data is sent before closing */
     shutdown(client_fd, SHUT_WR);
     close(client_fd);
+    client->client_fd = 0; /* Clear FD to prevent double-close in cleanup */
 
     goto cleanup;
   }

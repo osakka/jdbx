@@ -7,6 +7,8 @@
 #include <openssl/x509v3.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <sys/select.h>
 
 /* OpenSSL structures wrapped by our opaque types */
 struct ssl_context_t {
@@ -292,9 +294,11 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
   if (result <= 0) {
     int error = SSL_get_error(conn->ssl, result);
     
-    /* Handle non-fatal errors */
+    /* Handle non-fatal errors - these require retry */
     if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
-      return SSL_SUCCESS;
+      /* For non-blocking sockets, we need to indicate this is a retry situation */
+      errno = EAGAIN;
+      return SSL_ERROR_IO;  /* Let caller know to retry */
     }
     
     /* Handle connection closed */
@@ -314,7 +318,7 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
   return SSL_SUCCESS;
 }
 
-/* Write data to an SSL connection */
+/* Write data to an SSL connection - handles all retries internally */
 ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, size_t *bytes_written) {
   if (!conn || !conn->ssl || !data || !bytes_written) {
     LOG_ERROR("Invalid SSL write parameters.");
@@ -327,25 +331,88 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
   }
   
   *bytes_written = 0;
+  const char *buffer = (const char *)data;
+  size_t total_written = 0;
   
-  /* Write data */
-  int result = SSL_write(conn->ssl, data, (int)size);
-  if (result <= 0) {
-    int error = SSL_get_error(conn->ssl, result);
+  /* Keep trying until all data is written */
+  while (total_written < size) {
+    int to_write = (int)(size - total_written);
+    int result = SSL_write(conn->ssl, buffer + total_written, to_write);
     
-    /* Handle non-fatal errors */
-    if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
-      return SSL_SUCCESS;
+    if (result > 0) {
+      /* Some data was written */
+      total_written += result;
+      
+      if (g_logger && result < to_write) {
+        LOG_DEBUG("SSL partial write: requested=%d, written=%d, total=%zu/%zu", 
+                 to_write, result, total_written, size);
+      }
+    } else {
+      /* Handle error */
+      int ssl_error = SSL_get_error(conn->ssl, result);
+      
+      switch (ssl_error) {
+        case SSL_ERROR_WANT_WRITE:
+        case SSL_ERROR_WANT_READ: {
+          /* SSL needs to wait - use select to avoid busy loop */
+          int fd = SSL_get_fd(conn->ssl);
+          if (fd < 0) {
+            LOG_ERROR("Cannot get SSL file descriptor");
+            *bytes_written = total_written;
+            return SSL_ERROR_IO;
+          }
+          
+          fd_set fds;
+          struct timeval tv = {1, 0}; /* 1 second timeout */
+          FD_ZERO(&fds);
+          FD_SET(fd, &fds);
+          
+          /* Wait for appropriate condition */
+          int select_result;
+          if (ssl_error == SSL_ERROR_WANT_READ) {
+            select_result = select(fd + 1, &fds, NULL, NULL, &tv);
+          } else {
+            select_result = select(fd + 1, NULL, &fds, NULL, &tv);
+          }
+          
+          if (select_result < 0 && errno != EINTR) {
+            LOG_ERROR("Select failed during SSL write: %s", strerror(errno));
+            *bytes_written = total_written;
+            return SSL_ERROR_IO;
+          }
+          /* Continue trying even on timeout */
+          continue;
+        }
+        
+        case SSL_ERROR_ZERO_RETURN:
+          /* Connection closed */
+          LOG_ERROR("SSL connection closed during write");
+          *bytes_written = total_written;
+          conn->connected = 0;
+          return SSL_ERROR_IO;
+          
+        case SSL_ERROR_SYSCALL:
+          if (errno != 0) {
+            LOG_ERROR("SSL write system error: %s", strerror(errno));
+          } else {
+            LOG_ERROR("SSL write failed with EOF");
+          }
+          *bytes_written = total_written;
+          return SSL_ERROR_IO;
+          
+        default: {
+          char *error_str = get_openssl_error();
+          LOG_ERROR("SSL write failed: %s (SSL error: %d)", 
+                   error_str ? error_str : "Unknown error", ssl_error);
+          free(error_str);
+          *bytes_written = total_written;
+          return SSL_ERROR_IO;
+        }
+      }
     }
-    
-    char *error_str = get_openssl_error();
-    LOG_ERROR("SSL write failed: %s (code: %d)", error_str ? error_str : "Unknown error", error);
-    free(error_str);
-    
-    return SSL_ERROR_IO;
   }
   
-  *bytes_written = (size_t)result;
+  *bytes_written = total_written;
   return SSL_SUCCESS;
 }
 
