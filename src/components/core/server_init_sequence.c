@@ -359,14 +359,9 @@ static void* accept_loop(void *arg) {
       
       /* Submit to thread pool */
       if (config->thread_pool) {
-        /* Use function adapter to avoid cast warning */
-        void handle_client_wrapper(void* arg) {
-          handle_client(arg);
-        }
-        thread_pool_add_work(config->thread_pool, handle_client_wrapper, client_conn);
+        thread_pool_add_work(config->thread_pool, handle_client, client_conn);
       } else {
         /* Fallback to direct handling */
-        /* Call the unified handle_client directly */
         handle_client(client_conn);
       }
     }

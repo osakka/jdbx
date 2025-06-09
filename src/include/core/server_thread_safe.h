@@ -11,7 +11,7 @@
 /**
  * Enhanced thread-safe client handler
  */
-void handle_client_thread_safe(void* client_data);
+/* handle_client_thread_safe removed - use handle_client from server.h */
 
 /**
  * Thread-safe server accept loop (for pthread)

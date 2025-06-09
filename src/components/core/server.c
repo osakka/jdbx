@@ -40,26 +40,7 @@ static void signal_handler(int sig);
 
 /* External functions */
 extern init_status_t init_socket(server_config_t* config);
-
-/* Adapter function for thread pool compatibility */
-static void handle_client_adapter(void* client_data) {
-  /* Get thread information for debugging */
-  pthread_t thread_id = pthread_self();
-  pid_t system_tid = (pid_t)syscall(SYS_gettid);
-  
-  if (g_logger) {
-    TRACE_NET("ADAPTER_START: client_data=%p, thread=%lu, tid=%d", 
-        client_data, (unsigned long)thread_id, system_tid);
-  }
-  
-  /* Call the handle_client function - now with matching void signature */
-  handle_client(client_data);
-  
-  if (g_logger) {
-    TRACE_NET("ADAPTER_COMPLETE: client_data=%p, thread=%lu, tid=%d", 
-        client_data, (unsigned long)thread_id, system_tid);
-  }
-}
+extern void handle_client(void* client_data);
 
 /**
  * Initialize and run the server with improved design
@@ -522,8 +503,8 @@ static void* accept_thread_func(void* arg) {
              (void*)client, client_fd, (void*)config->api_ctx);
       }
       
-      /* Add client to thread pool using our adapter function */
-      if (thread_pool_add_work(config->thread_pool, handle_client_adapter, client) != 0) {
+      /* Add client to thread pool using the unified handle_client function */
+      if (thread_pool_add_work(config->thread_pool, handle_client, client) != 0) {
         fprintf(stderr, "Error: Failed to add client to thread pool\n");
         free(client);
         close(client_fd);

@@ -24,18 +24,7 @@ extern int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), vo
 static int g_thread_safe_mode_enabled = 0;
 
 
-/**
- * Thread-safe client handler - DEPRECATED
- * This function has been replaced by the unified handle_client() in handle_client.c
- * which provides full SSL support and thread safety.
- * 
- * Keeping stub for backward compatibility only.
- */
-void handle_client_thread_safe(void* client_data) {
-    /* Forward to the main handler which has SSL support */
-    extern void handle_client(void* client_data);
-    handle_client(client_data);
-}
+/* handle_client_thread_safe has been removed - use handle_client directly */
 
 /**
  * Enhanced server accept loop with thread-safe connection management
