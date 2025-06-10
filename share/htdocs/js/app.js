@@ -203,12 +203,22 @@ function detectIDConflicts() {
 
 // Initialize on DOM ready
 // Expose functions to global scope for onclick handlers
+window.switchView = switchView;
+window.logout = logout;
 window.switchLibrary = switchLibrary;
 window.showLibraryManager = showLibraryManager;
 window.createNewCollection = createNewCollection;
+window.createNewDocument = createNewDocument;
 window.showSchemaManager = showSchemaManager;
 window.refreshCollections = refreshCollections;
 window.selectCollection = selectCollection;
+window.toggleQueryBuilder = toggleQueryBuilder;
+window.copyToClipboard = copyToClipboard;
+window.deleteDocument = deleteDocument;
+window.saveDocument = saveDocument;
+window.toggleEditMode = toggleEditMode;
+window.showNotification = showNotification;
+window.apiRequest = apiRequest;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Run ID conflict detection
@@ -1639,7 +1649,7 @@ function selectDocument(index) {
 }
 
 // ===== QUERY BUILDER FUNCTIONALITY =====
-let queryBuilderVisible = false;
+// queryBuilderVisible already declared at top of file
 
 function toggleQueryBuilder() {
     queryBuilderVisible = !queryBuilderVisible;
