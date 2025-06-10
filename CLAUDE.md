@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 9, 2025 (v3.1.1)
+**Last Updated**: June 10, 2025 (v3.2.0)
 
 ## Core Principles
 
@@ -380,6 +380,41 @@ Regular code audits ensure quality:
 6. **Update Documentation**: Keep READMEs current
 7. **Commit Changes**: Use descriptive commit messages
 8. **Tag Releases**: When appropriate with comprehensive messages
+
+## Recent Updates (v3.2.0 - June 10, 2025)
+
+### Unified Documents Architecture
+1. **Everything is a Document**: Implemented unified documents model with type-based discrimination
+   - Users, roles, libraries, collections all stored as documents in 'documents' collection
+   - Hybrid architecture: metadata in documents, data in traditional library/collection paths
+   - Complete RBAC integration with field-level permissions
+
+2. **Library-First Design**: Libraries are now first-class citizens
+   - Library-scoped users (e.g., john@library1 vs john@library2)
+   - Default collections created for each library
+   - Multi-library support with isolated namespaces
+   - Quotas and settings at library level
+
+3. **System Actors**: Special non-login accounts for system operations
+   - system-admin, system-metrics, system-indexer, etc.
+   - All comply with RBAC (no backdoors)
+   - Cannot be used for authentication
+
+4. **Function Embedding**: JavaScript functions can be embedded or referenced
+   - Inline functions directly in documents
+   - Reference functions with @function:library/name syntax
+   - Automatic resolution during execution
+
+5. **Cascading Versioning**: Library policies cascade to collections
+   - Automatic version creation on insert/update/delete
+   - Configurable retention policies
+   - Version cleanup based on max_versions and retention_days
+
+6. **UI Adaptations**: Browser interface updated for unified architecture
+   - Library selector in collections panel
+   - Library-scoped collection operations
+   - Library management (create/switch)
+   - All operations respect library context
 
 ## Recent Updates (v3.1.1 - June 9, 2025)
 
