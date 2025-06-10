@@ -453,6 +453,12 @@
             font-weight: 600;
         }
         
+        /* Library selector styling */
+        .library-selector-nav {
+            border-left: 1px solid var(--border-color);
+            padding-left: 1rem;
+        }
+        
         /* Responsive */
         /* Navbar alignment */
         .navbar {
@@ -618,7 +624,16 @@
                     </li>
                 </ul>
             
-            <div class="navbar-nav ms-auto">
+            <div class="navbar-nav ms-auto d-flex align-items-center gap-3">
+                <div class="library-selector-nav d-flex align-items-center gap-2">
+                    <label class="text-muted small mb-0">Library:</label>
+                    <select id="globalLibrarySelector" class="form-select form-select-sm" style="width: auto; min-width: 100px;">
+                        <!-- Libraries will be populated here -->
+                    </select>
+                    <button class="btn btn-sm btn-unified btn-icon-only" onclick="showLibraryManager()" title="Manage Libraries">
+                        <i class="bi bi-folder-plus"></i>
+                    </button>
+                </div>
                 <button class="btn btn-sm btn-unified-danger" onclick="logout()">
                     <i class="bi bi-box-arrow-right"></i> Logout
                 </button>

@@ -220,7 +220,7 @@ window.toggleEditMode = toggleEditMode;
 window.showNotification = showNotification;
 window.apiRequest = apiRequest;
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // Run ID conflict detection
     detectIDConflicts();
     
@@ -237,6 +237,9 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.reload();
         return;
     }
+    
+    // Load libraries first for global selector
+    await loadLibraries();
     
     // Initialize based on hash
     const hash = window.location.hash.substring(1) || 'dashboard';
@@ -1075,38 +1078,22 @@ async function loadLibraries() {
     }
 }
 
-// Render library selector in the browser view
+// Render library selector in the navigation bar
 function renderLibrarySelector() {
-    const header = document.querySelector('#browser-view .collections-sidebar .panel-header');
-    if (!header) return;
+    const selector = document.getElementById('globalLibrarySelector');
+    if (!selector) return;
     
-    // Check if selector already exists
-    let selector = document.getElementById('librarySelector');
-    if (!selector) {
-        // Create library selector dropdown with management button
-        const selectorHtml = `
-            <div class="d-flex align-items-center gap-2">
-                <select id="librarySelector" class="form-select form-select-sm" style="max-width: 150px;" onchange="switchLibrary(this.value)">
-                    ${libraries.map(lib => 
-                        `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
-                            ${lib.name}
-                        </option>`
-                    ).join('')}
-                </select>
-                <button class="btn btn-sm btn-unified btn-icon-only" onclick="showLibraryManager()" title="Manage Libraries">
-                    <i class="bi bi-folder-plus"></i>
-                </button>
-            </div>
-        `;
-        
-        // Insert before the buttons
-        const buttons = header.querySelector('.btn-group');
-        if (buttons) {
-            const selectorDiv = document.createElement('div');
-            selectorDiv.innerHTML = selectorHtml;
-            header.insertBefore(selectorDiv.firstElementChild, buttons);
-        }
-    }
+    // Update the selector options
+    selector.innerHTML = libraries.map(lib => 
+        `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
+            ${lib.name}
+        </option>`
+    ).join('');
+    
+    // Add onchange handler
+    selector.onchange = function() {
+        switchLibrary(this.value);
+    };
 }
 
 // Show library management modal
@@ -1175,76 +1162,97 @@ async function switchLibrary(libraryName) {
     currentCollection = null;
     currentDocument = null;
     
-    // Clear document panel
-    document.getElementById('documentsList').innerHTML = `
-        <div class="empty-state">
-            <i class="bi bi-folder2-open"></i>
-            <p>Select a collection to view documents</p>
-        </div>
-    `;
+    // Update global selector
+    const globalSelector = document.getElementById('globalLibrarySelector');
+    if (globalSelector && globalSelector.value !== libraryName) {
+        globalSelector.value = libraryName;
+    }
     
-    // Clear content panel
-    document.getElementById('contentViewer').innerHTML = `
-        <div class="empty-state">
-            <i class="bi bi-file-earmark-text"></i>
-            <p>Select a document to view its content</p>
-        </div>
-    `;
+    // Clear panels if in browser view
+    if (currentView === 'browser') {
+        document.getElementById('documentsList').innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-folder2-open"></i>
+                <p>Select a collection to view documents</p>
+            </div>
+        `;
+        
+        document.getElementById('contentViewer').innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-file-earmark-text"></i>
+                <p>Select a document to view its content</p>
+            </div>
+        `;
+        
+        // Reload collections for the selected library
+        loadBrowserCollections();
+    }
     
-    // Reload collections for the selected library
-    loadBrowserCollections();
+    // Reload current view data with library context
+    switch(currentView) {
+        case 'dashboard':
+            loadDashboard();
+            break;
+        case 'metrics':
+            if (window.loadMetrics) {
+                loadMetrics();
+            }
+            break;
+        case 'rbac':
+            if (window.loadRBAC) {
+                loadRBAC();
+            }
+            break;
+    }
 }
 
 async function loadBrowserCollections() {
     try {
-        // Query collection metadata from unified documents for the current library
-        const collectionsQuery = {
-            type: 'collection',
-            library: currentLibrary
-        };
-        
+        // For now, fall back to traditional collection loading until unified docs API is ready
+        // TODO: Switch to unified documents query when API supports it
         const [collectionsResponse, schemasResponse] = await Promise.all([
-            apiRequest('/api/collections/documents/documents?query=' + 
-                encodeURIComponent(JSON.stringify(collectionsQuery))),
+            apiRequest('/api/collections'),
             apiRequest('/api/schemas').catch(() => [])
         ]);
         
-        // Handle unified documents response
-        let collectionDocs = [];
-        if (collectionsResponse && collectionsResponse.documents) {
-            collectionDocs = collectionsResponse.documents;
+        // Handle both array response and object with collections property
+        let rawCollections = [];
+        if (Array.isArray(collectionsResponse)) {
+            rawCollections = collectionsResponse;
+        } else if (collectionsResponse.collections) {
+            rawCollections = collectionsResponse.collections;
         }
         
-        // For each collection document, get the actual collection stats
-        const collectionPromises = collectionDocs.map(async (doc) => {
-            try {
-                // Get collection stats from the actual collection path
-                const collectionPath = `${currentLibrary}/${doc.collection_name}`;
-                const statsResponse = await apiRequest(`/api/collections/${collectionPath}`);
-                
+        // Filter collections by current library
+        // Collections are returned as library/collection format
+        collections = rawCollections
+            .filter(item => {
+                const name = typeof item === 'string' ? item : item.name;
+                // Include collections that start with current library
+                return name.startsWith(`${currentLibrary}/`) || 
+                       // Also include collections without library prefix if in default library
+                       (currentLibrary === 'default' && !name.includes('/'));
+            })
+            .map(item => {
+                if (typeof item === 'string') {
+                    // Remove library prefix for display
+                    const name = item.replace(`${currentLibrary}/`, '');
+                    return { 
+                        name: name, 
+                        fullPath: item,
+                        documentCount: 0, 
+                        isSystem: name.startsWith('_') 
+                    };
+                }
+                // Handle object format
+                const name = (item.name || '').replace(`${currentLibrary}/`, '');
                 return {
-                    name: doc.collection_name,
-                    path: collectionPath,
-                    documentCount: statsResponse.document_count || 0,
-                    isSystem: doc.collection_name.startsWith('_'),
-                    schema: doc.schema || null,
-                    permissions: doc.permissions || {},
-                    created_at: doc.created_at
+                    name: name,
+                    fullPath: item.name || name,
+                    documentCount: item.documentCount || item.document_count || 0,
+                    isSystem: name.startsWith('_')
                 };
-            } catch (error) {
-                // If we can't get stats, use defaults
-                return {
-                    name: doc.collection_name,
-                    path: `${currentLibrary}/${doc.collection_name}`,
-                    documentCount: 0,
-                    isSystem: doc.collection_name.startsWith('_'),
-                    schema: doc.schema || null,
-                    permissions: doc.permissions || {}
-                };
-            }
-        });
-        
-        collections = await Promise.all(collectionPromises);
+            });
         
         // Store schemas for reference
         if (schemasResponse && schemasResponse.schemas) {
@@ -1453,8 +1461,9 @@ async function selectCollection(collectionName) {
     // Update active state without full re-render to prevent count flicker
     updateCollectionActiveState();
     
-    // Build the full collection path with library
-    const collectionPath = `${currentLibrary}/${collectionName}`;
+    // Find the full path for this collection
+    const collection = collections.find(c => c.name === collectionName);
+    const collectionPath = collection?.fullPath || `${currentLibrary}/${collectionName}`;
     
     // Load documents
     await loadDocuments(collectionPath);
