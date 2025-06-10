@@ -79,14 +79,106 @@ static json_value_t* extract_field_value(json_value_t* doc, const char* field);
 static int rebuild_collection_indices(hp_collection_t* coll);
 extern int populate_secondary_index(void* storage, void* btree, const char* field_name);
 
+/* Hash table constants */
+#define COLLECTION_HASH_SIZE 1024  /* Power of 2 for fast modulo */
+#define HASH_LOAD_FACTOR 0.75
+
+/* Collection hash table entry */
+typedef struct collection_hash_entry {
+    char* name;
+    hp_collection_t* collection;
+    struct collection_hash_entry* next;
+} collection_hash_entry_t;
+
 /* Global database instance */
 static struct {
     char path[1024];
-    hp_collection_t* collections[MAX_COLLECTIONS];
+    hp_collection_t* collections[MAX_COLLECTIONS];  /* Keep for backward compatibility */
     size_t num_collections;
+    
+    /* Hash table for O(1) collection lookups */
+    collection_hash_entry_t* collection_hash[COLLECTION_HASH_SIZE];
+    size_t hash_entries;
+    
     pthread_rwlock_t lock;
     int initialized;
 } g_database = {0};
+
+/* Hash function for collection names */
+static unsigned int collection_hash_func(const char* name) {
+    unsigned int hash = 5381;
+    int c;
+    
+    while ((c = *name++)) {
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    }
+    
+    return hash & (COLLECTION_HASH_SIZE - 1);
+}
+
+/* Insert collection into hash table */
+static int hash_table_insert(hp_collection_t* coll) {
+    if (!coll) return -1;
+    
+    unsigned int hash = collection_hash_func(coll->name);
+    
+    /* Create new entry */
+    collection_hash_entry_t* entry = malloc(sizeof(collection_hash_entry_t));
+    if (!entry) return -1;
+    
+    entry->name = strdup(coll->name);
+    entry->collection = coll;
+    entry->next = g_database.collection_hash[hash];
+    
+    g_database.collection_hash[hash] = entry;
+    g_database.hash_entries++;
+    
+    return 0;
+}
+
+/* Find collection in hash table - O(1) average case */
+static hp_collection_t* hash_table_find(const char* name) {
+    if (!name) return NULL;
+    
+    unsigned int hash = collection_hash_func(name);
+    collection_hash_entry_t* entry = g_database.collection_hash[hash];
+    
+    while (entry) {
+        if (strcmp(entry->name, name) == 0) {
+            return entry->collection;
+        }
+        entry = entry->next;
+    }
+    
+    return NULL;
+}
+
+/* Remove collection from hash table */
+static int hash_table_remove(const char* name) {
+    if (!name) return -1;
+    
+    unsigned int hash = collection_hash_func(name);
+    collection_hash_entry_t* entry = g_database.collection_hash[hash];
+    collection_hash_entry_t* prev = NULL;
+    
+    while (entry) {
+        if (strcmp(entry->name, name) == 0) {
+            if (prev) {
+                prev->next = entry->next;
+            } else {
+                g_database.collection_hash[hash] = entry->next;
+            }
+            free(entry->name);
+            free(entry);
+            g_database.hash_entries--;
+            return 0;
+        }
+        prev = entry;
+        entry = entry->next;
+    }
+    
+    return -1;
+}
 
 /* Helper: Create directory if needed */
 static int ensure_directory(const char* path) {
@@ -97,18 +189,27 @@ static int ensure_directory(const char* path) {
     return mkdir(path, 0755);
 }
 
-/* Helper: Find collection by name */
+/* Helper: Find collection by name using hash table - O(1) */
 static hp_collection_t* find_collection(const char* name) {
-    LOG_DEBUG("find_collection: looking for '%s' among %zu collections", name, g_database.num_collections);
+    LOG_DEBUG("find_collection: looking for '%s' using hash table", name);
+    
+    /* First check the hash table for O(1) lookup */
+    hp_collection_t* coll = hash_table_find(name);
+    if (coll) {
+        LOG_DEBUG("  - found in hash table!");
+        return coll;
+    }
+    
+    /* Fallback to linear search for backward compatibility during migration */
     for (size_t i = 0; i < g_database.num_collections; i++) {
-        if (g_database.collections[i]) {
-            LOG_DEBUG("  - checking collection[%zu]: '%s'", i, g_database.collections[i]->name);
-            if (strcmp(g_database.collections[i]->name, name) == 0) {
-                LOG_DEBUG("  - found match!");
-                return g_database.collections[i];
-            }
+        if (g_database.collections[i] && strcmp(g_database.collections[i]->name, name) == 0) {
+            LOG_DEBUG("  - found in array, adding to hash table");
+            /* Add to hash table for next time */
+            hash_table_insert(g_database.collections[i]);
+            return g_database.collections[i];
         }
     }
+    
     LOG_DEBUG("find_collection: '%s' not found", name);
     return NULL;
 }
@@ -283,6 +384,19 @@ void db_close(database_t* db) {
         }
     }
     
+    /* Clean up hash table */
+    for (int i = 0; i < COLLECTION_HASH_SIZE; i++) {
+        collection_hash_entry_t* entry = g_database.collection_hash[i];
+        while (entry) {
+            collection_hash_entry_t* next = entry->next;
+            free(entry->name);
+            free(entry);
+            entry = next;
+        }
+        g_database.collection_hash[i] = NULL;
+    }
+    g_database.hash_entries = 0;
+    
     g_database.num_collections = 0;
     g_database.initialized = 0;
     
@@ -405,8 +519,14 @@ int db_create_collection(database_t* db, const char* name) {
     atomic_init(&coll->doc_count, 0);
     atomic_init(&coll->total_size, 0);
     
-    /* Add to collections */
+    /* Add to collections array (for backward compatibility) */
     g_database.collections[g_database.num_collections++] = coll;
+    
+    /* Add to hash table for O(1) lookups */
+    if (hash_table_insert(coll) != 0) {
+        LOG_WARNING("Failed to insert collection %s into hash table", name);
+        /* Continue anyway - the array lookup will still work */
+    }
     
     pthread_rwlock_unlock(&g_database.lock);
     
@@ -1402,6 +1522,12 @@ int db_drop_collection(database_t* db, const char* name) {
             unlink(path);
             snprintf(path, sizeof(path), "%s/%s.idx", g_database.path, name);
             unlink(path);
+            
+            /* Remove from hash table */
+            if (hash_table_remove(name) != 0) {
+                LOG_WARNING("Failed to remove collection %s from hash table", name);
+                /* Continue anyway - we're still removing it */
+            }
             
             free(coll);
             
