@@ -13,7 +13,7 @@
 #include <pthread.h>
 #include <time.h>
 
-#define CONFIG_COLLECTION "_system_config"
+#define CONFIG_COLLECTION "system/config"
 #define CONFIG_DOCUMENT_ID "system_config"
 
 /* Configuration change callback */

@@ -1,0 +1,115 @@
+{
+  "examples": [
+    {
+      "name": "Inline validator function",
+      "description": "A collection with an inline validator function",
+      "document": {
+        "type": "collection",
+        "library": "myapp",
+        "name": "products",
+        "settings": {
+          "validator": "function(doc) { if (!doc.name || doc.name.length < 3) { return { valid: false, error: 'Product name must be at least 3 characters' }; } if (!doc.price || doc.price < 0) { return { valid: false, error: 'Price must be non-negative' }; } return { valid: true }; }",
+          "versioning": {
+            "enabled": true,
+            "maxVersions": 10
+          }
+        }
+      }
+    },
+    {
+      "name": "Referenced validator function",
+      "description": "A collection referencing a validator from the functions collection",
+      "document": {
+        "type": "collection",
+        "library": "myapp", 
+        "name": "users",
+        "settings": {
+          "validator": "@function:system/validate-email-user",
+          "indexes": [
+            {
+              "field": "email",
+              "type": "hash",
+              "unique": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Function definition in functions collection",
+      "description": "A reusable function stored in system/functions",
+      "document": {
+        "type": "function",
+        "library": "system",
+        "name": "validate-email-user",
+        "description": "Validates user documents with email requirements",
+        "parameters": ["doc"],
+        "code": "function(doc) { const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/; if (!doc.email || !emailRegex.test(doc.email)) { return { valid: false, error: 'Invalid email address' }; } if (!doc.username || doc.username.length < 3) { return { valid: false, error: 'Username must be at least 3 characters' }; } return { valid: true }; }",
+        "tags": ["validator", "user", "email"],
+        "version": "1.0.0"
+      }
+    },
+    {
+      "name": "Collection with lifecycle hooks",
+      "description": "Collection with inline and referenced lifecycle functions",
+      "document": {
+        "type": "collection",
+        "library": "myapp",
+        "name": "audit_logs",
+        "settings": {
+          "onCreate": "function(doc) { doc.created_at = new Date().toISOString(); doc.version = 1; return doc; }",
+          "onUpdate": "@function:system/increment-version",
+          "onDelete": "function(doc) { console.log('Audit log deleted:', doc.uuid); return true; }",
+          "immutable": false
+        }
+      }
+    },
+    {
+      "name": "Transform function example",
+      "description": "A transformer that enriches documents on retrieval",
+      "document": {
+        "type": "collection",
+        "library": "myapp",
+        "name": "orders",
+        "settings": {
+          "transformer": "@function:myapp/enrich-order-data",
+          "cache": {
+            "enabled": true,
+            "ttl": 300
+          }
+        }
+      }
+    },
+    {
+      "name": "Complex inline arrow function",
+      "description": "Using modern JavaScript arrow function syntax",
+      "document": {
+        "type": "collection",
+        "library": "analytics",
+        "name": "events",
+        "settings": {
+          "validator": "(doc) => { const required = ['event_type', 'timestamp', 'user_id']; const missing = required.filter(field => !doc[field]); if (missing.length > 0) { return { valid: false, error: `Missing required fields: ${missing.join(', ')}` }; } return { valid: true }; }",
+          "partitioning": {
+            "enabled": true,
+            "field": "timestamp",
+            "interval": "day"
+          }
+        }
+      }
+    },
+    {
+      "name": "Shared utility function",
+      "description": "A utility function that can be referenced by multiple collections",
+      "document": {
+        "type": "function",
+        "library": "system",
+        "name": "increment-version",
+        "description": "Increments document version on update",
+        "parameters": ["doc", "oldDoc"],
+        "code": "function(doc, oldDoc) { doc.version = (oldDoc.version || 0) + 1; doc.updated_at = new Date().toISOString(); doc.updated_by = context.user.username; return doc; }",
+        "context_required": ["user"],
+        "tags": ["lifecycle", "versioning"]
+      }
+    }
+  ]
+}

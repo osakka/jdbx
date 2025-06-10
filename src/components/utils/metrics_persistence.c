@@ -12,7 +12,7 @@
 /* json_deep_copy is now available from json_deep_copy.c */
 
 /* Metrics persistence configuration */
-#define METRICS_COLLECTION_NAME "_metrics" /* Collection for new metrics */
+#define METRICS_COLLECTION_NAME "system/metrics" /* Collection for new metrics */
 #define OLD_METRICS_COLLECTION "metrics"      /* Old collection to clean up */
 #define METRICS_SNAPSHOT_INTERVAL 60 /* Save metrics every 60 seconds */
 #define METRICS_RETENTION_DAYS 7   /* Keep metrics for 7 days */

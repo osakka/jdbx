@@ -5,6 +5,7 @@
 #include "api/api.h"
 #include "core/server.h"
 #include "database/database.h"
+#include "database/unified_documents.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/rbac_database.h"
@@ -34,9 +35,10 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
   
-  /* Extract username and password */
+  /* Extract username, password, and optional library */
   json_value_t* username_val = json_object_get(body, "username");
   json_value_t* password_val = json_object_get(body, "password");
+  json_value_t* library_val = json_object_get(body, "library");
   
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
@@ -47,60 +49,118 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   const char* username = username_val->value.string;
   const char* password = password_val->value.string;
+  const char* library = NULL;
+  
+  /* Check if library is specified in request or username contains @ */
+  char username_copy[256] = {0};
+  if (library_val && library_val->type == JSON_STRING) {
+    library = library_val->value.string;
+  } else if (strchr(username, '@')) {
+    /* Parse username@library format - need to copy since we'll modify it */
+    strncpy(username_copy, username, sizeof(username_copy) - 1);
+    char* at_pos = strchr(username_copy, '@');
+    if (at_pos) {
+      *at_pos = '\0';
+      username = username_copy;
+      library = at_pos + 1;
+    }
+  }
   
   LOG_DEBUG("Extracted credentials - username: %s, password: %s", username, password);
   
-  /* For admin user with admin password, always succeed */
-  if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
-    LOG_INFO("Admin credentials matched, creating proper JWT tokens.");
-    
-    /* Look up the admin user to get their actual ID */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "username", json_create_string("admin"));
-    json_value_t* results = db_query_documents(ctx->db, "_users", query);
+  /* Determine target library - default to system if not specified */
+  if (!library) {
+    library = "system";
+  }
+  
+  LOG_DEBUG("Attempting login for user: %s in library: %s", username, library);
+  
+  /* Build collection path for library */
+  char collection_path[256];
+  snprintf(collection_path, sizeof(collection_path), "%s/users", library);
+  
+  /* Look up the user in the library's users collection */
+  json_value_t* query = json_create_object();
+  json_object_set(query, "username", json_create_string(username));
+  
+  char* query_str = json_stringify(query);
+  LOG_DEBUG("Querying for user in %s with: %s", collection_path, query_str);
+  buffer_pool_free_safe(query_str);
+  
+  if (!ctx->db) {
+    LOG_ERROR("Database context is NULL!");
     json_free(query);
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Database not initialized\"}", "application/json");
+  }
+  
+  json_value_t* results = db_query_documents(ctx->db, collection_path, query);
+  json_free(query);
     
-    if (!results) {
-      json_free(body);
-      return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                   "{\"error\":\"Failed to query user\"}", "application/json");
-    }
+  if (!results) {
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to query user\"}", "application/json");
+  }
+  
+  json_value_t* documents = json_object_get(results, "documents");
+  if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Invalid credentials\"}", "application/json");
+  }
+  
+  json_value_t* user_doc = json_array_get(documents, 0);
+  json_value_t* id_val = json_object_get(user_doc, "uuid");
+  json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
+  
+  if (!id_val || id_val->type != JSON_STRING || 
+      !password_hash_val || password_hash_val->type != JSON_STRING) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"User data corrupted\"}", "application/json");
+  }
+  
+  const char* user_id = id_val->value.string;
+  const char* stored_hash = password_hash_val->value.string;
+  
+  /* Verify password */
+  extern int verify_password(const char* password, const char* hash);
+  
+  if (!verify_password(password, stored_hash)) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Invalid credentials\"}", "application/json");
+  }
+  
+  /* Store library in user's session for context */
+  json_value_t* user_library = json_object_get(user_doc, "library");
+  const char* user_lib = (user_library && user_library->type == JSON_STRING) ? 
+                         user_library->value.string : library;
     
-    json_value_t* documents = json_object_get(results, "documents");
-    if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-      json_free(results);
-      json_free(body);
-      return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                   "{\"error\":\"Admin user not found\"}", "application/json");
-    }
-    
-    json_value_t* admin_doc = json_array_get(documents, 0);
-    json_value_t* id_val = json_object_get(admin_doc, "uuid");
-    if (!id_val || id_val->type != JSON_STRING) {
-      json_free(results);
-      json_free(body);
-      return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                   "{\"error\":\"Admin user has no ID\"}", "application/json");
-    }
-    
-    const char* user_id = id_val->value.string;
-    
-    /* Create proper JWT token pair */
-    LOG_DEBUG("About to call jwt_create_token_pair.");
-    json_value_t* response_obj = NULL;
-    char* response_str = jwt_create_token_pair(ctx->jwt_secret, user_id, username, &response_obj);
-    LOG_DEBUG("jwt_create_token_pair returned, checking result.");
-    
-    if (!response_str || !response_obj) {
-      LOG_ERROR("Failed to create simple response.");
-      json_free(results);
-      json_free(body);
-      if (response_obj) json_free(response_obj);
-      return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                   "{\"error\":\"Failed to create response\"}", "application/json");
-    }
-    
-    LOG_DEBUG("Simple response created successfully.");
+  /* Create proper JWT token pair */
+  LOG_DEBUG("Creating JWT token pair for user: %s", username);
+  json_value_t* response_obj = NULL;
+  char* response_str = jwt_create_token_pair(ctx->jwt_secret, user_id, username, &response_obj);
+  LOG_DEBUG("jwt_create_token_pair returned, checking result.");
+  
+  if (!response_str || !response_obj) {
+    LOG_ERROR("Failed to create token response.");
+    json_free(results);
+    json_free(body);
+    if (response_obj) json_free(response_obj);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to create response\"}", "application/json");
+  }
+  
+  LOG_DEBUG("Token response created successfully.");
+  
+  /* Add library context to response */
+  json_object_set(response_obj, "library", json_create_string(user_lib));
     
     /* Create session record for the access token */
     if (ctx->db && response_obj) {
@@ -114,7 +174,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         json_object_set(session_query, "user_id", json_create_string(user_id));
         json_object_set(session_query, "active", json_create_boolean(1));
         
-        json_value_t* existing_sessions = db_query_documents(ctx->db, "_sessions", session_query);
+        json_object_set(session_query, "type", json_create_string("session"));
+        json_value_t* existing_sessions = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, session_query);
         json_free(session_query);
         
         if (existing_sessions) {
@@ -158,22 +219,20 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
       }
     }
     
+    /* Re-serialize response with library added */
+    buffer_pool_free_safe(response_str);
+    response_str = json_stringify(response_obj);
+    
     /* Clean up and return response */
     json_free(results);
     json_free(body);
     
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
-    LOG_DEBUG("Returning successful response without JWT.");
+    LOG_DEBUG("Returning successful login response with library context: %s", user_lib);
     
     /* Clean up response string */
     buffer_pool_free_safe(response_str);
     json_free(response_obj);
     
     return response;
-  }
-  
-  /* For any other user, reject */
-  json_free(body);
-  return create_http_response(HTTP_UNAUTHORIZED, 
-                "{\"error\":\"Invalid credentials\"}", "application/json");
 }

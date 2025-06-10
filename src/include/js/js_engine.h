@@ -53,4 +53,9 @@ int js_call_user_function(js_engine_t *engine, const char *name, json_value_t *a
 const char* js_get_last_error(js_engine_t *engine);
 void js_set_error(js_engine_t *engine, const char *error);
 
+/* Direct code execution functions */
+json_value_t* js_engine_eval_code(js_engine_t *engine, const char *code, json_value_t *input);
+int js_engine_validate_with_code(js_engine_t *engine, const char *validator_code, json_value_t *document);
+json_value_t* js_engine_transform_with_code(js_engine_t *engine, const char *transformer_code, json_value_t *document, const char *operation);
+
 #endif /* JS_ENGINE_H */

@@ -2,6 +2,7 @@
 #include "api/session_api.h"
 #include "core/server.h"
 #include "database/database.h"
+#include "database/unified_documents.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
@@ -26,6 +27,13 @@ logger_config_t* g_logger = NULL;
 /* Forward declarations */
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request);
 
+/* Unified document handlers */
+static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_unified_document_update(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, http_request_t* request);
+
 /* API routes */
 api_route_t routes[] = {
   /* Authentication routes */
@@ -42,6 +50,13 @@ api_route_t routes[] = {
   /* Collection routes */
   {"/api/collections", HTTP_GET, api_handle_collections_list, 1},
   {"/api/collections", HTTP_POST, api_handle_collection_create, 1},
+  
+  /* Unified documents routes */
+  {"/api/documents", HTTP_GET, api_handle_unified_documents_query, 1},
+  {"/api/documents", HTTP_POST, api_handle_unified_documents_create, 1},
+  {"/api/documents/", HTTP_GET, api_handle_unified_document_get, 1},
+  {"/api/documents/", HTTP_PUT, api_handle_unified_document_update, 1},
+  {"/api/documents/", HTTP_DELETE, api_handle_unified_document_delete, 1},
   
   /* Document routes - TEMP: auth disabled for persistence testing */
   /* NOTE: More specific routes must come before general ones for proper matching */
@@ -985,16 +1000,29 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  /* Get collections with info */
-  json_value_t* collections_info = db_list_collections_with_info(ctx->db);
-  if (!collections_info) {
+  /* Query collection documents from unified documents collection */
+  json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("collection"));
+  
+  json_value_t* collections_result = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, query);
+  json_free(query);
+  
+  if (!collections_result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to list collections\"}", "application/json");
+                 "{\"error\":\"Failed to query collections\"}", "application/json");
   }
   
-  /* Create response */
+  /* Extract collections array from result */
+  json_value_t* collections_array = json_object_get(collections_result, "documents");
   json_value_t* response = json_create_object();
-  json_object_set(response, "collections", collections_info);
+  
+  if (collections_array) {
+    json_object_set(response, "collections", json_clone(collections_array));
+  } else {
+    json_object_set(response, "collections", json_create_array());
+  }
+  
+  json_free(collections_result);
   
   char* response_str = json_stringify(response);
   json_free(response);
@@ -1027,19 +1055,62 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   
   const char* name = name_val->value.string;
   
-  /* Create collection */
-  if (db_create_collection(ctx->db, name) != 0) {
-    json_free(body);
-    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to create collection\"}", "application/json");
+  /* Extract library (optional, defaults to "default") */
+  json_value_t* library_val = json_object_get(body, "library");
+  const char* library = (library_val && library_val->type == JSON_STRING) ? 
+                        library_val->value.string : "default";
+  
+  /* Get user ID from token */
+  char owner_id_buffer[256];
+  strcpy(owner_id_buffer, SYSTEM_USER_ADMIN);
+  const char* owner_id = owner_id_buffer;
+  
+  char* token = api_extract_token(request);
+  if (token) {
+    jwt_token_t* jwt = jwt_decode(token);
+    if (jwt && jwt->payload && jwt->payload->sub) {
+      strncpy(owner_id_buffer, jwt->payload->sub, sizeof(owner_id_buffer) - 1);
+      owner_id_buffer[sizeof(owner_id_buffer) - 1] = '\0';
+    }
+    if (jwt) jwt_free(jwt);
+    free(token);
   }
   
-  /* Create response */
-  json_value_t* response = json_create_object();
-  json_object_set(response, "name", json_create_string(name));
+  /* Create collection metadata in unified documents */
+  json_value_t* coll_doc = json_create_object();
+  add_document_system_fields(coll_doc, "collection", library, "collections", owner_id);
+  json_object_set(coll_doc, "name", json_create_string(name));
+  json_object_set(coll_doc, "library", json_create_string(library));
+  json_object_set(coll_doc, "is_system", json_create_boolean(0));
   
-  char* response_str = json_stringify(response);
-  json_free(response);
+  /* Add default settings */
+  json_value_t* settings = json_object_get(body, "settings");
+  if (settings) {
+    json_object_set(coll_doc, "settings", json_clone(settings));
+  } else {
+    json_object_set(coll_doc, "settings", json_create_object());
+  }
+  
+  /* Insert collection metadata */
+  json_value_t* result = db_insert_document(ctx->db, DOCUMENTS_COLLECTION, coll_doc);
+  json_free(coll_doc);
+  
+  if (!result) {
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to create collection metadata\"}", "application/json");
+  }
+  
+  /* Also create the actual collection */
+  char collection_path[256];
+  snprintf(collection_path, sizeof(collection_path), "%s/%s", library, name);
+  if (db_create_collection(ctx->db, collection_path) != 0) {
+    /* Collection creation failed, but metadata exists - not ideal but not fatal */
+    LOG_WARNING("Collection metadata created but physical collection failed: %s", collection_path);
+  }
+  
+  char* response_str = json_stringify(result);
+  json_free(result);
   json_free(body);
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
@@ -1068,6 +1139,121 @@ http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* 
   }
   
   return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
+}
+
+/* Unified documents handlers */
+
+/* Query unified documents */
+static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Parse query from body or URL parameters */
+  json_value_t* query = NULL;
+  
+  if (request->body && strlen(request->body) > 0) {
+    query = json_parse(request->body);
+    if (query && query->type != JSON_OBJECT) {
+      json_free(query);
+      query = NULL;
+    }
+  } else if (request->query) {
+    /* Parse URL query parameters into JSON object */
+    query = parse_url_query_to_json(request->query);
+  }
+  
+  /* Query documents from unified collection */
+  json_value_t* documents = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, query);
+  if (query) {
+    json_free(query);
+  }
+  
+  if (!documents) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to query documents\"}", "application/json");
+  }
+  
+  /* db_query_documents returns a complete response object, use it directly */
+  char* response_str = json_stringify(documents);
+  json_free(documents);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
+}
+
+/* Create unified document */
+static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request || !request->body) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Parse document */
+  json_value_t* doc = json_parse(request->body);
+  if (!doc || doc->type != JSON_OBJECT) {
+    if (doc) json_free(doc);
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid document\"}", "application/json");
+  }
+  
+  /* Validate document structure */
+  if (!validate_document_structure(doc)) {
+    json_free(doc);
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Document missing required fields (type, owner)\"}", "application/json");
+  }
+  
+  /* Insert document */
+  json_value_t* result = db_insert_document(ctx->db, DOCUMENTS_COLLECTION, doc);
+  json_free(doc);
+  
+  if (!result) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to insert document\"}", "application/json");
+  }
+  
+  char* response_str = json_stringify(result);
+  json_free(result);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_CREATED, response_str, "application/json");
+}
+
+/* Get unified document */
+static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  /* TODO: Implement */
+  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+               "{\"error\":\"Not implemented\"}", "application/json");
+}
+
+/* Update unified document */
+static http_response_t* api_handle_unified_document_update(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  /* TODO: Implement */
+  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+               "{\"error\":\"Not implemented\"}", "application/json");
+}
+
+/* Delete unified document */
+static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, http_request_t* request) {
+  (void)ctx;
+  (void)request;
+  /* TODO: Implement */
+  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+               "{\"error\":\"Not implemented\"}", "application/json");
 }
 
 /* Document handlers */

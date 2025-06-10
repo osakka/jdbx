@@ -1,10 +1,13 @@
 #include "init.h"
 #include "database/index_cleanup.h"
 #include "database/database.h"
+#include "database/unified_documents.h"
 #include "database/system_schemas.h"
 #include "database/adaptive_indexer.h"
 #include "database/index_metrics.h"
 #include "database/index_cleanup.h"
+#include "database/collection_defaults.h"
+#include "database/library_metadata.h"
 #include "js/js_native_storage.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,6 +105,15 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
       return INIT_DATABASE_ERROR;
     }
     INIT_LOG_SUCCESS("DATABASE", "System schemas initialized for bootstrap");
+    
+    /* Initialize unified documents system */
+    INIT_LOG_PROGRESS("DATABASE", "Initializing unified documents system");
+    if (!unified_documents_init(db)) {
+      INIT_LOG_FAILURE("DATABASE", "Failed to initialize unified documents system");
+      db_close(db);
+      return INIT_DATABASE_ERROR;
+    }
+    INIT_LOG_SUCCESS("DATABASE", "Unified documents system initialized");
   }
   
   /* Build indices for faster lookups */

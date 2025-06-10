@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 /* JSON Schema collection name */
-#define SCHEMAS_COLLECTION "_schemas"
+#define SCHEMAS_COLLECTION "system/schemas"
 
 /* Store a JSON schema for a collection */
 int db_store_json_schema(database_t* db, const char* collection_name, json_value_t* schema) {

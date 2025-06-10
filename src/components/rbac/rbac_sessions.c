@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SESSIONS_COLLECTION "_sessions"
+#define SESSIONS_COLLECTION "system/sessions"
 
 /* Create a new session */
 char* rbac_db_create_session(struct database* db, const char* user_id, const char* token,
@@ -32,7 +32,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_object_set(session_doc, "token", json_create_string(token));
   
   /* Get username from user document */
-  json_value_t* user_doc = db_get_document(db, "_users", user_id);
+  json_value_t* user_doc = db_get_document(db, "system/users", user_id);
   if (user_doc) {
     json_value_t* username_val = json_object_get(user_doc, "username");
     if (username_val && username_val->type == JSON_STRING) {

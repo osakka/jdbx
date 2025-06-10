@@ -420,7 +420,7 @@ http_response_t* api_handle_js_native_get_metrics(api_context_t* ctx, http_reque
 
     /* Check user permissions */
     const char *user_id = get_user_id_from_context(ctx);
-    if (!check_js_permission(ctx->db, user_id, "READ", "_js_metrics")) {
+    if (!check_js_permission(ctx->db, user_id, "READ", "system/js_metrics")) {
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to read metrics\"}", "application/json");
     }
@@ -599,7 +599,7 @@ http_response_t* api_handle_js_native_get_script_stats(api_context_t* ctx, http_
 
     /* Check user permissions */
     const char *user_id = get_user_id_from_context(ctx);
-    if (!check_js_permission(ctx->db, user_id, "READ", "_js_metrics")) {
+    if (!check_js_permission(ctx->db, user_id, "READ", "system/js_metrics")) {
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to read script statistics\"}", 
                                   "application/json");

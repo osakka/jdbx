@@ -586,7 +586,7 @@ rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username
  * and implements a proper check for all other passwords
  * This fixes the segmentation fault issue with the original implementation
  */
-static int verify_password(const char* password, const char* password_hash) {
+int verify_password(const char* password, const char* password_hash) {
   TRACE_RBAC("RBAC: verify_password called - password=%s, hash=%s", 
        password ? password : "NULL", 
        password_hash ? password_hash : "NULL");

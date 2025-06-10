@@ -1,0 +1,68 @@
+{
+  "_id": "_meta",
+  "_collection": "users",
+  "permissions": {
+    "owner": "rwxd",
+    "group": "rx",
+    "world": "r",
+    "owner_id": "admin",
+    "group_id": "user_management"
+  },
+  "schema": {
+    "type": "object",
+    "required": ["username", "email"],
+    "properties": {
+      "username": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 20,
+        "unique": true,
+        "functions": {
+          "transform": "function(v) { return v.toLowerCase().trim(); }",
+          "validate": {
+            "ref": "_functions/validate_username",
+            "permissions": {
+              "world": "x"
+            }
+          }
+        }
+      },
+      "email": {
+        "type": "string",
+        "format": "email",
+        "unique": true,
+        "functions": {
+          "transform": "function(v) { return v.toLowerCase(); }"
+        }
+      }
+    }
+  },
+  "versioning": {
+    "enabled": true,
+    "max_versions": 10,
+    "exclude_fields": ["last_login", "login_count"]
+  },
+  "indexes": [
+    {
+      "field": "username",
+      "type": "hash",
+      "unique": true,
+      "case_insensitive": false
+    },
+    {
+      "field": "email",
+      "type": "hash",
+      "unique": true,
+      "case_insensitive": true
+    }
+  ],
+  "collection_functions": {
+    "pre_insert": [
+      {
+        "name": "ensure_unique_user",
+        "type": "inline",
+        "code": "function(doc, db, user) {\n  // This runs with user's permissions\n  // Can only access collections user has read permission for\n  const existing = db.find('users', {\n    $or: [{username: doc.username}, {email: doc.email}]\n  });\n  if (existing.length > 0) {\n    throw new Error('Username or email already exists');\n  }\n  return true;\n}"
+      }
+    ]
+  }
+}

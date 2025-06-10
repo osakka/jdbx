@@ -31,7 +31,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "_sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
   json_free(query);
   
   if (!results) {
@@ -83,7 +83,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(full_session, "expires_at", json_create_string(expire_time));
   
   /* Update the session document with all fields */
-  db_update_document(ctx->db, "_sessions", session_id, full_session);
+  db_update_document(ctx->db, "system/sessions", session_id, full_session);
   
   if (g_logger) {
     LOG_DEBUG("Extended session %s expiration to %s", session_id, expire_time);
@@ -196,7 +196,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_object_set(session_query, "token", json_create_string(token));
   json_object_set(session_query, "active", json_create_boolean(1));
   
-  json_value_t* session_results = db_query_documents(ctx->db, "_sessions", session_query);
+  json_value_t* session_results = db_query_documents(ctx->db, "system/sessions", session_query);
   json_free(session_query);
   
   int session_found = 0;

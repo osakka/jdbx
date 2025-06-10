@@ -1,4 +1,6 @@
 #include "js/js_native_storage.h"
+#include "js/js_function_resolver.h"
+#include "js/js_engine.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
 #include "database/system_schemas.h"
@@ -9,11 +11,11 @@
 #include <float.h>
 
 /* System collection names for JavaScript storage */
-#define JS_VALIDATORS_COLLECTION "_validators"
-#define JS_TRANSFORMERS_COLLECTION "_transformers"
-#define JS_FUNCTIONS_COLLECTION "_functions"
+#define JS_VALIDATORS_COLLECTION "system/validators"
+#define JS_TRANSFORMERS_COLLECTION "system/transformers"
+#define JS_FUNCTIONS_COLLECTION "system/functions"
 /* Use existing system metrics collection for JavaScript execution metrics */
-#define JS_EXECUTION_METRICS_COLLECTION "_metrics"
+#define JS_EXECUTION_METRICS_COLLECTION "system/metrics"
 
 const char* js_script_type_to_string(js_script_type_t type) {
     switch (type) {
@@ -394,6 +396,68 @@ int js_native_check_execution_permission(database_t *db, const char *user_id,
     return 1;
 }
 
+/* Prepare script code with resolved functions */
+static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t *metadata) {
+    if (!metadata || !metadata->script_code) {
+        return NULL;
+    }
+    
+    /* Check if the code is a function reference */
+    json_value_t* code_val = json_create_string(metadata->script_code);
+    if (js_is_function_reference(code_val)) {
+        /* Resolve the function reference */
+        json_value_t* resolved = js_resolve_function(db, code_val);
+        json_free(code_val);
+        
+        if (resolved) {
+            /* Extract the actual code from resolved function */
+            json_value_t* code_field = json_object_get(resolved, "code");
+            if (code_field && code_field->type == JSON_STRING) {
+                char* resolved_code = strdup(code_field->value.string);
+                json_free(resolved);
+                LOG_DEBUG("Resolved function reference to code: %s", metadata->id);
+                return resolved_code;
+            }
+            json_free(resolved);
+        }
+        LOG_ERROR("Failed to resolve function reference: %s", metadata->script_code);
+        return NULL;
+    }
+    json_free(code_val);
+    
+    /* For inline functions, check if they need any embedded function resolution */
+    json_value_t* script_doc = json_create_object();
+    json_object_set(script_doc, "code", json_create_string(metadata->script_code));
+    
+    /* Resolve any embedded function references in the script */
+    json_value_t* resolved_doc = js_resolve_document_functions(db, script_doc);
+    json_free(script_doc);
+    
+    if (resolved_doc) {
+        json_value_t* resolved_code_field = json_object_get(resolved_doc, "code");
+        if (resolved_code_field) {
+            /* Check if it's already resolved to a function object */
+            if (resolved_code_field->type == JSON_OBJECT) {
+                json_value_t* code_field = json_object_get(resolved_code_field, "code");
+                if (code_field && code_field->type == JSON_STRING) {
+                    char* final_code = strdup(code_field->value.string);
+                    json_free(resolved_doc);
+                    return final_code;
+                }
+            } else if (resolved_code_field->type == JSON_STRING) {
+                /* Still a string, use as is */
+                char* final_code = strdup(resolved_code_field->value.string);
+                json_free(resolved_doc);
+                return final_code;
+            }
+        }
+        json_free(resolved_doc);
+    }
+    
+    /* No resolution needed, return original code */
+    return strdup(metadata->script_code);
+}
+
 /* Record script execution metrics */
 int js_native_record_execution_metrics(database_t *db, js_execution_context_t *context) {
     if (!db || !context) {
@@ -666,25 +730,37 @@ int js_native_execute_script(js_engine_t *engine, database_t *db, const char *sc
     context->input_data = input_data;
     clock_gettime(CLOCK_MONOTONIC, &context->start_time);
 
+    /* Prepare the script code with resolved functions */
+    char* resolved_code = js_native_prepare_script_code(db, metadata);
+    if (!resolved_code) {
+        LOG_ERROR("Failed to prepare script code for: %s", script_id);
+        js_native_free_script_metadata(metadata);
+        return 0;
+    }
+    
     /* Execute based on script type */
     int success = 0;
     
     switch (metadata->type) {
         case JS_SCRIPT_FUNCTION:
-            success = js_call_user_function(engine, metadata->name, input_data, output_data);
+            /* For functions, execute the resolved code directly */
+            *output_data = js_engine_eval_code(engine, resolved_code, input_data);
+            success = (*output_data != NULL);
+            strncpy(context->operation, "function", sizeof(context->operation) - 1);
             break;
             
         case JS_SCRIPT_VALIDATOR:
             if (input_data) {
-                success = js_validate_document(engine, metadata->collection_pattern, input_data);
+                /* Execute validator with resolved code */
+                success = js_engine_validate_with_code(engine, resolved_code, input_data);
                 strncpy(context->operation, "validate", sizeof(context->operation) - 1);
             }
             break;
             
         case JS_SCRIPT_TRANSFORMER:
             if (input_data) {
-                *output_data = js_transform_document(engine, metadata->collection_pattern, 
-                                                   input_data, "transform");
+                /* Execute transformer with resolved code */
+                *output_data = js_engine_transform_with_code(engine, resolved_code, input_data, "transform");
                 success = (*output_data != NULL);
                 strncpy(context->operation, "transform", sizeof(context->operation) - 1);
             }
@@ -694,6 +770,8 @@ int js_native_execute_script(js_engine_t *engine, database_t *db, const char *sc
             LOG_ERROR("Unknown script type: %d", metadata->type);
             break;
     }
+    
+    free(resolved_code);
 
     clock_gettime(CLOCK_MONOTONIC, &context->end_time);
     context->success = success;
@@ -932,7 +1010,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
     /* Check if user owns the script or has admin permissions */
     if (strcmp(existing->created_by, user_id) != 0) {
         /* Check for admin permission */
-        if (!rbac_db_check_permission(db, user_id, RBAC_COLLECTION, "_js_scripts", RBAC_ADMIN)) {
+        if (!rbac_db_check_permission(db, user_id, RBAC_COLLECTION, "system/js_scripts", RBAC_ADMIN)) {
             LOG_WARNING("User %s attempted to update script %s without permission", user_id, script_id);
             js_native_free_script_metadata(existing);
             return 0;
@@ -994,7 +1072,7 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
     /* Check if user owns the script or has admin permissions */
     if (strcmp(existing->created_by, user_id) != 0) {
         /* Check for admin permission */
-        if (!rbac_db_check_permission(db, user_id, RBAC_COLLECTION, "_js_scripts", RBAC_ADMIN)) {
+        if (!rbac_db_check_permission(db, user_id, RBAC_COLLECTION, "system/js_scripts", RBAC_ADMIN)) {
             LOG_WARNING("User %s attempted to delete script %s without permission", user_id, script_id);
             js_native_free_script_metadata(existing);
             return 0;

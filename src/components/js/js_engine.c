@@ -1128,6 +1128,233 @@ void js_set_error(js_engine_t *engine, const char *error) {
   }
 }
 
+/* Execute JavaScript code with input data and return output */
+json_value_t* js_engine_eval_code(js_engine_t *engine, const char *code, json_value_t *input) {
+  if (!engine || !code) {
+    return NULL;
+  }
+
+  /* Clear any previous errors */
+  js_set_error(engine, NULL);
+
+  /* Convert input to JavaScript object if provided */
+  JSValue js_input = JS_NULL;
+  if (input) {
+    js_input = json_to_js(engine->ctx, input);
+  }
+
+  /* Create global input variable */
+  JSValue global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "input", JS_DupValue(engine->ctx, js_input));
+  JS_FreeValue(engine->ctx, global);
+
+  /* Wrap the code in a function to allow return statements */
+  char *wrapped_code = malloc(strlen(code) + 100);
+  if (!wrapped_code) {
+    JS_FreeValue(engine->ctx, js_input);
+    js_set_error(engine, "Out of memory");
+    return NULL;
+  }
+  sprintf(wrapped_code, "(function() { %s })()", code);
+
+  /* Evaluate the wrapped code */
+  JSValue result = JS_Eval(engine->ctx, wrapped_code, strlen(wrapped_code), "<eval-code>", JS_EVAL_TYPE_GLOBAL);
+  free(wrapped_code);
+
+  if (JS_IsException(result)) {
+    JSValue exception = JS_GetException(engine->ctx);
+    const char *str = JS_ToCString(engine->ctx, exception);
+    js_set_error(engine, str);
+    JS_FreeCString(engine->ctx, str);
+    JS_FreeValue(engine->ctx, exception);
+    JS_FreeValue(engine->ctx, result);
+    JS_FreeValue(engine->ctx, js_input);
+    return NULL;
+  }
+
+  /* Convert result to JSON */
+  json_value_t *json_result = js_to_json(engine->ctx, result);
+
+  /* Clean up */
+  global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "input", JS_NULL);
+  JS_FreeValue(engine->ctx, global);
+  JS_FreeValue(engine->ctx, result);
+  JS_FreeValue(engine->ctx, js_input);
+
+  return json_result;
+}
+
+/* Execute validator code with document and return boolean result */
+int js_engine_validate_with_code(js_engine_t *engine, const char *validator_code, json_value_t *document) {
+  if (!engine || !validator_code || !document) {
+    return 0;
+  }
+
+  /* Clear any previous errors */
+  js_set_error(engine, NULL);
+
+  /* Convert document to JavaScript object */
+  JSValue js_doc = json_to_js(engine->ctx, document);
+
+  /* Create global document variable */
+  JSValue global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "document", JS_DupValue(engine->ctx, js_doc));
+  JS_FreeValue(engine->ctx, global);
+
+  /* Prepare validation environment */
+  const char *setup_script = 
+    "let validationErrors = [];\n"
+    "let isValid = true;\n"
+    "\n"
+    "function addError(field, message) {\n"
+    "  validationErrors.push({ field, message });\n"
+    "  isValid = false;\n"
+    "}\n";
+
+  /* Evaluate the setup script */
+  JSValue setup_result = JS_Eval(engine->ctx, setup_script, strlen(setup_script), "<validation-setup>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(setup_result)) {
+    JS_FreeValue(engine->ctx, setup_result);
+    JS_FreeValue(engine->ctx, js_doc);
+    return 0;
+  }
+  JS_FreeValue(engine->ctx, setup_result);
+
+  /* Evaluate the validator code */
+  JSValue eval_result = JS_Eval(engine->ctx, validator_code, strlen(validator_code), "<validator>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(eval_result)) {
+    JSValue exception = JS_GetException(engine->ctx);
+    const char *str = JS_ToCString(engine->ctx, exception);
+    js_set_error(engine, str);
+    JS_FreeCString(engine->ctx, str);
+    JS_FreeValue(engine->ctx, exception);
+    JS_FreeValue(engine->ctx, eval_result);
+    JS_FreeValue(engine->ctx, js_doc);
+    return 0;
+  }
+  JS_FreeValue(engine->ctx, eval_result);
+
+  /* Execute validation - call the validator which should return true/false */
+  const char *validation_code = "validateDocument(document);";
+  JSValue result = JS_Eval(engine->ctx, validation_code, strlen(validation_code), "<validation>", JS_EVAL_TYPE_GLOBAL);
+
+  /* Check result */
+  int is_valid = JS_ToBool(engine->ctx, result);
+  JS_FreeValue(engine->ctx, result);
+  
+  /* If not valid, get validation errors */
+  if (!is_valid) {
+    global = JS_GetGlobalObject(engine->ctx);
+    JSValue errors = JS_GetPropertyStr(engine->ctx, global, "validationErrors");
+    
+    if (!JS_IsNull(errors) && !JS_IsUndefined(errors)) {
+      /* Convert errors to string and set as last error */
+      JSValue json_errors = JS_JSONStringify(engine->ctx, errors, JS_NULL, JS_NULL);
+      if (!JS_IsException(json_errors)) {
+        const char *str = JS_ToCString(engine->ctx, json_errors);
+        if (str && strlen(str) > 2) { /* More than just "[]" */
+          js_set_error(engine, str);
+        } else {
+          js_set_error(engine, "Validation failed");
+        }
+        JS_FreeCString(engine->ctx, str);
+      } else {
+        js_set_error(engine, "Validation failed (error converting errors)");
+      }
+      JS_FreeValue(engine->ctx, json_errors);
+    } else {
+      js_set_error(engine, "Validation failed (no error array)");
+    }
+    
+    JS_FreeValue(engine->ctx, errors);
+    JS_FreeValue(engine->ctx, global);
+  }
+
+  /* Clean up */
+  global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "document", JS_NULL);
+  JS_FreeValue(engine->ctx, global);
+  JS_FreeValue(engine->ctx, js_doc);
+
+  return is_valid;
+}
+
+/* Execute transformer code with document and return transformed document */
+json_value_t* js_engine_transform_with_code(js_engine_t *engine, const char *transformer_code, json_value_t *document, const char *operation) {
+  if (!engine || !transformer_code || !document) {
+    return NULL;
+  }
+
+  /* Convert document to JavaScript object */
+  JSValue js_doc = json_to_js(engine->ctx, document);
+
+  /* Create global variables */
+  JSValue global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "document", JS_DupValue(engine->ctx, js_doc));
+  if (operation) {
+    JS_SetPropertyStr(engine->ctx, global, "operation", JS_NewString(engine->ctx, operation));
+  } else {
+    JS_SetPropertyStr(engine->ctx, global, "operation", JS_NewString(engine->ctx, "transform"));
+  }
+  JS_FreeValue(engine->ctx, global);
+
+  /* Evaluate the transformer code */
+  JSValue eval_result = JS_Eval(engine->ctx, transformer_code, strlen(transformer_code), "<transformer>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(eval_result)) {
+    JSValue exception = JS_GetException(engine->ctx);
+    const char *str = JS_ToCString(engine->ctx, exception);
+    js_set_error(engine, str);
+    JS_FreeCString(engine->ctx, str);
+    JS_FreeValue(engine->ctx, exception);
+    JS_FreeValue(engine->ctx, eval_result);
+    JS_FreeValue(engine->ctx, js_doc);
+    return NULL;
+  }
+  JS_FreeValue(engine->ctx, eval_result);
+
+  /* Execute transformation */
+  const char *transform_code = "transformDocument(document, operation);";
+  JSValue result = JS_Eval(engine->ctx, transform_code, strlen(transform_code), "<transform>", JS_EVAL_TYPE_GLOBAL);
+
+  if (JS_IsException(result)) {
+    JSValue exception = JS_GetException(engine->ctx);
+    const char *str = JS_ToCString(engine->ctx, exception);
+    js_set_error(engine, str);
+    JS_FreeCString(engine->ctx, str);
+    JS_FreeValue(engine->ctx, exception);
+    JS_FreeValue(engine->ctx, result);
+    JS_FreeValue(engine->ctx, js_doc);
+    return NULL;
+  }
+
+  /* The transformer might return the transformed document directly,
+   * or it might modify the global document variable */
+  json_value_t *json_result = NULL;
+  
+  if (!JS_IsNull(result) && !JS_IsUndefined(result)) {
+    /* Transformer returned a value, use it */
+    json_result = js_to_json(engine->ctx, result);
+  } else {
+    /* Get the transformed document from global scope */
+    global = JS_GetGlobalObject(engine->ctx);
+    JSValue transformed = JS_GetPropertyStr(engine->ctx, global, "document");
+    json_result = js_to_json(engine->ctx, transformed);
+    JS_FreeValue(engine->ctx, transformed);
+    JS_FreeValue(engine->ctx, global);
+  }
+
+  /* Clean up */
+  global = JS_GetGlobalObject(engine->ctx);
+  JS_SetPropertyStr(engine->ctx, global, "document", JS_NULL);
+  JS_SetPropertyStr(engine->ctx, global, "operation", JS_NULL);
+  JS_FreeValue(engine->ctx, global);
+  JS_FreeValue(engine->ctx, result);
+  JS_FreeValue(engine->ctx, js_doc);
+
+  return json_result;
+}
+
 /* Execute JavaScript file */
 int js_execute_file(js_engine_t* engine, const char* file_path) {
   if (!engine || !file_path) {
@@ -1365,6 +1592,30 @@ const char* js_get_last_error(js_engine_t *engine __attribute__((unused))) {
 void js_set_error(js_engine_t *engine __attribute__((unused)), 
         const char *error __attribute__((unused))) {
   /* No operation needed */
+}
+
+/* Execute JavaScript code with input data and return output */
+json_value_t* js_engine_eval_code(js_engine_t *engine __attribute__((unused)), 
+                const char *code __attribute__((unused)), 
+                json_value_t *input __attribute__((unused))) {
+  return NULL;
+}
+
+/* Execute validator code with document and return boolean result */
+int js_engine_validate_with_code(js_engine_t *engine __attribute__((unused)), 
+                const char *validator_code __attribute__((unused)), 
+                json_value_t *document __attribute__((unused))) {
+  /* Default validation passes when JavaScript is not available */
+  return 1;
+}
+
+/* Execute transformer code with document and return transformed document */
+json_value_t* js_engine_transform_with_code(js_engine_t *engine __attribute__((unused)), 
+                const char *transformer_code __attribute__((unused)), 
+                json_value_t *document, 
+                const char *operation __attribute__((unused))) {
+  /* Return a copy of the original document when JavaScript is not available */
+  return json_clone(document);
 }
 
 #endif /* USE_QUICKJS */

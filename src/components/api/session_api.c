@@ -17,7 +17,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   
   /* Query all sessions */
   json_value_t* query = json_create_object();
-  json_value_t* results = db_query_documents(ctx->db, "_sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
   json_free(query);
   
   if (!results) {
@@ -97,7 +97,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   json_value_t* query = json_create_object();
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "_sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
   json_free(query);
   
   if (!results) {
@@ -190,7 +190,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "_sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
   json_free(query);
   
   if (!results) {

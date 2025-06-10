@@ -28,6 +28,9 @@
 #include "utils/buffer_pool.h"
 #include "utils/production_config.h"
 #include "utils/metrics.h"
+#include "database/versioning_policy.h"
+#include "database/collection_metadata.h"
+#include "database/collection_defaults.h"
 //#include "database/js_integration.h"
 //#include "transaction/transaction.h"
 
@@ -96,12 +99,17 @@ static int ensure_directory(const char* path) {
 
 /* Helper: Find collection by name */
 static hp_collection_t* find_collection(const char* name) {
+    LOG_DEBUG("find_collection: looking for '%s' among %zu collections", name, g_database.num_collections);
     for (size_t i = 0; i < g_database.num_collections; i++) {
-        if (g_database.collections[i] && 
-            strcmp(g_database.collections[i]->name, name) == 0) {
-            return g_database.collections[i];
+        if (g_database.collections[i]) {
+            LOG_DEBUG("  - checking collection[%zu]: '%s'", i, g_database.collections[i]->name);
+            if (strcmp(g_database.collections[i]->name, name) == 0) {
+                LOG_DEBUG("  - found match!");
+                return g_database.collections[i];
+            }
         }
     }
+    LOG_DEBUG("find_collection: '%s' not found", name);
     return NULL;
 }
 
@@ -114,8 +122,55 @@ hp_collection_t* find_collection_internal(const char* name) {
     return coll;
 }
 
+/* Load collections from a library directory */
+static void load_library_collections(const char* db_path, const char* library_name) {
+    char lib_path[2048];
+    snprintf(lib_path, sizeof(lib_path), "%s/%s", db_path, library_name);
+    
+    DIR* dir = opendir(lib_path);
+    if (!dir) {
+        return; /* Library directory doesn't exist yet */
+    }
+    
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        /* Look for .mmap files */
+        char* ext = strrchr(entry->d_name, '.');
+        if (ext && strcmp(ext, ".mmap") == 0) {
+            /* Extract collection name */
+            char coll_name[256];
+            size_t name_len = ext - entry->d_name;
+            if (name_len >= sizeof(coll_name)) continue;
+            
+            strncpy(coll_name, entry->d_name, name_len);
+            coll_name[name_len] = '\0';
+            
+            /* Build full collection name with library */
+            char full_name[512];
+            snprintf(full_name, sizeof(full_name), "%s/%s", library_name, coll_name);
+            
+            LOG_INFO("Loading existing collection: %s", full_name);
+            
+            /* Create/load the collection */
+            if (db_create_collection((database_t*)&g_database, full_name) == 0) {
+                /* Rebuild indices for the loaded collection */
+                pthread_rwlock_rdlock(&g_database.lock);
+                hp_collection_t* coll = find_collection(full_name);
+                pthread_rwlock_unlock(&g_database.lock);
+                
+                if (coll) {
+                    rebuild_collection_indices(coll);
+                }
+            }
+        }
+    }
+    
+    closedir(dir);
+}
+
 /* Load existing collections from disk */
 static void load_existing_collections(const char* path) {
+    /* First load collections in root (backward compatibility) */
     DIR* dir = opendir(path);
     if (!dir) {
         LOG_WARNING("Cannot open database directory: %s", path);
@@ -124,7 +179,7 @@ static void load_existing_collections(const char* path) {
     
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
-        /* Look for .mmap files */
+        /* Look for .mmap files in root */
         char* ext = strrchr(entry->d_name, '.');
         if (ext && strcmp(ext, ".mmap") == 0) {
             /* Extract collection name */
@@ -148,6 +203,10 @@ static void load_existing_collections(const char* path) {
                     rebuild_collection_indices(coll);
                 }
             }
+        }
+        /* Look for library directories */
+        else if (entry->d_type == DT_DIR && entry->d_name[0] != '.') {
+            load_library_collections(path, entry->d_name);
         }
     }
     
@@ -269,7 +328,39 @@ int db_create_collection(database_t* db, const char* name) {
     /* Initialize storage with production configuration */
     const production_config_t* prod_config = production_config_get();
     char storage_path[2048];
-    snprintf(storage_path, sizeof(storage_path), "%s/%s.mmap", g_database.path, name);
+    
+    /* Parse library and collection names */
+    char library[256] = "default";
+    char collection[256];
+    const char* slash = strchr(name, '/');
+    if (slash) {
+        size_t lib_len = slash - name;
+        if (lib_len < sizeof(library)) {
+            strncpy(library, name, lib_len);
+            library[lib_len] = '\0';
+            strncpy(collection, slash + 1, sizeof(collection) - 1);
+            collection[sizeof(collection) - 1] = '\0';
+        } else {
+            strncpy(collection, name, sizeof(collection) - 1);
+            collection[sizeof(collection) - 1] = '\0';
+        }
+    } else {
+        strncpy(collection, name, sizeof(collection) - 1);
+        collection[sizeof(collection) - 1] = '\0';
+    }
+    
+    /* Create library directory if needed */
+    char lib_dir[2048];
+    snprintf(lib_dir, sizeof(lib_dir), "%s/%s", g_database.path, library);
+    if (ensure_directory(lib_dir) != 0) {
+        free(coll);
+        pthread_rwlock_unlock(&g_database.lock);
+        LOG_ERROR("Cannot create library directory: %s", lib_dir);
+        return -1;
+    }
+    
+    /* Create storage path with library directory */
+    snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.mmap", g_database.path, library, collection);
     
     LOG_DEBUG("Creating collection '%s' with MMAP size: %s", name, 
               format_bytes(prod_config->mmap_size_per_collection));
@@ -285,7 +376,7 @@ int db_create_collection(database_t* db, const char* name) {
     
     /* Initialize index */
     char index_path[2048];
-    snprintf(index_path, sizeof(index_path), "%s/%s.idx", g_database.path, name);
+    snprintf(index_path, sizeof(index_path), "%s/%s/%s.idx", g_database.path, library, collection);
     coll->primary_index = hash_index_create(index_path, NULL);
     
     if (!coll->primary_index) {
@@ -323,10 +414,47 @@ int db_create_collection(database_t* db, const char* name) {
     return 0;
 }
 
+/* Parse library/collection name */
+static int parse_collection_name(const char* full_name, char* library, size_t lib_size, 
+                                char* collection, size_t coll_size) {
+    if (!full_name) return -1;
+    
+    const char* slash = strchr(full_name, '/');
+    if (slash) {
+        /* Library qualified name: library/collection */
+        size_t lib_len = slash - full_name;
+        if (lib_len >= lib_size) return -1;
+        
+        strncpy(library, full_name, lib_len);
+        library[lib_len] = '\0';
+        
+        strncpy(collection, slash + 1, coll_size - 1);
+        collection[coll_size - 1] = '\0';
+    } else {
+        /* No library specified, use default */
+        strncpy(library, "default", lib_size - 1);
+        library[lib_size - 1] = '\0';
+        
+        strncpy(collection, full_name, coll_size - 1);
+        collection[coll_size - 1] = '\0';
+    }
+    
+    return 0;
+}
+
 /* Get collection */
 db_collection_t* db_get_collection(database_t* db, const char* name) {
     (void)db; /* Using global database */
     if (!g_database.initialized || !name) return NULL;
+    
+    static char new_name[512]; /* Static to avoid dangling pointer */
+    
+    /* For backward compatibility, check if it's an old-style collection name */
+    if (name[0] == '_') {
+        /* Old system collection - redirect to system library */
+        snprintf(new_name, sizeof(new_name), "system/%s", name + 1);
+        name = new_name;
+    }
     
     pthread_rwlock_rdlock(&g_database.lock);
     hp_collection_t* coll = find_collection(name);
@@ -403,6 +531,53 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
         if (!json_object_get(document, "uuid")) {
             json_object_set(document, "uuid", json_create_string(doc_id));
         }
+    }
+    
+    /* Skip unique constraint checks for metadata documents */
+    int is_meta_doc = (strcmp(doc_id, COLLECTION_META_ID) == 0);
+    
+    /* Load collection metadata to check for unique constraints */
+    collection_metadata_t* metadata = NULL;
+    if (!is_meta_doc) {
+        metadata = collection_metadata_load(db, collection_name);
+    }
+    
+    if (metadata) {
+        LOG_DEBUG("Checking %zu indexes for unique constraints in collection %s", 
+                  metadata->index_count, collection_name);
+        
+        /* Check unique constraints before inserting */
+        for (size_t i = 0; i < metadata->index_count; i++) {
+            if (metadata->indexes[i].unique && metadata->indexes[i].field_name) {
+                LOG_DEBUG("Checking unique constraint on field '%s'", 
+                          metadata->indexes[i].field_name);
+                json_value_t* field_value = json_object_get(document, metadata->indexes[i].field_name);
+                if (field_value) {
+                    /* Check if value already exists */
+                    char query_str[512];
+                    snprintf(query_str, sizeof(query_str), "{\"%s\": \"%s\"}", 
+                             metadata->indexes[i].field_name,
+                             field_value->type == JSON_STRING ? field_value->value.string : "");
+                    
+                    json_value_t* query = json_parse(query_str);
+                    if (query) {
+                        json_value_t* existing = db_query_documents(db, collection_name, query);
+                        json_free(query);
+                        
+                        if (existing && existing->type == JSON_ARRAY && existing->value.array.size > 0) {
+                            LOG_ERROR("Unique constraint violation: field '%s' with value '%s' already exists",
+                                     metadata->indexes[i].field_name,
+                                     field_value->type == JSON_STRING ? field_value->value.string : "");
+                            collection_metadata_free(metadata);
+                            json_free(existing);
+                            return NULL;
+                        }
+                        if (existing) json_free(existing);
+                    }
+                }
+            }
+        }
+        collection_metadata_free(metadata);
     }
     
     /* Add timestamps for new documents */
@@ -537,6 +712,35 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
         LOG_ERROR("db_insert_document: json_str is NULL, not freeing.");
     }
     
+    /* Add the actual document ID to the result */
+    json_object_set(result_doc, "uuid", json_create_string(doc_id));
+    
+    /* Create version if versioning is enabled */
+    {
+        /* Extract library name from collection path */
+        char library_name[256] = "default";
+        char collection_only[256];
+        const char* slash = strchr(collection_name, '/');
+        if (slash) {
+            size_t lib_len = slash - collection_name;
+            if (lib_len < sizeof(library_name)) {
+                strncpy(library_name, collection_name, lib_len);
+                library_name[lib_len] = '\0';
+                strncpy(collection_only, slash + 1, sizeof(collection_only) - 1);
+                collection_only[sizeof(collection_only) - 1] = '\0';
+            } else {
+                strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+                collection_only[sizeof(collection_only) - 1] = '\0';
+            }
+        } else {
+            strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+            collection_only[sizeof(collection_only) - 1] = '\0';
+        }
+        
+        /* Create initial version with the result document that has the ID */
+        versioning_create_version(db, library_name, collection_only, result_doc, "insert");
+    }
+    
     /* Run JS triggers */
     //js_run_insert_triggers(collection_name, document);
     
@@ -549,9 +753,6 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     if (db_ops) {
         metrics_counter_inc(db_ops, 1);
     }
-    
-    /* Add the actual document ID to the result */
-    json_object_set(result_doc, "uuid", json_create_string(doc_id));
     
     /* Return the cloned document */
     TRACE_DB("db_insert_document: returning cloned document with _id: %s", doc_id);
@@ -667,6 +868,9 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
     
     size_t doc_size = strlen(json_str);
     
+    /* Get current document for versioning before acquiring write lock */
+    json_value_t* current_doc = db_get_document(db, collection_name, id);
+    
     /* Update with write lock */
     pthread_rwlock_wrlock(&coll->lock);
     
@@ -675,6 +879,7 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
     if (hash_index_search(coll->primary_index, id, strlen(id), &old_offset) != 0) {
         pthread_rwlock_unlock(&coll->lock);
         buffer_pool_free_safe(json_str);
+        if (current_doc) json_free(current_doc);
         return NULL;
     }
     
@@ -709,6 +914,33 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
     
     pthread_rwlock_unlock(&coll->lock);
     buffer_pool_free_safe(json_str);
+    
+    /* Create version if versioning is enabled */
+    if (current_doc) {
+        /* Extract library name from collection path */
+        char library_name[256] = "default";
+        char collection_only[256];
+        const char* slash = strchr(collection_name, '/');
+        if (slash) {
+            size_t lib_len = slash - collection_name;
+            if (lib_len < sizeof(library_name)) {
+                strncpy(library_name, collection_name, lib_len);
+                library_name[lib_len] = '\0';
+                strncpy(collection_only, slash + 1, sizeof(collection_only) - 1);
+                collection_only[sizeof(collection_only) - 1] = '\0';
+            } else {
+                strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+                collection_only[sizeof(collection_only) - 1] = '\0';
+            }
+        } else {
+            strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+            collection_only[sizeof(collection_only) - 1] = '\0';
+        }
+        
+        /* Create version with the updated document */
+        versioning_create_version(db, library_name, collection_only, document, "update");
+        json_free(current_doc);
+    }
     
     /* Run JS triggers */
     //js_run_update_triggers(collection_name, document);
@@ -802,6 +1034,32 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
             generic_cache_remove(coll->cache, id, strlen(id));
         }
         
+        /* Create version if versioning is enabled */
+        if (doc) {
+            /* Extract library name from collection path */
+            char library_name[256] = "default";
+            char collection_only[256];
+            const char* slash = strchr(collection_name, '/');
+            if (slash) {
+                size_t lib_len = slash - collection_name;
+                if (lib_len < sizeof(library_name)) {
+                    strncpy(library_name, collection_name, lib_len);
+                    library_name[lib_len] = '\0';
+                    strncpy(collection_only, slash + 1, sizeof(collection_only) - 1);
+                    collection_only[sizeof(collection_only) - 1] = '\0';
+                } else {
+                    strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+                    collection_only[sizeof(collection_only) - 1] = '\0';
+                }
+            } else {
+                strncpy(collection_only, collection_name, sizeof(collection_only) - 1);
+                collection_only[sizeof(collection_only) - 1] = '\0';
+            }
+            
+            /* Create version before freeing the document */
+            versioning_create_version(db, library_name, collection_only, doc, "delete");
+        }
+        
         /* Run JS triggers */
         //js_run_delete_triggers(collection_name, id);
     }
@@ -834,11 +1092,21 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     (void)db; /* Using global database */
     if (!g_database.initialized || !collection_name) return NULL;
     
-    pthread_rwlock_rdlock(&g_database.lock);
-    hp_collection_t* coll = find_collection(collection_name);
-    pthread_rwlock_unlock(&g_database.lock);
+    LOG_DEBUG("db_query_documents: querying collection '%s'", collection_name);
+    LOG_DEBUG("db_query_documents: g_database.initialized = %d", g_database.initialized);
+    LOG_DEBUG("db_query_documents: about to acquire read lock");
     
-    if (!coll) return NULL;
+    pthread_rwlock_rdlock(&g_database.lock);
+    LOG_DEBUG("db_query_documents: acquired read lock, calling find_collection");
+    hp_collection_t* coll = find_collection(collection_name);
+    LOG_DEBUG("db_query_documents: find_collection returned %p", (void*)coll);
+    pthread_rwlock_unlock(&g_database.lock);
+    LOG_DEBUG("db_query_documents: released read lock");
+    
+    if (!coll) {
+        LOG_ERROR("db_query_documents: collection '%s' not found", collection_name);
+        return NULL;
+    }
     
     /* Try to use index-optimized query first */
     if (query && query->type == JSON_OBJECT && json_object_size(query) > 0) {
@@ -1177,15 +1445,15 @@ int db_load(database_t* db) {
 
 /* Bootstrap functions */
 int db_needs_bootstrap(database_t* db) {
-    return db_collection_exists(db, "_system_config") ? 0 : 1;
+    return db_collection_exists(db, "system/config") ? 0 : 1;
 }
 
 int db_init_system_schemas(database_t* db) {
     /* System schemas are automatically created on-demand in high-performance mode */
     
     /* Add welcome message to the database */
-    if (!db_get_collection(db, "_system_config")) {
-        db_create_collection(db, "_system_config");
+    if (!db_get_collection(db, "system/config")) {
+        db_create_collection(db, "system/config");
         
         /* Create welcome message document */
         json_value_t* welcome_doc = json_create_object();
@@ -1195,7 +1463,7 @@ int db_init_system_schemas(database_t* db) {
         json_object_set(welcome_doc, "created_at", json_create_string("2025-06-06T00:00:00Z"));
         json_object_set(welcome_doc, "version", json_create_string("3.0.0"));
         
-        db_insert_document(db, "_system_config", welcome_doc);
+        db_insert_document(db, "system/config", welcome_doc);
     }
     
     return 1; /* Return 1 for success */

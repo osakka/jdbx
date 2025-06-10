@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <stddef.h>
 
 /* RBAC resource types */
 typedef enum {
@@ -22,14 +24,45 @@ typedef enum {
     RBAC_READ = 1,        /* 0001 */
     RBAC_WRITE = 2,       /* 0010 */
     RBAC_DELETE = 4,      /* 0100 */
-    RBAC_ADMIN = 8        /* 1000 */
+    RBAC_ADMIN = 8,       /* 1000 */
+    RBAC_EXECUTE = 16     /* 10000 - Permission to execute functions */
 } rbac_permission_t;
 
-/* RBAC role */
+/* Multi-role and multi-owner permission structure */
+typedef struct rbac_permissions {
+    char** owner_ids;            /* Multiple document owners */
+    size_t owner_count;          /* Number of owners */
+    uint8_t owner_perms;         /* Owner permissions */
+    uint8_t world_perms;         /* World/public permissions */
+    
+    /* Role-based permissions */
+    struct {
+        char* role_id;           /* Role/group name */
+        uint8_t permissions;     /* Permissions for this role */
+    } *role_perms;
+    size_t role_count;
+    
+    /* Field-level rules */
+    struct {
+        char* pattern;           /* Regex pattern for field names */
+        uint8_t owner_perms;     /* Permissions for owner */
+        uint8_t world_perms;     /* Permissions for world */
+        struct {
+            char* role_id;
+            uint8_t permissions;
+        } *role_perms;
+        size_t role_count;
+    } *field_rules;
+    size_t field_rule_count;
+} rbac_permissions_t;
+
+/* RBAC role/group - supports nesting */
 typedef struct {
     char* id;
     char* name;
-    json_value_t* permissions; /* JSON object mapping resource to permission */
+    json_value_t* permissions;   /* JSON object mapping resource to permission */
+    json_value_t* parent_roles;  /* JSON array of parent role IDs */
+    json_value_t* child_roles;   /* JSON array of child role IDs */
 } rbac_role_t;
 
 /* RBAC user */
@@ -65,6 +98,7 @@ rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username
 int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char* password);
 void rbac_free_user(rbac_user_t* user);
 char* hash_password(const char* password);
+int verify_password(const char* password, const char* password_hash);
 
 /* Role operations */
 rbac_role_t* rbac_create_role(rbac_system_t* rbac, const char* name);

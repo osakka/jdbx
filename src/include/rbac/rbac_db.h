@@ -4,11 +4,11 @@
 #include "rbac/rbac.h"
 
 /* System collection for storing configuration */
-#define RBAC_CONFIG_COLLECTION "_system"
+#define RBAC_CONFIG_COLLECTION "system/config"
 
 /* RBAC-specific collections */
-#define RBAC_USERS_COLLECTION "_users"
-#define RBAC_ROLES_COLLECTION "_roles"
+#define RBAC_USERS_COLLECTION "system/users"
+#define RBAC_ROLES_COLLECTION "system/roles"
 
 /* Collection creation/upgrade status */
 typedef struct {

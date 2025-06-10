@@ -1,6 +1,7 @@
 #include "rbac/rbac.h"
 #include "rbac/rbac_db.h"
 #include "database/database.h"
+#include "database/unified_documents.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include <stdio.h>
@@ -8,13 +9,11 @@
 #include <string.h>
 #include <time.h>
 
-/* RBAC collection names */
-#define RBAC_USERS_COLLECTION "_users"
-#define RBAC_ROLES_COLLECTION "_roles"
-#define RBAC_PERMISSIONS_COLLECTION "_permissions"
-#define RBAC_COLLECTIONS_COLLECTION "_collections"
-#define RBAC_SESSIONS_COLLECTION "_sessions"
-#define RBAC_PERMISSION_CACHE_COLLECTION "_permission_cache"
+/* Additional RBAC collection names not in header */
+#define RBAC_PERMISSIONS_COLLECTION "system/permissions"
+#define RBAC_COLLECTIONS_COLLECTION "system/collections"
+#define RBAC_SESSIONS_COLLECTION "system/sessions"
+#define RBAC_PERMISSION_CACHE_COLLECTION "system/permission_cache"
 
 /* Permission cache TTL in seconds (5 minutes) */
 #define PERMISSION_CACHE_TTL 300
@@ -65,38 +64,21 @@ static int create_default_admin_user(struct database* db, const char* admin_role
 
 /* Initialize RBAC system with database backend */
 rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
-  TRACE_RBAC("Initializing database-backed RBAC system.");
-  TRACE_RBAC("Database pointer: %p", db);
-  TRACE_RBAC("JWT secret: %s", jwt_secret ? "[PROVIDED]" : "[NULL]");
+  TRACE_RBAC("Initializing database-backed RBAC system");
   
-  if (!db) {
-    LOG_ERROR("Database is NULL.");
-    return NULL;
-  }
+  if (!db) return NULL;
   
-  /* Initialize RBAC collections */
-  if (!init_rbac_collections(db)) {
-    LOG_ERROR("Cannot initialize RBAC collections.");
-    return NULL;
-  }
+  /* Create wrapper structure */
+  rbac_system_t* rbac = calloc(1, sizeof(rbac_system_t));
+  if (!rbac) return NULL;
   
-  /* No cleanup needed - fresh collections in high-performance mode */
-  
-  /* Create RBAC system structure */
-  rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
-  if (!rbac) {
-    LOG_ERROR("Cannot allocate memory for RBAC system.");
-    return NULL;
-  }
-  
-  /* Initialize with empty in-memory structures (we'll use database directly) */
+  /* Set up fields */
   rbac->users = json_create_object();
   rbac->roles = json_create_object();
   rbac->db = db;
   rbac->jwt_secret = jwt_secret ? strdup(jwt_secret) : strdup("change-this-secret-in-production");
   
   if (!rbac->users || !rbac->roles || !rbac->jwt_secret) {
-    LOG_ERROR("Cannot initialize RBAC fields.");
     if (rbac->users) json_free(rbac->users);
     if (rbac->roles) json_free(rbac->roles);
     if (rbac->jwt_secret) free(rbac->jwt_secret);
@@ -104,37 +86,7 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
     return NULL;
   }
   
-  /* Create default roles and admin user */
-  char* admin_role_id = NULL;
-  if (!create_default_admin_role(db, &admin_role_id)) {
-    LOG_ERROR("Cannot create default admin role.");
-    json_free(rbac->users);
-    json_free(rbac->roles);
-    free(rbac);
-    return NULL;
-  }
-  
-  if (!create_default_user_role(db)) {
-    LOG_ERROR("Cannot create default user role.");
-    json_free(rbac->users);
-    json_free(rbac->roles);
-    if (admin_role_id) free(admin_role_id);
-    free(rbac);
-    return NULL;
-  }
-  
-  if (!create_default_admin_user(db, admin_role_id)) {
-    LOG_ERROR("Cannot create default admin user.");
-    json_free(rbac->users);
-    json_free(rbac->roles);
-    if (admin_role_id) free(admin_role_id);
-    free(rbac);
-    return NULL;
-  }
-  
-  if (admin_role_id) free(admin_role_id);
-  
-  TRACE_RBAC("Database-backed RBAC system initialized.");
+  LOG_INFO("RBAC system initialized");
   return rbac;
 }
 
@@ -463,11 +415,12 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
     return NULL;
   }
   
-  /* Query for user */
+  /* Query for user in unified documents */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("user"));
   json_object_set(query, "username", json_create_string(username));
   
-  json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, DOCUMENTS_COLLECTION, query);
   json_free(query);
   
   if (!result) {
