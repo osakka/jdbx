@@ -5,23 +5,7 @@
 # Go to the script's directory
 cd "$(dirname "$0")"
 
-# Environment file paths (in order of preference)
-ENV_FILES=(
-    "${JSONDB_VAR_DIR}/jsondb.env"         # Running configuration
-    "${JSONDB_SHARE_DIR}/config/jsondb.env" # Template defaults (if running config doesn't exist)
-    "./jsondb.env"                          # Local directory override
-)
-
-# Load environment configuration
-ENV_FILE=""
-for file in "${ENV_FILES[@]}"; do
-    if [ -f "$file" ]; then
-        ENV_FILE="$file"
-        echo "Loading configuration from $ENV_FILE"
-        source "$ENV_FILE"
-        break
-    fi
-done
+# Environment configuration will be loaded after directories are set
 
 # Set default values if not defined in environment
 : ${JSONDB_PORT:=5000}
@@ -32,6 +16,11 @@ done
 : ${JSONDB_USE_SSL:="true"}
 : ${JSONDB_SSL_CERT:="/etc/ssl/certs/server.pem"}
 : ${JSONDB_SSL_KEY:="/etc/ssl/private/server.key"}
+
+# Storage backend configuration (v3.2.0)
+: ${JSONDB_STORAGE_BACKEND:="mmap"}
+: ${JSONDB_JDBX_INITIAL_SIZE:=104857600}
+: ${JSONDB_JDBX_WAL_SIZE:=10485760}
 
 # Advanced configuration options (v3.1.0)
 : ${JSONDB_THREAD_POOL_MIN:=4}
@@ -83,9 +72,27 @@ export JSONDB_BASE_DIR
 : ${JSONDB_METRICS_DIR:="${JSONDB_VAR_DIR}/metrics"}
 : ${JSONDB_DOC_PATH:="${JSONDB_BASE_DIR}/docs"}
 
+# Load environment configuration after directories are set
+ENV_FILES=(
+    "${JSONDB_VAR_DIR}/jsondb.env"         # Running configuration
+    "${JSONDB_SHARE_DIR}/config/jsondb.env" # Template defaults (if running config doesn't exist)
+    "./jsondb.env"                          # Local directory override
+)
+
+ENV_FILE=""
+for file in "${ENV_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        ENV_FILE="$file"
+        echo "Loading configuration from $ENV_FILE"
+        source "$ENV_FILE"
+        break
+    fi
+done
+
 # Display current configuration
 echo "Using configuration:"
 echo "  Database path: $JSONDB_DB_DIR"
+echo "  Storage backend: $JSONDB_STORAGE_BACKEND"
 echo "  RBAC file: $JSONDB_RBAC_FILE"
 echo "  Log file: $JSONDB_LOG_FILE"
 echo "  PID file: $JSONDB_PID_FILE"
@@ -176,6 +183,9 @@ start_server() {
     export JSONDB_BASE_PATH="${JSONDB_BASE_DIR}"
     export JSONDB_DOC_PATH="${JSONDB_DOC_PATH}"
     export JSONDB_VAR_PATH="${JSONDB_VAR_DIR}"
+    export JSONDB_INITIAL_ADMIN_USER="${JSONDB_INITIAL_ADMIN_USER}"
+    export JSONDB_INITIAL_ADMIN_PASSWORD="${JSONDB_INITIAL_ADMIN_PASSWORD}"
+    export JSONDB_INITIAL_ADMIN_EMAIL="${JSONDB_INITIAL_ADMIN_EMAIL}"
     
     eval "./bin/jsondb_server \
         --daemon \
@@ -203,6 +213,9 @@ start_server() {
         --index-time-threshold=\"$JSONDB_INDEX_TIME_THRESHOLD\" \
         --index-startup-delay=\"$JSONDB_INDEX_STARTUP_DELAY\" \
         --index-check-interval=\"$JSONDB_INDEX_CHECK_INTERVAL\" \
+        --storage-backend=\"$JSONDB_STORAGE_BACKEND\" \
+        --jdbx-initial-size=\"$JSONDB_JDBX_INITIAL_SIZE\" \
+        --jdbx-wal-size=\"$JSONDB_JDBX_WAL_SIZE\" \
         $SSL_ARGS"
 
     # Wait for server to start (simplified)

@@ -169,6 +169,14 @@ typedef struct {
     
 } jdbx_btree_t;
 
+/* B-tree iterator structure */
+typedef struct {
+    jdbx_btree_t* tree;             /* B-tree reference */
+    uint64_t current_page;          /* Current page */
+    int current_index;              /* Current key index in page */
+    int finished;                   /* Iterator finished */
+} jdbx_btree_iterator_t;
+
 /* Core page manager operations */
 jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size);
 jdbx_page_manager_t* jdbx_open(const char* path);
@@ -194,6 +202,13 @@ int jdbx_btree_get(jdbx_btree_t* tree,
 int jdbx_btree_delete(jdbx_btree_t* tree,
                       const void* key, size_t key_len);
 void jdbx_btree_close(jdbx_btree_t* tree);
+
+/* B-tree iterator operations */
+jdbx_btree_iterator_t* jdbx_btree_iterator_create(jdbx_btree_t* tree);
+int jdbx_btree_iterator_next(jdbx_btree_iterator_t* iter, 
+                             void** key, size_t* key_len,
+                             void** value, size_t* value_len);
+void jdbx_btree_iterator_destroy(jdbx_btree_iterator_t* iter);
 
 /* Utility functions */
 uint32_t jdbx_crc32(const void* data, size_t size);

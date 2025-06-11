@@ -24,43 +24,9 @@
  * If duplicate cleanup is needed in the future, implement it as part of
  * the regular RBAC maintenance operations. */
 
-/* Initialize RBAC database collections */
-static int init_rbac_collections(struct database* db) {
-  TRACE_RBAC("Initializing RBAC collections.");
-  
-  const char* collections[] = {
-    RBAC_USERS_COLLECTION,
-    RBAC_ROLES_COLLECTION,
-    RBAC_PERMISSIONS_COLLECTION,
-    RBAC_COLLECTIONS_COLLECTION,
-    RBAC_SESSIONS_COLLECTION,
-    RBAC_PERMISSION_CACHE_COLLECTION
-  };
-  
-  for (size_t i = 0; i < sizeof(collections) / sizeof(collections[0]); i++) {
-    TRACE_RBAC("Checking collection %zu: %s", i, collections[i]);
-    if (!db_collection_exists(db, collections[i])) {
-      TRACE_RBAC("Creating collection: %s", collections[i]);
-      if (db_create_collection(db, collections[i]) != 0) {
-        LOG_ERROR("Cannot create collection: %s", collections[i]);
-        return 0;
-      }
-      TRACE_RBAC("Collection created: %s", collections[i]);
-    } else {
-      TRACE_RBAC("Collection already exists: %s", collections[i]);
-    }
-    TRACE_RBAC("Collection %s processed", collections[i]);
-  }
-  
-  TRACE_RBAC("All RBAC collections initialized.");
-  return 1;
-}
 
 /* Forward declarations */
 /* Removed old ID generation forward declarations - using generate_document_id() now */
-static int create_default_admin_role(struct database* db, char** admin_role_id_out);
-static int create_default_user_role(struct database* db);
-static int create_default_admin_user(struct database* db, const char* admin_role_id);
 
 /* Initialize RBAC system with database backend */
 rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
@@ -359,15 +325,25 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   
   TRACE_RBAC("Using admin role ID: %s", admin_role_id);
   
+  /* Check for initial admin configuration from environment */
+  const char* initial_admin_user = getenv("JSONDB_INITIAL_ADMIN_USER");
+  const char* initial_admin_pass = getenv("JSONDB_INITIAL_ADMIN_PASSWORD");
+  const char* initial_admin_email = getenv("JSONDB_INITIAL_ADMIN_EMAIL");
+  
+  if (!initial_admin_user || !initial_admin_pass) {
+    LOG_INFO("No initial admin configured. Database will require manual admin setup.");
+    LOG_INFO("Set JSONDB_INITIAL_ADMIN_USER and JSONDB_INITIAL_ADMIN_PASSWORD environment variables to create initial admin.");
+    return 1;  /* Not an error - just no initial admin */
+  }
+  
   /* Create admin user document - let database generate UUID */
   json_value_t* admin_user = json_create_object();
-  /* Don't set _id - let db_insert_document generate it */
-  json_object_set(admin_user, "username", json_create_string("admin"));
+  json_object_set(admin_user, "username", json_create_string(initial_admin_user));
   json_object_set(admin_user, "cn", json_create_string("System Administrator"));
-  json_object_set(admin_user, "email", json_create_string("admin@localhost"));
+  json_object_set(admin_user, "email", json_create_string(initial_admin_email ? initial_admin_email : "admin@localhost"));
   
-  /* Hash the default password "admin" */
-  char* password_hash = hash_password("admin");
+  /* Hash the provided password */
+  char* password_hash = hash_password(initial_admin_pass);
   if (!password_hash) {
     LOG_ERROR("Cannot hash password.");
     json_free(admin_user);
@@ -401,7 +377,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   }
   
   const char* user_id = json_get_string(json_object_get(user_result, "uuid"));
-  TRACE_RBAC("Admin user created with ID: %s", user_id ? user_id : "(null).");
+  TRACE_RBAC("Initial admin user '%s' created with ID: %s", initial_admin_user, user_id ? user_id : "(null).");
   json_free(user_result);
   return 1;
 }

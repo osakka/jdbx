@@ -16,7 +16,9 @@
 #define MMAP_VERSION 1
 
 /* Default sizes and limits */
+#ifndef DEFAULT_MMAP_SIZE
 #define DEFAULT_MMAP_SIZE (1ULL << 24)      /* 16MB initial */
+#endif
 #define MAX_MMAP_SIZE (1ULL << 40)          /* 1TB max */
 #define PARTITION_COUNT 1024                 /* Default partitions */
 #define PAGE_SIZE 4096                       /* OS page size */

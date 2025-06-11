@@ -207,6 +207,9 @@ window.switchView = switchView;
 window.logout = logout;
 window.switchLibrary = switchLibrary;
 window.showLibraryManager = showLibraryManager;
+window.createNewLibrary = createNewLibrary;
+window.deleteLibrary = deleteLibrary;
+window.deleteSpecificLibrary = deleteSpecificLibrary;
 window.createNewCollection = createNewCollection;
 window.createNewDocument = createNewDocument;
 window.showSchemaManager = showSchemaManager;
@@ -273,6 +276,14 @@ function switchView(view) {
     
     // Add page-specific class
     document.body.classList.add(`page-${view}`);
+    
+    // Control library selector visibility based on view
+    const librarySelector = document.querySelector('.library-selector-nav');
+    if (librarySelector) {
+        // Show library selector only on browser, collections, and scripts views
+        const showLibrarySelector = ['browser', 'collections', 'scripts'].includes(view);
+        librarySelector.style.display = showLibrarySelector ? 'flex' : 'none';
+    }
     
     // Show selected view with minimal delay to prevent snap
     const viewElement = document.getElementById(`${view}-view`);
@@ -491,9 +502,13 @@ function initializeDashboard() {
     if (!collectionsChart) {
         const ctx = document.getElementById('collectionsChart');
         if (ctx) {
-            // Destroy existing chart if canvas is already in use
-            Chart.getChart(ctx)?.destroy();
-            collectionsChart = new Chart(ctx.getContext('2d'), {
+            try {
+                // Destroy existing chart if canvas is already in use
+                const existingChart = Chart.getChart(ctx);
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+                collectionsChart = new Chart(ctx.getContext('2d'), {
                 type: 'pie',
                 data: {
                     labels: [],
@@ -548,6 +563,10 @@ function initializeDashboard() {
                     }
                 }
             });
+            } catch (error) {
+                console.error('Error initializing collections chart:', error);
+                collectionsChart = null;
+            }
         }
     }
     
@@ -555,9 +574,13 @@ function initializeDashboard() {
     if (!connectionsChart) {
         const ctx = document.getElementById('connectionsChart');
         if (ctx) {
-            // Destroy existing chart if canvas is already in use
-            Chart.getChart(ctx)?.destroy();
-            connectionsChart = new Chart(ctx.getContext('2d'), {
+            try {
+                // Destroy existing chart if canvas is already in use
+                const existingChart = Chart.getChart(ctx);
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+                connectionsChart = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: [],
@@ -590,6 +613,10 @@ function initializeDashboard() {
                     }
                 }
             });
+            } catch (error) {
+                console.error('Error initializing connections chart:', error);
+                connectionsChart = null;
+            }
         }
     }
     
@@ -597,9 +624,13 @@ function initializeDashboard() {
     if (!responseTimesChart) {
         const ctx = document.getElementById('responseTimesChart');
         if (ctx) {
-            // Destroy existing chart if canvas is already in use
-            Chart.getChart(ctx)?.destroy();
-            responseTimesChart = new Chart(ctx.getContext('2d'), {
+            try {
+                // Destroy existing chart if canvas is already in use
+                const existingChart = Chart.getChart(ctx);
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+                responseTimesChart = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: [],
@@ -643,6 +674,10 @@ function initializeDashboard() {
                     }
                 }
             });
+            } catch (error) {
+                console.error('Error initializing response times chart:', error);
+                responseTimesChart = null;
+            }
         }
     }
     
@@ -667,6 +702,9 @@ async function loadDashboard(isPolling = false) {
         
         // Load connections and response times
         await loadDashboardMetrics();
+        
+        // Load library statistics
+        await loadLibraryStatistics();
         
         // Load welcome panel content
         if (!isPolling) {
@@ -984,10 +1022,104 @@ function updateResponseTimesChart(performanceData) {
     }
 }
 
+async function loadLibraryStatistics() {
+    try {
+        // Get all libraries
+        const librariesResponse = await apiRequest('/api/libraries');
+        const libraries = librariesResponse.libraries || [];
+        
+        const statsPanel = document.getElementById('libraryStatsPanel');
+        if (!statsPanel) return;
+        
+        let statsHtml = '';
+        
+        // Process each library
+        for (const library of libraries) {
+            try {
+                // Get library stats
+                const statsResponse = await apiRequest(`/api/libraries/${library.name}/stats`);
+                const stats = statsResponse.stats || {};
+                
+                // Create library stat card
+                statsHtml += `
+                    <div class="col-md-4 col-lg-3 mb-3">
+                        <div class="card h-100 ${library.name === currentLibrary ? 'border-primary' : ''}">
+                            <div class="card-body">
+                                <h6 class="card-title d-flex justify-content-between align-items-center">
+                                    <span>${library.name}</span>
+                                    ${library.name === 'system' ? '<span class="badge bg-secondary">System</span>' : ''}
+                                    ${library.name === currentLibrary ? '<span class="badge bg-primary">Current</span>' : ''}
+                                </h6>
+                                <div class="small">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Collections:</span>
+                                        <span class="fw-bold">${stats.total_collections || 0}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Documents:</span>
+                                        <span class="fw-bold">${stats.total_documents || 0}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Size:</span>
+                                        <span class="fw-bold">${formatBytes(stats.total_size || 0)}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">Created:</span>
+                                        <span class="fw-bold">${formatDate(library.created_at)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error(`Failed to load stats for library ${library.name}:`, error);
+                // Add placeholder card for libraries with errors
+                statsHtml += `
+                    <div class="col-md-4 col-lg-3 mb-3">
+                        <div class="card h-100 ${library.name === currentLibrary ? 'border-primary' : ''}">
+                            <div class="card-body">
+                                <h6 class="card-title">${library.name}</h6>
+                                <div class="text-muted small">Unable to load statistics</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Update the panel
+        statsPanel.innerHTML = statsHtml || '<div class="col-12 text-center text-muted">No libraries found</div>';
+        
+    } catch (error) {
+        console.error('Error loading library statistics:', error);
+        const statsPanel = document.getElementById('libraryStatsPanel');
+        if (statsPanel) {
+            statsPanel.innerHTML = '<div class="col-12 text-center text-danger">Failed to load library statistics</div>';
+        }
+    }
+}
+
+// Helper function to format bytes
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Helper function to format date
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+}
+
 async function loadDashboardMetrics() {
     try {
         // Fetch metrics data from _metrics collection
-        const metricsData = await apiRequest('/api/collections/_metrics').catch(err => {
+        const metricsData = await apiRequest('/api/collections/_metrics/documents').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -1098,9 +1230,52 @@ function renderLibrarySelector() {
 
 // Show library management modal
 async function showLibraryManager() {
-    // Simple prompt for now - can be replaced with a proper modal later
-    const action = confirm('Would you like to create a new library?');
-    if (!action) return;
+    // Show library management modal
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Library Management</h5>
+                    <button type="button" class="btn-close" onclick="this.closest('.modal').remove()"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="createNewLibrary(); this.closest('.modal').remove();">
+                            <i class="bi bi-plus-circle me-2"></i>Create New Library
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteLibrary(); this.closest('.modal').remove();">
+                            <i class="bi bi-trash me-2"></i>Delete Current Library
+                        </button>
+                    </div>
+                    <hr>
+                    <h6>Existing Libraries:</h6>
+                    <ul class="list-group">
+                        ${libraries.map(lib => `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>${lib.name} ${lib.name === currentLibrary ? '<span class="badge bg-primary ms-2">Current</span>' : ''}</span>
+                                ${lib.name !== 'system' && lib.name !== 'default' ? 
+                                    `<button class="btn btn-sm btn-outline-danger" onclick="deleteSpecificLibrary('${lib.name}'); this.closest('.modal').remove();">
+                                        <i class="bi bi-trash"></i>
+                                    </button>` : 
+                                    '<span class="text-muted small">Protected</span>'
+                                }
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function createNewLibrary() {
     
     const libraryName = prompt('Enter library name:');
     if (!libraryName) return;
@@ -1153,6 +1328,68 @@ async function showLibraryManager() {
     } catch (error) {
         console.error('Error creating library:', error);
         showNotification('Failed to create library', 'error');
+    }
+}
+
+// Delete current library
+async function deleteLibrary() {
+    if (currentLibrary === 'system' || currentLibrary === 'default') {
+        showNotification('Cannot delete system or default library', 'error');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete the library "${currentLibrary}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/api/libraries/${currentLibrary}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.success) {
+            showNotification(`Library "${currentLibrary}" deleted successfully`, 'success');
+            
+            // Switch to default library
+            await loadLibraries();
+            switchLibrary('default');
+        }
+    } catch (error) {
+        console.error('Error deleting library:', error);
+        showNotification('Failed to delete library', 'error');
+    }
+}
+
+// Delete specific library
+async function deleteSpecificLibrary(libraryName) {
+    if (libraryName === 'system' || libraryName === 'default') {
+        showNotification('Cannot delete system or default library', 'error');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete the library "${libraryName}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/api/libraries/${libraryName}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.success) {
+            showNotification(`Library "${libraryName}" deleted successfully`, 'success');
+            
+            // Reload libraries
+            await loadLibraries();
+            
+            // If we deleted the current library, switch to default
+            if (libraryName === currentLibrary) {
+                switchLibrary('default');
+            }
+        }
+    } catch (error) {
+        console.error('Error deleting library:', error);
+        showNotification('Failed to delete library', 'error');
     }
 }
 
@@ -1224,14 +1461,18 @@ async function loadBrowserCollections() {
         }
         
         // Filter collections by current library
-        // Collections are returned as library/collection format
+        // Collections are returned either as strings (library/collection) or objects with library field
         collections = rawCollections
             .filter(item => {
-                const name = typeof item === 'string' ? item : item.name;
-                // Include collections that start with current library
-                return name.startsWith(`${currentLibrary}/`) || 
-                       // Also include collections without library prefix if in default library
-                       (currentLibrary === 'default' && !name.includes('/'));
+                if (typeof item === 'string') {
+                    // Old format: library/collection string
+                    const name = item;
+                    return name.startsWith(`${currentLibrary}/`) || 
+                           (currentLibrary === 'default' && !name.includes('/'));
+                } else {
+                    // New format: object with library field from unified documents
+                    return item.library === currentLibrary;
+                }
             })
             .map(item => {
                 if (typeof item === 'string') {
@@ -1244,13 +1485,14 @@ async function loadBrowserCollections() {
                         isSystem: name.startsWith('_') 
                     };
                 }
-                // Handle object format
-                const name = (item.name || '').replace(`${currentLibrary}/`, '');
+                // Handle object format from unified documents
+                const name = item.name || '';
+                const fullPath = item.library ? `${item.library}/${name}` : name;
                 return {
                     name: name,
-                    fullPath: item.name || name,
+                    fullPath: fullPath,
                     documentCount: item.documentCount || item.document_count || 0,
-                    isSystem: name.startsWith('_')
+                    isSystem: item.is_system || name.startsWith('_')
                 };
             });
         
@@ -1387,9 +1629,11 @@ async function updateCollectionCounts() {
         const collection = collections[i];
         try {
             const collectionName = typeof collection === 'string' ? collection : collection.name;
-            console.log(`Requesting count for collection: ${collectionName} (${i+1}/${collections.length})`);
-            const response = await apiRequest(`/api/collections/${collectionName}/documents`);
-            console.log(`Received response for ${collectionName}:`, response ? 'success' : 'null');
+            // Use the full path which includes library prefix
+            const collectionPath = collection.fullPath || `${currentLibrary}/${collectionName}`;
+            console.log(`Requesting count for collection: ${collectionPath} (${i+1}/${collections.length})`);
+            const response = await apiRequest(`/api/collections/${collectionPath}/documents`);
+            console.log(`Received response for ${collectionPath}:`, response ? 'success' : 'null');
             const count = response && response.documents ? response.documents.length : 0;
             
             // Check if count has changed before updating DOM (prevent flicker)
@@ -1484,7 +1728,7 @@ async function selectCollection(collectionName) {
 async function loadDocuments(collectionPath, isPolling = false) {
     try {
         // collectionPath is already library/collection format
-        const response = await apiRequest(`/api/collections/${collectionPath}`);
+        const response = await apiRequest(`/api/collections/${collectionPath}/documents`);
         // Handle both array response and object with documents property
         const newDocuments = Array.isArray(response) ? response : (response.documents || []);
         
@@ -1969,7 +2213,9 @@ async function validateDocumentRealtime(content) {
 
 async function getCollectionValidators(collection) {
     try {
-        const response = await apiRequest('/api/collections/_validators/documents');
+        // Use the current library for validators collection
+        const validatorsPath = `${currentLibrary}/_validators`;
+        const response = await apiRequest(`/api/collections/${validatorsPath}/documents`);
         if (response && response.documents) {
             // Filter validators for this collection or global validators
             return response.documents.filter(script => {
@@ -1979,7 +2225,10 @@ async function getCollectionValidators(collection) {
         }
         return [];
     } catch (error) {
-        console.error('Failed to get validators:', error);
+        // Validators collection might not exist, which is fine
+        if (error.message && !error.message.includes('404') && !error.message.includes('Not found')) {
+            console.error('Error loading validators:', error);
+        }
         return [];
     }
 }
@@ -4187,7 +4436,9 @@ async function loadTransformersForPreview() {
     }
     
     try {
-        const response = await apiRequest('/api/collections/_transformers/documents');
+        // Use the current library for transformers collection
+        const transformersPath = `${currentLibrary}/_transformers`;
+        const response = await apiRequest(`/api/collections/${transformersPath}/documents`);
         if (response && response.documents) {
             // Filter transformers for this collection or global transformers
             currentTransformers = response.documents.filter(script => {
@@ -4198,7 +4449,10 @@ async function loadTransformersForPreview() {
             currentTransformers = [];
         }
     } catch (error) {
-        console.error('Failed to load transformers:', error);
+        // Transformers collection might not exist, which is fine
+        if (error.message && !error.message.includes('404') && !error.message.includes('Not found')) {
+            console.error('Error loading transformers:', error);
+        }
         currentTransformers = [];
     }
 }
@@ -5193,7 +5447,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // Fetch metrics data from _metrics collection
         console.log('Fetching metrics from _metrics collection...');
-        const metricsData = await apiRequest('/api/collections/_metrics').catch(err => {
+        const metricsData = await apiRequest('/api/collections/_metrics/documents').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });

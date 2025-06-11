@@ -276,13 +276,267 @@ int create_system_actors(database_t* db) {
     return 1;
 }
 
+/* Create predefined library templates */
+int create_library_templates(database_t* db) {
+    LOG_INFO("Creating predefined library templates");
+    
+    /* E-Commerce Template */
+    json_value_t* ecommerce_template = json_create_object();
+    json_object_set(ecommerce_template, "type", json_create_string("library_template"));
+    json_object_set(ecommerce_template, "name", json_create_string("e-commerce"));
+    json_object_set(ecommerce_template, "display_name", json_create_string("E-Commerce Template"));
+    json_object_set(ecommerce_template, "description", json_create_string("Complete e-commerce platform with products, orders, customers, and inventory management"));
+    
+    /* E-commerce collections */
+    json_value_t* ecommerce_collections = json_create_array();
+    
+    /* Products collection */
+    json_value_t* products_collection = json_create_object();
+    json_object_set(products_collection, "name", json_create_string("products"));
+    json_object_set(products_collection, "display_name", json_create_string("Products"));
+    json_object_set(products_collection, "description", json_create_string("Product catalog"));
+    json_value_t* products_schema = json_create_object();
+    json_object_set(products_schema, "type", json_create_string("object"));
+    json_value_t* products_props = json_create_object();
+    json_value_t* name_prop = json_create_object();
+    json_object_set(name_prop, "type", json_create_string("string"));
+    json_object_set(products_props, "name", name_prop);
+    json_value_t* price_prop = json_create_object();
+    json_object_set(price_prop, "type", json_create_string("number"));
+    json_object_set(products_props, "price", price_prop);
+    json_value_t* category_prop = json_create_object();
+    json_object_set(category_prop, "type", json_create_string("string"));
+    json_object_set(products_props, "category", category_prop);
+    json_value_t* inventory_prop = json_create_object();
+    json_object_set(inventory_prop, "type", json_create_string("integer"));
+    json_object_set(products_props, "inventory", inventory_prop);
+    json_object_set(products_schema, "properties", products_props);
+    json_object_set(products_collection, "schema", products_schema);
+    json_array_append(ecommerce_collections, products_collection);
+    
+    /* Orders collection */
+    json_value_t* orders_collection = json_create_object();
+    json_object_set(orders_collection, "name", json_create_string("orders"));
+    json_object_set(orders_collection, "display_name", json_create_string("Orders"));
+    json_object_set(orders_collection, "description", json_create_string("Customer orders"));
+    json_value_t* orders_schema = json_create_object();
+    json_object_set(orders_schema, "type", json_create_string("object"));
+    json_value_t* orders_props = json_create_object();
+    json_value_t* customer_id_prop = json_create_object();
+    json_object_set(customer_id_prop, "type", json_create_string("string"));
+    json_object_set(orders_props, "customer_id", customer_id_prop);
+    json_value_t* total_prop = json_create_object();
+    json_object_set(total_prop, "type", json_create_string("number"));
+    json_object_set(orders_props, "total", total_prop);
+    json_value_t* status_prop = json_create_object();
+    json_object_set(status_prop, "type", json_create_string("string"));
+    json_object_set(orders_props, "status", status_prop);
+    json_object_set(orders_schema, "properties", orders_props);
+    json_object_set(orders_collection, "schema", orders_schema);
+    json_array_append(ecommerce_collections, orders_collection);
+    
+    /* Customers collection */
+    json_value_t* customers_collection = json_create_object();
+    json_object_set(customers_collection, "name", json_create_string("customers"));
+    json_object_set(customers_collection, "display_name", json_create_string("Customers"));
+    json_object_set(customers_collection, "description", json_create_string("Customer information"));
+    json_value_t* customers_schema = json_create_object();
+    json_object_set(customers_schema, "type", json_create_string("object"));
+    json_value_t* customers_props = json_create_object();
+    json_value_t* email_prop = json_create_object();
+    json_object_set(email_prop, "type", json_create_string("string"));
+    json_object_set(customers_props, "email", email_prop);
+    json_value_t* full_name_prop = json_create_object();
+    json_object_set(full_name_prop, "type", json_create_string("string"));
+    json_object_set(customers_props, "full_name", full_name_prop);
+    json_object_set(customers_schema, "properties", customers_props);
+    json_object_set(customers_collection, "schema", customers_schema);
+    json_array_append(ecommerce_collections, customers_collection);
+    
+    /* Categories collection */
+    json_value_t* categories_collection = json_create_object();
+    json_object_set(categories_collection, "name", json_create_string("categories"));
+    json_object_set(categories_collection, "display_name", json_create_string("Categories"));
+    json_object_set(categories_collection, "description", json_create_string("Product categories"));
+    json_array_append(ecommerce_collections, categories_collection);
+    
+    json_object_set(ecommerce_template, "collections", ecommerce_collections);
+    
+    /* E-commerce settings */
+    json_value_t* ecommerce_settings = json_create_object();
+    json_object_set(ecommerce_settings, "default_currency", json_create_string("USD"));
+    json_object_set(ecommerce_settings, "inventory_tracking", json_create_boolean(1));
+    json_object_set(ecommerce_settings, "order_notifications", json_create_boolean(1));
+    json_object_set(ecommerce_template, "settings", ecommerce_settings);
+    
+    add_document_system_fields(ecommerce_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
+    
+    /* Wiki Template */
+    json_value_t* wiki_template = json_create_object();
+    json_object_set(wiki_template, "type", json_create_string("library_template"));
+    json_object_set(wiki_template, "name", json_create_string("wiki"));
+    json_object_set(wiki_template, "display_name", json_create_string("Wiki Template"));
+    json_object_set(wiki_template, "description", json_create_string("Knowledge base and documentation platform with pages, categories, and revision history"));
+    
+    /* Wiki collections */
+    json_value_t* wiki_collections = json_create_array();
+    
+    /* Pages collection */
+    json_value_t* pages_collection = json_create_object();
+    json_object_set(pages_collection, "name", json_create_string("pages"));
+    json_object_set(pages_collection, "display_name", json_create_string("Pages"));
+    json_object_set(pages_collection, "description", json_create_string("Wiki pages"));
+    json_value_t* pages_schema = json_create_object();
+    json_object_set(pages_schema, "type", json_create_string("object"));
+    json_value_t* pages_props = json_create_object();
+    json_value_t* title_prop = json_create_object();
+    json_object_set(title_prop, "type", json_create_string("string"));
+    json_object_set(pages_props, "title", title_prop);
+    json_value_t* content_prop = json_create_object();
+    json_object_set(content_prop, "type", json_create_string("string"));
+    json_object_set(pages_props, "content", content_prop);
+    json_value_t* tags_prop = json_create_object();
+    json_object_set(tags_prop, "type", json_create_string("array"));
+    json_object_set(pages_props, "tags", tags_prop);
+    json_object_set(pages_schema, "properties", pages_props);
+    json_object_set(pages_collection, "schema", pages_schema);
+    json_array_append(wiki_collections, pages_collection);
+    
+    /* Revisions collection */
+    json_value_t* revisions_collection = json_create_object();
+    json_object_set(revisions_collection, "name", json_create_string("revisions"));
+    json_object_set(revisions_collection, "display_name", json_create_string("Revisions"));
+    json_object_set(revisions_collection, "description", json_create_string("Page revision history"));
+    json_array_append(wiki_collections, revisions_collection);
+    
+    /* Wiki categories collection */
+    json_value_t* wiki_categories_collection = json_create_object();
+    json_object_set(wiki_categories_collection, "name", json_create_string("categories"));
+    json_object_set(wiki_categories_collection, "display_name", json_create_string("Categories"));
+    json_object_set(wiki_categories_collection, "description", json_create_string("Content categories"));
+    json_array_append(wiki_collections, wiki_categories_collection);
+    
+    /* Comments collection */
+    json_value_t* comments_collection = json_create_object();
+    json_object_set(comments_collection, "name", json_create_string("comments"));
+    json_object_set(comments_collection, "display_name", json_create_string("Comments"));
+    json_object_set(comments_collection, "description", json_create_string("Page comments and discussions"));
+    json_array_append(wiki_collections, comments_collection);
+    
+    json_object_set(wiki_template, "collections", wiki_collections);
+    
+    /* Wiki settings */
+    json_value_t* wiki_settings = json_create_object();
+    json_object_set(wiki_settings, "enable_comments", json_create_boolean(1));
+    json_object_set(wiki_settings, "enable_revisions", json_create_boolean(1));
+    json_object_set(wiki_settings, "markdown_support", json_create_boolean(1));
+    json_object_set(wiki_template, "settings", wiki_settings);
+    
+    add_document_system_fields(wiki_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
+    
+    /* CMS Template */
+    json_value_t* cms_template = json_create_object();
+    json_object_set(cms_template, "type", json_create_string("library_template"));
+    json_object_set(cms_template, "name", json_create_string("cms"));
+    json_object_set(cms_template, "display_name", json_create_string("Content Management System"));
+    json_object_set(cms_template, "description", json_create_string("Full-featured content management system with posts, media, menus, and publishing workflow"));
+    
+    /* CMS collections */
+    json_value_t* cms_collections = json_create_array();
+    
+    /* Posts collection */
+    json_value_t* posts_collection = json_create_object();
+    json_object_set(posts_collection, "name", json_create_string("posts"));
+    json_object_set(posts_collection, "display_name", json_create_string("Posts"));
+    json_object_set(posts_collection, "description", json_create_string("Blog posts and articles"));
+    json_value_t* posts_schema = json_create_object();
+    json_object_set(posts_schema, "type", json_create_string("object"));
+    json_value_t* posts_props = json_create_object();
+    json_value_t* post_title_prop = json_create_object();
+    json_object_set(post_title_prop, "type", json_create_string("string"));
+    json_object_set(posts_props, "title", post_title_prop);
+    json_value_t* post_content_prop = json_create_object();
+    json_object_set(post_content_prop, "type", json_create_string("string"));
+    json_object_set(posts_props, "content", post_content_prop);
+    json_value_t* post_status_prop = json_create_object();
+    json_object_set(post_status_prop, "type", json_create_string("string"));
+    json_object_set(posts_props, "status", post_status_prop);
+    json_object_set(posts_schema, "properties", posts_props);
+    json_object_set(posts_collection, "schema", posts_schema);
+    json_array_append(cms_collections, posts_collection);
+    
+    /* Media collection */
+    json_value_t* media_collection = json_create_object();
+    json_object_set(media_collection, "name", json_create_string("media"));
+    json_object_set(media_collection, "display_name", json_create_string("Media"));
+    json_object_set(media_collection, "description", json_create_string("Images, videos, and documents"));
+    json_array_append(cms_collections, media_collection);
+    
+    /* Menus collection */
+    json_value_t* menus_collection = json_create_object();
+    json_object_set(menus_collection, "name", json_create_string("menus"));
+    json_object_set(menus_collection, "display_name", json_create_string("Menus"));
+    json_object_set(menus_collection, "description", json_create_string("Navigation menus"));
+    json_array_append(cms_collections, menus_collection);
+    
+    /* Pages for CMS */
+    json_value_t* cms_pages_collection = json_create_object();
+    json_object_set(cms_pages_collection, "name", json_create_string("pages"));
+    json_object_set(cms_pages_collection, "display_name", json_create_string("Pages"));
+    json_object_set(cms_pages_collection, "description", json_create_string("Static pages"));
+    json_array_append(cms_collections, cms_pages_collection);
+    
+    /* Themes collection */
+    json_value_t* themes_collection = json_create_object();
+    json_object_set(themes_collection, "name", json_create_string("themes"));
+    json_object_set(themes_collection, "display_name", json_create_string("Themes"));
+    json_object_set(themes_collection, "description", json_create_string("Site themes and templates"));
+    json_array_append(cms_collections, themes_collection);
+    
+    json_object_set(cms_template, "collections", cms_collections);
+    
+    /* CMS settings */
+    json_value_t* cms_settings = json_create_object();
+    json_object_set(cms_settings, "enable_publishing", json_create_boolean(1));
+    json_object_set(cms_settings, "enable_drafts", json_create_boolean(1));
+    json_object_set(cms_settings, "enable_comments", json_create_boolean(1));
+    json_object_set(cms_settings, "default_theme", json_create_string("default"));
+    json_object_set(cms_template, "settings", cms_settings);
+    
+    add_document_system_fields(cms_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
+    
+    /* Insert templates into database */
+    json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, ecommerce_template);
+    if (result) {
+        LOG_INFO("Created e-commerce library template");
+        json_free(result);
+    }
+    json_free(ecommerce_template);
+    
+    result = db_insert_document(db, DOCUMENTS_COLLECTION, wiki_template);
+    if (result) {
+        LOG_INFO("Created wiki library template");
+        json_free(result);
+    }
+    json_free(wiki_template);
+    
+    result = db_insert_document(db, DOCUMENTS_COLLECTION, cms_template);
+    if (result) {
+        LOG_INFO("Created CMS library template");
+        json_free(result);
+    }
+    json_free(cms_template);
+    
+    return 1;
+}
+
 /* Initialize unified documents system */
 int unified_documents_init(database_t* db) {
     if (!db) return 0;
     
     LOG_INFO("Initializing unified documents system");
     
-    /* Create documents collection at root level */
+    /* CRITICAL: Create documents collection FIRST before any other operations */
     if (!db_collection_exists(db, DOCUMENTS_COLLECTION)) {
         /* Use simple collection name to ensure it's at root level */
         if (db_create_collection(db, DOCUMENTS_COLLECTION) != 0) {
@@ -290,9 +544,11 @@ int unified_documents_init(database_t* db) {
             return 0;
         }
         LOG_INFO("Created documents collection at root level");
+    } else {
+        LOG_INFO("Documents collection already exists");
     }
     
-    /* Create indexes */
+    /* Create indexes AFTER collection exists */
     LOG_INFO("Creating unified document indexes");
     
     /* Type index for fast filtering */
@@ -438,6 +694,9 @@ int unified_documents_init(database_t* db) {
     }
     if (existing) json_free(existing);
     if (admin_role_id) free(admin_role_id);
+    
+    /* Create predefined library templates */
+    create_library_templates(db);
     
     LOG_INFO("Unified documents system initialized");
     return 1;

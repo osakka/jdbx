@@ -81,6 +81,7 @@ json_value_t* json_deep_copy(json_value_t* value);
 json_value_t* json_deep_copy_optimized(json_value_t* value);
 void json_array_set(json_value_t* array, size_t index, json_value_t* value);
 int json_equals(json_value_t* value1, json_value_t* value2);
+json_value_t* json_object_get_keys(json_value_t* object);
 
 /* Helper functions for working with JSON values */
 json_type_t json_get_type(json_value_t* value);

@@ -43,6 +43,8 @@
 
 /* Forward declarations */
 static void generate_doc_id(char* id_buf, size_t buf_size);
+/* Note: hp_collection_t defined below */
+static void free_namespaced_key(char* key);
 
 /* Resolve DEFAULT_MMAP_SIZE conflict between config_defaults.h and mmap_storage.h */
 #ifdef DEFAULT_MMAP_SIZE
@@ -110,9 +112,35 @@ static struct {
     collection_hash_entry_t* collection_hash[COLLECTION_HASH_SIZE];
     size_t hash_entries;
     
+    /* Global JDBX storage (shared by all collections when using JDBX backend) */
+    storage_backend_t* jdbx_storage;
+    
     pthread_rwlock_t lock;
     int initialized;
 } g_database = {0};
+
+/* JDBX namespaced key helpers */
+static char* create_namespaced_key(hp_collection_t* coll, const char* doc_id) {
+    /* For MMAP storage, just return the doc_id as-is */
+    if (!coll->storage || coll->storage->type != STORAGE_BACKEND_JDBX) {
+        return strdup(doc_id);
+    }
+    
+    /* For JDBX storage, create namespaced key: library:collection:doc_id */
+    size_t namespace_len = strlen(coll->name);
+    size_t doc_id_len = strlen(doc_id);
+    size_t total_len = namespace_len + 1 + doc_id_len + 1; /* +1 for :, +1 for \0 */
+    
+    char* namespaced_key = malloc(total_len);
+    if (!namespaced_key) return NULL;
+    
+    snprintf(namespaced_key, total_len, "%s:%s", coll->name, doc_id);
+    return namespaced_key;
+}
+
+static void free_namespaced_key(char* key) {
+    free(key);
+}
 
 /* Hash function for collection names */
 static unsigned int collection_hash_func(const char* name) {
@@ -488,21 +516,44 @@ int db_create_collection(database_t* db, const char* name) {
                                   : DEFAULT_STORAGE_BACKEND;
     
     if (strcmp(storage_backend, "jdbx") == 0) {
-        /* Use JDBX storage backend */
-        snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.jdbx", g_database.path, library, collection);
+        /* Use JDBX storage backend - single database file for all collections */
+        snprintf(storage_path, sizeof(storage_path), "%s/database.jdbx", g_database.path);
         
-        LOG_DEBUG("Creating collection '%s' with JDBX storage, initial size: %s", name, 
+        LOG_DEBUG("Creating collection '%s' with JDBX storage (shared database), initial size: %s", name, 
                   format_bytes(prod_config->mmap_size_per_collection));
         
-        coll->storage = storage_backend_create(STORAGE_BACKEND_JDBX);
-        if (!coll->storage || coll->storage->ops->init(coll->storage, storage_path, 
-                                                       prod_config->mmap_size_per_collection) != 0) {
-            if (coll->storage) storage_backend_destroy(coll->storage);
+        /* Check if global JDBX database already exists */
+        if (!g_database.jdbx_storage) {
+            g_database.jdbx_storage = storage_backend_create(STORAGE_BACKEND_JDBX);
+            if (!g_database.jdbx_storage || g_database.jdbx_storage->ops->init(g_database.jdbx_storage, storage_path, 
+                                                           prod_config->mmap_size_per_collection) != 0) {
+                if (g_database.jdbx_storage) storage_backend_destroy(g_database.jdbx_storage);
+                g_database.jdbx_storage = NULL;
+                free(coll);
+                pthread_rwlock_unlock(&g_database.lock);
+                LOG_ERROR("Cannot create JDBX storage for collection: %s", name);
+                return -1;
+            }
+            LOG_INFO("Initialized shared JDBX database: %s", storage_path);
+        }
+        
+        /* All collections share the same JDBX storage with namespaced keys */
+        coll->storage = g_database.jdbx_storage;
+        
+        /* Store namespace for this collection (used to prefix keys) */
+        size_t lib_len = strlen(library);
+        size_t coll_len = strlen(collection);
+        if (lib_len + 1 + coll_len >= sizeof(coll->name)) {
+            storage_backend_destroy(g_database.jdbx_storage);
+            g_database.jdbx_storage = NULL;
             free(coll);
             pthread_rwlock_unlock(&g_database.lock);
-            LOG_ERROR("Cannot create JDBX storage for collection: %s", name);
+            LOG_ERROR("Collection name too long: %s:%s", library, collection);
             return -1;
         }
+        strcpy(coll->name, library);
+        strcat(coll->name, ":");
+        strcat(coll->name, collection);
     } else {
         /* Use MMAP storage backend (default) */
         snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.mmap", g_database.path, library, collection);
@@ -625,33 +676,6 @@ int db_create_collection(database_t* db, const char* name) {
     return 0;
 }
 
-/* Parse library/collection name */
-static int parse_collection_name(const char* full_name, char* library, size_t lib_size, 
-                                char* collection, size_t coll_size) {
-    if (!full_name) return -1;
-    
-    const char* slash = strchr(full_name, '/');
-    if (slash) {
-        /* Library qualified name: library/collection */
-        size_t lib_len = slash - full_name;
-        if (lib_len >= lib_size) return -1;
-        
-        strncpy(library, full_name, lib_len);
-        library[lib_len] = '\0';
-        
-        strncpy(collection, slash + 1, coll_size - 1);
-        collection[coll_size - 1] = '\0';
-    } else {
-        /* No library specified, use default */
-        strncpy(library, "default", lib_size - 1);
-        library[lib_size - 1] = '\0';
-        
-        strncpy(collection, full_name, coll_size - 1);
-        collection[coll_size - 1] = '\0';
-    }
-    
-    return 0;
-}
 
 /* Get collection */
 db_collection_t* db_get_collection(database_t* db, const char* name) {
@@ -842,13 +866,24 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     /* size_t entry_size = sizeof(doc_entry_t) + strlen(doc_id) + doc_size; - not used */
     /* Store document using storage backend */
     TRACE_DB("db_insert_document: storing doc_id=%s, size=%zu", doc_id, doc_size);
-    if (coll->storage->ops->store(coll->storage, doc_id, json_str, doc_size) != 0) {
+    char* namespaced_key = create_namespaced_key(coll, doc_id);
+    if (!namespaced_key) {
+        free(json_str);
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("db_insert_document: Failed to create namespaced key");
+        return NULL;
+    }
+    
+    if (coll->storage->ops->store(coll->storage, namespaced_key, json_str, doc_size) != 0) {
+        free_namespaced_key(namespaced_key);
         LOG_ERROR("db_insert_document: storage store failed for doc_id=%s", doc_id);
         pthread_rwlock_unlock(&coll->lock);
         buffer_pool_free_safe(json_str);
         json_free(result_doc);
         return NULL;
     }
+    
+    free_namespaced_key(namespaced_key);
     
     /* For now, use doc_id hash as offset for index (JDBX doesn't expose offsets) */
     uint64_t offset = 0;
@@ -1008,7 +1043,15 @@ json_value_t* db_get_document(database_t* db, const char* collection_name,
     
     /* Get document from storage backend */
     size_t data_len;
-    char* data = coll->storage->ops->retrieve(coll->storage, id, &data_len);
+    char* namespaced_key = create_namespaced_key(coll, id);
+    if (!namespaced_key) {
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("db_get_document: Failed to create namespaced key");
+        return NULL;
+    }
+    
+    char* data = coll->storage->ops->retrieve(coll->storage, namespaced_key, &data_len);
+    free_namespaced_key(namespaced_key);
     if (!data) {
         pthread_rwlock_unlock(&coll->lock);
         LOG_ERROR("db_get_document: document %s not found", id);
@@ -1094,11 +1137,24 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
     
     /* Store new version */
     /* Store updated document using storage backend */
-    if (coll->storage->ops->store(coll->storage, id, json_str, doc_size) != 0) {
+    char* namespaced_key = create_namespaced_key(coll, id);
+    if (!namespaced_key) {
+        pthread_rwlock_unlock(&coll->lock);
+        buffer_pool_free_safe(json_str);
+        json_free(document);
+        if (current_doc) json_free(current_doc);
+        LOG_ERROR("db_update_document: Failed to create namespaced key");
+        return NULL;
+    }
+    
+    if (coll->storage->ops->store(coll->storage, namespaced_key, json_str, doc_size) != 0) {
+        free_namespaced_key(namespaced_key);
         pthread_rwlock_unlock(&coll->lock);
         buffer_pool_free_safe(json_str);
         return NULL;
     }
+    
+    free_namespaced_key(namespaced_key);
     
     /* Update stats - disabled for now */
     // atomic_fetch_add(&coll->total_size, doc_size);
@@ -1176,14 +1232,31 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     /* First, get the document to extract field values for index removal */
     json_value_t* doc = NULL;
     size_t value_size;
-    char* data = coll->storage->ops->retrieve(coll->storage, id, &value_size);
+    char* namespaced_key = create_namespaced_key(coll, id);
+    if (!namespaced_key) {
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("db_delete_document: Failed to create namespaced key");
+        return -1;
+    }
+    
+    char* data = coll->storage->ops->retrieve(coll->storage, namespaced_key, &value_size);
+    free_namespaced_key(namespaced_key);
     if (data) {
         doc = json_parse(data);
         free(data);
     }
     
     /* Delete from storage backend */
-    int result = coll->storage->ops->delete(coll->storage, id);
+    namespaced_key = create_namespaced_key(coll, id);
+    if (!namespaced_key) {
+        if (doc) json_free(doc);
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("db_delete_document: Failed to create namespaced key for deletion");
+        return -1;
+    }
+    
+    int result = coll->storage->ops->delete(coll->storage, namespaced_key);
+    free_namespaced_key(namespaced_key);
     
     /* Remove from primary index if storage deletion succeeded */
     if (result == 0) {

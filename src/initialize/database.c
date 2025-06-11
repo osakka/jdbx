@@ -29,6 +29,12 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
     return INIT_DATABASE_ERROR;
   }
   
+  /* Check if JDBX mode is enabled */
+  const char* use_jdbx = getenv("JSONDB_USE_JDBX");
+  if (use_jdbx && strcmp(use_jdbx, "1") == 0) {
+    INIT_LOG_PROGRESS("DATABASE", "Using JDBX single-file database format");
+  }
+  
   /* Check if path is specified */
   if (!config->db_path || strlen(config->db_path) == 0) {
     INIT_LOG_PROGRESS("DATABASE", "No database path specified, using in-memory database");
@@ -105,8 +111,10 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
       return INIT_DATABASE_ERROR;
     }
     INIT_LOG_SUCCESS("DATABASE", "System schemas initialized for bootstrap");
-    
-    /* Initialize unified documents system */
+  }
+  
+  /* Always check for unified documents system - it may be missing even if system/config exists */
+  if (!db_collection_exists(db, "documents")) {
     INIT_LOG_PROGRESS("DATABASE", "Initializing unified documents system");
     if (!unified_documents_init(db)) {
       INIT_LOG_FAILURE("DATABASE", "Failed to initialize unified documents system");
@@ -114,6 +122,8 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
       return INIT_DATABASE_ERROR;
     }
     INIT_LOG_SUCCESS("DATABASE", "Unified documents system initialized");
+  } else {
+    INIT_LOG_SUCCESS("DATABASE", "Unified documents system already initialized");
   }
   
   /* Build indices for faster lookups */

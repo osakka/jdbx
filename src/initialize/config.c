@@ -38,6 +38,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int use_ssl = -1;  /* -1 = not set, 0 = disabled, 1 = enabled */
   char* ssl_cert = NULL;
   char* ssl_key = NULL;
+  char* storage_backend = NULL;
+  char* jdbx_initial_size = NULL;
+  char* jdbx_wal_size = NULL;
   
   /* Initialize binary directory for path resolution */
   config_init_binary_dir();
@@ -99,6 +102,10 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"index-time-threshold", required_argument, 0, 311},
     {"index-startup-delay", required_argument, 0, 312},
     {"index-check-interval", required_argument, 0, 313},
+    /* Storage backend options */
+    {"storage-backend", required_argument, 0, 314},
+    {"jdbx-initial-size", required_argument, 0, 315},
+    {"jdbx-wal-size", required_argument, 0, 316},
     {0, 0, 0, 0}
   };
   
@@ -220,6 +227,15 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 313:
         heap_config->index_check_interval = atoi(optarg);
+        break;
+      case 314:
+        storage_backend = optarg;
+        break;
+      case 315:
+        jdbx_initial_size = optarg;
+        break;
+      case 316:
+        jdbx_wal_size = optarg;
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
@@ -393,6 +409,26 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     }
     heap_config->metrics_dir = strdup(metrics_dir);
     INIT_LOG_PROGRESS("CONFIG", "Metrics directory set to %s", metrics_dir);
+  }
+  
+  /* Process storage backend arguments */
+  if (storage_backend) {
+    /* Free previous value if allocated */
+    if (heap_config->storage_backend) {
+      free(heap_config->storage_backend);
+    }
+    heap_config->storage_backend = strdup(storage_backend);
+    INIT_LOG_PROGRESS("CONFIG", "Storage backend set to %s", storage_backend);
+  }
+  
+  if (jdbx_initial_size) {
+    heap_config->jdbx_initial_size = (size_t)atoll(jdbx_initial_size);
+    INIT_LOG_PROGRESS("CONFIG", "JDBX initial size set to %zu bytes", heap_config->jdbx_initial_size);
+  }
+  
+  if (jdbx_wal_size) {
+    heap_config->jdbx_wal_size = (size_t)atoll(jdbx_wal_size);
+    INIT_LOG_PROGRESS("CONFIG", "JDBX WAL size set to %zu bytes", heap_config->jdbx_wal_size);
   }
   
   /* Process SSL arguments */

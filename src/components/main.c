@@ -49,6 +49,10 @@ static void print_usage(const char* program_name) {
   printf(" -K, --ssl-key=FILE       Set SSL private key file path\n");
   printf(" -v, --version         Display version information and exit\n");
   printf(" -j, --js-file=FILE      Execute JavaScript file and exit\n");
+  printf("\nStorage Backend Options (Advanced):\n");
+  printf(" --storage-backend=BACKEND  Set storage backend (mmap or jdbx)\n");
+  printf(" --jdbx-initial-size=SIZE   Set JDBX initial file size (bytes)\n");
+  printf(" --jdbx-wal-size=SIZE      Set JDBX WAL size (bytes)\n");
   printf("\n");
 }
 

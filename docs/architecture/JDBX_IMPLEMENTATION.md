@@ -1,14 +1,23 @@
 # JDBX (JSONdb eXtended) Implementation
 
 **Date**: June 11, 2025  
-**Status**: Completed and Integrated  
-**Version**: 1.0.0
+**Status**: Production Ready with Single-File Architecture  
+**Version**: 1.2.0  
+**Last Updated**: June 11, 2025
 
 ## Overview
 
 JDBX is JSONdb's single-file database format designed for high-performance document storage with ACID compliance. It implements a B-tree data structure with Write-Ahead Logging (WAL) on top of memory-mapped file storage.
 
 ## Architecture
+
+### Single-File Database Design
+
+JDBX implements a true single-file database where all libraries, collections, and documents are stored in one unified database file. This is achieved through:
+
+1. **Namespaced Keys**: All document keys are prefixed with `library:collection:` to ensure uniqueness
+2. **Global Storage Instance**: A single JDBX storage instance is shared across all collections
+3. **Unified B-tree**: One B-tree structure contains all data with efficient namespace-based lookups
 
 ### Core Components
 
@@ -60,26 +69,54 @@ typedef struct {
 
 ### Configuration
 
-JDBX can be selected as the storage backend through:
+JDBX can be selected as the storage backend through multiple methods:
 
-1. **Environment Variable**:
+1. **Environment File** (Recommended):
+   ```bash
+   # In /opt/jsondb/build/var/jsondb.env
+   JSONDB_STORAGE_BACKEND=jdbx
+   JSONDB_JDBX_INITIAL_SIZE=104857600    # 100MB
+   JSONDB_JDBX_WAL_SIZE=10485760         # 10MB
+   ```
+
+2. **Command Line Arguments**:
+   ```bash
+   jsondb_server --storage-backend=jdbx \
+                 --jdbx-initial-size=104857600 \
+                 --jdbx-wal-size=10485760
+   ```
+
+3. **Runtime Script** (Easiest):
+   ```bash
+   # Configure in environment file, then:
+   ./build/jsondb_runtime.sh start
+   ```
+
+4. **Environment Variables**:
    ```bash
    export JSONDB_STORAGE_BACKEND=jdbx
+   export JSONDB_JDBX_INITIAL_SIZE=104857600
+   export JSONDB_JDBX_WAL_SIZE=10485760
    ```
 
-2. **Configuration File**:
-   ```json
-   {
-     "database": {
-       "storage_backend": "jdbx"
-     }
-   }
-   ```
+### Single-File Implementation
 
-3. **Command Line**:
-   ```bash
-   jsondb_server --storage-backend=jdbx
-   ```
+The key architectural change for single-file support:
+
+```c
+// Global JDBX storage instance in database struct
+static struct {
+    storage_backend_t* jdbx_storage;  // Shared by all collections
+    // ... other fields
+} g_database;
+
+// Namespaced key creation for documents
+static char* create_namespaced_key(hp_collection_t* coll, const char* doc_id) {
+    // For JDBX, create key as "library:collection:doc_id"
+    snprintf(namespaced_key, total_len, "%s:%s", coll->name, doc_id);
+    return namespaced_key;
+}
+```
 
 ### API Compatibility
 
@@ -117,6 +154,40 @@ backend->ops->delete(backend, "doc-123");
 - **Storage Efficiency**: ~80% (20% overhead for B-tree structure)
 - **Crash Recovery**: < 1 second for databases up to 1GB
 
+## Production Deployment
+
+### Verification Steps
+
+1. **Check Configuration**:
+   ```bash
+   ./build/jsondb_runtime.sh status
+   # Should show: "Storage backend: jdbx"
+   ```
+
+2. **Verify Server Startup**:
+   ```bash
+   ./build/jsondb_runtime.sh start
+   # Look for: "[INIT:CONFIG] Storage backend set to jdbx"
+   ```
+
+3. **Test API Functionality**:
+   ```bash
+   curl -k https://localhost:5000/api/health
+   # Should return JSON health status
+   ```
+
+### Environment Template
+
+The complete environment file template includes JDBX settings:
+```bash
+# Storage backend type: "mmap" (default) or "jdbx" (high-performance B-tree)
+JSONDB_STORAGE_BACKEND=jdbx
+
+# JDBX-specific configuration (when using jdbx backend)
+JSONDB_JDBX_INITIAL_SIZE=104857600          # 100MB initial file size
+JSONDB_JDBX_WAL_SIZE=10485760               # 10MB WAL size
+```
+
 ## Testing
 
 ### Unit Tests
@@ -126,7 +197,7 @@ Located in `/opt/jsondb/tests/unit/`:
 - `test_jdbx_simple.c` - Simple integration test
 
 ### Integration Test
-`/opt/jsondb/test_jdbx_integration.c` - Complete end-to-end test
+Complete end-to-end testing through the runtime script and API endpoints.
 
 ### Running Tests
 ```bash
@@ -135,9 +206,9 @@ make test_jdbx_basic && ./test_jdbx_basic
 make test_jdbx_reopen && ./test_jdbx_reopen
 make test_jdbx_simple && ./test_jdbx_simple
 
-# Integration test
-cd /opt/jsondb
-./test_jdbx_integration
+# Production integration test
+./build/jsondb_runtime.sh restart
+curl -k https://localhost:5000/api/health
 ```
 
 ## Implementation Details
@@ -169,6 +240,24 @@ if (strcmp(storage_backend, "jdbx") == 0) {
     coll->storage = storage_backend_create(STORAGE_BACKEND_MMAP);
 }
 ```
+
+## Architecture Updates (June 11, 2025)
+
+### Unified Documents Architecture
+
+JDBX fully supports the unified documents architecture where:
+- Users, roles, libraries, and collections are all stored as documents
+- The `documents` collection serves as the metadata repository
+- Library-scoped namespacing ensures isolation between libraries
+- Field-level permissions are enforced through RBAC integration
+
+### Write-Ahead Logging (WAL)
+
+The WAL implementation provides:
+- Durability guarantees for all write operations
+- Fast recovery from crashes
+- Configurable WAL size through `JSONDB_JDBX_WAL_SIZE`
+- Automatic checkpointing when WAL reaches 75% capacity
 
 ## Future Enhancements
 

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <openssl/sha.h>
 
 /* 
  * More secure password hashing implementation with salt and PBKDF2
@@ -128,13 +129,16 @@ char* hash_password(const char* password) {
   unsigned char salt[SALT_LENGTH];
   generate_salt(salt, SALT_LENGTH);
   
-  /* Derive key using PBKDF2 */
-  unsigned char hash[HASH_LENGTH];
-  pbkdf2_hmac_sha256(password, salt, SALT_LENGTH, PBKDF2_ITERATIONS, HASH_LENGTH, hash);
-  
   /* Format: $pbkdf2$iterations$salt$hash */
   char* result = (char*)malloc(SALT_LENGTH * 2 + HASH_LENGTH * 2 + 32);
   if (!result) {
+    return NULL;
+  }
+  
+  /* For now, use simple SHA256 - TODO: Implement pbkdf2_hmac_sha256 */
+  unsigned char hash[HASH_LENGTH];
+  if (SHA256((unsigned char*)password, strlen(password), hash) == NULL) {
+    free(result);
     return NULL;
   }
   
@@ -619,24 +623,40 @@ int verify_password(const char* password, const char* password_hash) {
     TRACE_RBAC("RBAC: PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
          iterations, salt_hex, stored_hash_hex);
     
-    /* TODO: Implement pbkdf2_hmac_sha256 - for now just accept admin password */
-    TRACE_RBAC("RBAC: TODO - pbkdf2_hmac_sha256 not implemented, accepting admin password.");
-    if (strcmp(password, "admin") == 0) {
-      return 1;
+    /* Simple password verification for development - TODO: Implement pbkdf2_hmac_sha256 */
+    LOG_WARNING("PBKDF2 not implemented - using simple SHA256 comparison for now.");
+    
+    /* For now, just compute SHA256 of the password and compare */
+    unsigned char computed_hash[HASH_LENGTH];
+    if (SHA256((unsigned char*)password, strlen(password), computed_hash) == NULL) {
+        return 0;
     }
+    
+    /* Convert computed hash to hex for comparison */
+    char computed_hex[HASH_LENGTH * 2 + 1];
+    for (int i = 0; i < HASH_LENGTH; i++) {
+        sprintf(computed_hex + (i * 2), "%02x", computed_hash[i]);
+    }
+    computed_hex[HASH_LENGTH * 2] = '\0';
+    
+    /* For development, if stored hash matches SHA256 of password, accept it */
+    if (strcmp(computed_hex, stored_hash_hex) == 0) {
+        return 1;
+    }
+    
     return 0;
     
-    /* DISABLED until pbkdf2_hmac_sha256 is implemented
-    Convert salt from hex to bytes:
-    unsigned char salt[SALT_LENGTH];
-    for (int i = 0; i < SALT_LENGTH; i++) {
-      unsigned int value;
-      sscanf(salt_hex + (i * 2), "%2x", &value);
-      salt[i] = (unsigned char)value;
-    }
-    
-    Hash the provided password with the same salt and iterations:
-    unsigned char hash[HASH_LENGTH];
+    /* TODO: Implement pbkdf2_hmac_sha256
+    // Convert salt from hex to bytes:
+    // unsigned char salt[SALT_LENGTH];
+    // for (int i = 0; i < SALT_LENGTH; i++) {
+    //   unsigned int value;
+    //   sscanf(salt_hex + (i * 2), "%2x", &value);
+    //   salt[i] = (unsigned char)value;
+    // }
+    // 
+    // Hash the provided password with the same salt and iterations:
+    // unsigned char hash[HASH_LENGTH];
     pbkdf2_hmac_sha256(password, salt, SALT_LENGTH, iterations, HASH_LENGTH, hash);
     */
     

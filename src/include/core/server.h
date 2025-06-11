@@ -92,6 +92,8 @@ typedef struct {
     /* File paths */
     char* db_path;
     char* storage_backend;              /* Storage backend: "mmap" or "jdbx" */
+    size_t jdbx_initial_size;           /* JDBX initial file size */
+    size_t jdbx_wal_size;               /* JDBX WAL size */
     char* rbac_path;
     char* pid_file;
     char* log_file;

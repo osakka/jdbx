@@ -102,7 +102,9 @@
 #define DEFAULT_STORAGE_BACKEND "mmap"
 
 /** Default memory map size */
+#ifndef DEFAULT_MMAP_SIZE
 #define DEFAULT_MMAP_SIZE (1024 * 1024 * 100)  /* 100 MB */
+#endif
 
 /** Default JDBX initial size */
 #define DEFAULT_JDBX_SIZE (1024 * 1024 * 100)  /* 100 MB */

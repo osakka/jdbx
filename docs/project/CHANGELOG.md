@@ -5,6 +5,50 @@ All notable changes to JSONdb will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2025-06-11
+
+### Added
+- **JDBX Storage Backend**: High-performance single-file B-tree database format with WAL
+  - Runtime storage backend selection via environment variables
+  - B-tree structure with O(log n) operations
+  - Write-Ahead Logging for durability
+  - CRC32 checksums for data integrity
+  - Configurable initial size and WAL size
+- **Unified Documents Architecture**: Everything is now a document with type-based discrimination
+  - Users, roles, libraries, and collections stored as documents
+  - Library-first design with library-scoped users (username@library)
+  - System actors for internal operations (system-admin, system-metrics, etc.)
+  - Function embedding support (inline or referenced)
+- **Field-Level Operations**: Granular document manipulation without loading entire documents
+  - Field read/update/delete operations
+  - Nested field path support
+  - RBAC integration for field-level permissions
+  - Delta-based storage for efficiency
+- **Cascading Versioning Policy**: Library-level versioning policies that cascade to collections
+  - Automatic version creation on insert/update/delete
+  - Configurable retention and cleanup
+  - Version history tracking
+
+### Changed
+- Database architecture now supports multiple storage backends (MMAP and JDBX)
+- All entities unified under documents collection with type discrimination
+- Users are now library-scoped for true multi-tenancy
+- Browser interface updated with library selector and context awareness
+- Configuration system expanded for storage backend selection
+
+### Fixed
+- JDBX header checksum calculation for database persistence
+- Hardcoded admin credentials replaced with environment configuration
+- PBKDF2 placeholder implementation with SHA256 fallback
+- Compilation warnings for format truncation and unused parameters
+- Environment loading order in runtime script for proper configuration
+
+### Security
+- Removed hardcoded admin/admin credentials
+- Added environment-based initial admin configuration
+- System actors comply with RBAC (no backdoors)
+- Field-level permissions for granular access control
+
 ## [Unreleased]
 
 ### Added

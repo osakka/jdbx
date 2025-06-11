@@ -399,13 +399,23 @@ int jdbx_btree_insert(jdbx_btree_t* tree,
             if (found) {
                 /* Key already exists - update value */
                 uint8_t* entry_ptr = get_key_ptr(node, pos);
-                (void)entry_ptr; /* Unused for now */
-                /* btree_entry_t* entry = (btree_entry_t*)entry_ptr; - for future use */
+                btree_entry_t* entry = (btree_entry_t*)entry_ptr;
                 
-                /* For simplicity, we don't support in-place update yet */
-                /* Would need to handle size changes */
-                jdbx_error("Key already exists (updates not implemented)");
-                return -1;
+                /* Check if new value fits in existing space */
+                if (value_len <= entry->value_size && entry->overflow_page == 0) {
+                    /* In-place update */
+                    entry->value_size = value_len;
+                    memcpy(entry_ptr + sizeof(btree_entry_t) + entry->key_size, value, value_len);
+                    return 0;
+                } else {
+                    /* Delete old entry and insert new one */
+                    if (jdbx_btree_delete(tree, key, key_len) != 0) {
+                        return -1;
+                    }
+                    /* Restart insertion after deletion */
+                    current_page = tree->root_page;
+                    continue;
+                }
             }
             
             /* Calculate space needed */
@@ -531,19 +541,71 @@ int jdbx_btree_get(jdbx_btree_t* tree,
 /* Delete key from B-tree */
 int jdbx_btree_delete(jdbx_btree_t* tree,
                       const void* key, size_t key_len) {
-    /* TODO: Implement B-tree deletion */
-    /* This is complex and requires handling:
-     * - Leaf deletion
-     * - Borrowing from siblings
-     * - Merging nodes
-     * - Updating parent keys
-     */
-    (void)tree;
-    (void)key;
-    (void)key_len;
+    if (!tree || !key || key_len == 0) {
+        jdbx_error("Invalid delete parameters");
+        return -1;
+    }
     
-    jdbx_error("B-tree deletion not implemented");
-    return -1;
+    /* Find the key */
+    uint64_t current_page = tree->root_page;
+    
+    while (current_page != 0) {
+        btree_node_t* node = (btree_node_t*)jdbx_get_page_for_write(tree->pm, current_page);
+        if (!node) return -1;
+        
+        int found = 0;
+        int pos = find_key_position(tree, node, key, key_len, &found);
+        
+        if (node->level == 0) {
+            /* Leaf node */
+            if (found) {
+                uint8_t* entry_ptr = get_key_ptr(node, pos);
+                btree_entry_t* entry = (btree_entry_t*)entry_ptr;
+                
+                /* Calculate entry size */
+                size_t entry_size = sizeof(btree_entry_t) + entry->key_size;
+                if (entry->overflow_page == 0) {
+                    entry_size += entry->value_size;
+                }
+                
+                /* Calculate size to shift */
+                size_t shift_size = 0;
+                for (int i = pos + 1; i < node->num_keys; i++) {
+                    btree_entry_t* shift_entry = (btree_entry_t*)get_key_ptr(node, i);
+                    shift_size += sizeof(btree_entry_t) + shift_entry->key_size;
+                    if (shift_entry->overflow_page == 0) {
+                        shift_size += shift_entry->value_size;
+                    }
+                }
+                
+                /* Shift entries left */
+                if (shift_size > 0) {
+                    memmove(entry_ptr, entry_ptr + entry_size, shift_size);
+                }
+                
+                /* Update node metadata */
+                node->num_keys--;
+                node->total_size -= entry_size;
+                tree->stats.num_keys--;
+                
+                return 0;
+            }
+            /* Key not found */
+            return -1;
+        } else {
+            /* Internal node - traverse to child */
+            if (pos < node->num_keys) {
+                uint8_t* child_ptr = get_key_ptr(node, pos) + sizeof(btree_entry_t) + 
+                                    ((btree_entry_t*)get_key_ptr(node, pos))->key_size;
+                current_page = *(uint64_t*)child_ptr;
+            } else {
+                /* Use rightmost child */
+                current_page = node->right_sibling;
+            }
+        }
+    }
+    
+    return -1; /* Key not found */
 }
 
 /* Close B-tree */
@@ -555,4 +617,108 @@ void jdbx_btree_close(jdbx_btree_t* tree) {
              (unsigned long long)tree->stats.num_pages);
     
     free(tree);
+}
+
+/* Find leftmost leaf page */
+static uint64_t find_leftmost_leaf(jdbx_btree_t* tree) {
+    uint64_t current_page = tree->root_page;
+    
+    while (current_page != 0) {
+        btree_node_t* node = (btree_node_t*)jdbx_get_page(tree->pm, current_page);
+        if (!node) return 0;
+        
+        if (node->level == 0) {
+            /* Leaf node - this is our leftmost */
+            return current_page;
+        } else {
+            /* Internal node - go to leftmost child */
+            current_page = get_child_page(node, 0);
+        }
+    }
+    
+    return 0;
+}
+
+/* Create B-tree iterator */
+jdbx_btree_iterator_t* jdbx_btree_iterator_create(jdbx_btree_t* tree) {
+    if (!tree) return NULL;
+    
+    jdbx_btree_iterator_t* iter = calloc(1, sizeof(jdbx_btree_iterator_t));
+    if (!iter) {
+        jdbx_error("Failed to allocate iterator");
+        return NULL;
+    }
+    
+    iter->tree = tree;
+    iter->current_page = find_leftmost_leaf(tree);
+    iter->current_index = 0;
+    iter->finished = (iter->current_page == 0);
+    
+    return iter;
+}
+
+/* Get next key-value pair from iterator */
+int jdbx_btree_iterator_next(jdbx_btree_iterator_t* iter, 
+                             void** key, size_t* key_len,
+                             void** value, size_t* value_len) {
+    if (!iter || iter->finished) return -1;
+    
+    while (iter->current_page != 0) {
+        btree_node_t* node = (btree_node_t*)jdbx_get_page(iter->tree->pm, iter->current_page);
+        if (!node) {
+            iter->finished = 1;
+            return -1;
+        }
+        
+        if (iter->current_index < node->num_keys) {
+            /* Get current entry */
+            uint8_t* entry_ptr = get_key_ptr(node, iter->current_index);
+            btree_entry_t* entry = (btree_entry_t*)entry_ptr;
+            
+            /* Extract key */
+            *key_len = entry->key_size;
+            *key = malloc(*key_len);
+            if (!*key) return -1;
+            memcpy(*key, entry_ptr + sizeof(btree_entry_t), *key_len);
+            
+            /* Extract value */
+            if (entry->overflow_page == 0) {
+                *value_len = entry->value_size;
+                *value = malloc(*value_len);
+                if (!*value) {
+                    free(*key);
+                    return -1;
+                }
+                memcpy(*value, entry_ptr + sizeof(btree_entry_t) + entry->key_size, *value_len);
+            } else {
+                /* TODO: Handle overflow pages */
+                jdbx_error("Overflow pages not supported in iterator");
+                free(*key);
+                return -1;
+            }
+            
+            /* Advance iterator */
+            iter->current_index++;
+            return 0;
+        } else {
+            /* Move to next page */
+            iter->current_page = node->right_sibling;
+            iter->current_index = 0;
+            
+            if (iter->current_page == 0) {
+                iter->finished = 1;
+                return -1;
+            }
+        }
+    }
+    
+    iter->finished = 1;
+    return -1;
+}
+
+/* Destroy iterator */
+void jdbx_btree_iterator_destroy(jdbx_btree_iterator_t* iter) {
+    if (iter) {
+        free(iter);
+    }
 }

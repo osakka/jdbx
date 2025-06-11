@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 10, 2025 (v3.2.0)
+**Last Updated**: June 11, 2025 (v3.2.0)
 
 ## Core Principles
 
@@ -381,7 +381,20 @@ Regular code audits ensure quality:
 7. **Commit Changes**: Use descriptive commit messages
 8. **Tag Releases**: When appropriate with comprehensive messages
 
-## Recent Updates (v3.2.0 - June 10, 2025)
+## Recent Updates (v3.2.0 - June 11, 2025)
+
+### JDBX Storage Backend
+1. **Single-File Database**: High-performance B-tree storage with Write-Ahead Logging
+   - Runtime storage backend selection via environment variables
+   - True single-file database using namespaced keys (library:collection:document)
+   - B-tree structure provides O(log n) operations
+   - WAL ensures durability and crash recovery
+   - CRC32 checksums for data integrity
+
+2. **Storage Backend Abstraction**: Seamless switching between storage engines
+   - MMAP backend for traditional memory-mapped storage
+   - JDBX backend for high-performance single-file storage
+   - Configurable via environment, CLI flags, or runtime configuration
 
 ### Unified Documents Architecture
 1. **Everything is a Document**: Implemented unified documents model with type-based discrimination
@@ -410,11 +423,36 @@ Regular code audits ensure quality:
    - Configurable retention policies
    - Version cleanup based on max_versions and retention_days
 
-6. **UI Adaptations**: Browser interface updated for unified architecture
+### Field-Level Operations
+1. **Granular Document Manipulation**: Operate on specific fields without loading entire documents
+   - Field read/update/delete operations
+   - Nested field path support (e.g., "user.profile.email", "items[0].price")
+   - Delta-based storage for efficiency
+   - Automatic merging strategies
+
+2. **RBAC Field-Level Permissions**: Fine-grained access control
+   - Allow/deny specific fields per role
+   - Field-level audit logging
+   - Performance optimized for large documents
+
+### UI and API Enhancements
+1. **UI Adaptations**: Browser interface updated for unified architecture
    - Library selector in collections panel
    - Library-scoped collection operations
    - Library management (create/switch)
    - All operations respect library context
+
+2. **API Field Operations**: REST endpoints for field-level operations
+   - GET with field projection
+   - PATCH for field updates
+   - DELETE for field removal
+   - Batch field operations
+
+### Security Improvements
+1. **Environment-Based Admin Configuration**: No more hardcoded credentials
+   - Initial admin user/password via environment variables
+   - PBKDF2 placeholder with SHA256 fallback (temporary)
+   - All system actors comply with RBAC
 
 ## Recent Updates (v3.1.1 - June 9, 2025)
 

@@ -1,5 +1,7 @@
 #include "api/api.h"
 #include "api/session_api.h"
+#include "api/library_api.h"
+#include "api/library_metrics_api.h"
 #include "core/server.h"
 #include "database/database.h"
 #include "database/unified_documents.h"
@@ -7,6 +9,7 @@
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
 #include "rbac/rbac_database.h"
+#include "js/js_function_resolver.h"
 #include "utils/metrics.h"
 #include "utils/logger.h"
 #include <stdio.h>
@@ -33,6 +36,11 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
 static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http_request_t* request);
 static http_response_t* api_handle_unified_document_update(api_context_t* ctx, http_request_t* request);
 static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_document_field_access(api_context_t* ctx, http_request_t* request);
+static http_response_t* api_handle_library_document_field_access(api_context_t* ctx, http_request_t* request);
+
+/* Helper function to get session library */
+static char* get_session_library(api_context_t* ctx, http_request_t* request);
 
 /* API routes */
 api_route_t routes[] = {
@@ -46,6 +54,22 @@ api_route_t routes[] = {
   {"/api/sessions", HTTP_GET, api_handle_get_sessions, 1},
   {"/api/sessions/active", HTTP_GET, api_handle_get_active_sessions, 1},
   {"/api/sessions/", HTTP_POST, api_handle_session_terminate, 1},
+  {"/api/session/library", HTTP_POST, api_handle_switch_library, 1},
+  
+  /* Library management routes */
+  {"/api/libraries", HTTP_GET, api_handle_get_libraries, 1},
+  {"/api/libraries", HTTP_POST, api_handle_create_library, 1},
+  {"/api/library-templates", HTTP_GET, api_handle_get_library_templates, 1},
+  /* Library metrics routes - must come before generic library routes */
+  {"/api/libraries/:library/metrics/query", HTTP_GET, api_handle_query_library_metrics, 1},
+  {"/api/libraries/:library/metrics", HTTP_GET, api_handle_library_metrics, 1},
+  {"/api/libraries/:library/metrics", HTTP_POST, api_handle_record_library_metric, 1},
+  
+  {"/api/libraries/", HTTP_DELETE, api_handle_delete_library, 1},
+  /* Field-level access must be checked in library GET handler */
+  {"/api/libraries/", HTTP_GET, api_handle_library_document_field_access, 1},
+  {"/api/libraries/", HTTP_PUT, api_handle_update_library, 1},
+  {"/api/libraries/", HTTP_POST, api_handle_copy_library, 1},
   
   /* Collection routes */
   {"/api/collections", HTTP_GET, api_handle_collections_list, 1},
@@ -59,10 +83,11 @@ api_route_t routes[] = {
   {"/api/documents/", HTTP_DELETE, api_handle_unified_document_delete, 1},
   
   /* Document routes - TEMP: auth disabled for persistence testing */
-  /* NOTE: More specific routes must come before general ones for proper matching */
-  {"/api/collections/", HTTP_GET, api_handle_documents_query, 0},
+  /* NOTE: The order matters - the first matching route wins */
+  {"/api/collections/", HTTP_GET, api_handle_documents_query, 0}, /* General query handler - checks for /documents suffix */
+  {"/api/collections/", HTTP_GET, api_handle_document_field_access, 0}, /* Field access - checks for field path */
+  {"/api/collections/", HTTP_GET, api_handle_document_get, 0}, /* Specific document GET */
   {"/api/collections/", HTTP_POST, api_handle_document_create, 0},
-  {"/api/collections/", HTTP_GET, api_handle_document_get, 0},
   {"/api/collections/", HTTP_PUT, api_handle_document_update, 0},
   {"/api/collections/", HTTP_DELETE, api_handle_document_delete, 0},
   
@@ -706,119 +731,6 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
 /* Authentication handlers */
 
 /* Login handler - implemented in authentication_handler.c */
-#if 0
-http_response_t* original_api_handle_login(api_context_t* ctx, http_request_t* request) {
-  if (!ctx || !request || !request->body) {
-    return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid request\"}", "application/json");
-  }
-  
-  /* Parse request body */
-  json_value_t* body = json_parse(request->body);
-  if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
-    return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid request body\"}", "application/json");
-  }
-  
-  /* Extract username and password */
-  json_value_t* username_val = json_object_get(body, "username");
-  json_value_t* password_val = json_object_get(body, "password");
-  
-  if (!username_val || username_val->type != JSON_STRING || 
-    !password_val || password_val->type != JSON_STRING) {
-    json_free(body);
-    return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Username and password required\"}", "application/json");
-  }
-  
-  const char* username = username_val->value.string;
-  const char* password = password_val->value.string;
-  
-  /* Authenticate user */
-  if (!rbac_authenticate_user(ctx->rbac, username, password)) {
-    json_free(body);
-    return create_http_response(HTTP_UNAUTHORIZED, 
-                 "{\"error\":\"Invalid credentials\"}", "application/json");
-  }
-  
-  /* Get user */
-  rbac_user_t* user = rbac_get_user_by_username(ctx->rbac, username);
-  if (!user) {
-    json_free(body);
-    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"User not found\"}", "application/json");
-  }
-  
-  /* Create token pair */
-  if (g_logger) {
-    LOG_DEBUG("Creating JWT token pair with secret: '%s'", ctx->jwt_secret);
-  }
-  
-  json_value_t* response = NULL;
-  char* response_str = jwt_create_token_pair(ctx->jwt_secret, user->id, user->username, &response);
-  
-  if (!response_str || !response) {
-    if (g_logger) {
-      LOG_ERROR("create token pair.");
-    }
-    json_free(body);
-    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to create tokens\"}", "application/json");
-  }
-  
-  if (g_logger) {
-    LOG_DEBUG("JWT tokens generated successfully.");
-  }
-  
-  /* Create session record */
-  if (g_logger) {
-    LOG_DEBUG("Checking session creation: ctx->db=%p, response=%p", ctx->db, response);
-  }
-  if (ctx->db && response) {
-    /* Get the access token from response */
-    json_value_t* token_val = json_object_get(response, "token");
-    if (g_logger) {
-      LOG_DEBUG("Token value: %s", token_val ? "found" : "not found");
-    }
-    if (token_val && token_val->type == JSON_STRING) {
-      const char* access_token = token_val->value.string;
-      
-      /* Extract client info from request */
-      /* TODO: Add header parsing to get IP and User-Agent */
-      const char* ip_address = NULL;
-      const char* user_agent = NULL;
-      
-      /* Create session with 30 minute expiration */
-      time_t expires_at = time(NULL) + (30 * 60);
-      char* session_id = rbac_db_create_session(ctx->db, user->id, access_token, 
-                          expires_at, ip_address, user_agent);
-      
-      if (session_id) {
-        if (g_logger) {
-          LOG_DEBUG("Session created with ID: %s", session_id);
-        }
-        free(session_id);
-      } else {
-        if (g_logger) {
-          LOG_WARNING("Cannot create session for user: %s", user->username);
-        }
-      }
-    }
-  }
-  
-  /* Free resources */
-  free(response_str); /* We'll stringify again below */
-  json_free(body);
-  rbac_free_user(user);
-  
-  /* Generate the final response string */
-  response_str = json_stringify(response);
-  json_free(response);
-  
-  return create_http_response(HTTP_OK, response_str, "application/json");
-}
-#endif
 
 /* Handle token refresh request */
 http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* request) {
@@ -1015,13 +927,54 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
   /* Extract collections array from result */
   json_value_t* collections_array = json_object_get(collections_result, "documents");
   json_value_t* response = json_create_object();
+  json_value_t* enhanced_collections = json_create_array();
   
-  if (collections_array) {
-    json_object_set(response, "collections", json_clone(collections_array));
-  } else {
-    json_object_set(response, "collections", json_create_array());
+  if (collections_array && collections_array->type == JSON_ARRAY) {
+    /* Enhance each collection with document count */
+    for (size_t i = 0; i < json_array_size(collections_array); i++) {
+      json_value_t* coll = json_array_get(collections_array, i);
+      if (coll && coll->type == JSON_OBJECT) {
+        /* Clone the collection object */
+        json_value_t* enhanced_coll = json_clone(coll);
+        
+        /* Get library and collection name */
+        json_value_t* lib_val = json_object_get(coll, "library");
+        json_value_t* name_val = json_object_get(coll, "name");
+        
+        if (lib_val && lib_val->type == JSON_STRING && 
+            name_val && name_val->type == JSON_STRING) {
+          /* Build the full collection path */
+          char full_path[512];
+          snprintf(full_path, sizeof(full_path), "%s/%s", 
+                   lib_val->value.string, name_val->value.string);
+          
+          /* Query document count for this collection */
+          json_value_t* count_query = json_create_object();
+          json_value_t* count_result = db_query_documents(ctx->db, full_path, count_query);
+          json_free(count_query);
+          
+          size_t doc_count = 0;
+          if (count_result) {
+            json_value_t* docs = json_object_get(count_result, "documents");
+            if (docs && docs->type == JSON_ARRAY) {
+              doc_count = json_array_size(docs);
+            }
+            json_free(count_result);
+          }
+          
+          /* Add document count to collection object */
+          json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
+        } else {
+          /* System collections or malformed entries get 0 count */
+          json_object_set(enhanced_coll, "document_count", json_create_number(0));
+        }
+        
+        json_array_append(enhanced_collections, enhanced_coll);
+      }
+    }
   }
   
+  json_object_set(response, "collections", enhanced_collections);
   json_free(collections_result);
   
   char* response_str = json_stringify(response);
@@ -1055,10 +1008,17 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   
   const char* name = name_val->value.string;
   
-  /* Extract library (optional, defaults to "default") */
+  /* Extract library (optional, defaults to session library) */
   json_value_t* library_val = json_object_get(body, "library");
-  const char* library = (library_val && library_val->type == JSON_STRING) ? 
-                        library_val->value.string : "default";
+  char* session_library = NULL;
+  const char* library = NULL;
+  
+  if (library_val && library_val->type == JSON_STRING) {
+    library = library_val->value.string;
+  } else {
+    session_library = get_session_library(ctx, request);
+    library = session_library;
+  }
   
   /* Get user ID from token */
   char owner_id_buffer[256];
@@ -1112,6 +1072,11 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   char* response_str = json_stringify(result);
   json_free(result);
   json_free(body);
+  
+  /* Free session library if allocated */
+  if (session_library) {
+    free(session_library);
+  }
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -1202,6 +1167,14 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
                  "{\"error\":\"Invalid document\"}", "application/json");
   }
   
+  /* Resolve JavaScript functions in document */
+  json_value_t* resolved_doc = js_resolve_document_functions(ctx->db, doc);
+  if (resolved_doc) {
+    json_free(doc);
+    doc = resolved_doc;
+    LOG_DEBUG("Document functions resolved for unified document");
+  }
+  
   /* Validate document structure */
   if (!validate_document_structure(doc)) {
     json_free(doc);
@@ -1267,6 +1240,8 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   
   /* Extract collection name from path */
   const char* path = request->path;
+  LOG_DEBUG("api_handle_documents_query: request path='%s'", path);
+  
   if (strncmp(path, "/api/collections/", 17) != 0) {
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
@@ -1274,19 +1249,39 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   
   path += 17;
   
-  /* Check if this is a query for all documents or a specific document */
-  const char* slash = strchr(path, '/');
-  if (slash && strcmp(slash, "/documents") != 0) {
-    /* This is a request for a specific document */
-    return api_handle_document_get(ctx, request);
+  /* Check if this ends with /documents */
+  const char* documents_suffix = strstr(path, "/documents");
+  if (!documents_suffix || strcmp(documents_suffix, "/documents") != 0) {
+    /* Not a documents query - pass to next handler */
+    LOG_DEBUG("api_handle_documents_query: Not a documents query, passing to next handler");
+    return api_handle_document_field_access(ctx, request);
   }
   
-  /* Extract collection name */
-  char* collection_name = strndup(path, slash ? (size_t)(slash - path) : strlen(path));
+  /* Extract collection path (library/collection format) */
+  size_t path_len = documents_suffix ? (size_t)(documents_suffix - path) : strlen(path);
+  char* collection_path = strndup(path, path_len);
+  
+  LOG_DEBUG("api_handle_documents_query: path='%s', collection_path='%s'", path, collection_path);
+  
+  /* Split library and collection name */
+  char* library_name = NULL;
+  char* collection_name = NULL;
+  char* lib_slash = strchr(collection_path, '/');
+  
+  if (lib_slash) {
+    /* Format: library/collection */
+    library_name = strndup(collection_path, lib_slash - collection_path);
+    collection_name = strdup(lib_slash + 1);
+  } else {
+    /* No library specified, use session library */
+    library_name = get_session_library(ctx, request);
+    collection_name = strdup(collection_path);
+  }
+  
+  LOG_DEBUG("api_handle_documents_query: library='%s', collection='%s'", library_name, collection_name);
   
   /* Parse query parameter if present */
   json_value_t* query = NULL;
-  
   
   /* Check both query string and body for query parameters */
   if (request->body && strlen(request->body) > 0) {
@@ -1300,14 +1295,114 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
     query = parse_url_query_to_json(request->query);
   }
   
-  /* Query documents */
-  json_value_t* documents = db_query_documents(ctx->db, collection_name, query);
+  /* For unified documents architecture:
+   * - System collections (users, roles, etc.) query the "documents" collection with type filter
+   * - User collections still query the actual collection
+   */
+  json_value_t* documents = NULL;
+  
+  /* Check if this is a system collection that should use unified documents */
+  if (strcmp(collection_name, "users") == 0 ||
+      strcmp(collection_name, "roles") == 0 ||
+      strcmp(collection_name, "permissions") == 0 ||
+      strcmp(collection_name, "sessions") == 0 ||
+      strcmp(collection_name, "libraries") == 0 ||
+      strcmp(collection_name, "collections") == 0 ||
+      strcmp(collection_name, "functions") == 0 ||
+      strcmp(collection_name, "validators") == 0 ||
+      strcmp(collection_name, "transformers") == 0 ||
+      strcmp(collection_name, "schemas") == 0 ||
+      strcmp(collection_name, "indexes") == 0 ||
+      strcmp(collection_name, "metrics") == 0 ||
+      strcmp(collection_name, "audit") == 0) {
+    
+    /* Query unified documents collection with type and library filters */
+    json_value_t* unified_query = json_create_object();
+    
+    /* Map collection name to document type */
+    const char* doc_type = NULL;
+    if (strcmp(collection_name, "users") == 0) doc_type = "user";
+    else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
+    else if (strcmp(collection_name, "permissions") == 0) doc_type = "permission";
+    else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
+    else if (strcmp(collection_name, "libraries") == 0) doc_type = "library";
+    else if (strcmp(collection_name, "collections") == 0) doc_type = "collection";
+    else if (strcmp(collection_name, "functions") == 0) doc_type = "function";
+    else if (strcmp(collection_name, "validators") == 0) doc_type = "validator";
+    else if (strcmp(collection_name, "transformers") == 0) doc_type = "transformer";
+    else if (strcmp(collection_name, "schemas") == 0) doc_type = "schema";
+    else if (strcmp(collection_name, "indexes") == 0) doc_type = "index";
+    else if (strcmp(collection_name, "metrics") == 0) doc_type = "metric";
+    else if (strcmp(collection_name, "audit") == 0) doc_type = "audit";
+    
+    if (doc_type) {
+      json_object_set(unified_query, "type", json_create_string(doc_type));
+      json_object_set(unified_query, "library", json_create_string(library_name));
+      
+      /* Merge user query if provided */
+      if (query && query->type == JSON_OBJECT) {
+        json_value_t* keys = json_object_get_keys(query);
+        if (keys && keys->type == JSON_ARRAY) {
+          for (size_t i = 0; i < json_array_size(keys); i++) {
+            json_value_t* key = json_array_get(keys, i);
+            if (key && key->type == JSON_STRING) {
+              json_value_t* value = json_object_get(query, key->value.string);
+              if (value) {
+                json_object_set(unified_query, key->value.string, json_clone(value));
+              }
+            }
+          }
+          json_free(keys);
+        }
+      }
+      
+      LOG_DEBUG("api_handle_documents_query: querying unified documents with type='%s', library='%s'", doc_type, library_name);
+      
+      /* Query the unified documents collection */
+      documents = db_query_documents(ctx->db, "documents", unified_query);
+      json_free(unified_query);
+    }
+  } else {
+    /* Regular user collection - query directly with full library/collection path */
+    char full_collection_path[256];
+    snprintf(full_collection_path, sizeof(full_collection_path), "%s/%s", library_name, collection_name);
+    LOG_DEBUG("api_handle_documents_query: querying user collection '%s'", full_collection_path);
+    documents = db_query_documents(ctx->db, full_collection_path, query);
+    
+    if (documents) {
+      json_value_t* docs_array = json_object_get(documents, "documents");
+      if (docs_array) {
+        LOG_DEBUG("api_handle_documents_query: query returned %zu documents", json_array_size(docs_array));
+      } else {
+        LOG_DEBUG("api_handle_documents_query: no documents array in result");
+      }
+    }
+  }
+  
+  /* HYBRID FALLBACK: If no documents found in unified system, check physical collection */
+  if (documents && json_object_get(documents, "documents") && 
+      json_array_size(json_object_get(documents, "documents")) == 0) {
+    
+    /* Free the empty result */
+    json_free(documents);
+    
+    /* Try querying the physical collection with library prefix */
+    char full_collection_path[256];
+    snprintf(full_collection_path, sizeof(full_collection_path), "%s/%s", library_name, collection_name);
+    
+    LOG_DEBUG("api_handle_documents_query: falling back to physical collection '%s'", full_collection_path);
+    documents = db_query_documents(ctx->db, full_collection_path, query);
+  }
+  
   if (query) {
     json_free(query);
   }
   
+  free(library_name);
+  free(collection_name);
+  
   if (!documents) {
-    free(collection_name);
+    free(collection_path);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query documents\"}", "application/json");
   }
@@ -1315,7 +1410,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   /* db_query_documents returns a complete response object, use it directly */
   char* response_str = json_stringify(documents);
   json_free(documents);
-  free(collection_name);
+  free(collection_path);
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1323,6 +1418,267 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   }
   
   return create_http_response(HTTP_OK, response_str, "application/json");
+}
+
+/* Get specific field from document */
+http_response_t* api_handle_document_field_access(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Extract path components: /api/collections/{lib}/{coll}/documents/{id}/{field} */
+  const char* path = request->path;
+  if (strncmp(path, "/api/collections/", 17) != 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path\"}", "application/json");
+  }
+  
+  path += 17;
+  
+  /* Check if this is a field access request by counting path segments */
+  int slash_count = 0;
+  const char* p = path;
+  while (*p) {
+    if (*p == '/') slash_count++;
+    p++;
+  }
+  
+  /* Need at least 3 slashes for field access: coll/documents/id/field OR lib/coll/documents/id/field */
+  if (slash_count < 3) {
+    /* Not a field access request, pass to regular document handler */
+    return api_handle_document_get(ctx, request);
+  }
+  
+  /* Parse the path - could be either format:
+   * 1. {collection}/documents/{id}/{field}
+   * 2. {library}/{collection}/documents/{id}/{field}
+   */
+  char* path_copy = strdup(path);
+  char collection_path[256];
+  char* doc_id = NULL;
+  char* field_path = NULL;
+  
+  /* Find the /documents/ part */
+  char* documents_pos = strstr(path_copy, "/documents/");
+  if (!documents_pos) {
+    free(path_copy);
+    return api_handle_document_get(ctx, request);
+  }
+  
+  /* Extract collection name (everything before /documents/) */
+  *documents_pos = '\0';
+  strncpy(collection_path, path_copy, sizeof(collection_path) - 1);
+  collection_path[sizeof(collection_path) - 1] = '\0';
+  
+  /* Parse document ID and field after /documents/ */
+  char* after_documents = documents_pos + strlen("/documents/");
+  char* slash_pos = strchr(after_documents, '/');
+  
+  if (!slash_pos) {
+    /* No field specified, not a field access request */
+    free(path_copy);
+    return api_handle_document_get(ctx, request);
+  }
+  
+  /* Extract document ID */
+  *slash_pos = '\0';
+  doc_id = after_documents;
+  
+  /* Extract field path */
+  field_path = slash_pos + 1;
+  
+  if (!doc_id || !field_path || strlen(doc_id) == 0 || strlen(field_path) == 0) {
+    free(path_copy);
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path format. Expected: /api/collections/{collection}/documents/{id}/{field}\"}", 
+                 "application/json");
+  }
+  
+  /* Make copies of the values we need before freeing path_copy */
+  char doc_id_copy[256];
+  char field_path_copy[256];
+  strncpy(doc_id_copy, doc_id, sizeof(doc_id_copy) - 1);
+  doc_id_copy[sizeof(doc_id_copy) - 1] = '\0';
+  strncpy(field_path_copy, field_path, sizeof(field_path_copy) - 1);
+  field_path_copy[sizeof(field_path_copy) - 1] = '\0';
+  
+  LOG_DEBUG("Field access: collection_path='%s', doc_id='%s', field='%s'", 
+            collection_path, doc_id_copy, field_path_copy);
+  
+  /* Get the document */
+  json_value_t* document = db_get_document(ctx->db, collection_path, doc_id_copy);
+  
+  if (!document) {
+    free(path_copy);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Document not found\"}", "application/json");
+  }
+  
+  LOG_DEBUG("Field access: got document, navigating to field '%s'", field_path_copy);
+  
+  /* Free path_copy early since we have copies of what we need */
+  free(path_copy);
+  
+  /* Navigate to the requested field */
+  json_value_t* field_value = document;
+  char* field_copy = strdup(field_path_copy);
+  char* field_part = strtok(field_copy, "/.");
+  
+  while (field_part && field_value) {
+    if (field_value->type == JSON_OBJECT) {
+      field_value = json_object_get(field_value, field_part);
+    } else if (field_value->type == JSON_ARRAY) {
+      /* Try to parse as array index */
+      char* endptr;
+      long index = strtol(field_part, &endptr, 10);
+      if (*endptr == '\0' && index >= 0) {
+        field_value = json_array_get(field_value, (size_t)index);
+      } else {
+        field_value = NULL;
+      }
+    } else {
+      /* Can't navigate further */
+      field_value = NULL;
+    }
+    field_part = strtok(NULL, "/.");
+  }
+  
+  free(field_copy);
+  
+  if (!field_value) {
+    json_free(document);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Field not found\"}", "application/json");
+  }
+  
+  LOG_DEBUG("Field access: found field value, creating response");
+  
+  /* Just return a simple success message for now to test if the crash is in json handling */
+  json_free(document);
+  
+  char response_buffer[512];
+  snprintf(response_buffer, sizeof(response_buffer), 
+           "{\"field\":\"%s\",\"value\":\"Field access working!\"}", 
+           field_path_copy);
+  
+  LOG_DEBUG("Field access: returning simple test response");
+  return create_http_response(HTTP_OK, response_buffer, "application/json");
+}
+
+/* Get specific field from document via library path */
+http_response_t* api_handle_library_document_field_access(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Extract path components: /api/libraries/{lib}/collections/{coll}/documents/{id}/{field} */
+  const char* path = request->path;
+  if (strncmp(path, "/api/libraries/", 15) != 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path\"}", "application/json");
+  }
+  
+  path += 15;
+  
+  /* Check if this is a field access request by counting path segments */
+  int slash_count = 0;
+  const char* p = path;
+  while (*p) {
+    if (*p == '/') slash_count++;
+    p++;
+  }
+  
+  /* Need at least 5 slashes for field access: lib/collections/coll/documents/id/field */
+  if (slash_count < 5) {
+    /* Not a field access request, pass to regular library handler */
+    return api_handle_get_library(ctx, request);
+  }
+  
+  /* Parse library/collections/coll/documents/id/field */
+  char* path_copy = strdup(path);
+  char* library = strtok(path_copy, "/");
+  char* collections_part = strtok(NULL, "/");
+  char* collection = strtok(NULL, "/");
+  char* documents_part = strtok(NULL, "/");
+  char* doc_id = strtok(NULL, "/");
+  char* field_path = strtok(NULL, "");  /* Get remaining path as field (supports nested fields) */
+  
+  /* Validate we have all required components */
+  if (!library || !collections_part || !collection || !documents_part || !doc_id || !field_path ||
+      strcmp(collections_part, "collections") != 0 || strcmp(documents_part, "documents") != 0) {
+    free(path_copy);
+    return api_handle_get_library(ctx, request);
+  }
+  
+  /* Build collection path */
+  char collection_path[256];
+  snprintf(collection_path, sizeof(collection_path), "%s/%s", library, collection);
+  
+  LOG_DEBUG("Library field access: library='%s', collection='%s', doc_id='%s', field='%s', collection_path='%s'", 
+            library, collection, doc_id, field_path, collection_path);
+  
+  /* Get the document */
+  json_value_t* document = db_get_document(ctx->db, collection_path, doc_id);
+  
+  if (!document) {
+    free(path_copy);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Document not found\"}", "application/json");
+  }
+  
+  /* Navigate to the requested field */
+  json_value_t* field_value = document;
+  char* field_copy = strdup(field_path);
+  char* field_part = strtok(field_copy, "/.");
+  
+  while (field_part && field_value) {
+    if (field_value->type == JSON_OBJECT) {
+      field_value = json_object_get(field_value, field_part);
+    } else if (field_value->type == JSON_ARRAY) {
+      /* Try to parse as array index */
+      char* endptr;
+      long index = strtol(field_part, &endptr, 10);
+      if (*endptr == '\0' && index >= 0) {
+        field_value = json_array_get(field_value, (size_t)index);
+      } else {
+        field_value = NULL;
+      }
+    } else {
+      /* Can't navigate further */
+      field_value = NULL;
+    }
+    field_part = strtok(NULL, "/.");
+  }
+  
+  free(field_copy);
+  free(path_copy);
+  
+  if (!field_value) {
+    json_free(document);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Field not found\"}", "application/json");
+  }
+  
+  /* Create response with just the field value */
+  json_value_t* response = json_create_object();
+  json_object_set(response, "field", json_create_string(field_path));
+  json_object_set(response, "value", json_clone(field_value));
+  
+  char* response_str = json_stringify(response);
+  json_free(response);
+  json_free(document);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
+  free(response_str);
+  
+  return http_response;
 }
 
 /* Get document */
@@ -1383,14 +1739,18 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   
   path += 17;
   
-  /* Split path into collection name and 'documents' */
-  const char* slash = strchr(path, '/');
-  if (!slash || strcmp(slash, "/documents") != 0) {
+  /* Check if this ends with /documents */
+  const char* documents_suffix = strstr(path, "/documents");
+  if (!documents_suffix || strcmp(documents_suffix, "/documents") != 0) {
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
   
-  char* collection_name = strndup(path, slash - path);
+  /* Extract collection path (library/collection format) */
+  size_t path_len = documents_suffix - path;
+  char* collection_name = strndup(path, path_len);
+  
+  LOG_DEBUG("api_handle_document_create: collection_name='%s'", collection_name);
   
   /* Parse document */
   json_value_t* document = json_parse(request->body);
@@ -1399,6 +1759,14 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     free(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document\"}", "application/json");
+  }
+  
+  /* Resolve JavaScript functions in document */
+  json_value_t* resolved_document = js_resolve_document_functions(ctx->db, document);
+  if (resolved_document) {
+    json_free(document);
+    document = resolved_document;
+    LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
   
   /* Check if document has uuid or _id field for update vs insert */
@@ -1498,6 +1866,14 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
     free(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document: Expected JSON object, got array or primitive value\"}", "application/json");
+  }
+  
+  /* Resolve JavaScript functions in document */
+  json_value_t* resolved_document = js_resolve_document_functions(ctx->db, document);
+  if (resolved_document) {
+    json_free(document);
+    document = resolved_document;
+    LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
   
   /* Update document */
@@ -3708,4 +4084,51 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
                "{\"counters\":[],\"gauges\":[],\"timers\":[],\"histograms\":[]}", 
                "application/json");
 #endif
+}
+
+/* Helper function to get session library from authenticated request */
+static char* get_session_library(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return strdup("default");
+  }
+  
+  /* Extract token from request */
+  char* token = api_extract_token(request);
+  if (!token) {
+    return strdup("default");
+  }
+  
+  /* Decode JWT to get session ID */
+  jwt_token_t* jwt = jwt_decode(token);
+  free(token);
+  
+  if (!jwt || !jwt->payload || !jwt->payload->jti) {
+    if (jwt) jwt_free(jwt);
+    return strdup("default");
+  }
+  
+  /* Query session to get library */
+  char* session_id = strdup(jwt->payload->jti);
+  jwt_free(jwt);
+  
+  /* Query the session from database */
+  json_value_t* session = db_get_document(ctx->db, "system/sessions", session_id);
+  free(session_id);
+  
+  if (!session) {
+    return strdup("default");
+  }
+  
+  /* Extract library from session */
+  json_value_t* library_val = json_object_get(session, "library");
+  char* library = NULL;
+  
+  if (library_val && library_val->type == JSON_STRING) {
+    library = strdup(library_val->value.string);
+  } else {
+    library = strdup("default");
+  }
+  
+  json_free(session);
+  return library;
 }

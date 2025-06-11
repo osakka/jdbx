@@ -32,7 +32,7 @@ typedef struct {
 typedef struct {
     storage_backend_t* backend;
     jdbx_btree_t* btree;
-    /* TODO: Add JDBX iterator state */
+    jdbx_btree_iterator_t* iter;
 } jdbx_iterator_t;
 
 /*==============================================================================
@@ -182,11 +182,7 @@ static char* jdbx_retrieve(storage_backend_t* backend, const char* id, size_t* s
 
 static int jdbx_delete(storage_backend_t* backend, const char* id) {
     jdbx_backend_t* jdbx = (jdbx_backend_t*)backend->impl;
-    (void)jdbx; /* Unused for now */
-    (void)id;   /* Unused for now */
-    /* TODO: Implement delete in JDBX B-tree */
-    LOG_WARNING("JDBX delete not yet implemented");
-    return -1;
+    return jdbx_btree_delete(jdbx->btree, id, strlen(id));
 }
 
 static storage_iterator_t* jdbx_iterator_create(storage_backend_t* backend) {
@@ -195,23 +191,61 @@ static storage_iterator_t* jdbx_iterator_create(storage_backend_t* backend) {
     
     iter->backend = backend;
     iter->btree = ((jdbx_backend_t*)backend->impl)->btree;
-    /* TODO: Initialize JDBX iterator */
+    iter->iter = jdbx_btree_iterator_create(iter->btree);
+    
+    if (!iter->iter) {
+        free(iter);
+        return NULL;
+    }
     
     return (storage_iterator_t*)iter;
 }
 
 static int jdbx_iterator_next(storage_iterator_t* iter, char** id, char** data, size_t* size) {
-    (void)iter; /* Unused for now */
-    (void)id;   /* Unused for now */
-    (void)data; /* Unused for now */
-    (void)size; /* Unused for now */
-    /* TODO: Implement JDBX iteration */
-    LOG_WARNING("JDBX iteration not yet implemented");
-    return -1;
+    jdbx_iterator_t* jdbx_iter = (jdbx_iterator_t*)iter;
+    void* key;
+    size_t key_len;
+    void* value;
+    size_t value_len;
+    
+    if (jdbx_btree_iterator_next(jdbx_iter->iter, &key, &key_len, &value, &value_len) != 0) {
+        return -1;
+    }
+    
+    /* Copy key as ID */
+    *id = malloc(key_len + 1);
+    if (!*id) {
+        free(key);
+        free(value);
+        return -1;
+    }
+    memcpy(*id, key, key_len);
+    (*id)[key_len] = '\0';
+    
+    /* Copy value as data */
+    *data = malloc(value_len);
+    if (!*data) {
+        free(*id);
+        free(key);
+        free(value);
+        return -1;
+    }
+    memcpy(*data, value, value_len);
+    *size = value_len;
+    
+    free(key);
+    free(value);
+    return 0;
 }
 
 static void jdbx_iterator_destroy(storage_iterator_t* iter) {
-    free(iter);
+    jdbx_iterator_t* jdbx_iter = (jdbx_iterator_t*)iter;
+    if (jdbx_iter) {
+        if (jdbx_iter->iter) {
+            jdbx_btree_iterator_destroy(jdbx_iter->iter);
+        }
+        free(jdbx_iter);
+    }
 }
 
 static void jdbx_get_stats(storage_backend_t* backend, uint64_t* doc_count, uint64_t* total_size) {

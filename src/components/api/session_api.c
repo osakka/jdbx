@@ -227,3 +227,123 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
                "{\"error\":\"Failed to invalidate session\"}", "application/json");
 }
 
+/* Handle library switching */
+http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !ctx->db || !request) {
+    return create_http_response(HTTP_BAD_REQUEST,
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Get token from authorization header */
+  const char* auth_header = request->authorization;
+  if (!auth_header) {
+    return create_http_response(HTTP_UNAUTHORIZED,
+                 "{\"error\":\"No authorization header\"}", "application/json");
+  }
+  
+  /* Extract token */
+  const char* token = auth_header;
+  if (strncmp(auth_header, "Bearer ", 7) == 0) {
+    token = auth_header + 7;
+  }
+  
+  /* Parse request body */
+  json_value_t* body = json_parse(request->body);
+  if (!body || body->type != JSON_OBJECT) {
+    return create_http_response(HTTP_BAD_REQUEST,
+                 "{\"error\":\"Invalid JSON body\"}", "application/json");
+  }
+  
+  /* Get library name from request */
+  json_value_t* library_val = json_object_get(body, "library");
+  if (!library_val || library_val->type != JSON_STRING) {
+    json_free(body);
+    return create_http_response(HTTP_BAD_REQUEST,
+                 "{\"error\":\"Library name required\"}", "application/json");
+  }
+  
+  const char* library_name = library_val->value.string;
+  
+  /* Validate library exists */
+  char collection_path[512];
+  snprintf(collection_path, sizeof(collection_path), "%s/users", library_name);
+  if (!db_collection_exists(ctx->db, collection_path)) {
+    json_free(body);
+    return create_http_response(HTTP_NOT_FOUND,
+                 "{\"error\":\"Library not found\"}", "application/json");
+  }
+  
+  /* Find session by token */
+  json_value_t* query = json_create_object();
+  json_object_set(query, "token", json_create_string(token));
+  json_object_set(query, "active", json_create_boolean(1));
+  
+  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_free(query);
+  
+  if (!results) {
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                 "{\"error\":\"Failed to query sessions\"}", "application/json");
+  }
+  
+  /* Get documents array */
+  json_value_t* documents = json_object_get(results, "documents");
+  if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_NOT_FOUND,
+                 "{\"error\":\"Session not found\"}", "application/json");
+  }
+  
+  /* Get first session */
+  json_value_t* session = json_array_get(documents, 0);
+  json_value_t* session_id_val = json_object_get(session, "uuid");
+  
+  if (!session_id_val || session_id_val->type != JSON_STRING) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                 "{\"error\":\"Invalid session data\"}", "application/json");
+  }
+  
+  const char* session_id = session_id_val->value.string;
+  
+  /* Update session with new library */
+  json_value_t* update_doc = json_clone(session);
+  json_object_set(update_doc, "library", json_create_string(library_name));
+  
+  /* Add timestamp */
+  time_t now = time(NULL);
+  char timestamp[64];
+  struct tm* utc_tm = gmtime(&now);
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+  json_object_set(update_doc, "updated_at", json_create_string(timestamp));
+  
+  /* Update session in database */
+  json_value_t* update_result = db_update_document(ctx->db, "system/sessions", session_id, update_doc);
+  json_free(update_doc);
+  
+  if (!update_result) {
+    json_free(results);
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                 "{\"error\":\"Failed to update session\"}", "application/json");
+  }
+  
+  json_free(update_result);
+  json_free(results);
+  json_free(body);
+  
+  /* Return success response */
+  json_value_t* response = json_create_object();
+  json_object_set(response, "success", json_create_boolean(1));
+  json_object_set(response, "library", json_create_string(library_name));
+  json_object_set(response, "message", json_create_string("Library switched successfully"));
+  
+  char* response_str = json_stringify(response);
+  json_free(response);
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
+}
+

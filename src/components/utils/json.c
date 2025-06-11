@@ -260,6 +260,27 @@ size_t json_object_size(json_value_t* object) {
   return object->value.object.size;
 }
 
+/* Get an array of all keys in a JSON object */
+json_value_t* json_object_get_keys(json_value_t* object) {
+  if (!object || object->type != JSON_OBJECT) {
+    return NULL;
+  }
+  
+  json_value_t* keys = json_create_array();
+  if (!keys) {
+    return NULL;
+  }
+  
+  for (size_t i = 0; i < object->value.object.size; i++) {
+    json_value_t* key_str = json_create_string(object->value.object.entries[i].key);
+    if (key_str) {
+      json_array_append(keys, key_str);
+    }
+  }
+  
+  return keys;
+}
+
 void json_object_remove(json_value_t* object, const char* key) {
   if (!object || object->type != JSON_OBJECT || !key) {
     return;

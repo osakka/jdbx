@@ -21,18 +21,6 @@ static metric_t* g_index_effectiveness_gauge = NULL;
 
 /* === Helper Functions === */
 
-/**
- * Get current timestamp in milliseconds
- *
- * NOTE: Currently unused but kept for future use
- */
-#if 0
-static double get_timestamp_ms(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (double)(tv.tv_sec * 1000) + (double)(tv.tv_usec / 1000.0);
-}
-#endif
 
 /**
  * Calculate days between two timestamps
