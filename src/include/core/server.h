@@ -91,6 +91,7 @@ typedef struct {
 
     /* File paths */
     char* db_path;
+    char* storage_backend;              /* Storage backend: "mmap" or "jdbx" */
     char* rbac_path;
     char* pid_file;
     char* log_file;

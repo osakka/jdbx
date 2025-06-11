@@ -20,6 +20,7 @@
 
 #include "database/database.h"
 #include "storage/mmap_storage.h"
+#include "storage/storage_backend.h"
 #include "index/hash_index.h"
 #include "index/btree_disk.h"
 #include "utils/json_helpers.h"
@@ -28,16 +29,25 @@
 #include "utils/buffer_pool.h"
 #include "utils/production_config.h"
 #include "utils/metrics.h"
+#include "utils/config_loader.h"
 #include "database/versioning_policy.h"
 #include "database/collection_metadata.h"
 #include "database/collection_defaults.h"
+#include "database/unified_documents.h"
 //#include "database/js_integration.h"
 //#include "transaction/transaction.h"
 
 /* Maximum limits */
 #define MAX_COLLECTIONS 1024
 #define MAX_INDEXES_PER_COLLECTION 16
+
+/* Forward declarations */
+static void generate_doc_id(char* id_buf, size_t buf_size);
+
+/* Resolve DEFAULT_MMAP_SIZE conflict between config_defaults.h and mmap_storage.h */
+#ifdef DEFAULT_MMAP_SIZE
 #undef DEFAULT_MMAP_SIZE
+#endif
 #undef DEFAULT_CACHE_SIZE
 
 /* Production-ready sizes for billion-document scale */
@@ -59,7 +69,7 @@ typedef struct {
 /* High-performance collection */
 typedef struct {
     char name[256];
-    mmap_storage_t* storage;
+    storage_backend_t* storage;  /* Abstract storage backend */
     hash_index_t* primary_index;
     
     /* Secondary indexes */
@@ -363,10 +373,9 @@ void db_close(database_t* db) {
         if (g_database.collections[i]) {
             hp_collection_t* coll = g_database.collections[i];
             
-            /* Sync storage */
+            /* Destroy storage backend */
             if (coll->storage) {
-                mmap_storage_sync(coll->storage);
-                mmap_storage_destroy(coll->storage);
+                storage_backend_destroy(coll->storage);
             }
             
             /* Destroy index */
@@ -473,19 +482,43 @@ int db_create_collection(database_t* db, const char* name) {
         return -1;
     }
     
-    /* Create storage path with library directory */
-    snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.mmap", g_database.path, library, collection);
+    /* Create storage based on configured backend */
+    const char* storage_backend = (g_server_config && g_server_config->storage_backend) 
+                                  ? g_server_config->storage_backend 
+                                  : DEFAULT_STORAGE_BACKEND;
     
-    LOG_DEBUG("Creating collection '%s' with MMAP size: %s", name, 
-              format_bytes(prod_config->mmap_size_per_collection));
-    
-    coll->storage = mmap_storage_create(storage_path, prod_config->mmap_size_per_collection);
-    
-    if (!coll->storage) {
-        free(coll);
-        pthread_rwlock_unlock(&g_database.lock);
-        LOG_ERROR("Cannot create storage for collection: %s", name);
-        return -1;
+    if (strcmp(storage_backend, "jdbx") == 0) {
+        /* Use JDBX storage backend */
+        snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.jdbx", g_database.path, library, collection);
+        
+        LOG_DEBUG("Creating collection '%s' with JDBX storage, initial size: %s", name, 
+                  format_bytes(prod_config->mmap_size_per_collection));
+        
+        coll->storage = storage_backend_create(STORAGE_BACKEND_JDBX);
+        if (!coll->storage || coll->storage->ops->init(coll->storage, storage_path, 
+                                                       prod_config->mmap_size_per_collection) != 0) {
+            if (coll->storage) storage_backend_destroy(coll->storage);
+            free(coll);
+            pthread_rwlock_unlock(&g_database.lock);
+            LOG_ERROR("Cannot create JDBX storage for collection: %s", name);
+            return -1;
+        }
+    } else {
+        /* Use MMAP storage backend (default) */
+        snprintf(storage_path, sizeof(storage_path), "%s/%s/%s.mmap", g_database.path, library, collection);
+        
+        LOG_DEBUG("Creating collection '%s' with MMAP size: %s", name, 
+                  format_bytes(prod_config->mmap_size_per_collection));
+        
+        coll->storage = storage_backend_create(STORAGE_BACKEND_MMAP);
+        if (!coll->storage || coll->storage->ops->init(coll->storage, storage_path, 
+                                                       prod_config->mmap_size_per_collection) != 0) {
+            if (coll->storage) storage_backend_destroy(coll->storage);
+            free(coll);
+            pthread_rwlock_unlock(&g_database.lock);
+            LOG_ERROR("Cannot create MMAP storage for collection: %s", name);
+            return -1;
+        }
     }
     
     /* Initialize index */
@@ -494,7 +527,7 @@ int db_create_collection(database_t* db, const char* name) {
     coll->primary_index = hash_index_create(index_path, NULL);
     
     if (!coll->primary_index) {
-        mmap_storage_destroy(coll->storage);
+        storage_backend_destroy(coll->storage);
         free(coll);
         pthread_rwlock_unlock(&g_database.lock);
         LOG_ERROR("Cannot create index for collection: %s", name);
@@ -529,6 +562,64 @@ int db_create_collection(database_t* db, const char* name) {
     }
     
     pthread_rwlock_unlock(&g_database.lock);
+    
+    /* Create collection metadata in unified documents collection */
+    /* Only create metadata for user collections, not system collections */
+    if (name[0] != '_' && strcmp(name, DOCUMENTS_COLLECTION) != 0) {
+        /* Parse library and collection for metadata */
+        char lib_name[256] = "default";
+        char coll_name[256];
+        const char* lib_slash = strchr(name, '/');
+        if (lib_slash) {
+            size_t lib_len = lib_slash - name;
+            if (lib_len < sizeof(lib_name)) {
+                strncpy(lib_name, name, lib_len);
+                lib_name[lib_len] = '\0';
+                strncpy(coll_name, lib_slash + 1, sizeof(coll_name) - 1);
+                coll_name[sizeof(coll_name) - 1] = '\0';
+            } else {
+                strncpy(coll_name, name, sizeof(coll_name) - 1);
+                coll_name[sizeof(coll_name) - 1] = '\0';
+            }
+        } else {
+            strncpy(coll_name, name, sizeof(coll_name) - 1);
+            coll_name[sizeof(coll_name) - 1] = '\0';
+        }
+        
+        /* Create collection metadata document */
+        json_value_t* coll_meta = json_create_object();
+        json_object_set(coll_meta, "type", json_create_string("collection"));
+        json_object_set(coll_meta, "library", json_create_string(lib_name));
+        json_object_set(coll_meta, "collection", json_create_string("collections"));
+        json_object_set(coll_meta, "owner", json_create_string(SYSTEM_USER_ADMIN));
+        json_object_set(coll_meta, "name", json_create_string(coll_name));
+        json_object_set(coll_meta, "is_system", json_create_boolean(0));
+        json_object_set(coll_meta, "settings", json_create_object());
+        
+        /* Add timestamps */
+        time_t now = time(NULL);
+        char timestamp[64];
+        struct tm* utc_tm = gmtime(&now);
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+        json_object_set(coll_meta, "created_at", json_create_string(timestamp));
+        json_object_set(coll_meta, "updated_at", json_create_string(timestamp));
+        json_object_set(coll_meta, "version", json_create_number(1));
+        
+        /* Generate UUID for metadata */
+        char meta_uuid[256];
+        generate_doc_id(meta_uuid, sizeof(meta_uuid));
+        json_object_set(coll_meta, "uuid", json_create_string(meta_uuid));
+        
+        /* Insert metadata into documents collection */
+        json_value_t* meta_result = db_insert_document(db, DOCUMENTS_COLLECTION, coll_meta);
+        if (meta_result) {
+            LOG_DEBUG("Created metadata for collection %s in library %s", coll_name, lib_name);
+            json_free(meta_result);
+        } else {
+            LOG_WARNING("Failed to create metadata for collection %s", name);
+        }
+        json_free(coll_meta);
+    }
     
     LOG_INFO("Created collection: %s", name);
     return 0;
@@ -749,16 +840,20 @@ json_value_t* db_insert_document(database_t* db, const char* collection_name,
     /* Store in mmap */
     /* Calculate the offset where the document will be stored */
     /* size_t entry_size = sizeof(doc_entry_t) + strlen(doc_id) + doc_size; - not used */
-    uint64_t offset = coll->storage->header->free_offset;
-    
-    TRACE_DB("db_insert_document: storing doc_id=%s at offset=%lu, size=%zu", 
-              doc_id, offset, doc_size);
-    if (mmap_storage_put(coll->storage, doc_id, strlen(doc_id), json_str, doc_size) != 0) {
-        LOG_ERROR("db_insert_document: mmap_storage_put failed for doc_id=%s", doc_id);
+    /* Store document using storage backend */
+    TRACE_DB("db_insert_document: storing doc_id=%s, size=%zu", doc_id, doc_size);
+    if (coll->storage->ops->store(coll->storage, doc_id, json_str, doc_size) != 0) {
+        LOG_ERROR("db_insert_document: storage store failed for doc_id=%s", doc_id);
         pthread_rwlock_unlock(&coll->lock);
         buffer_pool_free_safe(json_str);
         json_free(result_doc);
         return NULL;
+    }
+    
+    /* For now, use doc_id hash as offset for index (JDBX doesn't expose offsets) */
+    uint64_t offset = 0;
+    for (size_t i = 0; i < strlen(doc_id); i++) {
+        offset = offset * 31 + doc_id[i];
     }
     
     /* Update primary index with the actual storage offset */
@@ -911,21 +1006,12 @@ json_value_t* db_get_document(database_t* db, const char* collection_name,
     /* Read lock for lookup */
     pthread_rwlock_rdlock(&coll->lock);
     
-    /* Find in index */
-    uint64_t offset;
-    int search_result = hash_index_search(coll->primary_index, id, strlen(id), &offset);
-    LOG_DEBUG("db_get_document: hash_index_search returned %d, offset=%lu", search_result, offset);
-    if (search_result != 0) {
-        pthread_rwlock_unlock(&coll->lock);
-        LOG_ERROR("db_get_document: document %s not found in index", id);
-        return NULL;
-    }
-    
-    /* Get from storage using offset */
-    void* data;
+    /* Get document from storage backend */
     size_t data_len;
-    if (mmap_storage_get_by_offset(coll->storage, offset, NULL, NULL, &data, &data_len) != 0) {
+    char* data = coll->storage->ops->retrieve(coll->storage, id, &data_len);
+    if (!data) {
         pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("db_get_document: document %s not found", id);
         return NULL;
     }
     
@@ -1003,22 +1089,12 @@ json_value_t* db_update_document(database_t* db, const char* collection_name,
         return NULL;
     }
     
-    /* Mark old document as deleted */
-    char* base = (char*)coll->storage->base_addr;
-    doc_entry_t* old_entry = (doc_entry_t*)(base + old_offset);
-    old_entry->flags |= DOC_FLAG_DELETED;
+    /* For storage backend abstraction, we'll let the backend handle the update */
+    /* The storage->store operation will handle updating/replacing the document */
     
     /* Store new version */
-    uint64_t new_offset = coll->storage->header->free_offset;
-    if (mmap_storage_put(coll->storage, id, strlen(id), json_str, doc_size) != 0) {
-        pthread_rwlock_unlock(&coll->lock);
-        buffer_pool_free_safe(json_str);
-        return NULL;
-    }
-    
-    /* Update index - first remove old entry, then insert new */
-    hash_index_delete(coll->primary_index, id, strlen(id));
-    if (hash_index_insert(coll->primary_index, id, strlen(id), new_offset) != 0) {
+    /* Store updated document using storage backend */
+    if (coll->storage->ops->store(coll->storage, id, json_str, doc_size) != 0) {
         pthread_rwlock_unlock(&coll->lock);
         buffer_pool_free_safe(json_str);
         return NULL;
@@ -1098,25 +1174,21 @@ int db_delete_document(database_t* db, const char* collection_name, const char* 
     pthread_rwlock_wrlock(&coll->lock);
     
     /* First, get the document to extract field values for index removal */
-    uint64_t offset;
     json_value_t* doc = NULL;
-    if (hash_index_search(coll->primary_index, id, strlen(id), &offset) == 0) {
-        /* Load document from storage */
-        void* data = NULL;
-        size_t value_size;
-        if (mmap_storage_get_by_offset(coll->storage, offset, NULL, NULL, &data, &value_size) == 0 && data) {
-            doc = json_parse((char*)data);
-            free(data);  /* mmap_storage_get_by_offset allocates memory */
-        }
-        
-        /* Mark document as deleted in storage */
-        char* base = (char*)coll->storage->base_addr;
-        doc_entry_t* entry = (doc_entry_t*)(base + offset);
-        entry->flags |= DOC_FLAG_DELETED;
+    size_t value_size;
+    char* data = coll->storage->ops->retrieve(coll->storage, id, &value_size);
+    if (data) {
+        doc = json_parse(data);
+        free(data);
     }
     
-    /* Remove from primary index */
-    int result = hash_index_delete(coll->primary_index, id, strlen(id));
+    /* Delete from storage backend */
+    int result = coll->storage->ops->delete(coll->storage, id);
+    
+    /* Remove from primary index if storage deletion succeeded */
+    if (result == 0) {
+        hash_index_delete(coll->primary_index, id, strlen(id));
+    }
     
     if (result == 0) {
         /* Remove from secondary indexes */
@@ -1254,69 +1326,34 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
     // } seen_id_t;
     // seen_id_t* seen_ids = NULL;
     
-    /* For now, implement a simple full scan through mmap storage */
+    /* Use storage backend iteration for queries */
     pthread_rwlock_rdlock(&coll->lock);
     
-    /* Use mmap_storage_iterate to go through all documents */
-    storage_header_t* header = coll->storage->header;
-    char* base = (char*)coll->storage->base_addr;
-    uint64_t offset = header->data_offset;
+    /* Create iterator for storage backend */
+    storage_iterator_t* iter = coll->storage->ops->iterator_create(coll->storage);
+    if (!iter) {
+        pthread_rwlock_unlock(&coll->lock);
+        json_free(documents);
+        json_free(results);
+        return NULL;
+    }
     
-    TRACE_DB("db_query_documents: Starting scan from offset %lu to %lu", 
-              offset, header->free_offset);
+    TRACE_DB("db_query_documents: Starting iteration through storage backend");
     
-    int doc_num = 0;
-    while (offset < header->free_offset) {
-        /* Check if we have enough space for a doc_entry header */
-        if (offset + sizeof(doc_entry_t) > header->free_offset) {
-            break;
-        }
-        
-        doc_entry_t* entry = (doc_entry_t*)(base + offset);
-        
-        /* Validate magic number */
-        if (entry->magic != 0x444F4355) { /* "DOCU" */
-            TRACE_DB("db_query_documents: Invalid magic at offset %lu: 0x%x", 
-                      offset, entry->magic);
-            offset += 4; /* Try next aligned position */
+    /* Iterate through all documents using storage backend */
+    char* doc_id = NULL;
+    char* json_data = NULL;
+    size_t data_size = 0;
+    
+    while (coll->storage->ops->iterator_next(iter, &doc_id, &json_data, &data_size) == 0) {
+        if (!doc_id || !json_data) {
+            /* Free allocated data and continue */
+            if (doc_id) { free(doc_id); doc_id = NULL; }
+            if (json_data) { free(json_data); json_data = NULL; }
             continue;
         }
-        
-        /* Skip deleted documents */
-        if (entry->flags & DOC_FLAG_DELETED) {
-            uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
-            offset += entry_size;
-            offset = (offset + 7) & ~7; /* Align to 8 bytes */
-            continue;
-        }
-        
-        doc_num++;
-        
-        /* Validate entry sizes */
-        if (entry->key_len == 0 || entry->value_len == 0 || 
-            entry->key_len > 1024 || entry->value_len > 1024*1024) {
-            TRACE_DB("db_query_documents: Invalid entry sizes at offset %lu: key_len=%u, value_len=%u", 
-                      offset, entry->key_len, entry->value_len);
-            offset += sizeof(doc_entry_t);
-            continue;
-        }
-        
-        /* Make sure we don't read past the end */
-        uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
-        if (offset + entry_size > header->free_offset) {
-            TRACE_DB("db_query_documents: Entry at offset %lu would exceed bounds", offset);
-            break;
-        }
-        
-        /* Extract the document key (ID) */
-        char* key = (char*)entry + sizeof(doc_entry_t);
-        char doc_id[256];
-        size_t key_copy_len = entry->key_len < sizeof(doc_id) - 1 ? entry->key_len : sizeof(doc_id) - 1;
-        memcpy(doc_id, key, key_copy_len);
-        doc_id[key_copy_len] = '\0';
         
         /* Parse the JSON document */
-        char* json_data = (char*)entry + sizeof(doc_entry_t) + entry->key_len;
         json_value_t* doc = json_parse(json_data);
         
         if (doc && doc->type == JSON_OBJECT) {
@@ -1347,13 +1384,14 @@ json_value_t* db_query_documents(database_t* db, const char* collection_name,
             }
         }
         
+        /* Free document and iterator data */
         if (doc) json_free(doc);
-        
-        /* Move to next entry */
-        offset += entry_size;
-        /* Align to 8 bytes */
-        offset = (offset + 7) & ~7;
+        if (doc_id) { free(doc_id); doc_id = NULL; }
+        if (json_data) { free(json_data); json_data = NULL; }
     }
+    
+    /* Destroy iterator */
+    coll->storage->ops->iterator_destroy(iter);
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1401,64 +1439,49 @@ static int rebuild_collection_indices(hp_collection_t* coll) {
     
     LOG_INFO("Rebuilding indices for collection: %s", coll->name);
     
-    /* Scan through storage and rebuild primary index */
-    storage_header_t* header = coll->storage->header;
-    char* base = (char*)coll->storage->base_addr;
-    uint64_t offset = header->data_offset;
+    /* Use storage backend to iterate and rebuild index */
+    storage_iterator_t* iter = coll->storage->ops->iterator_create(coll->storage);
+    if (!iter) {
+        LOG_ERROR("Cannot create storage iterator for index rebuild");
+        return -1;
+    }
+    
     int doc_count = 0;
     int indexed_count = 0;
     
-    while (offset < header->free_offset) {
-        /* Check if we have enough space for a doc_entry header */
-        if (offset + sizeof(doc_entry_t) > header->free_offset) {
-            break;
-        }
-        
-        doc_entry_t* entry = (doc_entry_t*)(base + offset);
-        
-        /* Validate magic number */
-        if (entry->magic != 0x444F4355) { /* "DOCU" */
-            offset += 4; /* Try next aligned position */
-            continue;
-        }
-        
-        /* Skip deleted documents */
-        if (entry->flags & DOC_FLAG_DELETED) {
-            uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
-            offset += entry_size;
-            offset = (offset + 7) & ~7; /* Align to 8 bytes */
+    char* doc_id = NULL;
+    char* json_data = NULL;
+    size_t data_size = 0;
+    
+    while (coll->storage->ops->iterator_next(iter, &doc_id, &json_data, &data_size) == 0) {
+        if (!doc_id || !json_data) {
+            if (doc_id) { free(doc_id); doc_id = NULL; }
+            if (json_data) { free(json_data); json_data = NULL; }
             continue;
         }
         
         doc_count++;
         
-        /* Validate entry sizes */
-        if (entry->key_len == 0 || entry->value_len == 0 || 
-            entry->key_len > 1024 || entry->value_len > 1024*1024) {
-            offset += sizeof(doc_entry_t);
-            continue;
+        /* Create a hash-based offset for the document ID */
+        uint64_t offset = 0;
+        for (size_t i = 0; i < strlen(doc_id); i++) {
+            offset = offset * 31 + doc_id[i];
         }
-        
-        /* Make sure we don't read past the end */
-        uint64_t entry_size = sizeof(doc_entry_t) + entry->key_len + entry->value_len;
-        if (offset + entry_size > header->free_offset) {
-            break;
-        }
-        
-        /* Extract key (document ID) */
-        char* key = (char*)entry + sizeof(doc_entry_t);
         
         /* Add to primary index */
-        if (hash_index_insert(coll->primary_index, key, entry->key_len, offset) == 0) {
+        if (hash_index_insert(coll->primary_index, doc_id, strlen(doc_id), offset) == 0) {
             indexed_count++;
         } else {
-            LOG_WARNING("Cannot index document at offset %lu", offset);
+            LOG_WARNING("Cannot index document: %s", doc_id);
         }
         
-        /* Move to next entry */
-        offset += entry_size;
-        offset = (offset + 7) & ~7; /* Align to 8 bytes */
+        /* Free allocated data */
+        if (doc_id) { free(doc_id); doc_id = NULL; }
+        if (json_data) { free(json_data); json_data = NULL; }
     }
+    
+    /* Destroy iterator */
+    coll->storage->ops->iterator_destroy(iter);
     
     LOG_INFO("Rebuilt indices for collection %s: found %d documents, indexed %d", 
              coll->name, doc_count, indexed_count);
@@ -1506,7 +1529,7 @@ int db_drop_collection(database_t* db, const char* name) {
             
             /* Clean up resources */
             if (coll->storage) {
-                mmap_storage_destroy(coll->storage);
+                storage_backend_destroy(coll->storage);
             }
             if (coll->primary_index) {
                 hash_index_destroy(coll->primary_index);
@@ -1519,6 +1542,10 @@ int db_drop_collection(database_t* db, const char* name) {
             /* Remove files */
             char path[2048];
             snprintf(path, sizeof(path), "%s/%s.mmap", g_database.path, name);
+            unlink(path);
+            snprintf(path, sizeof(path), "%s/%s.jdbx", g_database.path, name);
+            unlink(path);
+            snprintf(path, sizeof(path), "%s/%s.jdbx.wal", g_database.path, name);
             unlink(path);
             snprintf(path, sizeof(path), "%s/%s.idx", g_database.path, name);
             unlink(path);
@@ -1555,7 +1582,8 @@ int db_save(database_t* db) {
     
     for (size_t i = 0; i < g_database.num_collections; i++) {
         if (g_database.collections[i] && g_database.collections[i]->storage) {
-            mmap_storage_sync(g_database.collections[i]->storage);
+            /* Storage backend handles persistence automatically */
+            /* No explicit sync needed for abstracted storage */
         }
     }
     

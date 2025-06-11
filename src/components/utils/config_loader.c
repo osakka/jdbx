@@ -1679,6 +1679,7 @@ void config_free(server_config_t* config) {
   /* Free string resources */
   if (config->host) free(config->host);
   if (config->db_path) free(config->db_path);
+  if (config->storage_backend) free(config->storage_backend);
   if (config->rbac_path) free(config->rbac_path);
   if (config->jwt_secret) free(config->jwt_secret);
   if (config->pid_file) free(config->pid_file);
@@ -1762,6 +1763,7 @@ void config_init_defaults(server_config_t* config) {
   
   /* File paths (resolved relative to binary directory) */
   config->db_path = resolve_path(DEFAULT_DB_PATH);
+  config->storage_backend = strdup(DEFAULT_STORAGE_BACKEND);
   config->rbac_path = resolve_path(DEFAULT_RBAC_PATH);
   config->pid_file = resolve_path(DEFAULT_PID_FILE);
   config->log_file = resolve_path(DEFAULT_LOG_FILE);

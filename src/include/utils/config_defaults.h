@@ -92,6 +92,22 @@
 #define DEFAULT_SSL_KEY_PATH "/etc/ssl/private/server.key"
 
 /*==============================================================================
+ * Database Defaults
+ *============================================================================*/
+
+/** Default database directory */
+#define DEFAULT_DATABASE_DIR "/opt/jsondb/data"
+
+/** Default storage backend (mmap or jdbx) */
+#define DEFAULT_STORAGE_BACKEND "mmap"
+
+/** Default memory map size */
+#define DEFAULT_MMAP_SIZE (1024 * 1024 * 100)  /* 100 MB */
+
+/** Default JDBX initial size */
+#define DEFAULT_JDBX_SIZE (1024 * 1024 * 100)  /* 100 MB */
+
+/*==============================================================================
  * Performance Defaults
  *============================================================================*/
 

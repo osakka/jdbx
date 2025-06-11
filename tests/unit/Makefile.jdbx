@@ -1,0 +1,36 @@
+# JDBX Test Makefile
+
+CC = gcc
+CFLAGS = -g -O0 -Wall -Wextra -I../../src/include -I../../src
+LDFLAGS = -lpthread -lm
+
+# Source files
+JDBX_SRCS = ../../src/components/storage/jdbx_page_manager.c \
+            ../../src/components/storage/jdbx_btree.c \
+            ../../src/components/utils/logger.c
+
+TEST_SRCS = test_jdbx_basic.c
+
+# Object files
+JDBX_OBJS = $(JDBX_SRCS:.c=.o)
+TEST_OBJS = $(TEST_SRCS:.c=.o)
+
+# Target
+TARGET = test_jdbx_basic
+
+all: $(TARGET)
+
+$(TARGET): $(TEST_OBJS) $(JDBX_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+run: $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET) $(TEST_OBJS) $(JDBX_OBJS)
+	rm -f /tmp/test.jdbx /tmp/test.jdbx.wal
+
+.PHONY: all run clean

@@ -237,6 +237,13 @@ int load_environment_config(server_config_t* config) {
     config->key_path = strdup(ssl_key_file);
   }
   
+  /* Storage backend configuration */
+  const char* storage_backend = getenv("JSONDB_STORAGE_BACKEND");
+  if (storage_backend) {
+    if (config->storage_backend) free(config->storage_backend);
+    config->storage_backend = strdup(storage_backend);
+  }
+  
   /* Get numeric configuration from environment */
   const char* port_str = getenv("JSONDB_PORT");
   if (port_str) {
