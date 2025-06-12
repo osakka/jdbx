@@ -175,13 +175,18 @@ void analyze_query_pattern(const char* collection_name, json_value_t* query) {
     if (!collection_name || !query || query->type != JSON_OBJECT) return;
     
     /* Extract all fields used in the query */
-    size_t field_count = json_object_size(query);
-    for (size_t i = 0; i < field_count; i++) {
-        const char* field_name = json_object_get_key(query, i);
-        if (field_name) {
-            LOG_DEBUG("Query uses field '%s' in collection '%s'", field_name, collection_name);
-            /* TODO: Track field usage for adaptive indexing */
+    json_value_t* keys = json_object_get_keys(query);
+    if (keys && keys->type == JSON_ARRAY) {
+        size_t field_count = json_array_size(keys);
+        for (size_t i = 0; i < field_count; i++) {
+            json_value_t* key_val = json_array_get(keys, i);
+            if (key_val && key_val->type == JSON_STRING) {
+                const char* field_name = json_get_string(key_val);
+                LOG_DEBUG("Query uses field '%s' in collection '%s'", field_name, collection_name);
+                /* TODO: Track field usage for adaptive indexing */
+            }
         }
+        json_free(keys);
     }
 }
 

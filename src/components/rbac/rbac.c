@@ -71,7 +71,7 @@ static void hmac_sha256(const unsigned char* key, size_t key_len,
 }
 
 /* PBKDF2 with HMAC-SHA-256 implementation */
-static void pbkdf2_hmac_sha256(const char* password, const unsigned char* salt, size_t salt_len,
+__attribute__((unused)) static void pbkdf2_hmac_sha256(const char* password, const unsigned char* salt, size_t salt_len,
                int iterations, size_t output_len, unsigned char* output) {
   unsigned char digest[32];
   unsigned char block[salt_len + 4];

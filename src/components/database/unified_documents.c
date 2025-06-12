@@ -128,7 +128,7 @@ static int create_system_actor(database_t* db, const char* username, const char*
 }
 
 /* Create collection metadata helper */
-static int create_collection_metadata(database_t* db, const char* library, const char* collection_name,
+__attribute__((unused)) static int create_collection_metadata(database_t* db, const char* library, const char* collection_name,
                                      const char* owner, int is_system) {
     /* Check if already exists */
     json_value_t* query = json_create_object();
@@ -193,7 +193,7 @@ static int create_collection_metadata(database_t* db, const char* library, const
 }
 
 /* Create library metadata document */
-static int create_library_metadata(database_t* db, const char* name, const char* display_name,
+__attribute__((unused)) static int create_library_metadata(database_t* db, const char* name, const char* display_name,
                                   const char* description, const char* owner, int is_system) {
     /* Check if already exists */
     json_value_t* query = json_create_object();

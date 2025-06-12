@@ -52,6 +52,7 @@ static int batch_insert_jdbx(
     batch_insert_result_t* result,
     const batch_insert_options_t* options
 ) {
+    (void)options; /* TODO: Implement batch options */
     size_t count = json_array_size(documents);
     size_t errors = 0;
     

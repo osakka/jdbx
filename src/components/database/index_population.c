@@ -12,13 +12,7 @@
 #include "utils/json.h"
 #include "utils/logger.h"
 
-/* Extract field value from a document given a field path */
-static json_value_t* extract_field_value_local(json_value_t* doc, const char* field_path) {
-    if (!doc || !field_path || doc->type != JSON_OBJECT) return NULL;
-    
-    /* For now, simple field lookup - no nested path support */
-    return json_object_get(doc, field_path);
-}
+/* Field extraction is handled by json_object_get() directly */
 
 /* Populate a secondary index with existing documents
  * In JDBX, this will be implemented as part of the integrated index system
