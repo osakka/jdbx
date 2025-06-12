@@ -35,14 +35,13 @@ JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
 # Performance optimization sources - JDBX ONLY!
-# Exclude mmap_storage.c, storage_backend.c, and jdbx_v2.c
-STORAGE_SRCS = $(filter-out $(SRC_DIR)/components/storage/mmap_storage.c $(SRC_DIR)/components/storage/storage_backend.c $(SRC_DIR)/components/storage/jdbx_v2.c,$(wildcard $(SRC_DIR)/components/storage/*.c))
-# Exclude hash_index.c and btree_disk.c (legacy index files)
-INDEX_SRCS = $(filter-out $(SRC_DIR)/components/index/hash_index.c $(SRC_DIR)/components/index/btree_disk.c,$(wildcard $(SRC_DIR)/components/index/*.c))
+# Clean source lists - redundant files have been moved to trash
+STORAGE_SRCS = $(wildcard $(SRC_DIR)/components/storage/*.c)
+INDEX_SRCS = $(wildcard $(SRC_DIR)/components/index/*.c)
 LOCKFREE_SRCS = $(wildcard $(SRC_DIR)/components/lockfree/*.c)
 
 # Initialization components (use JDBX-only database)
-INIT_SRCS = $(filter-out $(SRC_DIR)/initialize/database.c,$(wildcard $(SRC_DIR)/initialize/*.c)) $(SRC_DIR)/initialize/database_jdbx.c
+INIT_SRCS = $(wildcard $(SRC_DIR)/initialize/*.c)
 
 # Thread pool implementation
 # Note: Now integrated into server.c directly
@@ -105,47 +104,20 @@ directories:
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LIB_DIR)
 
-# Define custom database objects using the new high-performance implementation
-# Filter out old implementations and persistence.c
-EXCLUDED_OLD_DB = $(SRC_DIR)/components/database/collection_v2.c \
-                  $(SRC_DIR)/components/database/database_operations.c \
-                  $(SRC_DIR)/components/database/database_with_optimizations.c \
-                  $(SRC_DIR)/components/database/db.c.old \
-                  $(SRC_DIR)/components/database/persistence.c
-CUSTOM_DB_SRCS = $(filter-out $(EXCLUDED_OLD_DB),$(DB_SRCS))
-CUSTOM_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CUSTOM_DB_SRCS))
-
-# Use JDBX-only database implementation (single source of truth)
-JDBX_ONLY_DB_SRCS = $(SRC_DIR)/components/database/database_jdbx_only.c
-JDBX_ONLY_DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(JDBX_ONLY_DB_SRCS))
-
-# Remove ALL other database implementations - JDBX only!
-EXCLUDED_DB_FILES = $(SRC_DIR)/components/database/database.c \
-                    $(SRC_DIR)/components/database/database_unified.c \
-                    $(SRC_DIR)/components/storage/mmap_storage.c \
-                    $(SRC_DIR)/components/storage/storage_backend.c
-
-# Final database objects - ONLY JDBX implementation
-# First, get the object files to exclude by converting source paths
-EXCLUDED_DB_OBJS = $(OBJ_DIR)/components/database/database.o \
-                   $(OBJ_DIR)/components/database/database_unified.o \
-                   $(OBJ_DIR)/components/storage/mmap_storage.o \
-                   $(OBJ_DIR)/components/storage/storage_backend.o
-
-FINAL_DB_OBJS = $(filter-out $(EXCLUDED_DB_OBJS),$(CUSTOM_DB_OBJS)) $(JDBX_ONLY_DB_OBJS)
+# Database objects - clean source tree with single JDBX implementation
+DB_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DB_SRCS))
 
 # Performance optimization components (Phase 2 & 3)
 OPTIMIZATION_SRCS = $(SRC_DIR)/components/core/epoll_server.c $(SRC_DIR)/components/core/server_selector.c
 OPTIMIZATION_OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(OPTIMIZATION_SRCS))
 
 # Define all optimized objects
-OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/authentication_handler.o $(API_OBJS) $(FINAL_DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
+OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/authentication_handler.o $(API_OBJS) $(DB_OBJS) $(BINARY_OBJS) $(QUERY_OBJS) $(TRANS_OBJS) \
        $(RBAC_OBJS) $(UTILS_OBJS) $(TOOLS_OBJS) $(JS_OBJS) $(THREAD_POOL_OBJ) $(OPTIMIZATION_OBJS) $(INIT_OBJS) \
        $(STORAGE_OBJS) $(INDEX_OBJS) $(LOCKFREE_OBJS)
 
 # List of objects for Makefile dependencies
-ALL_OBJS = $(filter-out $(OBJ_DIR)/components/database/database.o $(OBJ_DIR)/components/database/database_operations.o, $(OBJS)) \
-           $(THREAD_POOL_OBJ)
+ALL_OBJS = $(OBJS) $(THREAD_POOL_OBJ)
 
 # Build static library
 libjsondb: $(OPTIMIZED_OBJS)
