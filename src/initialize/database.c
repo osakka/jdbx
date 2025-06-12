@@ -102,7 +102,7 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
   /* Check if database needs bootstrap */
   if (db_needs_bootstrap(db)) {
     INIT_LOG_PROGRESS("DATABASE", "Database needs bootstrap initialization");
-    db->is_bootstrap_mode = 1;
+    /* JDBX-only implementation handles bootstrap mode internally */
     
     /* Initialize system schemas */
     if (!db_init_system_schemas(db)) {

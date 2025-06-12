@@ -68,6 +68,28 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   LOG_DEBUG("Extracted credentials - username: %s, password: %s", username, password);
   
+  /* Check if we need to perform deferred bootstrap */
+  if (ctx->db && ctx->db->is_bootstrap_mode) {
+    const char* deferred_bootstrap = getenv("JSONDB_DEFERRED_BOOTSTRAP");
+    if (deferred_bootstrap && strcmp(deferred_bootstrap, "1") == 0) {
+      LOG_INFO("Performing deferred bootstrap - creating admin user");
+      
+      /* Create admin role and user now that server is fully initialized */
+      char* admin_role_id = NULL;
+      if (create_default_admin_role(ctx->db, &admin_role_id)) {
+        if (admin_role_id) {
+          if (create_default_admin_user(ctx->db, admin_role_id)) {
+            LOG_INFO("Deferred bootstrap completed successfully");
+            /* Disable bootstrap mode */
+            ctx->db->is_bootstrap_mode = 0;
+            unsetenv("JSONDB_DEFERRED_BOOTSTRAP");
+          }
+          free(admin_role_id);
+        }
+      }
+    }
+  }
+  
   /* Determine target library - default to system if not specified */
   if (!library) {
     library = "system";
@@ -75,16 +97,12 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   LOG_DEBUG("Attempting login for user: %s in library: %s", username, library);
   
-  /* Build collection path for library */
-  char collection_path[256];
-  snprintf(collection_path, sizeof(collection_path), "%s/users", library);
-  
-  /* Look up the user in the library's users collection */
+  /* HIERARCHICAL ARCHITECTURE: Query system/users collection for user */
   json_value_t* query = json_create_object();
   json_object_set(query, "username", json_create_string(username));
   
   char* query_str = json_stringify(query);
-  LOG_DEBUG("Querying for user in %s with: %s", collection_path, query_str);
+  LOG_DEBUG("Querying for user in system/users with: %s", query_str);
   buffer_pool_free_safe(query_str);
   
   if (!ctx->db) {
@@ -95,7 +113,9 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  json_value_t* results = db_query_documents(ctx->db, collection_path, query);
+  /* HIERARCHICAL: Query system/users collection */
+  json_value_t* results = db_query_documents(ctx->db, "system/users", query);
+  
   json_free(query);
     
   if (!results) {
@@ -104,15 +124,14 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                  "{\"error\":\"Failed to query user\"}", "application/json");
   }
   
-  json_value_t* documents = json_object_get(results, "documents");
-  if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
+  if (!results || results->type != JSON_ARRAY || json_array_size(results) == 0) {
     json_free(results);
     json_free(body);
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
   }
   
-  json_value_t* user_doc = json_array_get(documents, 0);
+  json_value_t* user_doc = json_array_get(results, 0);
   json_value_t* id_val = json_object_get(user_doc, "uuid");
   json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
   
@@ -174,28 +193,25 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         json_object_set(session_query, "user_id", json_create_string(user_id));
         json_object_set(session_query, "active", json_create_boolean(1));
         
-        json_object_set(session_query, "type", json_create_string("session"));
-        json_value_t* existing_sessions = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, session_query);
+        /* Query system/sessions collection in JDBX architecture */
+        json_value_t* existing_sessions = db_query_documents(ctx->db, "system/sessions", session_query);
         json_free(session_query);
         
-        if (existing_sessions) {
-          json_value_t* documents = json_object_get(existing_sessions, "documents");
-          if (documents && documents->type == JSON_ARRAY) {
-            int session_count = json_array_size(documents);
-            LOG_DEBUG("Found %d existing active sessions for user", session_count);
-            
-            /* Invalidate each existing session */
-            for (size_t i = 0; i < documents->value.array.size; i++) {
-              json_value_t* session = json_array_get(documents, i);
-              json_value_t* session_id_val = json_object_get(session, "uuid");
-              if (!session_id_val) {
-                session_id_val = json_object_get(session, "uuid");
-              }
-              if (session_id_val && session_id_val->type == JSON_STRING) {
-                const char* old_session_id = session_id_val->value.string;
-                LOG_INFO("Invalidating old session: %s", old_session_id);
-                rbac_db_invalidate_session(ctx->db, old_session_id);
-              }
+        if (existing_sessions && existing_sessions->type == JSON_ARRAY) {
+          int session_count = json_array_size(existing_sessions);
+          LOG_DEBUG("Found %d existing active sessions for user", session_count);
+          
+          /* Invalidate each existing session */
+          for (size_t i = 0; i < existing_sessions->value.array.size; i++) {
+            json_value_t* session = json_array_get(existing_sessions, i);
+            json_value_t* session_id_val = json_object_get(session, "_id");
+            if (!session_id_val) {
+              session_id_val = json_object_get(session, "uuid");
+            }
+            if (session_id_val && session_id_val->type == JSON_STRING) {
+              const char* old_session_id = session_id_val->value.string;
+              LOG_INFO("Invalidating old session: %s", old_session_id);
+              rbac_db_invalidate_session(ctx->db, old_session_id);
             }
           }
           json_free(existing_sessions);

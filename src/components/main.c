@@ -27,21 +27,17 @@ static void print_usage(const char* program_name) {
   printf("JSON Database Server - A lightweight JSON document database\n\n");
   printf("Options:\n");
   printf(" -h, --help          Display this help message and exit\n");
+  printf(" -f, --foreground      Run in foreground mode (do not daemonize)\n");
   printf(" -d, --daemon         Run as a daemon (background mode)\n");
   printf(" -t, --terminate        Terminate running server instance\n");
-  printf(" -V, --verbose         Enable verbose logging\n");
   printf(" -l, --log-level=LEVEL     Set log level (error, warn, info, debug, trace)\n");
   printf(" -x, --trace-categories=CATS Set trace categories (database,rbac,api,auth,transaction,binary,javascript,network,metrics,memory,all)\n");
   printf(" -b, --db-dir=DIRECTORY    Set database directory\n");
-  printf(" -r, --rbac-file=FILE     Set RBAC file path\n");
   printf(" -i, --pid-file=FILE      Set PID file path\n");
   printf(" -o, --log-file=FILE      Set log file path\n");
   printf(" -w, --web-root=DIRECTORY   Set web admin interface root directory\n");
   printf(" -p, --port=PORT        Set server port (default: 5000)\n");
   printf(" -H, --host=HOST        Set server bind address (default: 0.0.0.0)\n");
-  printf(" -Q, --validators-dir=DIR   Set validators directory\n");
-  printf(" -T, --transforms-dir=DIR   Set transforms directory\n");
-  printf(" -M, --metrics-dir=DIR     Set metrics directory\n");
   printf(" -c, --config=FILE       Load configuration from file\n");
   printf(" -S, --ssl           Enable SSL/TLS encryption\n");
   printf(" -N, --no-ssl          Disable SSL/TLS encryption\n");
@@ -157,15 +153,11 @@ int main(int argc, char** argv) {
               config->log_level == LOG_LEVEL_DEBUG ? "debug" :
               config->log_level == LOG_LEVEL_TRACE ? "trace" : "unknown");
   printf("Database path: %s\n", config->db_path ? config->db_path : "not set");
-  printf("RBAC file: %s\n", config->rbac_path ? config->rbac_path : "not set");
   printf("Web root: %s\n", config->web_root ? config->web_root : "not set");
   printf("PID file: %s\n", config->pid_file ? config->pid_file : "not set");
   printf("Log file: %s\n", config->log_file ? config->log_file : "not set");
   printf("Server host: %s\n", config->host ? config->host : "0.0.0.0");
   printf("Server port: %d\n", config->port);
-  printf("Validators directory: %s\n", config->validators_dir ? config->validators_dir : "not set");
-  printf("Transforms directory: %s\n", config->transforms_dir ? config->transforms_dir : "not set");
-  printf("Metrics directory: %s\n", config->metrics_dir ? config->metrics_dir : "not set");
   printf("SSL enabled: %s\n", config->use_ssl ? "yes" : "no");
   if (config->use_ssl) {
     printf("SSL certificate: %s\n", config->cert_path ? config->cert_path : "not set");
@@ -337,15 +329,16 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize JWT cache for performance */
-  LOG_DEBUG("Initializing JWT cache.");
+  LOG_INFO("Initializing JWT cache with 10,000 max entries.");
   if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
     INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
     free(config);
     return 1;
   }
+  LOG_INFO("JWT cache initialized successfully.");
   
   /* Initialize API context with properly initialized RBAC */
-  LOG_DEBUG("Initializing API.");
+  LOG_INFO("Initializing API context.");
   status = init_api(config, database, rbac, &api_ctx);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize API context");
@@ -366,9 +359,20 @@ int main(int argc, char** argv) {
   
   LOG_INFO("All components initialized in the correct sequence.");
   
+  /* Verify API context before running server */
+  if (!config->api_ctx) {
+    LOG_ERROR("API context is NULL before running server!");
+  } else {
+    LOG_INFO("API context is valid: %p", config->api_ctx);
+  }
+  
+  LOG_INFO("About to call run_server with config=%p", config);
+  
   /* Run server main loop */
   INIT_LOG_PROGRESS("MAIN", "All components initialized, starting server main loop");
   status = run_server(config);
+  
+  LOG_INFO("run_server returned with status: %d", status);
   
   /* The server has shut down */
   INIT_LOG_PROGRESS("MAIN", "Server has shut down, status: %d", status);

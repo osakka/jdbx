@@ -12,8 +12,17 @@
 /* Global JavaScript engine */
 js_engine_t *g_js_engine = NULL;
 
-/* Declare make_path_absolute from main.c */
-extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size);
+/* Simple implementation of make_path_absolute since it's not actually in main.c */
+static void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_path_size) {
+  char cwd[PATH_MAX];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    snprintf(abs_path, abs_path_size, "%s/%s", cwd, rel_path);
+  } else {
+    /* Fallback to relative path */
+    strncpy(abs_path, rel_path, abs_path_size - 1);
+    abs_path[abs_path_size - 1] = '\0';
+  }
+}
 
 /* Ensure USE_QUICKJS is defined when JavaScript is enabled */
 #if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
@@ -23,35 +32,9 @@ extern void make_path_absolute(const char* rel_path, char* abs_path, size_t abs_
 /* Initialize JavaScript engine */
 void js_api_init(database_t *db) {
 #ifndef DISABLE_JS
-  /* Get absolute paths for JS directories */
-  char functions_dir[PATH_MAX] = {0};
-  char validators_dir[PATH_MAX] = {0};
-  char transforms_dir[PATH_MAX] = {0};
-
-  /* Make absolute paths */
-  make_path_absolute("functions", functions_dir, sizeof(functions_dir));
-  make_path_absolute("validators", validators_dir, sizeof(validators_dir));
-  make_path_absolute("transforms", transforms_dir, sizeof(transforms_dir));
-
-  /* Create functions directory if it doesn't exist */
-  struct stat st = {0};
-  if (stat(functions_dir, &st) == -1) {
-    printf("Creating functions directory at: %s\n", functions_dir);
-    mkdir(functions_dir, 0755);
-  }
-
-  /* Create validators directory if it doesn't exist */
-  if (stat(validators_dir, &st) == -1) {
-    printf("Creating validators directory at: %s\n", validators_dir);
-    mkdir(validators_dir, 0755);
-  }
-
-  /* Create transforms directory if it doesn't exist */
-  if (stat(transforms_dir, &st) == -1) {
-    printf("Creating transforms directory at: %s\n", transforms_dir);
-    mkdir(transforms_dir, 0755);
-  }
-
+  /* In JDBX-only implementation, JS functions are stored in the database,
+     not in filesystem directories. No need to create directories. */
+  
   /* Initialize JavaScript engine - with error checking */
   if (g_js_engine != NULL) {
     fprintf(stderr, "Warning: JS engine was already initialized\n");
@@ -63,10 +46,9 @@ void js_api_init(database_t *db) {
 
   if (g_js_engine == NULL) {
     fprintf(stderr, "Warning: Failed to initialize JavaScript engine\n");
-    LOG_ERROR("initialize JavaScript engine.");
+    LOG_ERROR("Failed to initialize JavaScript engine.");
   } else {
-    printf("JavaScript engine initialized\n");
-    LOG_INFO("JavaScript engine initialized.");
+    LOG_INFO("JavaScript engine initialized with JDBX database storage.");
   }
 #else /* JavaScript functionality disabled */
   fprintf(stderr, "JavaScript support is not available (disabled in this build)\n");

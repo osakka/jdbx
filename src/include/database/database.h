@@ -133,6 +133,7 @@ typedef struct database {
 
 /* Database function prototypes */
 database_t* db_init(const char* path);
+database_t* db_create(void);
 void db_close(database_t* db);
 int db_save(database_t* db);
 
@@ -169,6 +170,10 @@ json_value_t* db_get_document(database_t* db, const char* collection, const char
 json_value_t* db_update_document(database_t* db, const char* collection, const char* id, json_value_t* document);
 int db_delete_document(database_t* db, const char* collection, const char* id);
 json_value_t* db_query_documents(database_t* db, const char* collection, json_value_t* query);
+
+/* Advanced query operations */
+json_value_t* db_find(database_t* db, const char* collection_path, const char* query,
+                     const char* projection, int limit, int skip, const char* sort);
 
 /* Schema operations */
 schema_t* db_create_schema(const char* name, const char* description);

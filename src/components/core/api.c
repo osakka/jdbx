@@ -82,17 +82,17 @@ api_route_t routes[] = {
   {"/api/documents/", HTTP_PUT, api_handle_unified_document_update, 1},
   {"/api/documents/", HTTP_DELETE, api_handle_unified_document_delete, 1},
   
-  /* Document routes - TEMP: auth disabled for persistence testing */
+  /* Document routes - Authentication enabled */
   /* NOTE: The order matters - the first matching route wins */
-  {"/api/collections/", HTTP_GET, api_handle_documents_query, 0}, /* General query handler - checks for /documents suffix */
-  {"/api/collections/", HTTP_GET, api_handle_document_field_access, 0}, /* Field access - checks for field path */
-  {"/api/collections/", HTTP_GET, api_handle_document_get, 0}, /* Specific document GET */
-  {"/api/collections/", HTTP_POST, api_handle_document_create, 0},
-  {"/api/collections/", HTTP_PUT, api_handle_document_update, 0},
-  {"/api/collections/", HTTP_DELETE, api_handle_document_delete, 0},
+  {"/api/collections/", HTTP_GET, api_handle_documents_query, 1}, /* General query handler - checks for /documents suffix */
+  {"/api/collections/", HTTP_GET, api_handle_document_field_access, 1}, /* Field access - checks for field path */
+  {"/api/collections/", HTTP_GET, api_handle_document_get, 1}, /* Specific document GET */
+  {"/api/collections/", HTTP_POST, api_handle_document_create, 1},
+  {"/api/collections/", HTTP_PUT, api_handle_document_update, 1},
+  {"/api/collections/", HTTP_DELETE, api_handle_document_delete, 1},
   
   /* Collection drop must come after document routes to avoid matching document paths */
-  {"/api/collections/", HTTP_DELETE, api_handle_collection_drop, 0},
+  {"/api/collections/", HTTP_DELETE, api_handle_collection_drop, 1},
   
   /* RBAC routes */
   {"/api/users", HTTP_GET, api_handle_users_list, 1},
@@ -912,62 +912,55 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  /* Query collection documents from unified documents collection */
-  json_value_t* query = json_create_object();
-  json_object_set(query, "type", json_create_string("collection"));
+  /* Use JDBX native db_list_collections function */
+  json_value_t* collections_array = db_list_collections(ctx->db);
   
-  json_value_t* collections_result = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, query);
-  json_free(query);
-  
-  if (!collections_result) {
+  if (!collections_array) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query collections\"}", "application/json");
   }
   
-  /* Extract collections array from result */
-  json_value_t* collections_array = json_object_get(collections_result, "documents");
   json_value_t* response = json_create_object();
   json_value_t* enhanced_collections = json_create_array();
   
-  if (collections_array && collections_array->type == JSON_ARRAY) {
-    /* Enhance each collection with document count */
+  if (collections_array->type == JSON_ARRAY) {
+    /* Enhance each collection with document count and metadata */
     for (size_t i = 0; i < json_array_size(collections_array); i++) {
-      json_value_t* coll = json_array_get(collections_array, i);
-      if (coll && coll->type == JSON_OBJECT) {
-        /* Clone the collection object */
-        json_value_t* enhanced_coll = json_clone(coll);
+      json_value_t* coll_path_val = json_array_get(collections_array, i);
+      if (coll_path_val && coll_path_val->type == JSON_STRING) {
+        const char* coll_path = coll_path_val->value.string;
         
-        /* Get library and collection name */
-        json_value_t* lib_val = json_object_get(coll, "library");
-        json_value_t* name_val = json_object_get(coll, "name");
+        /* Create enhanced collection object */
+        json_value_t* enhanced_coll = json_create_object();
+        json_object_set(enhanced_coll, "path", json_create_string(coll_path));
         
-        if (lib_val && lib_val->type == JSON_STRING && 
-            name_val && name_val->type == JSON_STRING) {
-          /* Build the full collection path */
-          char full_path[512];
-          snprintf(full_path, sizeof(full_path), "%s/%s", 
-                   lib_val->value.string, name_val->value.string);
+        /* Parse library/collection from path */
+        const char* slash = strchr(coll_path, '/');
+        if (slash) {
+          size_t lib_len = slash - coll_path;
+          char library[256], collection[256];
+          strncpy(library, coll_path, lib_len);
+          library[lib_len] = '\0';
+          strcpy(collection, slash + 1);
           
-          /* Query document count for this collection */
-          json_value_t* count_query = json_create_object();
-          json_value_t* count_result = db_query_documents(ctx->db, full_path, count_query);
-          json_free(count_query);
-          
-          size_t doc_count = 0;
-          if (count_result) {
-            json_value_t* docs = json_object_get(count_result, "documents");
-            if (docs && docs->type == JSON_ARRAY) {
-              doc_count = json_array_size(docs);
-            }
-            json_free(count_result);
-          }
-          
-          /* Add document count to collection object */
-          json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
+          json_object_set(enhanced_coll, "library", json_create_string(library));
+          json_object_set(enhanced_coll, "name", json_create_string(collection));
         } else {
-          /* System collections or malformed entries get 0 count */
-          json_object_set(enhanced_coll, "document_count", json_create_number(0));
+          /* Default library */
+          json_object_set(enhanced_coll, "library", json_create_string("default"));
+          json_object_set(enhanced_coll, "name", json_create_string(coll_path));
         }
+        
+        /* Query document count for this collection */
+        json_value_t* count_result = db_find(ctx->db, coll_path, NULL, NULL, -1, 0, NULL);
+        size_t doc_count = 0;
+        if (count_result && count_result->type == JSON_ARRAY) {
+          doc_count = json_array_size(count_result);
+          json_free(count_result);
+        }
+        
+        /* Add document count to collection object */
+        json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
         
         json_array_append(enhanced_collections, enhanced_coll);
       }
@@ -975,7 +968,7 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
   }
   
   json_object_set(response, "collections", enhanced_collections);
-  json_free(collections_result);
+  json_free(collections_array);
   
   char* response_str = json_stringify(response);
   json_free(response);
@@ -1204,29 +1197,139 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
 
 /* Get unified document */
 static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http_request_t* request) {
-  (void)ctx;
-  (void)request;
-  /* TODO: Implement */
-  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-               "{\"error\":\"Not implemented\"}", "application/json");
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Extract document ID from path: /api/documents/{id} */
+  const char* path = request->path;
+  if (strncmp(path, "/api/documents/", 15) != 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path\"}", "application/json");
+  }
+  
+  const char* doc_id = path + 15;
+  if (strlen(doc_id) == 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Document ID required\"}", "application/json");
+  }
+  
+  /* Get document from unified documents collection */
+  json_value_t* document = db_get_document(ctx->db, "documents", doc_id);
+  
+  if (!document) {
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Document not found\"}", "application/json");
+  }
+  
+  char* response_str = json_stringify(document);
+  json_free(document);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 /* Update unified document */
 static http_response_t* api_handle_unified_document_update(api_context_t* ctx, http_request_t* request) {
-  (void)ctx;
-  (void)request;
-  /* TODO: Implement */
-  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-               "{\"error\":\"Not implemented\"}", "application/json");
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Extract document ID from path: /api/documents/{id} */
+  const char* path = request->path;
+  if (strncmp(path, "/api/documents/", 15) != 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path\"}", "application/json");
+  }
+  
+  const char* doc_id = path + 15;
+  if (strlen(doc_id) == 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Document ID required\"}", "application/json");
+  }
+  
+  /* Parse request body */
+  json_value_t* update_doc = json_parse(request->body);
+  if (!update_doc || update_doc->type != JSON_OBJECT) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid JSON body\"}", "application/json");
+  }
+  
+  /* Update document in unified documents collection */
+  json_value_t* result = db_update_document(ctx->db, "documents", doc_id, update_doc);
+  json_free(update_doc);
+  
+  if (!result) {
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Document not found or update failed\"}", "application/json");
+  }
+  
+  char* response_str = json_stringify(result);
+  json_free(result);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 /* Delete unified document */
 static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, http_request_t* request) {
-  (void)ctx;
-  (void)request;
-  /* TODO: Implement */
-  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-               "{\"error\":\"Not implemented\"}", "application/json");
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Extract document ID from path: /api/documents/{id} */
+  const char* path = request->path;
+  if (strncmp(path, "/api/documents/", 15) != 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid path\"}", "application/json");
+  }
+  
+  const char* doc_id = path + 15;
+  if (strlen(doc_id) == 0) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Document ID required\"}", "application/json");
+  }
+  
+  /* Check if document exists first */
+  json_value_t* existing = db_get_document(ctx->db, "documents", doc_id);
+  if (!existing) {
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Document not found\"}", "application/json");
+  }
+  json_free(existing);
+  
+  /* Delete document from unified documents collection */
+  if (db_delete_document(ctx->db, "documents", doc_id) != 0) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to delete document\"}", "application/json");
+  }
+  
+  /* Return success response */
+  json_value_t* response = json_create_object();
+  json_object_set(response, "success", json_create_boolean(1));
+  json_object_set(response, "message", json_create_string("Document deleted successfully"));
+  json_object_set(response, "id", json_create_string(doc_id));
+  
+  char* response_str = json_stringify(response);
+  json_free(response);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
 /* Document handlers */

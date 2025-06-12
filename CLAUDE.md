@@ -1,6 +1,6 @@
 # JSONdb Development Guidelines
 
-**Last Updated**: June 11, 2025 (v3.2.0)
+**Last Updated**: June 12, 2025 (v3.3.0)
 
 ## Core Principles
 
@@ -380,6 +380,40 @@ Regular code audits ensure quality:
 6. **Update Documentation**: Keep READMEs current
 7. **Commit Changes**: Use descriptive commit messages
 8. **Tag Releases**: When appropriate with comprehensive messages
+
+## Recent Updates (v3.3.0 - June 12, 2025)
+
+### Lock-Free Database Architecture
+1. **Minimally-Locked Operations**: Redesigned database operations for maximum concurrency
+   - Library creation uses dedicated mutex instead of global database lock
+   - Lock-free library lookup with atomic operations for reads
+   - Double-check locking pattern prevents race conditions during library creation
+   - Collection operations optimized with reader/writer locks per collection
+
+2. **Single Source of Truth Enforcement**: Surgical removal of redundant implementations
+   - Removed `jdbx_database.c` and `jdbx_database.h` - kept only `database_jdbx_only.c`
+   - Updated Makefile to use single JDBX implementation (line 119)
+   - Moved obsolete patch files to trash (hash index corruption patches)
+   - Clean workspace with organized test files in proper directories
+
+3. **Performance Optimizations**: Zero-contention architecture for concurrent access
+   - Skip-list data structures provide thread-safe read operations
+   - Minimal locking scope reduces deadlock potential
+   - Background processes no longer contend for global locks
+   - Library creation mutex prevents only library-level race conditions
+
+4. **Code Quality Improvements**: Zero-warning compilation and clean workspace
+   - Fixed all compiler warnings with proper (void) parameter casts
+   - Removed object files from source directories
+   - Organized test scripts in `/opt/jsondb/tests/` directory
+   - Maintained impeccable git hygiene per project guidelines
+
+### Implementation Details
+- **File**: `src/components/database/database_jdbx_only.c` (lines 121-172)
+- **Key Function**: `get_or_create_library()` with atomic library creation
+- **Locking Strategy**: Read-heavy workloads benefit from lock-free library lookup
+- **Thread Safety**: Skip-list provides inherent thread safety for read operations
+- **Performance**: O(1) library access in most cases, O(log n) only during creation
 
 ## Recent Updates (v3.2.0 - June 11, 2025)
 

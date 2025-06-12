@@ -11,8 +11,8 @@
 /* Clone a JSON value - temporary until json_deep_copy is added to json utils */
 /* json_deep_copy is now available from json_deep_copy.c */
 
-/* Metrics persistence configuration */
-#define METRICS_COLLECTION_NAME "system/metrics" /* Collection for new metrics */
+/* Metrics persistence configuration - PURE DOCUMENTS ARCHITECTURE */
+#define METRICS_COLLECTION_NAME "system/metrics" /* Metrics stored in system/metrics collection */
 #define OLD_METRICS_COLLECTION "metrics"      /* Old collection to clean up */
 #define METRICS_SNAPSHOT_INTERVAL 60 /* Save metrics every 60 seconds */
 #define METRICS_RETENTION_DAYS 7   /* Keep metrics for 7 days */
@@ -74,31 +74,21 @@ int metrics_persistence_init(database_t* db) {
   g_metrics_persistence->last_cleanup = 0;
   pthread_mutex_init(&g_metrics_persistence->lock, NULL);
   
-  /* Create metrics collection if it doesn't exist */
-  LOG_INFO("Creating metrics collection: %s", METRICS_COLLECTION_NAME);
-  int result = db_create_collection(db, METRICS_COLLECTION_NAME);
-  if (result != 0 && result != -1) { /* -1 means collection already exists */
-    LOG_ERROR("Cannot create metrics collection.");
-    free(g_metrics_persistence);
-    g_metrics_persistence = NULL;
-    return 0;
-  }
+  /* PURE DOCUMENTS: No collection creation needed - using documents collection */
+  LOG_INFO("Using documents collection for metrics storage (pure documents architecture)");
   
-  /* Find existing metric documents by name and cache their IDs */
-  LOG_INFO("Looking for existing metric documents.");
-  const char* metric_names[] = {"operations", "performance", "cache", "memory", "connections"};
-  char** metric_id_ptrs[] = {&g_metric_id_operations, &g_metric_id_performance, 
-                              &g_metric_id_cache, &g_metric_id_memory, &g_metric_id_connections};
+  /* PURE DOCUMENTS: Skip metric document lookup for now - create fresh */
+  LOG_INFO("Skipping existing metric document lookup - will create fresh metrics");
   
-  for (int i = 0; i < 5; i++) {
-    char* existing_id = find_metric_by_name(g_metrics_persistence, metric_names[i]);
-    if (existing_id) {
-      *metric_id_ptrs[i] = existing_id;
-      LOG_INFO("Found existing metric document '%s' with ID: %s", metric_names[i], existing_id);
-    } else {
-      LOG_DEBUG("No existing metric document found for '%s'", metric_names[i]);
-    }
-  }
+  /* Initialize all metric IDs to NULL so they'll be created fresh */
+  g_metric_id_operations = NULL;
+  g_metric_id_performance = NULL; 
+  g_metric_id_cache = NULL;
+  g_metric_id_memory = NULL;
+  g_metric_id_connections = NULL;
+  
+  /* SURGICAL FIX: Add startup delay to prevent early JDBX deadlock */
+  g_metrics_persistence->last_snapshot = time(NULL) + 30; /* Delay first snapshot by 30 seconds */
   
   /* Start persistence thread */
   if (pthread_create(&g_metrics_persistence->persistence_thread, NULL, 
@@ -194,8 +184,11 @@ static void* metrics_persistence_thread(void* arg) {
  * Helper function to find metric document by name
  */
 static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_name) {
+  /* PURE DOCUMENTS: Query documents collection with type=metric */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("metric"));
   json_object_set(query, "name", json_create_string(metric_name));
+  json_object_set(query, "library", json_create_string("system"));
   
   json_value_t* result = db_query_documents(mp->db, METRICS_COLLECTION_NAME, query);
   json_free(query);
@@ -301,8 +294,15 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   } else {
     /* Create new document - let db_insert_document generate the ID */
     json_value_t* new_doc = json_create_object();
+    
+    /* PURE DOCUMENTS: Add document type fields */
+    json_object_set(new_doc, "type", json_create_string("metric"));
+    json_object_set(new_doc, "library", json_create_string("system"));
+    json_object_set(new_doc, "collection", json_create_string("metrics"));
+    
+    /* Metric-specific fields */
     json_object_set(new_doc, "name", json_create_string(metric_name));
-    json_object_set(new_doc, "type", json_create_string(metric_type));
+    json_object_set(new_doc, "metric_type", json_create_string(metric_type));
     json_object_set(new_doc, "retention_minutes", json_create_integer(15));
     json_object_set(new_doc, "max_entries", json_create_integer(15));
     
@@ -483,8 +483,12 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
   
   int deleted_count = 0;
   
-  /* Clean up old metrics collection entirely */
-  json_value_t* result = db_query_documents(mp->db, OLD_METRICS_COLLECTION, json_create_object());
+  /* PURE DOCUMENTS: Skip old metrics collection cleanup - it doesn't exist in pure documents architecture */
+  LOG_DEBUG("Skipping old metrics collection cleanup - using pure documents architecture");
+  
+  /* Clean up old metrics collection entirely - DISABLED for pure documents */
+  /* json_value_t* result = db_query_documents(mp->db, OLD_METRICS_COLLECTION, json_create_object()); */
+  json_value_t* result = NULL;
   
   if (result) {
     json_value_t* documents = json_object_get(result, "documents");

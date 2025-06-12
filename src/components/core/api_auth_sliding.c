@@ -101,6 +101,35 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     return 0;
   }
   
+  /* Check if database is in bootstrap mode - bypass authentication */
+  if (ctx->db && ctx->db->is_bootstrap_mode) {
+    if (g_logger) {
+      LOG_DEBUG("Authentication bypassed - database in bootstrap mode");
+    }
+    
+    /* Check if we need to perform deferred bootstrap */
+    const char* deferred_bootstrap = getenv("JSONDB_DEFERRED_BOOTSTRAP");
+    if (deferred_bootstrap && strcmp(deferred_bootstrap, "1") == 0) {
+      LOG_INFO("Performing deferred bootstrap - creating admin user");
+      
+      /* Create admin role and user now that server is fully initialized */
+      char* admin_role_id = NULL;
+      if (create_default_admin_role(ctx->db, &admin_role_id)) {
+        if (admin_role_id) {
+          if (create_default_admin_user(ctx->db, admin_role_id)) {
+            LOG_INFO("Deferred bootstrap completed successfully");
+            /* Disable bootstrap mode */
+            ctx->db->is_bootstrap_mode = 0;
+            unsetenv("JSONDB_DEFERRED_BOOTSTRAP");
+          }
+          free(admin_role_id);
+        }
+      }
+    }
+    
+    return 1; /* Allow all requests during bootstrap */
+  }
+  
   /* Get client IP for detailed authentication tracking */
   const char* client_ip = request->remote_addr ? request->remote_addr : "unknown";
   

@@ -600,87 +600,8 @@ int config_load_json(const char* filepath, server_config_t* config) {
     }
   }
   
-  /* Parse rbac section */
-  if (g_logger) {
-    LOG_DEBUG("Processing 'rbac' section.");
-    TRACE_API("Looking for 'rbac' object in configuration.");
-  }
-  
-  json_value_t* rbac_section = json_object_get(json, "rbac");
-  if (rbac_section) {
-    if (rbac_section->type == JSON_OBJECT) {
-      if (g_logger) {
-        TRACE_API("Found 'rbac' section with %zu properties", json_object_size(rbac_section));
-      }
-      
-      /* Process RBAC path setting */
-      if (g_logger) {
-        TRACE_API("Looking for 'path' property in RBAC section.");
-      }
-      
-      json_value_t* path_val = json_object_get(rbac_section, "path");
-      if (path_val) {
-        if (path_val->type == JSON_STRING) {
-          /* Free existing path if it exists */
-          if (config->rbac_path) {
-            if (g_logger) {
-              TRACE_API("Freeing existing rbac_path: '%s'", config->rbac_path);
-            }
-            free(config->rbac_path);
-          }
-          
-          config->rbac_path = strdup(path_val->value.string);
-          if (g_logger) {
-            LOG_DEBUG("Config: Set rbac_path to '%s'", config->rbac_path);
-            
-            /* Special warning for default path in production */
-            if (strcmp(config->rbac_path, DEFAULT_RBAC_PATH) == 0) {
-              LOG_WARNING("Using default RBAC path in configuration - "
-                   "this may not be suitable for production use");
-            }
-          }
-        } else {
-          if (g_logger) {
-            LOG_WARNING("Invalid type for 'path' in RBAC section (expected string, got %s)", 
-                  json_type_name(path_val->type));
-          }
-        }
-      } else {
-        if (g_logger) {
-          LOG_INFO("No RBAC path specified, using default: %s", DEFAULT_RBAC_PATH);
-          
-          /* Resolve the default path */
-          char* resolved_path = resolve_path(DEFAULT_RBAC_PATH);
-          if (resolved_path) {
-            config->rbac_path = resolved_path;
-            LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
-          } else {
-            LOG_ERROR("Cannot resolve default RBAC path.");
-            config->rbac_path = strdup(DEFAULT_RBAC_PATH);
-          }
-        }
-      }
-    } else {
-      if (g_logger) {
-        LOG_WARNING("'rbac' section is not an object (found %s), using defaults", 
-              json_type_name(rbac_section->type));
-      }
-    }
-  } else {
-    if (g_logger) {
-      LOG_INFO("No 'rbac' section found in config, using defaults.");
-      
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_RBAC_PATH);
-      if (resolved_path) {
-        config->rbac_path = resolved_path;
-        LOG_DEBUG("Resolved default RBAC path to: %s", config->rbac_path);
-      } else {
-        LOG_ERROR("Cannot resolve default RBAC path.");
-        config->rbac_path = strdup(DEFAULT_RBAC_PATH);
-      }
-    }
-  }
+  /* RBAC section removed - RBAC is now stored in the database */
+  /* Skip processing 'rbac' section as it's no longer needed */
   
   /* Parse JWT section */
   if (g_logger) {
@@ -1534,11 +1455,6 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
       if (g_logger) {
         LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
       }
-    } else if (strcasecmp(key, "rbac_path") == 0) {
-      config->rbac_path = strdup(value);
-      if (g_logger) {
-        LOG_DEBUG("Config: Set rbac_path to '%s'", config->rbac_path);
-      }
     } else if (strcasecmp(key, "jwt_secret") == 0) {
       config->jwt_secret = strdup(value);
       if (g_logger) {
@@ -1679,15 +1595,11 @@ void config_free(server_config_t* config) {
   /* Free string resources */
   if (config->host) free(config->host);
   if (config->db_path) free(config->db_path);
-  if (config->storage_backend) free(config->storage_backend);
-  if (config->rbac_path) free(config->rbac_path);
+  /* JDBX is the only storage backend - no field to free */
   if (config->jwt_secret) free(config->jwt_secret);
   if (config->pid_file) free(config->pid_file);
   if (config->log_file) free(config->log_file);
   if (config->web_root) free(config->web_root);
-  if (config->validators_dir) free(config->validators_dir);
-  if (config->transforms_dir) free(config->transforms_dir);
-  if (config->metrics_dir) free(config->metrics_dir);
   
   /* Free SSL resources */
   if (config->cert_path) free(config->cert_path);
@@ -1763,14 +1675,10 @@ void config_init_defaults(server_config_t* config) {
   
   /* File paths (resolved relative to binary directory) */
   config->db_path = resolve_path(DEFAULT_DB_PATH);
-  config->storage_backend = strdup(DEFAULT_STORAGE_BACKEND);
-  config->rbac_path = resolve_path(DEFAULT_RBAC_PATH);
+  /* JDBX is the only storage backend - no need to set */
   config->pid_file = resolve_path(DEFAULT_PID_FILE);
   config->log_file = resolve_path(DEFAULT_LOG_FILE);
   config->web_root = resolve_path(DEFAULT_WEB_ROOT);
-  config->validators_dir = resolve_path(DEFAULT_VALIDATORS_DIR);
-  config->transforms_dir = resolve_path(DEFAULT_TRANSFORMS_DIR);
-  config->metrics_dir = resolve_path(DEFAULT_METRICS_DIR);
   
   /* Security settings */
   config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
@@ -1817,13 +1725,9 @@ void config_init_defaults(server_config_t* config) {
     LOG_DEBUG("Default port: %d", config->port);
     LOG_DEBUG("Default host: %s", config->host);
     LOG_DEBUG("Default DB path: %s", config->db_path);
-    LOG_DEBUG("Default RBAC path: %s", config->rbac_path);
     LOG_DEBUG("Default PID file: %s", config->pid_file);
     LOG_DEBUG("Default log file: %s", config->log_file);
     LOG_DEBUG("Default web root: %s", config->web_root);
-    LOG_DEBUG("Default validators directory: %s", config->validators_dir);
-    LOG_DEBUG("Default transforms directory: %s", config->transforms_dir);
-    LOG_DEBUG("Default metrics directory: %s", config->metrics_dir);
     
     /* Security-related defaults - only log at trace level */
     TRACE_API("Default JWT secret length: %zu", strlen(config->jwt_secret));

@@ -17,7 +17,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_PROGRESS("CONFIG", "Initializing configuration");
 
   /* Variables for command line options */
-  int verbose_mode = 0;
+  int foreground_mode = 0;
   int show_help = 0;
   int terminate_server = 0;
   int show_version = 0;
@@ -26,15 +26,11 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   char* db_dir = NULL;
   char* pid_file = NULL;
   char* log_file = NULL;
-  char* rbac_file = NULL;
   char* web_root = NULL;
   char* config_file = NULL;
   char* js_file = NULL;
   char* port_str = NULL;
   char* host_str = NULL;
-  char* validators_dir = NULL;
-  char* transforms_dir = NULL;
-  char* metrics_dir = NULL;
   int use_ssl = -1;  /* -1 = not set, 0 = disabled, 1 = enabled */
   char* ssl_cert = NULL;
   char* ssl_key = NULL;
@@ -64,6 +60,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   static struct option long_options[] = {
     {"help",      no_argument,    0, 'h'},
     {"daemon",     no_argument,    0, 'd'},
+    {"foreground",   no_argument,    0, 'f'},
     {"terminate",   no_argument,    0, 't'},
     {"log-level",   required_argument, 0, 'l'},
     {"trace-categories", required_argument, 0, 'x'},
@@ -74,7 +71,6 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"web-root",    required_argument, 0, 'w'},
     {"config",     required_argument, 0, 'c'},
     {"version",    no_argument,    0, 'v'},
-    {"verbose",    no_argument,    0, 'V'},
     {"js-file",    required_argument, 0, 'j'},
     {"port",      required_argument, 0, 'p'},
     {"host",      required_argument, 0, 'H'},
@@ -114,7 +110,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int option_index = 0;
   
   optind = 1; /* Reset getopt index */
-  while ((opt = getopt_long(argc, argv, "hdtl:x:b:r:i:o:w:c:vVj:p:H:Q:T:M:SNC:K:", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hdftl:x:b:r:i:o:w:c:vj:p:H:Q:T:M:SNC:K:", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
         show_help = 1;
@@ -122,8 +118,8 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
       case 'd':
         /* Daemon mode - handle in run_daemon check later */
         break;
-      case 'V':
-        verbose_mode = 1;
+      case 'f':
+        foreground_mode = 1;
         break;
       case 't':
         terminate_server = 1;
@@ -136,9 +132,6 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 'b':
         db_dir = optarg;
-        break;
-      case 'r':
-        rbac_file = optarg;
         break;
       case 'i': 
         pid_file = optarg;
@@ -163,15 +156,6 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 'H':
         host_str = optarg;
-        break;
-      case 'Q':
-        validators_dir = optarg;
-        break;
-      case 'T':
-        transforms_dir = optarg;
-        break;
-      case 'M':
-        metrics_dir = optarg;
         break;
       case 'S':
         use_ssl = 1;
@@ -244,8 +228,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     }
   }
   
-  /* Set global verbose mode flag */
-  init_set_verbose(verbose_mode);
+  /* Remove verbose mode - use log levels instead */
   
   /* Show help if requested or if no arguments provided */
   if (show_help) {
@@ -285,12 +268,12 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   load_environment_config(heap_config);
   
   /* Override configuration with command line arguments (medium priority) */
-  /* Default to daemon mode (verbose_mode=0) unless verbose (-V) is explicitly set */
+  /* Default to daemon mode unless foreground (-f) is explicitly set */
   heap_config->verbose_mode = 0;
   
-  if (verbose_mode) {
+  if (foreground_mode) {
     heap_config->verbose_mode = 1;
-    INIT_LOG_PROGRESS("CONFIG", "Verbose mode enabled, daemon mode disabled");
+    INIT_LOG_PROGRESS("CONFIG", "Foreground mode enabled - daemon mode disabled");
   }
   
   if (log_level_str) {
@@ -323,14 +306,6 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_PROGRESS("CONFIG", "Database path set to %s", db_dir);
   }
   
-  if (rbac_file) {
-    /* Free previous value if allocated */
-    if (heap_config->rbac_path) {
-      free(heap_config->rbac_path);
-    }
-    heap_config->rbac_path = strdup(rbac_file);
-    INIT_LOG_PROGRESS("CONFIG", "RBAC file set to %s", rbac_file);
-  }
   
   if (web_root) {
     /* Free previous value if allocated */
@@ -381,44 +356,11 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_PROGRESS("CONFIG", "Host set to %s", host_str);
   }
   
-  /* Process validators directory argument */
-  if (validators_dir) {
-    /* Free previous value if allocated */
-    if (heap_config->validators_dir) {
-      free(heap_config->validators_dir);
-    }
-    heap_config->validators_dir = strdup(validators_dir);
-    INIT_LOG_PROGRESS("CONFIG", "Validators directory set to %s", validators_dir);
-  }
+  /* Directory arguments removed - JS functions stored in database */
   
-  /* Process transforms directory argument */
-  if (transforms_dir) {
-    /* Free previous value if allocated */
-    if (heap_config->transforms_dir) {
-      free(heap_config->transforms_dir);
-    }
-    heap_config->transforms_dir = strdup(transforms_dir);
-    INIT_LOG_PROGRESS("CONFIG", "Transforms directory set to %s", transforms_dir);
-  }
-  
-  /* Process metrics directory argument */
-  if (metrics_dir) {
-    /* Free previous value if allocated */
-    if (heap_config->metrics_dir) {
-      free(heap_config->metrics_dir);
-    }
-    heap_config->metrics_dir = strdup(metrics_dir);
-    INIT_LOG_PROGRESS("CONFIG", "Metrics directory set to %s", metrics_dir);
-  }
-  
-  /* Process storage backend arguments */
+  /* JDBX is the only storage backend - ignore storage_backend argument */
   if (storage_backend) {
-    /* Free previous value if allocated */
-    if (heap_config->storage_backend) {
-      free(heap_config->storage_backend);
-    }
-    heap_config->storage_backend = strdup(storage_backend);
-    INIT_LOG_PROGRESS("CONFIG", "Storage backend set to %s", storage_backend);
+    INIT_LOG_PROGRESS("CONFIG", "Ignoring storage backend argument - JDBX is the only supported backend");
   }
   
   if (jdbx_initial_size) {
@@ -484,13 +426,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_DEBUG("CONFIG", " Port: %d", heap_config->port);
   INIT_LOG_DEBUG("CONFIG", " Host: %s", heap_config->host ? heap_config->host : "(null).");
   INIT_LOG_DEBUG("CONFIG", " Database path: %s", heap_config->db_path ? heap_config->db_path : "(null).");
-  INIT_LOG_DEBUG("CONFIG", " RBAC file: %s", heap_config->rbac_path ? heap_config->rbac_path : "(null).");
   INIT_LOG_DEBUG("CONFIG", " PID file: %s", heap_config->pid_file ? heap_config->pid_file : "(null).");
   INIT_LOG_DEBUG("CONFIG", " Log file: %s", heap_config->log_file ? heap_config->log_file : "(null).");
   INIT_LOG_DEBUG("CONFIG", " Web root: %s", heap_config->web_root ? heap_config->web_root : "(null).");
-  INIT_LOG_DEBUG("CONFIG", " Validators dir: %s", heap_config->validators_dir ? heap_config->validators_dir : "(null).");
-  INIT_LOG_DEBUG("CONFIG", " Transforms dir: %s", heap_config->transforms_dir ? heap_config->transforms_dir : "(null).");
-  INIT_LOG_DEBUG("CONFIG", " Metrics dir: %s", heap_config->metrics_dir ? heap_config->metrics_dir : "(null).");
   INIT_LOG_DEBUG("CONFIG", " SSL enabled: %s", heap_config->use_ssl ? "yes" : "no");
   INIT_LOG_DEBUG("CONFIG", " SSL certificate: %s", heap_config->cert_path ? heap_config->cert_path : "(null).");
   INIT_LOG_DEBUG("CONFIG", " SSL private key: %s", heap_config->key_path ? heap_config->key_path : "(null).");

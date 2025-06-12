@@ -17,10 +17,15 @@ cd "$(dirname "$0")"
 : ${JSONDB_SSL_CERT:="/etc/ssl/certs/server.pem"}
 : ${JSONDB_SSL_KEY:="/etc/ssl/private/server.key"}
 
-# Storage backend configuration (v3.2.0)
-: ${JSONDB_STORAGE_BACKEND:="mmap"}
+# JDBX configuration (v3.2.0)
+# JDBX is the ONLY storage backend - no need to specify
 : ${JSONDB_JDBX_INITIAL_SIZE:=104857600}
 : ${JSONDB_JDBX_WAL_SIZE:=10485760}
+
+# Initial admin configuration (v3.2.0)
+: ${JSONDB_INITIAL_ADMIN_USER:="admin"}
+: ${JSONDB_INITIAL_ADMIN_PASSWORD:="admin123"}
+: ${JSONDB_INITIAL_ADMIN_EMAIL:="admin@localhost"}
 
 # Advanced configuration options (v3.1.0)
 : ${JSONDB_THREAD_POOL_MIN:=4}
@@ -62,14 +67,10 @@ export JSONDB_BASE_DIR
 : ${JSONDB_SHARE_DIR:="${JSONDB_BASE_DIR}/share"}
 
 # Configurable paths with dynamic defaults
-: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}/data"}
-: ${JSONDB_RBAC_FILE:="${JSONDB_VAR_DIR}/rbac.json"}
+: ${JSONDB_DB_DIR:="${JSONDB_VAR_DIR}"}
 : ${JSONDB_LOG_FILE:="${JSONDB_VAR_DIR}/jsondb.log"}
 : ${JSONDB_PID_FILE:="${JSONDB_VAR_DIR}/jsondb.pid"}
 : ${JSONDB_WEB_ROOT:="${JSONDB_SHARE_DIR}/htdocs"}
-: ${JSONDB_VALIDATORS_DIR:="${JSONDB_VAR_DIR}/validators"}
-: ${JSONDB_TRANSFORMS_DIR:="${JSONDB_VAR_DIR}/transforms"}
-: ${JSONDB_METRICS_DIR:="${JSONDB_VAR_DIR}/metrics"}
 : ${JSONDB_DOC_PATH:="${JSONDB_BASE_DIR}/docs"}
 
 # Load environment configuration after directories are set
@@ -92,8 +93,6 @@ done
 # Display current configuration
 echo "Using configuration:"
 echo "  Database path: $JSONDB_DB_DIR"
-echo "  Storage backend: $JSONDB_STORAGE_BACKEND"
-echo "  RBAC file: $JSONDB_RBAC_FILE"
 echo "  Log file: $JSONDB_LOG_FILE"
 echo "  PID file: $JSONDB_PID_FILE"
 echo "  Host: $JSONDB_HOST"
@@ -191,15 +190,11 @@ start_server() {
         --daemon \
         --log-level=\"$JSONDB_LOG_LEVEL\" \
         --db-dir=\"$JSONDB_DB_DIR\" \
-        --rbac-file=\"$JSONDB_RBAC_FILE\" \
         --log-file=\"$JSONDB_LOG_FILE\" \
         --pid-file=\"$JSONDB_PID_FILE\" \
         --web-root=\"$JSONDB_WEB_ROOT\" \
         --port=\"$JSONDB_PORT\" \
         --host=\"$JSONDB_HOST\" \
-        --validators-dir=\"$JSONDB_VALIDATORS_DIR\" \
-        --transforms-dir=\"$JSONDB_TRANSFORMS_DIR\" \
-        --metrics-dir=\"$JSONDB_METRICS_DIR\" \
         --thread-pool-min=\"$JSONDB_THREAD_POOL_MIN\" \
         --thread-pool-max=\"$JSONDB_THREAD_POOL_MAX\" \
         --thread-pool-queue-size=\"$JSONDB_THREAD_POOL_QUEUE_SIZE\" \
@@ -213,7 +208,6 @@ start_server() {
         --index-time-threshold=\"$JSONDB_INDEX_TIME_THRESHOLD\" \
         --index-startup-delay=\"$JSONDB_INDEX_STARTUP_DELAY\" \
         --index-check-interval=\"$JSONDB_INDEX_CHECK_INTERVAL\" \
-        --storage-backend=\"$JSONDB_STORAGE_BACKEND\" \
         --jdbx-initial-size=\"$JSONDB_JDBX_INITIAL_SIZE\" \
         --jdbx-wal-size=\"$JSONDB_JDBX_WAL_SIZE\" \
         $SSL_ARGS"

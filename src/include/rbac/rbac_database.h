@@ -16,16 +16,18 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret);
 /**
  * Create default admin role in database
  * @param db Database instance
+ * @param admin_role_id_out Output parameter for the created role ID (optional)
  * @return 1 on success, 0 on failure
  */
-int create_default_admin_role(struct database* db);
+int create_default_admin_role(struct database* db, char** admin_role_id_out);
 
 /**
  * Create default admin user in database
  * @param db Database instance
+ * @param admin_role_id Role ID to assign to the user
  * @return 1 on success, 0 on failure
  */
-int create_default_admin_user(struct database* db);
+int create_default_admin_user(struct database* db, const char* admin_role_id);
 
 /**
  * Get user by username from database

@@ -204,6 +204,208 @@ static int node_is_full(btree_node_t* node) {
     return node->num_keys >= BTREE_MAX_KEYS;
 }
 
+/* Forward declarations */
+static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
+                     uint64_t full_page, int parent_index);
+
+/* Overflow page threshold - values larger than this go to overflow pages */
+#define OVERFLOW_THRESHOLD 2048
+
+/* Write value to overflow pages */
+static uint64_t write_overflow_value(jdbx_btree_t* tree, const void* value, size_t value_len) {
+    /* Calculate number of pages needed */
+    size_t pages_needed = (value_len + JDBX_PAGE_SIZE - 1) / JDBX_PAGE_SIZE;
+    
+    uint64_t first_page = 0;
+    uint64_t prev_page = 0;
+    
+    const uint8_t* data = (const uint8_t*)value;
+    size_t remaining = value_len;
+    
+    for (size_t i = 0; i < pages_needed; i++) {
+        /* Allocate overflow page */
+        uint64_t page_num = jdbx_alloc_page(tree->pm, PAGE_TYPE_OVERFLOW);
+        if (page_num == 0) {
+            /* TODO: Free already allocated pages */
+            return 0;
+        }
+        
+        if (first_page == 0) {
+            first_page = page_num;
+        }
+        
+        /* Get page for writing */
+        page_header_t* page = jdbx_get_page_for_write(tree->pm, page_num);
+        if (!page) {
+            /* TODO: Free already allocated pages */
+            return 0;
+        }
+        
+        /* Link to previous page */
+        if (prev_page != 0) {
+            page_header_t* prev = jdbx_get_page_for_write(tree->pm, prev_page);
+            if (prev) {
+                prev->next_page = page_num;
+            }
+        }
+        
+        /* Write data to page */
+        size_t chunk_size = remaining > (JDBX_PAGE_SIZE - sizeof(page_header_t)) ?
+                           (JDBX_PAGE_SIZE - sizeof(page_header_t)) : remaining;
+        
+        memcpy((uint8_t*)page + sizeof(page_header_t), data, chunk_size);
+        
+        /* Store size in first word of first page */
+        if (i == 0) {
+            uint32_t* size_ptr = (uint32_t*)((uint8_t*)page + sizeof(page_header_t));
+            *size_ptr = (uint32_t)value_len;
+        }
+        
+        data += chunk_size;
+        remaining -= chunk_size;
+        prev_page = page_num;
+        
+        /* Update page checksum */
+        page->checksum = jdbx_crc32(page, JDBX_PAGE_SIZE);
+    }
+    
+    return first_page;
+}
+
+/* Read value from overflow pages */
+static void* read_overflow_value(jdbx_btree_t* tree, uint64_t overflow_page, size_t* value_len) {
+    if (overflow_page == 0) return NULL;
+    
+    /* Read first page to get size */
+    page_header_t* first_page = jdbx_get_page(tree->pm, overflow_page);
+    if (!first_page || first_page->type != PAGE_TYPE_OVERFLOW) {
+        return NULL;
+    }
+    
+    /* Get total size from first word */
+    uint32_t total_size = *(uint32_t*)((uint8_t*)first_page + sizeof(page_header_t));
+    *value_len = total_size;
+    
+    /* Allocate buffer for full value */
+    void* value = malloc(total_size);
+    if (!value) return NULL;
+    
+    uint8_t* data = (uint8_t*)value;
+    size_t copied = 0;
+    uint64_t current_page = overflow_page;
+    
+    while (current_page != 0 && copied < total_size) {
+        page_header_t* page = jdbx_get_page(tree->pm, current_page);
+        if (!page || page->type != PAGE_TYPE_OVERFLOW) {
+            free(value);
+            return NULL;
+        }
+        
+        /* Calculate copy size */
+        size_t offset = (current_page == overflow_page) ? sizeof(uint32_t) : 0;
+        size_t chunk_size = JDBX_PAGE_SIZE - sizeof(page_header_t) - offset;
+        if (copied + chunk_size > total_size) {
+            chunk_size = total_size - copied;
+        }
+        
+        /* Copy data */
+        memcpy(data + copied, (uint8_t*)page + sizeof(page_header_t) + offset, chunk_size);
+        copied += chunk_size;
+        
+        /* Move to next page */
+        current_page = page->next_page;
+    }
+    
+    if (copied != total_size) {
+        free(value);
+        return NULL;
+    }
+    
+    return value;
+}
+
+/* Insert key into parent node */
+static int insert_into_parent(jdbx_btree_t* tree, uint64_t parent_page,
+                              const void* key, size_t key_len,
+                              uint64_t left_child, uint64_t right_child) {
+    btree_node_t* parent = (btree_node_t*)jdbx_get_page_for_write(tree->pm, parent_page);
+    if (!parent) return -1;
+    
+    /* Check if parent is full */
+    if (node_is_full(parent)) {
+        /* Split parent first */
+        if (split_node(tree, parent->parent_page, parent_page, 0) != 0) {
+            return -1;
+        }
+        /* After parent split, find correct parent for our key */
+        return insert_into_parent(tree, parent_page, key, key_len, left_child, right_child);
+    }
+    
+    /* Find position to insert key in parent */
+    int found;
+    int pos = find_key_position(tree, parent, key, key_len, &found);
+    
+    /* Calculate space needed for new entry */
+    size_t entry_size = sizeof(btree_entry_t) + key_len + sizeof(uint64_t);
+    
+    /* Check if there's enough space */
+    if (parent->total_size + entry_size > JDBX_PAGE_SIZE) {
+        /* Split parent */
+        if (split_node(tree, parent->parent_page, parent_page, 0) != 0) {
+            return -1;
+        }
+        return insert_into_parent(tree, parent_page, key, key_len, left_child, right_child);
+    }
+    
+    /* Insert key and update child pointers */
+    uint8_t* insert_ptr = get_key_ptr(parent, pos);
+    size_t shift_size = 0;
+    
+    /* Calculate size of data to shift */
+    for (int i = pos; i < parent->num_keys; i++) {
+        btree_entry_t* entry = (btree_entry_t*)get_key_ptr(parent, i);
+        shift_size += sizeof(btree_entry_t) + entry->key_size + sizeof(uint64_t);
+    }
+    
+    /* Shift existing entries */
+    if (shift_size > 0) {
+        memmove(insert_ptr + entry_size, insert_ptr, shift_size);
+    }
+    
+    /* Insert new entry */
+    btree_entry_t* new_entry = (btree_entry_t*)insert_ptr;
+    new_entry->key_size = key_len;
+    new_entry->value_size = 0; /* Internal nodes don't store values */
+    new_entry->overflow_page = 0;
+    
+    memcpy(insert_ptr + sizeof(btree_entry_t), key, key_len);
+    
+    /* Insert right child pointer after the key */
+    uint64_t* child_ptr = (uint64_t*)(insert_ptr + sizeof(btree_entry_t) + key_len);
+    *child_ptr = right_child;
+    
+    /* Update child pointers - the left child is already correctly positioned */
+    /* We need to update the child pointer that was at position 'pos' to point to left_child */
+    if (pos == 0) {
+        /* Update left-most child pointer */
+        uint64_t* leftmost_ptr = (uint64_t*)(parent + 1);
+        *leftmost_ptr = left_child;
+    } else {
+        /* Update the child pointer after the previous key */
+        uint8_t* prev_entry_ptr = get_key_ptr(parent, pos - 1);
+        btree_entry_t* prev_entry = (btree_entry_t*)prev_entry_ptr;
+        uint64_t* prev_child_ptr = (uint64_t*)(prev_entry_ptr + sizeof(btree_entry_t) + prev_entry->key_size);
+        *prev_child_ptr = left_child;
+    }
+    
+    /* Update node metadata */
+    parent->num_keys++;
+    parent->total_size += entry_size;
+    parent->header.checksum = jdbx_crc32(parent, JDBX_PAGE_SIZE);
+    
+    return 0;
+}
+
 /* Split a full node */
 static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
                      uint64_t full_page, int parent_index) {
@@ -241,6 +443,10 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
     /* Copy middle key for promotion */
     size_t mid_key_size = mid_entry->key_size;
     uint8_t* mid_key = malloc(mid_key_size);
+    if (!mid_key) {
+        jdbx_free_page(tree->pm, sibling_page);
+        return -1;
+    }
     memcpy(mid_key, mid_ptr + sizeof(btree_entry_t), mid_key_size);
     
     /* Copy second half of keys to sibling */
@@ -342,11 +548,12 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
         new_root->header.checksum = jdbx_crc32(new_root, JDBX_PAGE_SIZE);
     } else {
         /* Insert middle key into existing parent */
-        /* TODO: Implement insertion into parent node */
-        /* This requires shifting keys and updating child pointers */
-        /* For now, return error */
-        free(mid_key);
-        return -1;
+        if (insert_into_parent(tree, parent_page, mid_key, mid_key_size,
+                              full_page, sibling_page) != 0) {
+            free(mid_key);
+            jdbx_free_page(tree->pm, sibling_page);
+            return -1;
+        }
     }
     
     /* Update checksums */
@@ -418,8 +625,23 @@ int jdbx_btree_insert(jdbx_btree_t* tree,
                 }
             }
             
+            /* Check if value should go to overflow pages */
+            uint64_t overflow_page = 0;
+            size_t stored_value_len = value_len;
+            
+            if (value_len > OVERFLOW_THRESHOLD) {
+                /* Write value to overflow pages */
+                overflow_page = write_overflow_value(tree, value, value_len);
+                if (overflow_page == 0) {
+                    return -1; /* Failed to allocate overflow pages */
+                }
+                stored_value_len = 0; /* Don't store value inline */
+                LOG_DEBUG("Stored large value (%zu bytes) in overflow pages starting at %llu",
+                         value_len, (unsigned long long)overflow_page);
+            }
+            
             /* Calculate space needed */
-            size_t entry_size = sizeof(btree_entry_t) + key_len + value_len;
+            size_t entry_size = sizeof(btree_entry_t) + key_len + stored_value_len;
             
             if (node->total_size + entry_size > JDBX_PAGE_SIZE) {
                 /* Would overflow page - need to split */
@@ -454,10 +676,12 @@ int jdbx_btree_insert(jdbx_btree_t* tree,
             btree_entry_t* new_entry = (btree_entry_t*)insert_ptr;
             new_entry->key_size = key_len;
             new_entry->value_size = value_len;
-            new_entry->overflow_page = 0; /* TODO: Handle large values */
+            new_entry->overflow_page = overflow_page;
             
             memcpy(insert_ptr + sizeof(btree_entry_t), key, key_len);
-            memcpy(insert_ptr + sizeof(btree_entry_t) + key_len, value, value_len);
+            if (overflow_page == 0) {
+                memcpy(insert_ptr + sizeof(btree_entry_t) + key_len, value, value_len);
+            }
             
             /* Update node metadata */
             node->num_keys++;
@@ -513,20 +737,26 @@ int jdbx_btree_get(jdbx_btree_t* tree,
             btree_entry_t* entry = (btree_entry_t*)entry_ptr;
             
             if (entry->overflow_page != 0) {
-                /* TODO: Handle overflow pages */
-                jdbx_error("Overflow pages not implemented");
-                return -1;
+                /* Read value from overflow pages */
+                *value = read_overflow_value(tree, entry->overflow_page, value_len);
+                if (!*value) {
+                    jdbx_error("Failed to read overflow value from page %llu",
+                              (unsigned long long)entry->overflow_page);
+                    return -1;
+                }
+                LOG_DEBUG("Read large value (%zu bytes) from overflow pages starting at %llu",
+                         *value_len, (unsigned long long)entry->overflow_page);
+            } else {
+                /* Allocate and copy value */
+                *value_len = entry->value_size;
+                *value = malloc(*value_len);
+                if (!*value) {
+                    return -1;
+                }
+                
+                memcpy(*value, entry_ptr + sizeof(btree_entry_t) + entry->key_size, 
+                       *value_len);
             }
-            
-            /* Allocate and copy value */
-            *value_len = entry->value_size;
-            *value = malloc(*value_len);
-            if (!*value) {
-                return -1;
-            }
-            
-            memcpy(*value, entry_ptr + sizeof(btree_entry_t) + entry->key_size, 
-                   *value_len);
             
             return 0;
         } else {

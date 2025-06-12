@@ -54,8 +54,8 @@ http_response_t* create_http_response(http_status_t status, const char* body, co
   }
   
   response->status = status;
-  response->body = body ? strdup(body) : NULL;
-  response->content_type = content_type ? strdup(content_type) : strdup("application/json");
+  response->body = body ? buffer_pool_strdup(body) : NULL;
+  response->content_type = content_type ? buffer_pool_strdup(content_type) : buffer_pool_strdup("application/json");
   response->content_length = response->body ? strlen(response->body) : 0;
   response->headers = NULL;
   response->num_headers = 0;
@@ -88,7 +88,7 @@ http_response_t* create_http_response_binary(http_status_t status, const char* b
     response->content_length = 0;
   }
   
-  response->content_type = content_type ? strdup(content_type) : strdup("application/octet-stream");
+  response->content_type = content_type ? buffer_pool_strdup(content_type) : buffer_pool_strdup("application/octet-stream");
   response->headers = NULL;
   response->num_headers = 0;
   response->keep_alive = 0;  /* Default to close */
@@ -339,7 +339,7 @@ int add_response_header(http_response_t* response, const char* header) {
   }
   
   response->headers = new_headers;
-  response->headers[response->num_headers] = strdup(header);
+  response->headers[response->num_headers] = buffer_pool_strdup(header);
   response->num_headers++;
   
   return 1;
@@ -349,12 +349,12 @@ int add_response_header(http_response_t* response, const char* header) {
 void free_http_response(http_response_t* response) {
   if (response) {
     if (response->body) buffer_pool_free_safe(response->body);
-    if (response->content_type) free(response->content_type);
+    if (response->content_type) buffer_pool_free_safe(response->content_type);
     
     /* Free headers */
     for (size_t i = 0; i < response->num_headers; i++) {
       if (response->headers[i]) {
-        free(response->headers[i]);
+        buffer_pool_free_safe(response->headers[i]);
       }
     }
     

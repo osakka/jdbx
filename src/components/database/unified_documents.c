@@ -571,48 +571,8 @@ int unified_documents_init(database_t* db) {
     /* Create system actors */
     create_system_actors(db);
     
-    /* Create default libraries */
-    LOG_INFO("Creating default libraries");
-    
-    /* System library */
-    create_library_metadata(db, "system", "System Library", 
-                           "Core system collections", SYSTEM_USER_ADMIN, 1);
-    
-    /* Default library */
-    create_library_metadata(db, "default", "Default Library",
-                           "User collections", SYSTEM_USER_ADMIN, 0);
-    
-    /* Define default collections for any library */
-    const char* default_collections[] = {
-        "users", "roles", "permissions", "sessions", "metrics", "audit"
-    };
-    
-    /* Additional system-only collections */
-    const char* system_only_collections[] = {
-        "actors", "libraries", "memberships", "configs", "indexes", 
-        "schemas", "functions", "validators", "transformers", "versions"
-    };
-    
-    /* Create default collections for system library */
-    for (size_t i = 0; i < sizeof(default_collections) / sizeof(default_collections[0]); i++) {
-        if (!create_collection_metadata(db, "system", default_collections[i], SYSTEM_USER_ADMIN, 1)) {
-            LOG_ERROR("Failed to create system collection: %s", default_collections[i]);
-        }
-    }
-    
-    /* Create system-only collections */
-    for (size_t i = 0; i < sizeof(system_only_collections) / sizeof(system_only_collections[0]); i++) {
-        if (!create_collection_metadata(db, "system", system_only_collections[i], SYSTEM_USER_ADMIN, 1)) {
-            LOG_ERROR("Failed to create system collection: %s", system_only_collections[i]);
-        }
-    }
-    
-    /* Create default collections for default library */
-    for (size_t i = 0; i < sizeof(default_collections) / sizeof(default_collections[0]); i++) {
-        if (!create_collection_metadata(db, "default", default_collections[i], SYSTEM_USER_ADMIN, 0)) {
-            LOG_ERROR("Failed to create default collection: %s", default_collections[i]);
-        }
-    }
+    /* PURE DOCUMENTS: No library/collection creation - everything in documents collection */
+    LOG_INFO("Skipping library/collection creation - using pure documents architecture");
     
     /* Create admin role */
     json_value_t* query = json_create_object();
@@ -655,16 +615,22 @@ int unified_documents_init(database_t* db) {
     }
     if (existing) json_free(existing);
     
-    /* Create admin user in system/users collection */
+    /* PURE DOCUMENTS: Create admin user in documents collection */
     query = json_create_object();
+    json_object_set(query, "type", json_create_string("user"));
     json_object_set(query, "username", json_create_string("admin"));
-    existing = db_query_documents(db, "system/users", query);
+    json_object_set(query, "library", json_create_string("system"));
+    existing = db_query_documents(db, DOCUMENTS_COLLECTION, query);
     json_free(query);
     
     if (!existing || !json_object_get(existing, "documents") ||
         json_object_get(existing, "documents")->value.array.size == 0) {
-        /* Create admin user */
+        /* Create admin user with proper document structure */
         json_value_t* admin_user = json_create_object();
+        
+        /* PURE DOCUMENTS: Add type and library fields */
+        json_object_set(admin_user, "type", json_create_string("user"));
+        json_object_set(admin_user, "library", json_create_string("system"));
         json_object_set(admin_user, "username", json_create_string("admin"));
         json_object_set(admin_user, "email", json_create_string("admin@localhost"));
         json_object_set(admin_user, "full_name", json_create_string("System Administrator"));
@@ -685,9 +651,12 @@ int unified_documents_init(database_t* db) {
             json_array_append(json_object_get(admin_user, "roles"), json_create_string(admin_role_id));
         }
         
-        json_value_t* result = db_insert_document(db, "system/users", admin_user);
+        /* Add system fields for unified documents */
+        add_document_system_fields(admin_user, "user", "system", "users", SYSTEM_USER_ADMIN);
+        
+        json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, admin_user);
         if (result) {
-            LOG_INFO("Created admin user with password 'admin' in system/users");
+            LOG_INFO("Created admin user with password 'admin' in documents collection");
             json_free(result);
         }
         json_free(admin_user);

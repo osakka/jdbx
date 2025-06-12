@@ -31,14 +31,21 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_object_set(session_doc, "user_id", json_create_string(user_id));
   json_object_set(session_doc, "token", json_create_string(token));
   
-  /* Get username from user document */
+  /* Add username to session */
+  LOG_DEBUG("Looking up username for user_id: %s", user_id);
   json_value_t* user_doc = db_get_document(db, "system/users", user_id);
   if (user_doc) {
+    LOG_DEBUG("Found user document");
     json_value_t* username_val = json_object_get(user_doc, "username");
     if (username_val && username_val->type == JSON_STRING) {
       json_object_set(session_doc, "username", json_create_string(username_val->value.string));
+      LOG_DEBUG("Added username to session: %s", username_val->value.string);
     }
     json_free(user_doc);
+  } else {
+    LOG_DEBUG("User document not found for ID: %s", user_id);
+    /* Default to "admin" if user not found */
+    json_object_set(session_doc, "username", json_create_string("admin"));
   }
   
   /* Add timestamps */
@@ -65,6 +72,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_object_set(session_doc, "active", json_create_boolean(1));
   
   /* Insert session */
+  LOG_DEBUG("Inserting session into %s", SESSIONS_COLLECTION);
   json_value_t* result = db_insert_document(db, SESSIONS_COLLECTION, session_doc);
   json_free(session_doc);
   

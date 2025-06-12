@@ -14,9 +14,11 @@ init_status_t init_threads(server_config_t* config) {
     return INIT_THREAD_ERROR;
   }
   
-  /* Calculate thread pool size based on configuration */
-  int min_threads = config->max_connections > 0 ? config->max_connections / 4 : 4;
-  int max_threads = config->max_connections > 0 ? config->max_connections : 16;
+  /* Use configured thread pool settings */
+  int min_threads = config->thread_pool_min > 0 ? config->thread_pool_min : DEFAULT_THREAD_POOL_MIN;
+  int max_threads = config->thread_pool_max > 0 ? config->thread_pool_max : DEFAULT_THREAD_POOL_MAX;
+  int queue_size = config->thread_pool_queue_size > 0 ? config->thread_pool_queue_size : DEFAULT_THREAD_POOL_QUEUE_SIZE;
+  int idle_timeout = config->thread_pool_idle_timeout > 0 ? config->thread_pool_idle_timeout : DEFAULT_THREAD_POOL_IDLE_TIMEOUT;
   
   INIT_LOG_PROGRESS("THREADS", "Configuring thread pool with min=%d, max=%d threads", 
           min_threads, max_threads);
@@ -24,8 +26,8 @@ init_status_t init_threads(server_config_t* config) {
   thread_pool_config_t pool_config = {
     .min_threads = min_threads,
     .max_threads = max_threads,
-    .queue_size = max_threads * 4, /* Queue size proportional to max threads */
-    .idle_timeout = 60 /* 1 minute idle timeout */
+    .queue_size = queue_size,
+    .idle_timeout = idle_timeout
   };
   
   /* Create thread pool */

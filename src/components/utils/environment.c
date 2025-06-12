@@ -86,13 +86,9 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   
   /* Store original values to free later */
   char* old_db_path = config->db_path;
-  char* old_rbac_path = config->rbac_path;
   char* old_pid_file = config->pid_file;
   char* old_log_file = config->log_file;
   char* old_web_root = config->web_root;
-  char* old_validators_dir = config->validators_dir;
-  char* old_transforms_dir = config->transforms_dir;
-  char* old_metrics_dir = config->metrics_dir;
   char* old_cert_path = config->cert_path;
   char* old_key_path = config->key_path;
   
@@ -101,9 +97,6 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
     config->db_path = ensure_absolute_path(config->db_path, base_dir);
   }
   
-  if (config->rbac_path) {
-    config->rbac_path = ensure_absolute_path(config->rbac_path, base_dir);
-  }
   
   if (config->pid_file) {
     config->pid_file = ensure_absolute_path(config->pid_file, base_dir);
@@ -117,18 +110,6 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
     config->web_root = ensure_absolute_path(config->web_root, base_dir);
   }
   
-  if (config->validators_dir) {
-    config->validators_dir = ensure_absolute_path(config->validators_dir, base_dir);
-  }
-  
-  if (config->transforms_dir) {
-    config->transforms_dir = ensure_absolute_path(config->transforms_dir, base_dir);
-  }
-  
-  if (config->metrics_dir) {
-    config->metrics_dir = ensure_absolute_path(config->metrics_dir, base_dir);
-  }
-  
   if (config->cert_path) {
     config->cert_path = ensure_absolute_path(config->cert_path, base_dir);
   }
@@ -139,13 +120,9 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   
   /* Free original strings */
   free(old_db_path);
-  free(old_rbac_path);
   free(old_pid_file);
   free(old_log_file);
   free(old_web_root);
-  free(old_validators_dir);
-  free(old_transforms_dir);
-  free(old_metrics_dir);
   free(old_cert_path);
   free(old_key_path);
   
@@ -176,13 +153,9 @@ int load_environment_config(server_config_t* config) {
   
   /* Get paths from environment variables with defaults */
   const char* db_dir = getenv("JSONDB_DB_DIR");
-  const char* rbac_file = getenv("JSONDB_RBAC_FILE");
   const char* log_file = getenv("JSONDB_LOG_FILE");
   const char* pid_file = getenv("JSONDB_PID_FILE");
   const char* web_root = getenv("JSONDB_WEB_ROOT");
-  const char* validators_dir = getenv("JSONDB_VALIDATORS_DIR");
-  const char* transforms_dir = getenv("JSONDB_TRANSFORMS_DIR");
-  const char* metrics_dir = getenv("JSONDB_METRICS_DIR");
   const char* ssl_cert_file = getenv("JSONDB_SSL_CERT");
   const char* ssl_key_file = getenv("JSONDB_SSL_KEY");
   
@@ -192,10 +165,6 @@ int load_environment_config(server_config_t* config) {
     config->db_path = strdup(db_dir);
   }
   
-  if (rbac_file) {
-    free(config->rbac_path);
-    config->rbac_path = strdup(rbac_file);
-  }
   
   if (log_file) {
     free(config->log_file);
@@ -212,20 +181,6 @@ int load_environment_config(server_config_t* config) {
     config->web_root = strdup(web_root);
   }
   
-  if (validators_dir) {
-    free(config->validators_dir);
-    config->validators_dir = strdup(validators_dir);
-  }
-  
-  if (transforms_dir) {
-    free(config->transforms_dir);
-    config->transforms_dir = strdup(transforms_dir);
-  }
-  
-  if (metrics_dir) {
-    free(config->metrics_dir);
-    config->metrics_dir = strdup(metrics_dir);
-  }
   
   if (ssl_cert_file) {
     free(config->cert_path);
@@ -237,12 +192,7 @@ int load_environment_config(server_config_t* config) {
     config->key_path = strdup(ssl_key_file);
   }
   
-  /* Storage backend configuration */
-  const char* storage_backend = getenv("JSONDB_STORAGE_BACKEND");
-  if (storage_backend) {
-    if (config->storage_backend) free(config->storage_backend);
-    config->storage_backend = strdup(storage_backend);
-  }
+  /* JDBX is the only storage backend - ignore env variable */
   
   /* Get numeric configuration from environment */
   const char* port_str = getenv("JSONDB_PORT");

@@ -6,6 +6,7 @@
 #include "rbac/rbac_refcount.h"
 #include "database/database.h"
 #include "database/system_schemas.h"
+#include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,11 +65,19 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
   /* Register with cleanup system */
   init_register_rbac(rbac, rbac_ref);
   
-  /* Complete bootstrap if we were in bootstrap mode */
-  if (database->is_bootstrap_mode) {
-    INIT_LOG_PROGRESS("RBAC", "Completing bootstrap mode");
-    db_complete_bootstrap(database);
-    INIT_LOG_SUCCESS("RBAC", "Bootstrap mode completed - normal operation enabled");
+  /* Create default admin role and user if needed */
+  /* Check if database needs bootstrap instead of accessing is_bootstrap_mode */
+  if (db_needs_bootstrap(database)) {
+    INIT_LOG_PROGRESS("RBAC", "Database needs bootstrap - deferring admin creation to avoid circular dependencies");
+    
+    /* Enable bootstrap mode but defer actual user creation until after server starts */
+    database->is_bootstrap_mode = 1;
+    INIT_LOG_PROGRESS("RBAC", "Bootstrap mode enabled - admin creation will be handled during first API request");
+    
+    /* Mark that we need to create admin on first opportunity */
+    setenv("JSONDB_DEFERRED_BOOTSTRAP", "1", 1);
+    
+    INIT_LOG_SUCCESS("RBAC", "Bootstrap mode configured - admin will be created automatically");
   }
   
   /* 

@@ -91,16 +91,16 @@ typedef struct {
 
     /* File paths */
     char* db_path;
-    char* storage_backend;              /* Storage backend: "mmap" or "jdbx" */
+    /* JDBX is the ONLY storage - no backend selection needed */
     size_t jdbx_initial_size;           /* JDBX initial file size */
     size_t jdbx_wal_size;               /* JDBX WAL size */
-    char* rbac_path;
+    /* char* rbac_path; */         /* DEPRECATED: RBAC is database-backed */
     char* pid_file;
     char* log_file;
     char* web_root;                 /* Path to web admin interface files */
-    char* validators_dir;           /* Path to validators directory */
-    char* transforms_dir;           /* Path to transforms directory */
-    char* metrics_dir;              /* Path to metrics directory */
+    /* char* validators_dir; */     /* DEPRECATED: JS functions embedded in documents */
+    /* char* transforms_dir; */     /* DEPRECATED: JS functions embedded in documents */
+    /* char* metrics_dir; */        /* DEPRECATED: Metrics stored in database */
     char* metrics_export_path;      /* Path for metrics auto-export */
     int metrics_export_interval;    /* Metrics export interval in seconds */
 
@@ -155,8 +155,8 @@ typedef struct {
 /* Compile-time checks to prevent field misalignment issues */
 #include <stddef.h>
 /* Verify critical field offsets to catch struct corruption early */
-_Static_assert(offsetof(server_config_t, pid_file) != offsetof(server_config_t, rbac_path), 
-               "pid_file and rbac_path fields must have different offsets");
+/* _Static_assert(offsetof(server_config_t, pid_file) != offsetof(server_config_t, rbac_path), 
+               "pid_file and rbac_path fields must have different offsets"); */ /* DEPRECATED */
 _Static_assert(offsetof(server_config_t, log_file) != offsetof(server_config_t, pid_file), 
                "log_file and pid_file fields must have different offsets");
 
