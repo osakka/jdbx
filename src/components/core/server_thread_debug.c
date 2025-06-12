@@ -38,7 +38,7 @@ typedef struct {
 /* Global variables */
 static thread_monitor_t g_thread_monitor = {0};
 static int g_debug_fd = -1;
-static char g_log_path[256] = "/tmp/thread_debug.log"; 
+static char g_log_path[256] = ""; 
 
 /* Initialize thread monitor */
 int thread_monitor_init(const char* log_path) {

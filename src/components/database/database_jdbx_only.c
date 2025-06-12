@@ -242,7 +242,10 @@ database_t* db_init(const char* path) {
         db_path = getenv("JSONDB_DB_PATH");
         if (!db_path) {
             /* Use default JDBX path */
-            db_path = "/opt/jsondb/build/var/jsondb.jdbx";
+            db_path = getenv("JSONDB_DB_PATH");
+            if (!db_path) {
+                db_path = "/opt/jsondb/build/var/jsondb.jdbx";
+            }
         }
     }
     

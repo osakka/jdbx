@@ -19,16 +19,29 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
         return INIT_DATABASE_ERROR;
     }
     
-    /* Get database directory */
-    const char* db_dir = config->db_path;
-    if (!db_dir || strlen(db_dir) == 0) {
-        db_dir = "/opt/jsondb/build/var";
+    /* Get database file basename */
+    const char* db_file = config->db_file;
+    if (!db_file || strlen(db_file) == 0) {
+        db_file = getenv("JSONDB_DB_FILE");
+        if (!db_file) {
+            db_file = "var/jsondb";
+        }
     }
     
-    INIT_LOG_PROGRESS("DATABASE", "Initializing JDBX database at %s", db_dir);
+    /* Generate actual JDBX file path */
+    char* jdbx_path = jdbx_generate_db_path(db_file);
+    if (!jdbx_path) {
+        INIT_LOG_FAILURE("DATABASE", "Failed to generate JDBX file path");
+        return INIT_DATABASE_ERROR;
+    }
+    
+    INIT_LOG_PROGRESS("DATABASE", "Initializing JDBX database at %s", jdbx_path);
     
     /* Initialize database (will create/open JDBX file) */
-    database_t* db = db_init(db_dir);
+    database_t* db = db_init(jdbx_path);
+    
+    /* Clean up generated path */
+    free(jdbx_path);
     if (!db) {
         INIT_LOG_FAILURE("DATABASE", "Failed to initialize JDBX database");
         return INIT_DATABASE_ERROR;

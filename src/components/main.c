@@ -32,7 +32,7 @@ static void print_usage(const char* program_name) {
   printf(" -t, --terminate        Terminate running server instance\n");
   printf(" -l, --log-level=LEVEL     Set log level (error, warn, info, debug, trace)\n");
   printf(" -x, --trace-categories=CATS Set trace categories (database,rbac,api,auth,transaction,binary,javascript,network,metrics,memory,all)\n");
-  printf(" -b, --db-dir=DIRECTORY    Set database directory\n");
+  printf(" -b, --db-file=FILE       Set database file basename (auto-generates .jdbx and .wal)\n");
   printf(" -i, --pid-file=FILE      Set PID file path\n");
   printf(" -o, --log-file=FILE      Set log file path\n");
   printf(" -w, --web-root=DIRECTORY   Set web admin interface root directory\n");
@@ -45,8 +45,8 @@ static void print_usage(const char* program_name) {
   printf(" -K, --ssl-key=FILE       Set SSL private key file path\n");
   printf(" -v, --version         Display version information and exit\n");
   printf(" -j, --js-file=FILE      Execute JavaScript file and exit\n");
-  printf("\nStorage Backend Options (Advanced):\n");
-  printf(" --storage-backend=BACKEND  Set storage backend (mmap or jdbx)\n");
+  printf("     --env-file=FILE      Load environment variables from file\n");
+  printf("\nJDBX Database Options (Advanced):\n");
   printf(" --jdbx-initial-size=SIZE   Set JDBX initial file size (bytes)\n");
   printf(" --jdbx-wal-size=SIZE      Set JDBX WAL size (bytes)\n");
   printf("\n");
@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
               config->log_level == LOG_LEVEL_INFO ? "info" :
               config->log_level == LOG_LEVEL_DEBUG ? "debug" :
               config->log_level == LOG_LEVEL_TRACE ? "trace" : "unknown");
-  printf("Database path: %s\n", config->db_path ? config->db_path : "not set");
+  printf("Database file: %s\n", config->db_file ? config->db_file : "not set");
   printf("Web root: %s\n", config->web_root ? config->web_root : "not set");
   printf("PID file: %s\n", config->pid_file ? config->pid_file : "not set");
   printf("Log file: %s\n", config->log_file ? config->log_file : "not set");

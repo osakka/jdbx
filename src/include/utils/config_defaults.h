@@ -38,8 +38,8 @@
  * - Individual path overrides (e.g., JSONDB_DB_DIR, JSONDB_LOG_FILE, etc.)
  *============================================================================*/
 
-/** Default database file path - JDBX single file */
-#define DEFAULT_DB_PATH "var/jsondb.jdbx"
+/** Default database file basename - JDBX auto-generates .jdbx and .wal */
+#define DEFAULT_DB_FILE "var/jsondb"
 
 /** Default RBAC config file path */
 #define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"
@@ -95,7 +95,7 @@
  * Database Defaults
  *============================================================================*/
 
-/** Default database directory */
+/** Default database directory (deprecated - use DEFAULT_DB_FILE) */
 #define DEFAULT_DATABASE_DIR "/opt/jsondb/data"
 
 /* JDBX is the ONLY storage backend - no selection needed */

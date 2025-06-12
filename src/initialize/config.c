@@ -12,6 +12,76 @@
 #include <errno.h>
 #include <sys/stat.h>
 
+/* Function to load environment variables from a file */
+static int load_env_file(const char* filename) {
+  if (!filename) {
+    return 0;
+  }
+  
+  FILE* file = fopen(filename, "r");
+  if (!file) {
+    return 0;
+  }
+  
+  char line[512];
+  int line_num = 0;
+  int success = 1;
+  
+  while (fgets(line, sizeof(line), file)) {
+    line_num++;
+    
+    /* Skip empty lines and comments */
+    char* trimmed = line;
+    while (*trimmed && (*trimmed == ' ' || *trimmed == '\t')) trimmed++;
+    if (*trimmed == '\0' || *trimmed == '\n' || *trimmed == '#') {
+      continue;
+    }
+    
+    /* Remove newline */
+    char* newline = strchr(trimmed, '\n');
+    if (newline) *newline = '\0';
+    
+    /* Find equals sign */
+    char* equals = strchr(trimmed, '=');
+    if (!equals) {
+      fprintf(stderr, "Warning: Invalid env file line %d in '%s': %s\n", 
+              line_num, filename, trimmed);
+      continue;
+    }
+    
+    /* Split into key and value */
+    *equals = '\0';
+    char* key = trimmed;
+    char* value = equals + 1;
+    
+    /* Trim key */
+    char* key_end = key + strlen(key) - 1;
+    while (key_end > key && (*key_end == ' ' || *key_end == '\t')) {
+      *key_end = '\0';
+      key_end--;
+    }
+    
+    /* Trim value and handle quotes */
+    while (*value && (*value == ' ' || *value == '\t')) value++;
+    if (*value == '"' || *value == '\'') {
+      char quote = *value;
+      value++;
+      char* end_quote = strrchr(value, quote);
+      if (end_quote) *end_quote = '\0';
+    }
+    
+    /* Set environment variable */
+    if (setenv(key, value, 1) != 0) {
+      fprintf(stderr, "Warning: Failed to set environment variable '%s' from '%s'\n", 
+              key, filename);
+      success = 0;
+    }
+  }
+  
+  fclose(file);
+  return success;
+}
+
 /* Function to parse command line arguments and initialize configuration */
 init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_PROGRESS("CONFIG", "Initializing configuration");
@@ -23,7 +93,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int show_version = 0;
   char* log_level_str = NULL;
   char* trace_categories_str = NULL;
-  char* db_dir = NULL;
+  char* db_file = NULL;
   char* pid_file = NULL;
   char* log_file = NULL;
   char* web_root = NULL;
@@ -34,9 +104,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int use_ssl = -1;  /* -1 = not set, 0 = disabled, 1 = enabled */
   char* ssl_cert = NULL;
   char* ssl_key = NULL;
-  char* storage_backend = NULL;
   char* jdbx_initial_size = NULL;
   char* jdbx_wal_size = NULL;
+  char* env_file = NULL;
   
   /* Initialize binary directory for path resolution */
   config_init_binary_dir();
@@ -64,7 +134,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"terminate",   no_argument,    0, 't'},
     {"log-level",   required_argument, 0, 'l'},
     {"trace-categories", required_argument, 0, 'x'},
-    {"db-dir",     required_argument, 0, 'b'},
+    {"db-file",    required_argument, 0, 'b'},
     {"rbac-file",   required_argument, 0, 'r'},
     {"pid-file",    required_argument, 0, 'i'}, 
     {"log-file",    required_argument, 0, 'o'},
@@ -98,10 +168,11 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"index-time-threshold", required_argument, 0, 311},
     {"index-startup-delay", required_argument, 0, 312},
     {"index-check-interval", required_argument, 0, 313},
-    /* Storage backend options */
-    {"storage-backend", required_argument, 0, 314},
+    /* JDBX options */
     {"jdbx-initial-size", required_argument, 0, 315},
     {"jdbx-wal-size", required_argument, 0, 316},
+    /* Environment file option */
+    {"env-file", required_argument, 0, 317},
     {0, 0, 0, 0}
   };
   
@@ -131,7 +202,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         trace_categories_str = optarg;
         break;
       case 'b':
-        db_dir = optarg;
+        db_file = optarg;
         break;
       case 'i': 
         pid_file = optarg;
@@ -212,14 +283,14 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
       case 313:
         heap_config->index_check_interval = atoi(optarg);
         break;
-      case 314:
-        storage_backend = optarg;
-        break;
       case 315:
         jdbx_initial_size = optarg;
         break;
       case 316:
         jdbx_wal_size = optarg;
+        break;
+      case 317:
+        env_file = optarg;
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
@@ -263,6 +334,37 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_SUCCESS("CONFIG", "Configuration loaded from '%s'", config_file);
   }
 
+  /* Load environment file if specified or auto-discover (lowest priority) */
+  if (env_file) {
+    INIT_LOG_PROGRESS("CONFIG", "Loading environment file '%s'", env_file);
+    if (!load_env_file(env_file)) {
+      INIT_LOG_FAILURE("CONFIG", "Failed to load environment file '%s'", env_file);
+      free(heap_config);
+      return INIT_CONFIG_ERROR;
+    }
+    INIT_LOG_SUCCESS("CONFIG", "Environment file loaded from '%s'", env_file);
+  } else {
+    /* Auto-discover environment files in priority order */
+    const char* env_files[] = {
+      "jsondb.env",                                    /* Local directory override */
+      "/opt/jsondb/build/var/jsondb.env",             /* Running configuration */
+      "/opt/jsondb/share/config/jsondb.env",          /* Template defaults */
+      NULL
+    };
+    
+    for (int i = 0; env_files[i]; i++) {
+      if (access(env_files[i], R_OK) == 0) {
+        INIT_LOG_PROGRESS("CONFIG", "Auto-discovered environment file '%s'", env_files[i]);
+        if (load_env_file(env_files[i])) {
+          INIT_LOG_SUCCESS("CONFIG", "Environment file loaded from '%s'", env_files[i]);
+          break;
+        } else {
+          INIT_LOG_WARNING("CONFIG", "Failed to load environment file '%s', trying next", env_files[i]);
+        }
+      }
+    }
+  }
+
   /* Load configuration from environment variables (lowest priority) */
   INIT_LOG_PROGRESS("CONFIG", "Loading settings from environment variables");
   load_environment_config(heap_config);
@@ -297,13 +399,13 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     }
   }
   
-  if (db_dir) {
+  if (db_file) {
     /* Free previous value if allocated */
-    if (heap_config->db_path) {
-      free(heap_config->db_path);
+    if (heap_config->db_file) {
+      free(heap_config->db_file);
     }
-    heap_config->db_path = strdup(db_dir);
-    INIT_LOG_PROGRESS("CONFIG", "Database path set to %s", db_dir);
+    heap_config->db_file = strdup(db_file);
+    INIT_LOG_PROGRESS("CONFIG", "Database file set to %s", db_file);
   }
   
   
@@ -358,10 +460,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   
   /* Directory arguments removed - JS functions stored in database */
   
-  /* JDBX is the only storage backend - ignore storage_backend argument */
-  if (storage_backend) {
-    INIT_LOG_PROGRESS("CONFIG", "Ignoring storage backend argument - JDBX is the only supported backend");
-  }
+  /* JDBX is the only storage backend - no configuration needed */
   
   if (jdbx_initial_size) {
     heap_config->jdbx_initial_size = (size_t)atoll(jdbx_initial_size);
@@ -425,7 +524,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_DEBUG("CONFIG", "Final configuration settings:");
   INIT_LOG_DEBUG("CONFIG", " Port: %d", heap_config->port);
   INIT_LOG_DEBUG("CONFIG", " Host: %s", heap_config->host ? heap_config->host : "(null).");
-  INIT_LOG_DEBUG("CONFIG", " Database path: %s", heap_config->db_path ? heap_config->db_path : "(null).");
+  INIT_LOG_DEBUG("CONFIG", " Database file: %s", heap_config->db_file ? heap_config->db_file : "(null).");
   INIT_LOG_DEBUG("CONFIG", " PID file: %s", heap_config->pid_file ? heap_config->pid_file : "(null).");
   INIT_LOG_DEBUG("CONFIG", " Log file: %s", heap_config->log_file ? heap_config->log_file : "(null).");
   INIT_LOG_DEBUG("CONFIG", " Web root: %s", heap_config->web_root ? heap_config->web_root : "(null).");
@@ -510,9 +609,9 @@ init_status_t create_required_directories(server_config_t* config) {
   }
   
   /* Create database directory if it doesn't exist */
-  if (config->db_path) {
+  if (config->db_file) {
     char db_dir[PATH_MAX];
-    strncpy(db_dir, config->db_path, PATH_MAX - 1);
+    strncpy(db_dir, config->db_file, PATH_MAX - 1);
     db_dir[PATH_MAX - 1] = '\0';
     
     char* dir = dirname(db_dir);

@@ -21,6 +21,10 @@
 typedef struct api_context api_context_t;
 typedef struct ssl_context_t ssl_context_t;
 
+/* JDBX file path utilities */
+char* jdbx_generate_db_path(const char* basename);
+char* jdbx_generate_wal_path(const char* basename);
+
 /* Server configuration */
 #define DEFAULT_PORT 5000
 #define MAX_CONNECTIONS 100
@@ -90,7 +94,7 @@ typedef struct {
     char* host;                  /* Binding host address */
 
     /* File paths */
-    char* db_path;
+    char* db_file;                      /* Database file basename (JDBX auto-generates .jdbx and .wal) */
     /* JDBX is the ONLY storage - no backend selection needed */
     size_t jdbx_initial_size;           /* JDBX initial file size */
     size_t jdbx_wal_size;               /* JDBX WAL size */

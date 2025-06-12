@@ -24,6 +24,46 @@ server_config_t* g_server_config = NULL;
 /* Path to the executable's directory, used for resolving relative paths */
 static char g_binary_dir[PATH_MAX] = {0};
 
+/* JDBX file path utilities */
+char* jdbx_generate_db_path(const char* basename) {
+  if (!basename) return NULL;
+  
+  size_t len = strlen(basename);
+  char* db_path = malloc(len + 6); /* .jdbx + null terminator */
+  if (!db_path) return NULL;
+  
+  strcpy(db_path, basename);
+  
+  /* Add .jdbx extension if not already present */
+  if (len < 5 || strcmp(basename + len - 5, ".jdbx") != 0) {
+    strcat(db_path, ".jdbx");
+  }
+  
+  return db_path;
+}
+
+char* jdbx_generate_wal_path(const char* basename) {
+  if (!basename) return NULL;
+  
+  size_t len = strlen(basename);
+  char* wal_path;
+  
+  /* Remove .jdbx extension if present and add .wal */
+  if (len >= 5 && strcmp(basename + len - 5, ".jdbx") == 0) {
+    wal_path = malloc(len + 1); /* replace .jdbx with .wal (same length) */
+    if (!wal_path) return NULL;
+    strncpy(wal_path, basename, len - 5);
+    strcpy(wal_path + len - 5, ".wal");
+  } else {
+    wal_path = malloc(len + 5); /* .wal + null terminator */
+    if (!wal_path) return NULL;
+    strcpy(wal_path, basename);
+    strcat(wal_path, ".wal");
+  }
+  
+  return wal_path;
+}
+
 /**
  * Get string representation of JSON type
  * @param type JSON value type
@@ -540,19 +580,19 @@ int config_load_json(const char* filepath, server_config_t* config) {
       if (path_val) {
         if (path_val->type == JSON_STRING) {
           /* Free existing path if it exists */
-          if (config->db_path) {
+          if (config->db_file) {
             if (g_logger) {
-              TRACE_API("Freeing existing db_path: '%s'", config->db_path);
+              TRACE_API("Freeing existing db_file: '%s'", config->db_file);
             }
-            free(config->db_path);
+            free(config->db_file);
           }
           
-          config->db_path = buffer_pool_strdup(path_val->value.string);
+          config->db_file = buffer_pool_strdup(path_val->value.string);
           if (g_logger) {
-            LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
+            LOG_DEBUG("Config: Set db_file to '%s'", config->db_file);
             
             /* Special warning for default path in production */
-            if (strcmp(config->db_path, DEFAULT_DB_PATH) == 0) {
+            if (strcmp(config->db_file, DEFAULT_DB_FILE) == 0) {
               LOG_WARNING("Using default database path in configuration - "
                    "this may not be suitable for production use");
             }
@@ -565,16 +605,16 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_INFO("No database path specified, using default: %s", DEFAULT_DB_PATH);
+          LOG_INFO("No database path specified, using default: %s", DEFAULT_DB_FILE);
           
           /* Resolve the default path */
-          char* resolved_path = resolve_path(DEFAULT_DB_PATH);
+          char* resolved_path = resolve_path(DEFAULT_DB_FILE);
           if (resolved_path) {
-            config->db_path = resolved_path;
-            LOG_DEBUG("Resolved default database path to: %s", config->db_path);
+            config->db_file = resolved_path;
+            LOG_DEBUG("Resolved default database path to: %s", config->db_file);
           } else {
             LOG_ERROR("Cannot resolve default database path.");
-            config->db_path = strdup(DEFAULT_DB_PATH);
+            config->db_file = strdup(DEFAULT_DB_FILE);
           }
         }
       }
@@ -589,13 +629,13 @@ int config_load_json(const char* filepath, server_config_t* config) {
       LOG_INFO("No 'database' section found in config, using defaults.");
       
       /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_DB_PATH);
+      char* resolved_path = resolve_path(DEFAULT_DB_FILE);
       if (resolved_path) {
-        config->db_path = resolved_path;
-        LOG_DEBUG("Resolved default database path to: %s", config->db_path);
+        config->db_file = resolved_path;
+        LOG_DEBUG("Resolved default database path to: %s", config->db_file);
       } else {
         LOG_ERROR("Cannot resolve default database path.");
-        config->db_path = strdup(DEFAULT_DB_PATH);
+        config->db_file = strdup(DEFAULT_DB_FILE);
       }
     }
   }
@@ -1451,9 +1491,9 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
         LOG_DEBUG("Config: Set max_connections to %d", config->max_connections);
       }
     } else if (strcasecmp(key, "db_path") == 0) {
-      config->db_path = strdup(value);
+      config->db_file = strdup(value);
       if (g_logger) {
-        LOG_DEBUG("Config: Set db_path to '%s'", config->db_path);
+        LOG_DEBUG("Config: Set db_path to '%s'", config->db_file);
       }
     } else if (strcasecmp(key, "jwt_secret") == 0) {
       config->jwt_secret = strdup(value);
@@ -1594,7 +1634,7 @@ void config_free(server_config_t* config) {
   
   /* Free string resources */
   if (config->host) free(config->host);
-  if (config->db_path) free(config->db_path);
+  if (config->db_file) free(config->db_file);
   /* JDBX is the only storage backend - no field to free */
   if (config->jwt_secret) free(config->jwt_secret);
   if (config->pid_file) free(config->pid_file);
@@ -1674,7 +1714,7 @@ void config_init_defaults(server_config_t* config) {
   config->js_enabled = DEFAULT_JS_ENABLED;
   
   /* File paths (resolved relative to binary directory) */
-  config->db_path = resolve_path(DEFAULT_DB_PATH);
+  config->db_file = resolve_path(DEFAULT_DB_FILE);
   /* JDBX is the only storage backend - no need to set */
   config->pid_file = resolve_path(DEFAULT_PID_FILE);
   config->log_file = resolve_path(DEFAULT_LOG_FILE);
@@ -1724,7 +1764,7 @@ void config_init_defaults(server_config_t* config) {
     LOG_INFO("Configuration initialized with default values.");
     LOG_DEBUG("Default port: %d", config->port);
     LOG_DEBUG("Default host: %s", config->host);
-    LOG_DEBUG("Default DB path: %s", config->db_path);
+    LOG_DEBUG("Default DB path: %s", config->db_file);
     LOG_DEBUG("Default PID file: %s", config->pid_file);
     LOG_DEBUG("Default log file: %s", config->log_file);
     LOG_DEBUG("Default web root: %s", config->web_root);
