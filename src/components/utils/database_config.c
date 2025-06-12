@@ -352,7 +352,7 @@ json_value_t* config_to_json(server_config_t* config) {
     
     /* Path settings */
     json_value_t* paths = json_create_object();
-    json_object_set(paths, "db", json_create_string(config->db_path ? config->db_path : ""));
+    json_object_set(paths, "db", json_create_string(config->db_file ? config->db_file : ""));
     json_object_set(paths, "log", json_create_string(config->log_file ? config->log_file : ""));
     json_object_set(paths, "web_root", json_create_string(config->web_root ? config->web_root : ""));
     json_object_set(root, "paths", paths);

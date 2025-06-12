@@ -85,7 +85,7 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   }
   
   /* Store original values to free later */
-  char* old_db_path = config->db_path;
+  char* old_db_path = config->db_file;
   char* old_pid_file = config->pid_file;
   char* old_log_file = config->log_file;
   char* old_web_root = config->web_root;
@@ -93,8 +93,8 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   char* old_key_path = config->key_path;
   
   /* Normalize all paths */
-  if (config->db_path) {
-    config->db_path = ensure_absolute_path(config->db_path, base_dir);
+  if (config->db_file) {
+    config->db_file = ensure_absolute_path(config->db_file, base_dir);
   }
   
   
@@ -161,8 +161,8 @@ int load_environment_config(server_config_t* config) {
   
   /* Update config with environment variables if they exist */
   if (db_dir) {
-    free(config->db_path);
-    config->db_path = strdup(db_dir);
+    free(config->db_file);
+    config->db_file = strdup(db_dir);
   }
   
   
