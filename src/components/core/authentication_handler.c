@@ -66,7 +66,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     }
   }
   
-  LOG_DEBUG("Extracted credentials - username: %s, password: %s", username, password);
+  TRACE_AUTH("Extracted credentials for username: %s", username);
   
   /* Check if we need to perform deferred bootstrap */
   if (ctx->db && ctx->db->is_bootstrap_mode) {

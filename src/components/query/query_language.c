@@ -201,7 +201,7 @@ static query_expr_t* parse_field_expr(const char* field_path, json_value_t* valu
 
 /* Parse a query JSON into a query expression tree */
 query_parse_result_t query_parse(json_value_t* query_json) {
-  LOG_DEBUG("Parsing query.");
+  TRACE_DB("Parsing query");
 
   query_parse_result_t result;
   result.expr = NULL;
@@ -212,7 +212,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
   result.error = NULL;
 
   if (!query_json) {
-    LOG_ERROR("parse query: Query JSON is NULL.");
+    LOG_ERROR("Query JSON is NULL");
     result.error = strdup("Query JSON is NULL");
     return result;
   }
@@ -221,44 +221,44 @@ query_parse_result_t query_parse(json_value_t* query_json) {
 
   /* Handle complex query format with query, limit, skip, sort, projection */
   if (query_json->type == JSON_OBJECT && json_object_get(query_json, "query")) {
-    LOG_DEBUG("Processing complex query format with options.");
+    TRACE_DB("Processing complex query format with options");
     json_value_t* query = json_object_get(query_json, "query");
 
     /* Parse options */
     json_value_t* limit_val = json_object_get(query_json, "limit");
     if (limit_val && limit_val->type == JSON_INTEGER) {
       result.options.limit = (int)limit_val->value.integer;
-      LOG_DEBUG("Query option: limit = %d", result.options.limit);
+      TRACE_DB("Query option: limit = %d", result.options.limit);
     }
 
     json_value_t* skip_val = json_object_get(query_json, "skip");
     if (skip_val && skip_val->type == JSON_INTEGER) {
       result.options.skip = (int)skip_val->value.integer;
-      LOG_DEBUG("Query option: skip = %d", result.options.skip);
+      TRACE_DB("Query option: skip = %d", result.options.skip);
     }
 
     json_value_t* sort_val = json_object_get(query_json, "sort");
     if (sort_val && sort_val->type == JSON_OBJECT) {
       result.options.sort = json_clone(sort_val);
-      LOG_DEBUG("Query option: sort is present.");
+      TRACE_DB("Query option: sort is present");
     }
 
     json_value_t* projection_val = json_object_get(query_json, "projection");
     if (projection_val && projection_val->type == JSON_OBJECT) {
       result.options.projection = json_clone(projection_val);
-      LOG_DEBUG("Query option: projection is present.");
+      TRACE_DB("Query option: projection is present");
     }
 
     /* Parse actual query */
-    LOG_DEBUG("Proceeding to parse inner query object.");
+    TRACE_DB("Proceeding to parse inner query object");
     query_json = query;
   } else {
-    LOG_DEBUG("Processing simple query format without options.");
+    TRACE_DB("Processing simple query format without options");
   }
   
   /* Parse query expression */
   if (query_json->type == JSON_OBJECT) {
-    LOG_DEBUG("Parsing object query expression.");
+    TRACE_DB("Parsing object query expression");
 
     /* Check for logical operators at root level */
     int has_logical_op = 0;
@@ -274,7 +274,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
       if (qkey[0] == '$') {
         query_operator_t op = query_parse_operator(qkey);
         if (op == OP_AND || op == OP_OR || op == OP_NOT || op == OP_NOR) {
-          LOG_DEBUG("Found logical operator %s at root level", qkey);
+          TRACE_DB("Found logical operator %s at root level", qkey);
           has_logical_op = 1;
           /* Create logical expression */
           result.expr = parse_logical_expr(qkey, qvalue);
@@ -284,7 +284,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
     }
     
     if (!has_logical_op) {
-      LOG_DEBUG("No logical operators found, creating implicit AND expression with %d fields", field_count);
+      TRACE_DB("No logical operators found, creating implicit AND expression with %d fields", field_count);
 
       /* Create a default AND expression at root with all field expressions as children */
       query_expr_t** children = (query_expr_t**)malloc(field_count * sizeof(query_expr_t*));
@@ -304,7 +304,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
 
       result.expr = query_create_logical_expr(OP_AND, children, field_count);
       free(children); /* Note: only free the array, not the child expressions */
-      LOG_DEBUG("Created implicit AND expression with %d child expressions", field_count);
+      TRACE_DB("Created implicit AND expression with %d child expressions", field_count);
     }
   } else {
     /* Invalid query format */
@@ -315,7 +315,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
   if (result.error) {
     LOG_ERROR("Query parsing failed: %s", result.error);
   } else {
-    LOG_INFO("Query parsed.");
+    TRACE_DB("Query parsed successfully");
   }
 
   return result;
@@ -1296,7 +1296,7 @@ int query_parse_cursor(const char* cursor, query_options_t* options) {
 
 /* Execute a query against a collection of documents */
 query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_options_t* options) {
-  LOG_INFO("Executing query against document collection.");
+  TRACE_DB("Executing query against document collection");
 
   query_result_t result;
   result.documents = json_create_array();
@@ -1310,11 +1310,11 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
     return result;
   }
 
-  LOG_DEBUG("Query execution with collection of %d documents", json_array_size(documents));
+  TRACE_DB("Query execution with collection of %d documents", json_array_size(documents));
 
   /* Create a temporary array with matching documents */
   json_value_t* matches = json_create_array();
-  LOG_DEBUG("Filtering documents using query expression.");
+  TRACE_DB("Filtering documents using query expression");
 
   /* Filter documents */
   int evaluated = 0;
@@ -1344,7 +1344,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
   
   /* Apply sorting if specified */
   if (options && options->sort) {
-    LOG_DEBUG("Applying sort to query results.");
+    TRACE_DB("Applying sort to query results");
     query_apply_sort(matches, options->sort);
   }
 
@@ -1355,7 +1355,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
   if (skip < 0) skip = 0;
   if (limit < 0) limit = 0;
 
-  LOG_DEBUG("Applying pagination: skip=%d, limit=%d", skip, limit);
+  TRACE_DB("Applying pagination: skip=%d, limit=%d", skip, limit);
 
   int max_index = json_array_size(matches);
   if (limit > 0) {
@@ -1363,7 +1363,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
   }
   
   /* Apply projection and copy final results */
-  LOG_DEBUG("Processing final result set from index %d to %d", skip, max_index);
+  TRACE_DB("Processing final result set from index %d to %d", skip, max_index);
 
   for (int i = skip; i < max_index; i++) {
     json_value_t* doc = json_array_get(matches, i);
@@ -1379,16 +1379,16 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
 
   /* Set count of documents in this result set */
   result.count = json_array_size(result.documents);
-  LOG_DEBUG("Final result set contains %d documents", result.count);
+  TRACE_DB("Final result set contains %d documents", result.count);
 
   /* Create pagination info if appropriate */
   if (options && (options->pagination_type != PAGINATION_NONE)) {
-    LOG_DEBUG("Creating pagination info (type: %d)", options->pagination_type);
+    TRACE_DB("Creating pagination info (type: %d)", options->pagination_type);
     result.pagination = query_create_pagination_info(options, result.total_count, result.documents);
   }
 
   /* Free temporary matches array */
-  LOG_DEBUG("Freeing temporary result set.");
+  TRACE_DB("Freeing temporary result set");
   json_free(matches);
 
   LOG_INFO("Query execution completed: returned %d/%d matching documents",

@@ -820,8 +820,8 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
 
 /* Register handler */
 http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request) {
-  TRACE_API("REGISTER_TRACE: Entering api_handle_register.");
-  TRACE_API("REGISTER_TRACE: ctx=%p, request=%p, request->body=%p", ctx, request, request ? request->body : NULL);
+  TRACE_API("Entering api_handle_register");
+  TRACE_API("ctx=%p, request=%p, body=%p", ctx, request, request ? request->body : NULL);
   
   if (!ctx || !request || !request->body) {
     LOG_ERROR("Invalid parameters - ctx=%p, request=%p, body=%p", 
@@ -830,8 +830,8 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  TRACE_API("REGISTER_TRACE: Request body: %s", request->body);
-  TRACE_API("REGISTER_TRACE: RBAC system pointer: %p", ctx->rbac);
+  TRACE_API("Request body: %s", request->body);
+  TRACE_API("RBAC system pointer: %p", ctx->rbac);
   
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
@@ -842,13 +842,13 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
   
-  TRACE_API("REGISTER_TRACE: Body parsed successfully.");
+  TRACE_API("Body parsed successfully");
   
   /* Extract username and password */
   json_value_t* username_val = json_object_get(body, "username");
   json_value_t* password_val = json_object_get(body, "password");
   
-  TRACE_API("REGISTER_TRACE: username_val=%p, password_val=%p", username_val, password_val);
+  TRACE_API("username_val=%p, password_val=%p", username_val, password_val);
   
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
@@ -861,24 +861,24 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   const char* username = username_val->value.string;
   const char* password = password_val->value.string;
   
-  TRACE_API("REGISTER_TRACE: Attempting to register user: %s", username);
-  TRACE_API("REGISTER_TRACE: About to call rbac_get_user_by_username.");
+  TRACE_API("Attempting to register user: %s", username);
+  TRACE_API("About to call rbac_get_user_by_username.");
   
   /* Check if user already exists */
   if (rbac_get_user_by_username(ctx->rbac, username)) {
-    TRACE_API("REGISTER_TRACE: User already exists.");
+    TRACE_API("User already exists.");
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username already exists\"}", "application/json");
   }
   
-  TRACE_API("REGISTER_TRACE: User does not exist, creating new user.");
-  TRACE_API("REGISTER_TRACE: About to call rbac_create_user.");
+  TRACE_API("User does not exist, creating new user.");
+  TRACE_API("About to call rbac_create_user.");
   
   /* Create user */
   rbac_user_t* user = rbac_create_user(ctx->rbac, username, password);
   
-  TRACE_API("REGISTER_TRACE: rbac_create_user returned: %p", user);
+  TRACE_API("rbac_create_user returned: %p", user);
   
   if (!user) {
     LOG_ERROR("Failed to create user.");
@@ -888,7 +888,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   }
   
   /* Create response */
-  TRACE_API("REGISTER_TRACE: Creating response for user: id=%s, username=%s", user->id, user->username);
+  TRACE_API("Creating response for user: id=%s, username=%s", user->id, user->username);
   
   json_value_t* response = json_create_object();
   json_object_set(response, "user_id", json_create_string(user->id));
@@ -898,7 +898,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_free(response);
   json_free(body);
   
-  TRACE_API("REGISTER_TRACE: Registration successful, returning response.");
+  TRACE_API("Registration successful, returning response.");
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }

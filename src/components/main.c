@@ -200,11 +200,11 @@ int main(int argc, char** argv) {
   if (config->verbose_mode && config->pid_file) {
     /* Debug logging in verbose mode */
     if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
-      LOG_DEBUG("[DAEMON] Verbose mode enabled, PID: %d", getpid());
+      LOG_DEBUG("Verbose mode enabled, PID: %d", getpid());
       
       char cwd[PATH_MAX];
       if (getcwd(cwd, sizeof(cwd)) != NULL) {
-        LOG_DEBUG("[DAEMON] Working directory: %s", cwd);
+        LOG_DEBUG("Working directory: %s", cwd);
       }
     }
     
@@ -214,27 +214,27 @@ int main(int argc, char** argv) {
       fclose(pid_fp);
       
       if (g_logger) {
-        LOG_INFO("[DAEMON] PID file written: %s (PID: %d)", config->pid_file, getpid());
+        LOG_INFO("PID file written: %s (PID: %d)", config->pid_file, getpid());
       } else {
-        printf("[DEBUG] PID file written: %s (PID: %d)\n", config->pid_file, getpid());
+        printf("PID file written: %s (PID: %d)\n", config->pid_file, getpid());
       }
     } else {
       if (g_logger) {
-        LOG_ERROR("[DAEMON] Failed to write PID file '%s': %s (errno=%d)", 
+        LOG_ERROR("Failed to write PID file '%s': %s (errno=%d)", 
             config->pid_file, strerror(errno), errno);
       } else {
-        fprintf(stderr, "[DEBUG] Failed to write PID file '%s': %s\n", 
+        fprintf(stderr, "Failed to write PID file '%s': %s\n", 
            config->pid_file, strerror(errno));
       }
     }
   }
   
   /* Initialize daemon process if in daemon mode */
-  LOG_DEBUG("Initializing Daemonization.");
+  LOG_INFO("Initializing daemon process");
   if (!config->verbose_mode) {
     /* Using our enhanced daemon initialization with proper logging */
     if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
-      LOG_DEBUG("[DAEMON] Starting daemon mode initialization.");
+      LOG_DEBUG("Starting daemon mode initialization");
     }
     
     status = init_daemon(config);

@@ -69,7 +69,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
   
   /* Log configuration details */
   if (g_logger) {
-    LOG_INFO("server.");
+    LOG_INFO("Starting server initialization");
     LOG_INFO("Server configuration: port=%d, host=%s, max_conn=%d, sock_fd=%d", 
         config->port, 
         config->host ? config->host : "(null)", 
@@ -90,7 +90,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
   if (pipe(g_signal_pipe) < 0) {
     fprintf(stderr, "Error: Failed to create signal pipe: %s\n", strerror(errno));
     if (g_logger) {
-      LOG_ERROR("create signal pipe: %s", strerror(errno));
+      LOG_ERROR("Failed to create signal pipe: %s", strerror(errno));
     }
     return SERVER_ERROR;
   }
@@ -122,7 +122,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     
     if (init_socket(config) != INIT_OK) {
       if (g_logger) {
-        LOG_ERROR("initialize server socket.");
+        LOG_ERROR("Failed to initialize server socket");
       } else {
         fprintf(stderr, "Error: Failed to initialize server socket\n");
       }
@@ -163,7 +163,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     
     if (initialize_ssl(config) != 0) {
       if (g_logger) {
-        LOG_ERROR("initialize SSL context.");
+        LOG_ERROR("Failed to initialize SSL context");
       } else {
         fprintf(stderr, "Error: Failed to initialize SSL context\n");
       }
@@ -186,7 +186,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
   
   if (initialize_thread_pool(config) != 0) {
     if (g_logger) {
-      LOG_ERROR("initialize thread pool.");
+      LOG_ERROR("Failed to initialize thread pool");
     } else {
       fprintf(stderr, "Error: Failed to initialize thread pool\n");
     }
@@ -199,7 +199,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
   
   /* Start accept loop in the current thread */
   if (g_logger) {
-    LOG_INFO("accept loop: socket=%d port=%d", config->socket_fd, config->port);
+    LOG_INFO("Starting accept loop: socket=%d port=%d", config->socket_fd, config->port);
   } else {
     printf("Starting accept loop on socket %d (port %d)\n", config->socket_fd, config->port);
   }
@@ -363,15 +363,15 @@ static void* accept_thread_func(void* arg) {
   int connection_count = 0;
   
   /* Debug: Print socket details */
-  printf("DEBUG: Starting accept thread with socket_fd=%d, PID=%d\n", config->socket_fd, getpid());
+  TRACE_NET("Starting accept thread with socket_fd=%d, PID=%d", config->socket_fd, getpid());
   
   /* Verify socket is still in listen state */
   int acceptconn = 0;
   socklen_t acceptconn_len = sizeof(acceptconn);
   if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
-    printf("WARNING: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+    LOG_WARNING("Failed to check SO_ACCEPTCONN: %s", strerror(errno));
   } else {
-    printf("DEBUG: Socket listening state in accept thread: %s\n", 
+    TRACE_NET("Socket listening state: %s", 
        acceptconn ? "LISTENING" : "NOT LISTENING");
   }
   
@@ -379,9 +379,9 @@ static void* accept_thread_func(void* arg) {
   struct sockaddr_in actual_addr;
   socklen_t actual_len = sizeof(actual_addr);
   if (getsockname(config->socket_fd, (struct sockaddr*)&actual_addr, &actual_len) < 0) {
-    printf("DEBUG: Failed to get socket name: %s\n", strerror(errno));
+    TRACE_NET("Failed to get socket name: %s", strerror(errno));
   } else {
-    printf("DEBUG: Socket is bound to %s:%d in accept thread\n", 
+    TRACE_NET("Socket bound to %s:%d", 
         inet_ntoa(actual_addr.sin_addr), ntohs(actual_addr.sin_port));
   }
   
@@ -441,7 +441,7 @@ static void* accept_thread_func(void* arg) {
     /* Check for socket activity */
     if (FD_ISSET(config->socket_fd, &read_fds)) {
       /* Debug: print that we're about to accept a connection */
-      printf("DEBUG: Detected activity on socket %d, calling accept()...\n", config->socket_fd);
+      TRACE_NET("Detected activity on socket %d, calling accept()...", config->socket_fd);
       
       /* Accept connection */
       client_fd = accept(config->socket_fd, (struct sockaddr*)&client_addr, &client_len);
@@ -449,7 +449,7 @@ static void* accept_thread_func(void* arg) {
       if (client_fd < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           /* Non-blocking socket with no connections ready */
-          printf("DEBUG: accept() returned EAGAIN/EWOULDBLOCK, no connection ready\n");
+          TRACE_NET("accept() returned EAGAIN/EWOULDBLOCK, no connection ready");
           continue;
         }
         
@@ -466,9 +466,9 @@ static void* accept_thread_func(void* arg) {
         int error = 0;
         socklen_t len = sizeof(error);
         if (getsockopt(config->socket_fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
-          fprintf(stderr, "DEBUG: Socket error check failed: %s\n", strerror(errno));
+          TRACE_NET("Socket error check failed: %s", strerror(errno));
         } else if (error != 0) {
-          fprintf(stderr, "DEBUG: Socket has error condition: %s\n", strerror(error));
+          TRACE_NET("Socket has error condition: %s", strerror(error));
         }
         
         continue;
