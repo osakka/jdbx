@@ -296,6 +296,9 @@ ssl_error_t ssl_handshake(ssl_connection_t *conn) {
     LOG_ERROR("SSL handshake failed: %s (code: %d)", error_str ? error_str : "Unknown error", error);
     free(error_str);
     
+    /* Ensure connection is marked as failed */
+    conn->connected = 0;
+    
     return SSL_ERROR_HANDSHAKE;
   }
   
@@ -335,6 +338,18 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
     if (error == SSL_ERROR_ZERO_RETURN) {
       conn->connected = 0;
       return SSL_SUCCESS;
+    }
+    
+    /* Handle system call errors */
+    if (error == SSL_ERROR_SYSCALL) {
+      if (errno != 0) {
+        LOG_ERROR("SSL read system error: %s", strerror(errno));
+      } else {
+        LOG_ERROR("SSL read failed with EOF");
+      }
+      /* Mark connection as disconnected to prevent further operations */
+      conn->connected = 0;
+      return SSL_ERROR_IO;
     }
     
     char *error_str = get_openssl_error();
@@ -427,6 +442,8 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
           } else {
             LOG_ERROR("SSL write failed with EOF");
           }
+          /* Mark connection as disconnected to prevent further operations */
+          conn->connected = 0;
           *bytes_written = total_written;
           return SSL_ERROR_IO;
           

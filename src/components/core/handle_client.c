@@ -781,39 +781,12 @@ cleanup:
     /* Memory safety validation before cleanup */
     int cleanup_safe = 1;
     
-    /* Check for obvious pointer corruption */
-    if ((uintptr_t)client < 0x1000 || (uintptr_t)client > 0x7fffffffffff) {
-      if (g_logger) {
-        LOG_ERROR("Invalid client pointer detected: %p", (void*)client);
-      }
+    /* Check for NULL pointer - only reliable check we can safely perform */
+    if (client == NULL) {
       cleanup_safe = 0;
     }
     
-    /* Validate client structure fields if pointer looks valid */
-    if (cleanup_safe) {
-      /* Check file descriptor validity */
-      if (client->client_fd < 0 || client->client_fd > 65535) {
-        if (g_logger) {
-          LOG_WARNING("Invalid client_fd=%d in structure %p", 
-               client->client_fd, (void*)client);
-        }
-      }
-      
-      /* Check API context pointer */
-      if (client->api_ctx) {
-        if ((uintptr_t)client->api_ctx < 0x1000 || (uintptr_t)client->api_ctx > 0x7fffffffffff) {
-          if (g_logger) {
-            LOG_WARNING("Invalid api_ctx pointer=%p in client %p", 
-                 (void*)client->api_ctx, (void*)client);
-          }
-        }
-      }
-      
-      if (g_logger) {
-        TRACE_NET("CONNECTION_STRUCT_VALIDATED: client=%p, fd=%d, api_ctx=%p, ssl_conn=%p", 
-             (void*)client, client->client_fd, (void*)client->api_ctx, (void*)client->ssl_conn);
-      }
-    }
+    /* Only perform cleanup if client pointer is valid (non-NULL) */
     
     /* Perform safe cleanup if validation passed */
     if (cleanup_safe) {
