@@ -617,17 +617,236 @@ json_value_t* db_find_by_id(database_t* db, const char* collection_path, const c
 /* Additional stubs for other operations */
 json_value_t* db_update(database_t* db, const char* collection_path, const char* id, 
                        json_value_t* update) {
-    /* TODO: Implement update using JDBX B-tree operations */
-    (void)db; (void)collection_path; (void)id; (void)update;
-    LOG_WARNING("Document update not yet implemented in consolidated JDBX");
-    return NULL;
+    (void)db; /* Unused - we use global */
+    
+    if (!g_db.initialized || !collection_path || !id || !update) return NULL;
+    
+    char library[256], collection[256];
+    if (parse_collection_path(collection_path, library, collection) != 0) {
+        return NULL;
+    }
+    
+    /* Get existing document */
+    json_value_t* doc = db_find_by_id(db, collection_path, id);
+    if (!doc) return NULL;
+    
+    pthread_rwlock_rdlock(&g_db.lock);
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &value_len);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        json_free(doc);
+        return NULL;
+    }
+    
+    pthread_rwlock_rdlock(&lib->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection, 
+                                                        strlen(collection) + 1, &value_len);
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        json_free(doc);
+        return NULL;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&lib->lock);
+    
+    /* Apply updates */
+    if (update->type == JSON_OBJECT) {
+        json_value_t* keys = json_object_get_keys(update);
+        if (keys && keys->type == JSON_ARRAY) {
+            size_t num_keys = json_array_size(keys);
+            for (size_t i = 0; i < num_keys; i++) {
+                json_value_t* key_val = json_array_get(keys, i);
+                if (key_val && key_val->type == JSON_STRING) {
+                    const char* key = json_get_string(key_val);
+                    json_value_t* value = json_object_get(update, key);
+                    
+                    /* Handle special update operators */
+                    if (strcmp(key, "$set") == 0 && value && value->type == JSON_OBJECT) {
+                        /* Apply $set operations */
+                        json_value_t* set_keys = json_object_get_keys(value);
+                        if (set_keys && set_keys->type == JSON_ARRAY) {
+                            size_t num_set_keys = json_array_size(set_keys);
+                            for (size_t j = 0; j < num_set_keys; j++) {
+                                json_value_t* set_key_val = json_array_get(set_keys, j);
+                                if (set_key_val && set_key_val->type == JSON_STRING) {
+                                    const char* set_key = json_get_string(set_key_val);
+                                    json_value_t* set_value = json_object_get(value, set_key);
+                                    if (set_value) {
+                                        json_object_set(doc, set_key, json_deep_copy(set_value));
+                                    }
+                                }
+                            }
+                            json_free(set_keys);
+                        }
+                    } else if (strcmp(key, "$unset") == 0 && value && value->type == JSON_OBJECT) {
+                        /* Apply $unset operations */
+                        json_value_t* unset_keys = json_object_get_keys(value);
+                        if (unset_keys && unset_keys->type == JSON_ARRAY) {
+                            size_t num_unset_keys = json_array_size(unset_keys);
+                            for (size_t j = 0; j < num_unset_keys; j++) {
+                                json_value_t* unset_key_val = json_array_get(unset_keys, j);
+                                if (unset_key_val && unset_key_val->type == JSON_STRING) {
+                                    const char* unset_key = json_get_string(unset_key_val);
+                                    json_object_remove(doc, unset_key);
+                                }
+                            }
+                            json_free(unset_keys);
+                        }
+                    } else {
+                        /* Direct field update */
+                        if (value) {
+                            json_object_set(doc, key, json_deep_copy(value));
+                        }
+                    }
+                }
+            }
+            json_free(keys);
+        }
+    }
+    
+    /* Update modified timestamp */
+    json_object_set(doc, "_modified_at", json_create_integer(time(NULL)));
+    
+    /* Update indexes: Remove old document from indexes and add new version */
+    skiplist_iterator_t* idx_iter = skiplist_iterator_create(coll->indexes);
+    void* idx_key = NULL;
+    size_t idx_key_len = 0;
+    void* idx_value = NULL;
+    size_t idx_value_len = 0;
+    
+    while (skiplist_iterator_next(idx_iter, &idx_key, &idx_key_len, &idx_value, &idx_value_len)) {
+        const char* idx_name = (const char*)idx_key;
+        skiplist_t* idx_skiplist = (skiplist_t*)idx_value;
+        
+        /* Extract field name from index name */
+        const char* field_start = strrchr(idx_name, '_');
+        if (field_start) {
+            const char* field_path = field_start + 1;
+            
+            /* Remove old index entry - get old field value first */
+            json_value_t* old_doc = (json_value_t*)skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
+            if (old_doc) {
+                json_value_t* old_field_value = json_object_get(old_doc, field_path);
+                if (old_field_value) {
+                    char* old_field_str = json_stringify(old_field_value);
+                    if (old_field_str) {
+                        skiplist_delete(idx_skiplist, old_field_str, strlen(old_field_str) + 1);
+                        buffer_pool_free_safe(old_field_str);
+                    }
+                }
+            }
+            
+            /* Add new index entry */
+            json_value_t* new_field_value = json_object_get(doc, field_path);
+            if (new_field_value) {
+                char* new_field_str = json_stringify(new_field_value);
+                if (new_field_str) {
+                    skiplist_insert(idx_skiplist, new_field_str, strlen(new_field_str) + 1,
+                                   (void*)id, strlen(id) + 1);
+                    buffer_pool_free_safe(new_field_str);
+                }
+            }
+        }
+    }
+    
+    skiplist_iterator_destroy(idx_iter);
+    
+    /* Get old document to free it */
+    size_t old_doc_len;
+    void* old_doc_ptr = skiplist_search(coll->documents, id, strlen(id) + 1, &old_doc_len);
+    if (old_doc_ptr) {
+        json_value_t* old_doc = *(json_value_t**)old_doc_ptr;
+        json_free(old_doc);
+    }
+    
+    /* Update document in storage - store pointer value */
+    skiplist_delete(coll->documents, id, strlen(id) + 1);
+    skiplist_insert(coll->documents, id, strlen(id) + 1, &doc, sizeof(json_value_t*));
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    LOG_DEBUG("Updated document '%s' in '%s'", id, collection_path);
+    return json_deep_copy(doc);
 }
 
 int db_delete(database_t* db, const char* collection, const char* id) {
-    /* TODO: Implement delete using JDBX B-tree operations */
-    (void)db; (void)collection; (void)id;
-    LOG_WARNING("Document delete not yet implemented in consolidated JDBX");
-    return 0;
+    (void)db; /* Unused - we use global */
+    
+    if (!g_db.initialized || !collection || !id) return 0;
+    
+    char library[64], coll_name[64];
+    if (parse_collection_path(collection, library, coll_name) != 0) {
+        return 0;
+    }
+    
+    pthread_rwlock_rdlock(&g_db.lock);
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &value_len);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return 0;
+    }
+    
+    pthread_rwlock_rdlock(&lib->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, coll_name, 
+                                                        strlen(coll_name) + 1, &value_len);
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        return 0;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&lib->lock);
+    
+    /* Remove document from all indexes before deleting */
+    void* doc_ptr = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
+    json_value_t* doc_to_delete = doc_ptr ? *(json_value_t**)doc_ptr : NULL;
+    if (doc_to_delete) {
+        skiplist_iterator_t* idx_iter = skiplist_iterator_create(coll->indexes);
+        void* idx_key = NULL;
+        size_t idx_key_len = 0;
+        void* idx_value = NULL;
+        size_t idx_value_len = 0;
+        
+        while (skiplist_iterator_next(idx_iter, &idx_key, &idx_key_len, &idx_value, &idx_value_len)) {
+            const char* idx_name = (const char*)idx_key;
+            skiplist_t* idx_skiplist = (skiplist_t*)idx_value;
+            
+            /* Extract field name from index name */
+            const char* field_start = strrchr(idx_name, '_');
+            if (field_start) {
+                const char* field_path = field_start + 1;
+                
+                /* Remove document from this index */
+                json_value_t* field_value = json_object_get(doc_to_delete, field_path);
+                if (field_value) {
+                    char* field_str = json_stringify(field_value);
+                    if (field_str) {
+                        skiplist_delete(idx_skiplist, field_str, strlen(field_str) + 1);
+                        buffer_pool_free_safe(field_str);
+                    }
+                }
+            }
+        }
+        
+        skiplist_iterator_destroy(idx_iter);
+        
+        /* Free the JSON document before deletion */
+        json_free(doc_to_delete);
+    }
+    
+    bool result = skiplist_delete(coll->documents, id, strlen(id) + 1);
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    LOG_DEBUG("Deleted document '%s' from '%s'", id, collection);
+    return result;
 }
 
 json_value_t* db_find(database_t* db, const char* collection_path, const char* query,
@@ -898,9 +1117,94 @@ json_value_t* db_aggregate(database_t* db, const char* collection, json_value_t*
 /* Index operations */
 index_t* db_create_index(database_t* db, const char* collection_path, const char* name,
                         const char* field_path, index_type_t type) {
-    (void)db; (void)collection_path; (void)name; (void)field_path; (void)type;
-    LOG_WARNING("Index creation not yet implemented in consolidated JDBX");
-    return NULL;
+    (void)db; /* Unused - we use global */
+    
+    if (!g_db.initialized || !collection_path || !field_path) return NULL;
+    
+    char library[256], collection[256];
+    if (parse_collection_path(collection_path, library, collection) != 0) {
+        return NULL;
+    }
+    
+    pthread_rwlock_rdlock(&g_db.lock);
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &value_len);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_rdlock(&lib->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection, 
+                                                        strlen(collection) + 1, &value_len);
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&lib->lock);
+    
+    /* Create index with proper name */
+    char index_name[128];
+    snprintf(index_name, sizeof(index_name), "idx_%s_%s", 
+             name ? name : "auto", field_path);
+    
+    /* Create index skiplist for this field */
+    skiplist_t* index_skiplist = skiplist_create(skiplist_string_compare);
+    if (!index_skiplist) {
+        pthread_rwlock_unlock(&coll->lock);
+        return NULL;
+    }
+    
+    /* Store index in collection's indexes skiplist */
+    skiplist_insert(coll->indexes, index_name, strlen(index_name) + 1, 
+                   index_skiplist, sizeof(void*));
+    
+    /* Build index from existing documents */
+    skiplist_iterator_t* doc_iter = skiplist_iterator_create(coll->documents);
+    void* doc_key = NULL;
+    size_t doc_key_len = 0;
+    void* doc_value = NULL;
+    size_t doc_value_len = 0;
+    
+    int indexed_count = 0;
+    while (skiplist_iterator_next(doc_iter, &doc_key, &doc_key_len, &doc_value, &doc_value_len)) {
+        const char* doc_id = (const char*)doc_key;
+        json_value_t* doc = *(json_value_t**)doc_value;
+        
+        /* Extract field value for indexing */
+        json_value_t* field_value = json_object_get(doc, field_path);
+        if (field_value) {
+            char* field_str = json_stringify(field_value);
+            if (field_str) {
+                /* Index entry: field_value -> document_id */
+                skiplist_insert(index_skiplist, field_str, strlen(field_str) + 1,
+                               (void*)doc_id, strlen(doc_id) + 1);
+                buffer_pool_free_safe(field_str);
+                indexed_count++;
+            }
+        }
+    }
+    
+    skiplist_iterator_destroy(doc_iter);
+    pthread_rwlock_unlock(&coll->lock);
+    
+    /* Create index metadata for compatibility */
+    index_t* idx = calloc(1, sizeof(index_t));
+    if (idx) {
+        idx->name = strdup(name ? name : field_path);
+        idx->field_path = strdup(field_path);
+        idx->type = type;
+        pthread_rwlock_init(&idx->lock, NULL);
+        /* The actual skiplist is stored in the collection's indexes skiplist */
+    }
+    
+    LOG_INFO("Created index '%s' on field '%s' in collection '%s' (%d documents indexed)", 
+             name ? name : field_path, field_path, collection_path, indexed_count);
+    return idx;
 }
 
 int db_drop_index(database_t* db, const char* collection_path, const char* name) {
