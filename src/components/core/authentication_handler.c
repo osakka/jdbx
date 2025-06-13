@@ -79,7 +79,64 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
       if (create_default_admin_role(ctx->db, &admin_role_id)) {
         if (admin_role_id) {
           if (create_default_admin_user(ctx->db, admin_role_id)) {
-            LOG_INFO("Deferred bootstrap completed successfully");
+            LOG_INFO("Admin user created successfully, now creating library documents");
+            
+            /* Create library documents for system and default libraries */
+            /* These were created as physical structures but need metadata documents */
+            
+            /* Create system library document */
+            json_value_t* system_lib_doc = json_create_object();
+            json_object_set(system_lib_doc, "type", json_create_string("library"));
+            json_object_set(system_lib_doc, "name", json_create_string("system"));
+            json_object_set(system_lib_doc, "template", json_create_string("system"));
+            json_object_set(system_lib_doc, "owner", json_create_string("admin"));
+            json_object_set(system_lib_doc, "description", json_create_string("System library for internal operations"));
+            
+            /* Add timestamps */
+            time_t now = time(NULL);
+            char timestamp[64];
+            struct tm* utc_tm = gmtime(&now);
+            strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+            json_object_set(system_lib_doc, "created_at", json_create_string(timestamp));
+            json_object_set(system_lib_doc, "updated_at", json_create_string(timestamp));
+            
+            /* Insert system library document */
+            json_value_t* system_lib_result = db_insert_document(ctx->db, "documents", system_lib_doc);
+            if (system_lib_result) {
+              json_value_t* system_lib_id_val = json_object_get(system_lib_result, "uuid");
+              if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
+                LOG_INFO("Created system library document: %s", system_lib_id_val->value.string);
+              }
+              json_free(system_lib_result);
+            } else {
+              LOG_WARNING("Failed to create system library document");
+            }
+            json_free(system_lib_doc);
+            
+            /* Create default library document */
+            json_value_t* default_lib_doc = json_create_object();
+            json_object_set(default_lib_doc, "type", json_create_string("library"));
+            json_object_set(default_lib_doc, "name", json_create_string("default"));
+            json_object_set(default_lib_doc, "template", json_create_string("standard"));
+            json_object_set(default_lib_doc, "owner", json_create_string("admin"));
+            json_object_set(default_lib_doc, "description", json_create_string("Default library for general use"));
+            json_object_set(default_lib_doc, "created_at", json_create_string(timestamp));
+            json_object_set(default_lib_doc, "updated_at", json_create_string(timestamp));
+            
+            /* Insert default library document */
+            json_value_t* default_lib_result = db_insert_document(ctx->db, "documents", default_lib_doc);
+            if (default_lib_result) {
+              json_value_t* default_lib_id_val = json_object_get(default_lib_result, "uuid");
+              if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
+                LOG_INFO("Created default library document: %s", default_lib_id_val->value.string);
+              }
+              json_free(default_lib_result);
+            } else {
+              LOG_WARNING("Failed to create default library document");
+            }
+            json_free(default_lib_doc);
+            
+            LOG_INFO("Deferred bootstrap completed successfully with library documents");
             /* Disable bootstrap mode */
             ctx->db->is_bootstrap_mode = 0;
             unsetenv("JDBX_DEFERRED_BOOTSTRAP");
