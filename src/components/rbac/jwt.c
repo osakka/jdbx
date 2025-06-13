@@ -323,7 +323,7 @@ void jwt_free(jwt_token_t* token) {
   
   /* Free other fields */
   if (token->signature) buffer_pool_free_safe(token->signature);
-  if (token->token_str) buffer_pool_free_safe(token->token_str);
+  if (token->token_str) free(token->token_str);  /* strdup allocated */
   
   buffer_pool_free_safe(token);
 }
@@ -969,8 +969,8 @@ char* jwt_create_token_pair(const char* secret, const char* user_id, const char*
   TRACE_AUTH("Token structures freed.");
   
   if (!access_token_str || !refresh_token_str) {
-    if (access_token_str) buffer_pool_free(access_token_str);
-    if (refresh_token_str) buffer_pool_free(refresh_token_str);
+    if (access_token_str) free(access_token_str);  /* strdup allocated */
+    if (refresh_token_str) free(refresh_token_str);  /* strdup allocated */
     return NULL;
   }
   
