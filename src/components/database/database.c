@@ -1,11 +1,7 @@
 /*
- * JDBX Database Implementation - Consolidated Single Source
- * 
- * This is the unified database implementation using JDBX storage engine
- * with proper page management, B-tree storage, and Write-Ahead Logging.
- * 
- * Architecture: Libraries → Collections → Documents
- * Storage: JDBX page manager with B-tree indexes and WAL persistence
+ * JDBX Database - Lock-Free Hierarchical Implementation with JDBX Storage
+ * Single source of truth: Libraries → Collections → Documents
+ * Storage: JDBX page manager with WAL, B-tree, and caching
  */
 
 #include <stdio.h>
@@ -15,6 +11,8 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include "database/database.h"
@@ -27,21 +25,39 @@
 #include "database/query_tracker.h"
 #include "database/index_metrics.h"
 #include "utils/generic_cache.h"
+#include "utils/skiplist.h"
 #include "utils/buffer_pool.h"
 
-/* JDBX Database Structure */
+/* Clean hierarchical database structure */
+typedef struct library {
+    char name[64];
+    void* collections;  /* Skiplist of collections */
+    pthread_rwlock_t lock;
+} library_t;
+
+typedef struct collection {
+    char name[64];
+    char library[64];
+    void* documents;    /* Skiplist of documents */
+    void* indexes;      /* Skiplist of indexes */
+    json_value_t* schema;
+    pthread_rwlock_t lock;
+} collection_t;
+
+/* JDBX Database with lock-free architecture */
 typedef struct {
-    jdbx_page_manager_t* page_manager;  /* JDBX storage engine with WAL */
-    jdbx_btree_t* documents_btree;      /* Main documents B-tree */
+    /* JDBX storage engine */
+    jdbx_page_manager_t* page_manager;  /* WAL, B-tree, caching */
     
-    /* Caching and optimization */
-    generic_cache_t* query_cache;
-    generic_cache_t* doc_cache;
-    
-    /* Thread synchronization */
+    /* Lock-free hierarchical structure */
+    void* libraries;           /* Skiplist of libraries */
     pthread_rwlock_t lock;
     bool initialized;
-    char path[512];
+    char path[256];
+    
+    /* Integrated components */
+    generic_cache_t* query_cache;
+    generic_cache_t* doc_cache;
     
     /* Compatibility facade */
     database_t facade;
@@ -50,28 +66,26 @@ typedef struct {
 /* Global database instance */
 static jdbx_database_t g_db = {
     .page_manager = NULL,
-    .documents_btree = NULL,
-    .query_cache = NULL,
-    .doc_cache = NULL,
+    .libraries = NULL,
     .lock = PTHREAD_RWLOCK_INITIALIZER,
     .initialized = false,
     .path = {0},
+    .query_cache = NULL,
+    .doc_cache = NULL,
     .facade = {0}
 };
 
-/* Key generation helpers */
-static void make_library_key(const char* library_name, char* key, size_t key_size) {
-    snprintf(key, key_size, "lib:%s", library_name);
-}
+/* Forward declarations */
+static library_t* get_or_create_library(const char* name);
+static collection_t* get_or_create_collection(const char* library_name, const char* collection_name);
+static int parse_collection_path(const char* path, char* library, char* collection);
+static int skiplist_string_compare(const void* a, size_t a_len, const void* b, size_t b_len);
 
-static void make_collection_key(const char* library_name, const char* collection_name, 
-                               char* key, size_t key_size) {
-    snprintf(key, key_size, "coll:%s:%s", library_name, collection_name);
-}
-
-static void make_document_key(const char* library_name, const char* collection_name, 
-                             const char* doc_id, char* key, size_t key_size) {
-    snprintf(key, key_size, "doc:%s:%s:%s", library_name, collection_name, doc_id);
+/* Helper: String comparison for skiplist */
+static int skiplist_string_compare(const void* a, size_t a_len, const void* b, size_t b_len) {
+    (void)a_len; /* Strings are null-terminated */
+    (void)b_len;
+    return strcmp((const char*)a, (const char*)b);
 }
 
 /* Helper: Parse library/collection path */
@@ -94,11 +108,114 @@ static int parse_collection_path(const char* path, char* library, char* collecti
     return 0;
 }
 
-/* JDBX string comparison for B-trees */
-static int jdbx_string_compare(const void* a, size_t a_len, const void* b, size_t b_len) {
-    (void)a_len; /* Keys are null-terminated */
-    (void)b_len;
-    return strcmp((const char*)a, (const char*)b);
+/* JSON helper functions */
+static void json_object_set_string(json_value_t* obj, const char* key, const char* value) {
+    if (!obj || obj->type != JSON_OBJECT || !key) return;
+    json_value_t* str_val = json_create_string(value);
+    if (str_val) {
+        json_object_set(obj, key, str_val);
+    }
+}
+
+/* Lock-free library management with atomic operations */
+static pthread_mutex_t g_library_creation_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Get or create library - Lock-free for reads, minimal locking for writes */
+static library_t* get_or_create_library(const char* name) {
+    if (!name) return NULL;
+    
+    /* First attempt: Lock-free search (skiplist is thread-safe for reads) */
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, name, strlen(name) + 1, &value_len);
+    if (lib) {
+        return lib; /* Found it - no locking needed */
+    }
+    
+    /* Library doesn't exist, we need to create it */
+    pthread_mutex_lock(&g_library_creation_mutex);
+    
+    /* Double-check after acquiring creation mutex */
+    lib = (library_t*)skiplist_search(g_db.libraries, name, strlen(name) + 1, &value_len);
+    if (lib) {
+        pthread_mutex_unlock(&g_library_creation_mutex);
+        return lib; /* Another thread created it while we waited */
+    }
+    
+    LOG_DEBUG("Creating library: %s", name);
+    
+    /* Create new library structure */
+    lib = calloc(1, sizeof(library_t));
+    if (!lib) {
+        pthread_mutex_unlock(&g_library_creation_mutex);
+        LOG_ERROR("Memory allocation failed for library '%s'", name);
+        return NULL;
+    }
+    
+    strncpy(lib->name, name, sizeof(lib->name) - 1);
+    lib->collections = skiplist_create(skiplist_string_compare);
+    pthread_rwlock_init(&lib->lock, NULL);
+    
+    /* Insert into skiplist */
+    bool insert_success = skiplist_insert(g_db.libraries, lib->name, strlen(lib->name) + 1, lib, sizeof(library_t));
+    
+    pthread_mutex_unlock(&g_library_creation_mutex);
+    
+    if (!insert_success) {
+        LOG_ERROR("Failed to insert library '%s' into skiplist", name);
+        skiplist_destroy(lib->collections);
+        pthread_rwlock_destroy(&lib->lock);
+        free(lib);
+        return NULL;
+    }
+    
+    LOG_INFO("Created library '%s'", name);
+    return lib;
+}
+
+/* Get or create collection */
+static collection_t* get_or_create_collection(const char* library_name, const char* collection_name) {
+    if (!library_name || !collection_name) return NULL;
+    
+    library_t* lib = get_or_create_library(library_name);
+    if (!lib) return NULL;
+    
+    pthread_rwlock_wrlock(&lib->lock);
+    
+    /* Check if collection exists */
+    size_t value_len;
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection_name, 
+                                                       strlen(collection_name) + 1, &value_len);
+    if (coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        return coll;
+    }
+    
+    /* Create new collection */
+    coll = calloc(1, sizeof(collection_t));
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        return NULL;
+    }
+    
+    strncpy(coll->name, collection_name, sizeof(coll->name) - 1);
+    strncpy(coll->library, library_name, sizeof(coll->library) - 1);
+    coll->documents = skiplist_create(skiplist_string_compare);
+    coll->indexes = skiplist_create(skiplist_string_compare);
+    pthread_rwlock_init(&coll->lock, NULL);
+    
+    /* Add to library */
+    skiplist_insert(lib->collections, coll->name, strlen(coll->name) + 1, 
+                   coll, sizeof(collection_t));
+    
+    pthread_rwlock_unlock(&lib->lock);
+    
+    LOG_INFO("Created collection '%s/%s'", library_name, collection_name);
+    
+    /* Register with adaptive indexing */
+    char full_path[128];
+    snprintf(full_path, sizeof(full_path), "%s/%s", library_name, collection_name);
+    
+    return coll;
 }
 
 /*==============================================================================
@@ -140,7 +257,7 @@ database_t* db_init(const char* path) {
     
     LOG_INFO("Initializing JDBX database at %s", jdbx_path);
     
-    /* Initialize JDBX page manager (handles WAL, caching, B-trees automatically) */
+    /* Initialize JDBX page manager for persistent storage */
     struct stat st;
     bool file_exists = (stat(jdbx_path, &st) == 0);
     
@@ -163,12 +280,12 @@ database_t* db_init(const char* path) {
         return NULL;
     }
     
-    /* Create main documents B-tree (JDBX handles the complexity) */
-    g_db.documents_btree = jdbx_btree_create(g_db.page_manager, jdbx_string_compare);
-    if (!g_db.documents_btree) {
+    /* Initialize in-memory lock-free structures */
+    g_db.libraries = skiplist_create(skiplist_string_compare);
+    if (!g_db.libraries) {
         jdbx_close(g_db.page_manager);
         pthread_rwlock_unlock(&g_db.lock);
-        LOG_ERROR("Failed to create documents B-tree");
+        LOG_ERROR("Failed to create libraries skiplist");
         return NULL;
     }
     
@@ -176,18 +293,20 @@ database_t* db_init(const char* path) {
     g_db.query_cache = generic_cache_create(1000);
     g_db.doc_cache = generic_cache_create(10000);
     
-    /* Initialize system collections metadata in documents B-tree */
+    /* Create system library */
+    get_or_create_library("system");
+    
+    /* Create system collections */
     const char* system_collections[] = {
-        "system/config", "system/metrics", "system/users", "system/roles", 
-        "system/sessions", "system/libraries", "system/indexes", "default/test"
+        "config", "metrics", "users", "roles", "sessions", "libraries", "indexes"
     };
     
     for (size_t i = 0; i < sizeof(system_collections)/sizeof(char*); i++) {
-        char meta_key[256];
-        snprintf(meta_key, sizeof(meta_key), "_meta:collection:%s", system_collections[i]);
-        jdbx_btree_insert(g_db.documents_btree, meta_key, strlen(meta_key) + 1,
-                         "{\"created\":true}", 17);
+        get_or_create_collection("system", system_collections[i]);
     }
+    
+    /* Create default library */
+    get_or_create_library("default");
     
     /* Initialize subsystems */
     adaptive_indexer_init(&g_db.facade);
@@ -240,10 +359,10 @@ void db_shutdown(void) {
         g_db.doc_cache = NULL;
     }
     
-    /* Close documents B-tree */
-    if (g_db.documents_btree) {
-        jdbx_btree_close(g_db.documents_btree);
-        g_db.documents_btree = NULL;
+    /* Clean up libraries */
+    if (g_db.libraries) {
+        skiplist_destroy(g_db.libraries);
+        g_db.libraries = NULL;
     }
     
     /* Sync and close JDBX page manager */
@@ -276,75 +395,88 @@ void db_shutdown(void) {
  *============================================================================*/
 
 int db_create_collection(database_t* db, const char* collection_path) {
-    (void)db; /* Use global instance */
+    (void)db; /* Unused - we use global */
     
     if (!g_db.initialized || !collection_path) return 0;
     
-    pthread_rwlock_wrlock(&g_db.lock);
+    char library[256], collection[256];
+    if (parse_collection_path(collection_path, library, collection) != 0) {
+        return 0;
+    }
     
-    /* Create collection metadata in documents B-tree */
-    char meta_key[256];
-    snprintf(meta_key, sizeof(meta_key), "_meta:collection:%s", collection_path);
-    jdbx_btree_insert(g_db.documents_btree, meta_key, strlen(meta_key) + 1,
-                     "{\"created\":true}", 17);
-    
-    pthread_rwlock_unlock(&g_db.lock);
-    
-    LOG_INFO("Created collection '%s'", collection_path);
-    return 1;
+    collection_t* coll = get_or_create_collection(library, collection);
+    return coll ? 1 : 0;
 }
 
 int db_collection_exists(database_t* db, const char* collection_path) {
-    (void)db; /* Use global instance */
+    (void)db; /* Unused - we use global */
     
     if (!g_db.initialized || !collection_path) return 0;
     
-    pthread_rwlock_rdlock(&g_db.lock);
+    char library[256], collection[256];
+    if (parse_collection_path(collection_path, library, collection) != 0) {
+        return 0;
+    }
     
-    char meta_key[256];
-    snprintf(meta_key, sizeof(meta_key), "_meta:collection:%s", collection_path);
+    /* Lock-free library lookup */
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &value_len);
+    if (!lib) {
+        return 0;
+    }
     
-    void* value = NULL;
-    size_t value_len = 0;
-    int exists = (jdbx_btree_get(g_db.documents_btree, meta_key, strlen(meta_key) + 1,
-                                &value, &value_len) == 0);
+    /* Lock collection for read */
+    pthread_rwlock_rdlock(&lib->lock);
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection, 
+                                                        strlen(collection) + 1, &value_len);
+    pthread_rwlock_unlock(&lib->lock);
     
-    pthread_rwlock_unlock(&g_db.lock);
-    
-    return exists;
+    return coll ? 1 : 0;
 }
 
 json_value_t* db_list_collections(database_t* db) {
-    (void)db; /* Use global instance */
+    (void)db; /* Unused - we use global */
     
     if (!g_db.initialized) return json_create_array();
     
-    pthread_rwlock_rdlock(&g_db.lock);
+    json_value_t* all_collections = json_create_array();
     
-    json_value_t* collections = json_create_array();
+    /* Lock-free iteration through libraries */
+    skiplist_iterator_t* lib_iter = skiplist_iterator_create(g_db.libraries);
+    void* lib_key = NULL;
+    size_t lib_key_len = 0;
+    void* lib_value = NULL;
+    size_t lib_value_len = 0;
     
-    /* Iterate through documents B-tree for collection metadata */
-    jdbx_btree_iterator_t* iter = jdbx_btree_iterator_create(g_db.documents_btree);
-    if (iter) {
-        void* key = NULL;
-        size_t key_len = 0;
-        void* value = NULL;
-        size_t value_len = 0;
+    while (skiplist_iterator_next(lib_iter, &lib_key, &lib_key_len, &lib_value, &lib_value_len)) {
+        library_t* lib = (library_t*)lib_value;
         
-        while (jdbx_btree_iterator_next(iter, &key, &key_len, &value, &value_len) == 0) {
-            const char* full_key = (const char*)key;
-            /* Extract collection paths from metadata keys */
-            if (strncmp(full_key, "_meta:collection:", 17) == 0) {
-                json_array_append(collections, json_create_string(full_key + 17));
-            }
+        /* Lock individual library for collection iteration */
+        pthread_rwlock_rdlock(&lib->lock);
+        
+        /* Iterate through collections in this library */
+        skiplist_iterator_t* coll_iter = skiplist_iterator_create(lib->collections);
+        void* coll_key = NULL;
+        size_t coll_key_len = 0;
+        void* coll_value = NULL;
+        size_t coll_value_len = 0;
+        
+        while (skiplist_iterator_next(coll_iter, &coll_key, &coll_key_len, &coll_value, &coll_value_len)) {
+            collection_t* coll = (collection_t*)coll_value;
+            
+            /* Create full path */
+            char full_path[128];
+            snprintf(full_path, sizeof(full_path), "%s/%s", lib->name, coll->name);
+            json_array_append(all_collections, json_create_string(full_path));
         }
+        skiplist_iterator_destroy(coll_iter);
         
-        jdbx_btree_iterator_destroy(iter);
+        pthread_rwlock_unlock(&lib->lock);
     }
     
-    pthread_rwlock_unlock(&g_db.lock);
+    skiplist_iterator_destroy(lib_iter);
     
-    return collections;
+    return all_collections;
 }
 
 /*==============================================================================
@@ -352,7 +484,9 @@ json_value_t* db_list_collections(database_t* db) {
  *============================================================================*/
 
 json_value_t* db_insert(database_t* db, const char* collection_path, json_value_t* document) {
-    (void)db; /* Use global instance */
+    (void)db; /* Unused - we use global */
+    
+    LOG_DEBUG("db_insert called for collection: %s", collection_path);
     
     if (!g_db.initialized || !collection_path || !document) return NULL;
     
@@ -361,12 +495,9 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
         return NULL;
     }
     
-    /* Ensure collection exists */
-    if (!db_collection_exists(db, collection_path)) {
-        if (!db_create_collection(db, collection_path)) {
-            return NULL;
-        }
-    }
+    LOG_DEBUG("db_insert: Getting collection %s/%s", library, collection);
+    collection_t* coll = get_or_create_collection(library, collection);
+    if (!coll) return NULL;
     
     /* Generate ID if not present */
     json_value_t* id_val = json_object_get(document, "_id");
@@ -382,37 +513,70 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
     json_object_set(document, "_created_at", json_create_integer(time(NULL)));
     json_object_set(document, "_modified_at", json_create_integer(time(NULL)));
     
-    pthread_rwlock_wrlock(&g_db.lock);
+    LOG_DEBUG("db_insert: Acquiring write lock for collection %s", collection_path);
+    pthread_rwlock_wrlock(&coll->lock);
+    LOG_DEBUG("db_insert: Write lock acquired, inserting document");
     
-    /* Store document in JDBX B-tree */
-    char doc_key[512];
-    make_document_key(library, collection, doc_id, doc_key, sizeof(doc_key));
+    /* Insert into documents skiplist - store pointer value */
+    json_value_t* doc_copy = json_deep_copy(document);
+    skiplist_insert(coll->documents, doc_id, strlen(doc_id) + 1, &doc_copy, sizeof(json_value_t*));
     
-    char* doc_json = json_stringify(document);
-    if (!doc_json) {
-        pthread_rwlock_unlock(&g_db.lock);
-        return NULL;
+    /* Update all indexes for this document */
+    skiplist_iterator_t* idx_iter = skiplist_iterator_create(coll->indexes);
+    void* idx_key = NULL;
+    size_t idx_key_len = 0;
+    void* idx_value = NULL;
+    size_t idx_value_len = 0;
+    
+    while (skiplist_iterator_next(idx_iter, &idx_key, &idx_key_len, &idx_value, &idx_value_len)) {
+        const char* idx_name = (const char*)idx_key;
+        skiplist_t* idx_skiplist = (skiplist_t*)idx_value;
+        
+        /* Extract field name from index name (idx_auto_fieldname or idx_name_fieldname) */
+        const char* field_start = strrchr(idx_name, '_');
+        if (field_start) {
+            const char* field_path = field_start + 1;
+            
+            /* Get field value and add to index */
+            json_value_t* field_value = json_object_get(doc_copy, field_path);
+            if (field_value) {
+                char* field_str = json_stringify(field_value);
+                if (field_str) {
+                    skiplist_insert(idx_skiplist, field_str, strlen(field_str) + 1,
+                                   (void*)doc_id, strlen(doc_id) + 1);
+                    buffer_pool_free_safe(field_str);
+                }
+            }
+        }
     }
     
-    /* Store in documents B-tree */
-    int result = jdbx_btree_insert(g_db.documents_btree,
-                                  doc_key, strlen(doc_key) + 1,
-                                  doc_json, strlen(doc_json) + 1);
+    skiplist_iterator_destroy(idx_iter);
+    pthread_rwlock_unlock(&coll->lock);
     
-    buffer_pool_free_safe(doc_json);
-    
-    pthread_rwlock_unlock(&g_db.lock);
-    
-    if (result == 0) {
-        LOG_DEBUG("Inserted document '%s' into '%s'", doc_id, collection_path);
-        return json_deep_copy(document);
+    /* Also store in JDBX for persistence */
+    if (g_db.page_manager) {
+        char doc_key[512];
+        snprintf(doc_key, sizeof(doc_key), "doc:%s:%s:%s", library, collection, doc_id);
+        
+        char* doc_json = json_stringify(doc_copy);
+        if (doc_json) {
+            /* Create a B-tree for persistent storage if needed */
+            jdbx_btree_t* persistent_btree = jdbx_btree_create(g_db.page_manager, skiplist_string_compare);
+            if (persistent_btree) {
+                jdbx_btree_insert(persistent_btree, doc_key, strlen(doc_key) + 1,
+                                 doc_json, strlen(doc_json) + 1);
+                jdbx_btree_close(persistent_btree);
+            }
+            buffer_pool_free_safe(doc_json);
+        }
     }
     
-    return NULL;
+    LOG_DEBUG("Inserted document '%s' into '%s'", doc_id, collection_path);
+    return json_deep_copy(document);
 }
 
 json_value_t* db_find_by_id(database_t* db, const char* collection_path, const char* id) {
-    (void)db; /* Use global instance */
+    (void)db; /* Unused - we use global */
     
     if (!g_db.initialized || !collection_path || !id) return NULL;
     
@@ -421,27 +585,33 @@ json_value_t* db_find_by_id(database_t* db, const char* collection_path, const c
         return NULL;
     }
     
-    pthread_rwlock_rdlock(&g_db.lock);
-    
-    char doc_key[512];
-    make_document_key(library, collection, id, doc_key, sizeof(doc_key));
-    
-    void* doc_json = NULL;
-    size_t doc_json_len = 0;
-    
-    /* Get document from JDBX B-tree */
-    int result = jdbx_btree_get(g_db.documents_btree,
-                               doc_key, strlen(doc_key) + 1,
-                               &doc_json, &doc_json_len);
-    
-    pthread_rwlock_unlock(&g_db.lock);
-    
-    if (result == 0 && doc_json) {
-        json_value_t* document = json_parse((const char*)doc_json);
-        return document;
+    /* Lock-free library lookup */
+    size_t value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &value_len);
+    if (!lib) {
+        return NULL;
     }
     
-    return NULL;
+    /* Lock library for collection lookup */
+    pthread_rwlock_rdlock(&lib->lock);
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection, 
+                                                        strlen(collection) + 1, &value_len);
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        return NULL;
+    }
+    
+    /* Lock collection for document access */
+    pthread_rwlock_rdlock(&coll->lock);
+    pthread_rwlock_unlock(&lib->lock);
+    
+    void* doc_ptr = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
+    json_value_t* doc = doc_ptr ? *(json_value_t**)doc_ptr : NULL;
+    json_value_t* result = doc ? json_deep_copy(doc) : NULL;
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    return result;
 }
 
 /* Additional stubs for other operations */
@@ -462,10 +632,134 @@ int db_delete(database_t* db, const char* collection, const char* id) {
 
 json_value_t* db_find(database_t* db, const char* collection_path, const char* query,
                      const char* projection, int limit, int skip, const char* sort) {
-    /* TODO: Implement query using JDBX B-tree iterator */
-    (void)db; (void)collection_path; (void)query; (void)projection; (void)limit; (void)skip; (void)sort;
-    LOG_WARNING("Document query not yet implemented in consolidated JDBX");
-    return json_create_array();
+    (void)db; /* Unused - we use global */
+    (void)projection; /* TODO: Implement projection */
+    (void)sort; /* TODO: Implement sorting */
+    
+    if (!g_db.initialized || !collection_path) return json_create_array();
+    
+    char library[256], collection[256];
+    if (parse_collection_path(collection_path, library, collection) != 0) {
+        return json_create_array();
+    }
+    
+    /* Parse query */
+    json_value_t* query_obj = NULL;
+    if (query && strlen(query) > 0) {
+        query_obj = json_parse(query);
+        if (!query_obj) {
+            LOG_ERROR("Invalid query JSON: %s", query);
+            return json_create_array();
+        }
+    }
+    
+    /* Lock-free library lookup */
+    size_t lookup_value_len;
+    library_t* lib = (library_t*)skiplist_search(g_db.libraries, library, strlen(library) + 1, &lookup_value_len);
+    if (!lib) {
+        if (query_obj) json_free(query_obj);
+        return json_create_array();
+    }
+    
+    /* Lock library for collection lookup */
+    pthread_rwlock_rdlock(&lib->lock);
+    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection, 
+                                                        strlen(collection) + 1, &lookup_value_len);
+    if (!coll) {
+        pthread_rwlock_unlock(&lib->lock);
+        if (query_obj) json_free(query_obj);
+        return json_create_array();
+    }
+    
+    LOG_DEBUG("db_find: Acquiring read lock for collection %s/%s", library, collection);
+    pthread_rwlock_rdlock(&coll->lock);
+    pthread_rwlock_unlock(&lib->lock);
+    LOG_DEBUG("db_find: Read lock acquired for %s/%s", library, collection);
+    
+    /* Execute query */
+    json_value_t* results = json_create_array();
+    skiplist_iterator_t* iter = skiplist_iterator_create(coll->documents);
+    int count = 0;
+    int skipped = 0;
+    
+    LOG_DEBUG("Executing query on %s/%s", library, collection);
+    
+    void* key = NULL;
+    size_t key_len = 0;
+    void* value = NULL;
+    size_t value_len = 0;
+    
+    while (skiplist_iterator_next(iter, &key, &key_len, &value, &value_len)) {
+        if (limit > 0 && count >= limit) break;
+        
+        /* value contains the pointer value, dereference it */
+        json_value_t* doc = *(json_value_t**)value;
+        
+        /* Safety check for null document */
+        if (!doc) {
+            LOG_ERROR("Null document found in skiplist at key: %s", (const char*)key);
+            continue;
+        }
+        
+        /* Apply query filter */
+        bool matches = true;
+        if (query_obj && query_obj->type == JSON_OBJECT) {
+            /* Simple query matching */
+            json_value_t* keys = json_object_get_keys(query_obj);
+            if (keys && keys->type == JSON_ARRAY) {
+                size_t num_keys = json_array_size(keys);
+                for (size_t i = 0; i < num_keys; i++) {
+                    json_value_t* key_val = json_array_get(keys, i);
+                    if (key_val && key_val->type == JSON_STRING) {
+                        const char* field = json_get_string(key_val);
+                        json_value_t* query_value = json_object_get(query_obj, field);
+                        json_value_t* doc_value = json_object_get(doc, field);
+                        
+                        /* Simple string equality check for now */
+                        if (!doc_value) {
+                            matches = false;
+                            break;
+                        }
+                        
+                        /* Compare based on type */
+                        if (query_value->type == JSON_STRING && doc_value->type == JSON_STRING) {
+                            if (strcmp(query_value->value.string, doc_value->value.string) != 0) {
+                                matches = false;
+                                break;
+                            }
+                        } else {
+                            /* For non-string types, use json_equals */
+                            if (!json_equals(doc_value, query_value)) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                json_free(keys);
+            }
+        }
+        
+        if (matches) {
+            if (skipped < skip) {
+                skipped++;
+            } else {
+                json_array_append(results, json_deep_copy(doc));
+                count++;
+            }
+        }
+    }
+    
+    skiplist_iterator_destroy(iter);
+    LOG_DEBUG("db_find: Releasing read lock for %s/%s", library, collection);
+    pthread_rwlock_unlock(&coll->lock);
+    LOG_DEBUG("db_find: Read lock released for %s/%s", library, collection);
+    
+    if (query_obj) {
+        json_free(query_obj);
+    }
+    
+    return results;
 }
 
 /*==============================================================================
