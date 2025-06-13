@@ -1198,13 +1198,18 @@ json_value_t* db_query_documents(database_t* db, const char* collection, json_va
         query_str = json_stringify(query);
     }
     
-    json_value_t* result = db_find(db, collection, query_str, NULL, -1, 0, NULL);
+    json_value_t* documents_array = db_find(db, collection, query_str, NULL, -1, 0, NULL);
     
     if (query_str) {
         buffer_pool_free_safe(query_str);
     }
     
-    return result;
+    /* Wrap results in proper API format with documents field */
+    json_value_t* response = json_create_object();
+    json_object_set(response, "documents", documents_array);
+    json_object_set(response, "count", json_create_integer(json_array_size(documents_array)));
+    
+    return response;
 }
 
 /* Schema operations */

@@ -114,18 +114,20 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   }
   
   /* HIERARCHICAL: Query system/users collection */
-  json_value_t* results = db_query_documents(ctx->db, "system/users", query);
+  json_value_t* query_results = db_query_documents(ctx->db, "system/users", query);
   
   json_free(query);
     
-  if (!results) {
+  if (!query_results) {
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query user\"}", "application/json");
   }
   
+  /* Extract documents array from response object */
+  json_value_t* results = json_object_get(query_results, "documents");
   if (!results || results->type != JSON_ARRAY || json_array_size(results) == 0) {
-    json_free(results);
+    json_free(query_results);
     json_free(body);
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
@@ -137,7 +139,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!id_val || id_val->type != JSON_STRING || 
       !password_hash_val || password_hash_val->type != JSON_STRING) {
-    json_free(results);
+    json_free(query_results);
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"User data corrupted\"}", "application/json");
@@ -150,7 +152,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   extern int verify_password(const char* password, const char* hash);
   
   if (!verify_password(password, stored_hash)) {
-    json_free(results);
+    json_free(query_results);
     json_free(body);
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
@@ -169,7 +171,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!response_str || !response_obj) {
     LOG_ERROR("Failed to create token response.");
-    json_free(results);
+    json_free(query_results);
     json_free(body);
     if (response_obj) json_free(response_obj);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -237,7 +239,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     response_str = json_stringify(response_obj);
     
     /* Clean up and return response */
-    json_free(results);
+    json_free(query_results);
     json_free(body);
     
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
