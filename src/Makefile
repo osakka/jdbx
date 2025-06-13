@@ -11,7 +11,7 @@ TEST_DIR = ../tests
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -g -O0 -Wall -Wextra -I$(INCLUDE_DIR) -I.
+CFLAGS = -g -O0 -Wall -Wextra -I$(INCLUDE_DIR) -I. -DUSE_QUICKJS
 LDFLAGS = -lpthread -lm -lssl -lcrypto
 
 # QuickJS support

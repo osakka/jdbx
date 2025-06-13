@@ -500,8 +500,7 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
     if (!coll) return NULL;
     
     /* Generate ID if not present */
-    json_value_t* id_val = json_object_get(document, "uuid");
-    if (!id_val) id_val = json_object_get(document, "_id");
+    json_value_t* id_val = json_object_get(document, "_id");
     char doc_id[64];
     if (!id_val) {
         snprintf(doc_id, sizeof(doc_id), "doc-%ld-%d", time(NULL), rand());
