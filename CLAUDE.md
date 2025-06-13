@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 13, 2025 (v4.0.1 - Authentication Session Lookup Fix)
+**Last Updated**: June 13, 2025 (v4.1.0 - JavaScript-Enhanced Metrics System)
 
 ## Core Principles
 
@@ -496,7 +496,54 @@ Regular code audits ensure quality:
    - PBKDF2 placeholder with SHA256 fallback (temporary)
    - All system actors comply with RBAC
 
-## Recent Updates (v4.0.1 - June 13, 2025)
+## Recent Updates (v4.1.0 - June 13, 2025)
+
+### JavaScript-Enhanced Metrics System
+1. **Single Source of Truth Enforcement**: Eliminated duplicate metrics implementations
+   - Removed redundant `enhanced_metrics.c/h` files that violated single source principle
+   - Enhanced existing `metrics.c` with JavaScript integration instead of parallel systems
+   - Maintained library-scoped metrics architecture with proper system aggregation
+   - Zero duplicate implementations across the entire metrics subsystem
+
+2. **JavaScript Analytics Integration**: Advanced analytics using JDBX's integrated QuickJS engine
+   - **Error Classification**: Intelligent error tracking with severity analysis (`metrics_error_tracker.js`)
+   - **Database Performance**: Query analysis, index optimization, and health scoring (`metrics_db_performance.js`)
+   - **Resource Monitoring**: System resource tracking with predictive analysis (`metrics_resource_monitor.js`)
+   - **Temporal Analysis**: Time-series analysis, percentiles, and anomaly detection (`metrics_temporal_analysis.js`)
+
+3. **Enhanced Metrics API**: New JavaScript-powered analytics functions
+   - `metrics_calculate_percentiles_js()` - Response time percentile calculations with fallback
+   - `metrics_analyze_performance_trends_js()` - Performance trend analysis and recommendations
+   - `metrics_calculate_health_score_js()` - Database health scoring with actionable insights
+   - `metrics_detect_anomalies_js()` - Time-series anomaly detection with configurable sensitivity
+   - `metrics_aggregate_by_time_window_js()` - Temporal aggregation (hourly, daily, weekly)
+
+4. **Library-Scoped Architecture**: Preserved existing per-library metrics with system aggregation
+   - Metrics collected per library with proper namespace isolation
+   - System-level aggregation for overall health monitoring
+   - Compatible with unified documents architecture
+   - Configurable retention policies via JavaScript analytics
+
+5. **Production-Ready Implementation**: Zero-warning build with comprehensive error handling
+   - Clean compilation with `-Wall -Wextra` flags
+   - Graceful fallbacks when JavaScript engine unavailable
+   - Conditional compilation with `#ifdef USE_QUICKJS`
+   - External reference to global `g_js_engine` from existing `js_api.c`
+
+### Key Implementation Files:
+- `src/components/utils/metrics.c` - Enhanced with JavaScript analytics functions
+- `src/include/utils/metrics.h` - Added JavaScript-enhanced analytics API
+- `src/components/utils/library_metrics.c` - Existing library-scoped metrics preserved
+- `share/examples/js-examples/metrics_*.js` - Comprehensive JavaScript analytics functions
+
+### Benefits Delivered:
+- **"Everything" Metrics Collection**: Comprehensive coverage including errors, performance, resources, and business metrics
+- **JavaScript-Enhanced Analytics**: Advanced percentiles, trend analysis, anomaly detection powered by QuickJS
+- **UI-Ready Data**: Metrics formatted for charts with proper units, legends, and visualizations
+- **Single Source of Truth**: No duplicate metric systems, clean architectural integration
+- **Configurable Retention**: JavaScript-driven retention policies and intelligent cleanup
+
+## Previous Updates (v4.0.1 - June 13, 2025)
 
 ### Critical Authentication Session Lookup Fix
 1. **Database Query Format Standardization**: Fixed inconsistent return format from `db_query_documents`

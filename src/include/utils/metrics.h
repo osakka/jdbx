@@ -9,6 +9,10 @@
 #include <sys/time.h>
 #include <stdint.h>
 
+#ifdef USE_QUICKJS
+#include "utils/json.h"
+#endif
+
 /* Metric types */
 typedef enum {
     METRIC_TYPE_COUNTER,  /* Incremental counter */
@@ -99,6 +103,50 @@ void metrics_timer_observe(metric_t* timer, double seconds);
 
 /* Histogram operations */
 void metrics_histogram_observe(metric_t* histogram, double value);
+
+/* JavaScript-Enhanced Analytics Functions */
+#ifdef USE_QUICKJS
+/**
+ * Calculate percentiles using JavaScript engine for response times
+ * @param values Array of response time values
+ * @param count Number of values
+ * @return JSON object with percentile calculations
+ */
+json_value_t* metrics_calculate_percentiles_js(double* values, size_t count);
+
+/**
+ * Analyze performance trends using JavaScript
+ * @param performance_history JSON array of performance records
+ * @param collection Optional collection filter
+ * @return JSON object with trend analysis
+ */
+json_value_t* metrics_analyze_performance_trends_js(json_value_t* performance_history, const char* collection);
+
+/**
+ * Calculate database health score using JavaScript
+ * @param metrics JSON object with current metrics
+ * @return JSON object with health score and recommendations
+ */
+json_value_t* metrics_calculate_health_score_js(json_value_t* metrics);
+
+/**
+ * Detect anomalies in time series data using JavaScript
+ * @param time_series JSON array of time series data
+ * @param sensitivity Sensitivity level for anomaly detection
+ * @return JSON object with detected anomalies
+ */
+json_value_t* metrics_detect_anomalies_js(json_value_t* time_series, double sensitivity);
+
+/**
+ * Aggregate metrics by time window using JavaScript
+ * @param time_series JSON array of time series data
+ * @param window_size Window size ("hour", "day", "week")
+ * @return JSON array of aggregated time windows
+ */
+json_value_t* metrics_aggregate_by_time_window_js(json_value_t* time_series, const char* window_size);
+#endif /* USE_QUICKJS */
+
+/* Library-scoped metrics integration */
 
 /* Helper functions */
 double metrics_get_timestamp();
