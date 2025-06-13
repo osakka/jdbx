@@ -34,12 +34,6 @@ typedef struct buffer_header {
 #define BUFFER_MAGIC 0xBEEF3712
 
 /* Check if memory was allocated by buffer pool */
-static int is_buffer_pool_memory(void* ptr) {
-    if (!ptr) return 0;
-    
-    buffer_header_t* header = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
-    return header->magic == BUFFER_MAGIC;
-}
 
 /* Pool for a specific size class */
 typedef struct buffer_pool {
@@ -228,7 +222,8 @@ void buffer_pool_free(void* ptr) {
     
     /* Verify magic number */
     if (buf->magic != BUFFER_MAGIC) {
-        /* Not a pooled buffer, use regular free */
+        /* Not a pooled buffer (or corrupted header), assume it's a regular malloc'd pointer */
+        LOG_DEBUG("Freeing non-pooled memory (magic=0x%x, expected=0x%x)", buf->magic, BUFFER_MAGIC);
         free(ptr);
         return;
     }
@@ -350,9 +345,6 @@ void buffer_pool_reset_stats(void) {
 void buffer_pool_free_safe(void* ptr) {
     if (!ptr) return;
     
-    if (is_buffer_pool_memory(ptr)) {
-        buffer_pool_free(ptr);
-    } else {
-        free(ptr);
-    }
+    /* Just call buffer_pool_free - it handles both pooled and regular memory safely */
+    buffer_pool_free(ptr);
 }

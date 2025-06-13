@@ -31,11 +31,12 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
+  if (g_logger) LOG_DEBUG("Querying sessions for token: %.30s...", token);
   json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
   json_free(query);
   
   if (!results) {
-    if (g_logger) LOG_DEBUG("No results from session query.");
+    if (g_logger) LOG_DEBUG("No results from session query");
     return;
   }
   
@@ -83,10 +84,17 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(full_session, "expires_at", json_create_string(expire_time));
   
   /* Update the session document with all fields */
-  db_update_document(ctx->db, "system/sessions", session_id, full_session);
+  json_value_t* update_result = db_update_document(ctx->db, "system/sessions", session_id, full_session);
   
-  if (g_logger) {
-    LOG_DEBUG("Extended session %s expiration to %s", session_id, expire_time);
+  if (update_result) {
+    if (g_logger) {
+      LOG_DEBUG("Extended session %s expiration to %s", session_id, expire_time);
+    }
+    json_free(update_result);
+  } else {
+    if (g_logger) {
+      LOG_ERROR("Failed to update session %s expiration - sliding window disabled", session_id);
+    }
   }
   
   json_free(full_session);
