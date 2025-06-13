@@ -39,31 +39,31 @@
  *============================================================================*/
 
 /** Default database file basename - JDBX auto-generates .jdbx and .wal */
-#define DEFAULT_DB_FILE "var/jdbx"
+#define DEFAULT_DB_FILE "/opt/jdbx/build/var/jdbx"
 
 /** Default RBAC config file path */
-#define DEFAULT_RBAC_PATH "var/data/jdbx/rbac.json"
+#define DEFAULT_RBAC_PATH "/opt/jdbx/build/var/rbac.json"
 
 /** Default PID file path */
-#define DEFAULT_PID_FILE "var/run/jdbx/jdbxd.pid"
+#define DEFAULT_PID_FILE "/opt/jdbx/build/var/jdbxd.pid"
 
 /** Default log file path */
-#define DEFAULT_LOG_FILE "var/log/jdbx/server.log"
+#define DEFAULT_LOG_FILE "/opt/jdbx/build/var/jdbxd.log"
 
 /** Default admin web interface root directory */
-#define DEFAULT_WEB_ROOT "share/htdocs"
+#define DEFAULT_WEB_ROOT "/opt/jdbx/share/htdocs"
 
 /** Admin files directory (maintained for compatibility) */
 #define DEFAULT_ADMIN_FILES_DIR DEFAULT_WEB_ROOT
 
 /** Default validators directory */
-#define DEFAULT_VALIDATORS_DIR "var/validators"
+#define DEFAULT_VALIDATORS_DIR "/opt/jdbx/build/var"
 
 /** Default transformers directory */
-#define DEFAULT_TRANSFORMS_DIR "var/transforms"
+#define DEFAULT_TRANSFORMS_DIR "/opt/jdbx/build/var"
 
 /** Default metrics directory */
-#define DEFAULT_METRICS_DIR "var/metrics"
+#define DEFAULT_METRICS_DIR "/opt/jdbx/build/var"
 
 /*==============================================================================
  * Security Defaults
@@ -96,7 +96,7 @@
  *============================================================================*/
 
 /** Default database directory (deprecated - use DEFAULT_DB_FILE) */
-#define DEFAULT_DATABASE_DIR "/opt/jdbx/data"
+#define DEFAULT_DATABASE_DIR "/opt/jdbx/build/var"
 
 /* JDBX is the ONLY storage backend - no selection needed */
 
@@ -174,7 +174,7 @@
  *============================================================================*/
 
 /* Backup API defaults */
-#define DEFAULT_BACKUP_DIR "var/backups"
+#define DEFAULT_BACKUP_DIR "/opt/jdbx/build/var"
 #define DEFAULT_BACKUP_RETENTION 10
 #define DEFAULT_AUTO_BACKUP_INTERVAL_HOURS 24
 #define MAX_FILENAME_LEN 256
