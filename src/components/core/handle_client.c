@@ -38,7 +38,7 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     /* SSL read with retry handling for non-blocking sockets */
     size_t bytes_read = 0;
     int retries = 0;
-    const int max_retries = 50;  /* 50 * 100ms = 5 seconds max */
+    const int max_retries = 150;  /* 150 * 100ms = 15 seconds max */
     
     while (retries < max_retries) {
       ssl_error_t error = ssl_read(client->ssl_conn, buffer, buffer_size - 1, &bytes_read);
@@ -49,9 +49,11 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
       }
       
       if (error == SSL_ERROR_IO && errno == EAGAIN) {
-        /* SSL needs to retry - wait a bit and try again */
+        /* SSL needs to retry - use progressive delays to reduce CPU usage */
         retries++;
-        usleep(100000);  /* 100ms */
+        /* Progressive delay: 50ms for first 10 retries, then 100ms, then 200ms */
+        int delay_ms = (retries <= 10) ? 50 : (retries <= 50) ? 100 : 200;
+        usleep(delay_ms * 1000);
         continue;
       }
       
@@ -296,7 +298,7 @@ void handle_client(void* client_data) {
 
   /* Set timeout */
   struct timeval tv;
-  tv.tv_sec = 5; /* 5 seconds timeout */
+  tv.tv_sec = 30; /* 30 seconds timeout for better SSL compatibility */
   tv.tv_usec = 0;
   if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv) < 0) {
     perror("setsockopt failed");
