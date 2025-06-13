@@ -200,7 +200,14 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     
     /* Create WAL file */
     char wal_path[1024];
-    snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
+    size_t path_len = strlen(path);
+    if (path_len >= 5 && strcmp(path + path_len - 5, ".jdbx") == 0) {
+        /* Replace .jdbx with .wal */
+        snprintf(wal_path, sizeof(wal_path), "%.*s.wal", (int)(path_len - 5), path);
+    } else {
+        /* Add .wal to path */
+        snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
+    }
     pm->wal.fd = open(wal_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
     if (pm->wal.fd < 0) {
         jdbx_error("Failed to create WAL file: %s", strerror(errno));
@@ -360,7 +367,14 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     
     /* Open WAL file */
     char wal_path[1024];
-    snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
+    size_t path_len = strlen(path);
+    if (path_len >= 5 && strcmp(path + path_len - 5, ".jdbx") == 0) {
+        /* Replace .jdbx with .wal */
+        snprintf(wal_path, sizeof(wal_path), "%.*s.wal", (int)(path_len - 5), path);
+    } else {
+        /* Add .wal to path */
+        snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
+    }
     pm->wal.fd = open(wal_path, O_RDWR | O_CREAT, 0644);
     if (pm->wal.fd < 0) {
         jdbx_error("Failed to open WAL file: %s", strerror(errno));
