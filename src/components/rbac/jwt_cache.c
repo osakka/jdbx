@@ -6,7 +6,7 @@
 #include <openssl/evp.h>
 
 #define CACHE_BUCKET_COUNT 1024
-#define CACHE_TTL_SECONDS 300  /* 5 minutes max cache time */
+#define CACHE_TTL_SECONDS (30 * 60)  /* 30 minutes - match JWT token expiration */
 
 /* Global cache instance */
 jwt_cache_t* g_jwt_cache = NULL;
@@ -183,13 +183,10 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                 g_jwt_cache->hits++;
                 jwt_payload_t* claims = entry->claims;
                 
-                /* Move to head of LRU for write lock upgrade */
-                pthread_rwlock_unlock(&g_jwt_cache->lock);
-                pthread_rwlock_wrlock(&g_jwt_cache->lock);
-                lru_move_to_head(g_jwt_cache, entry);
+                /* RACE CONDITION FIX: Keep read lock and defer LRU update */
                 pthread_rwlock_unlock(&g_jwt_cache->lock);
                 
-                TRACE_RBAC("JWT cache hit for user: %s", entry->username);
+                LOG_INFO("JWT cache hit for user: %s", entry->username);
                 return claims;
             } else {
                 /* Entry expired */
@@ -202,7 +199,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
     
     g_jwt_cache->misses++;
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    TRACE_RBAC("JWT cache miss.");
+    LOG_INFO("JWT cache miss - will verify token");
     return NULL;
 }
 
@@ -225,7 +222,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
             existing->cached_at = now;
             lru_move_to_head(g_jwt_cache, existing);
             pthread_rwlock_unlock(&g_jwt_cache->lock);
-            TRACE_RBAC("JWT cache updated for user: %s", username);
+            LOG_INFO("JWT cache updated for user: %s", username);
             return;
         }
         existing = existing->next;
@@ -289,7 +286,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     g_jwt_cache->current_entries++;
     
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    TRACE_RBAC("JWT cached for user: %s", username);
+    LOG_INFO("JWT cached for user: %s", username);
 }
 
 /* Invalidate cache entries for a specific user */
