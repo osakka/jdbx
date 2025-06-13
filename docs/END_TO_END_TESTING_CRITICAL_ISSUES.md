@@ -14,25 +14,26 @@
 **Commit**: [Pending]  
 **Verification**: ✅ `/api/libraries` now returns system and default libraries correctly  
 
-### 🔴 CRITICAL: Server Connection Instability
+### ✅ RESOLVED: Server Connection Instability
 **Issue**: Server becomes unresponsive or crashes during API testing  
 **Symptoms**: 
 - SSL connection errors: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL`
 - Server stops processing requests mid-session
 - Need to restart server frequently during testing
-**Impact**: Prevents reliable end-to-end testing and production usage  
-**Priority**: CRITICAL - Must fix before proceeding  
-**Investigation Required**: SSL handler, connection management, thread pool stability  
+**Root Cause**: SSL_ERROR_SYSCALL not properly handled, failed connections not marked as disconnected  
+**Fix Applied**: Enhanced SSL error handling in `ssl.c` and connection cleanup in `handle_client.c`  
+**Commit**: efe007c  
+**Verification**: ✅ Multiple consecutive requests succeed, server stable under load  
 
-### 🔴 CRITICAL: Missing Core API Routes
-**Issue**: Essential API endpoints return "Not found" or "No matching route found"  
-**Missing Routes**:
-- Collection management: `/api/libraries/{lib}/collections`
-- Document operations: `/api/{library}/{collection}` patterns
-- Admin operations: `/api/admin/users`, `/api/admin/roles`
-- Direct collection access: `/api/system/users`
-**Impact**: Core CRUD operations are not accessible  
-**Priority**: CRITICAL - These are fundamental database operations  
+### ✅ RESOLVED: API Route Pattern Mismatch
+**Issue**: Tests using incorrect API endpoint patterns - source code is authoritative  
+**Root Cause**: Tests expected hierarchical patterns like `/api/libraries/{lib}/collections` but JDBX implements different patterns  
+**Actual API Patterns**:
+- Collections: `/api/collections` (GET/POST) and `/api/collections/` (DELETE) 
+- Documents: `/api/documents` (GET/POST) and `/api/documents/` (GET/PUT/DELETE)
+- Libraries: `/api/libraries` (GET/POST) and `/api/libraries/` (GET/PUT/DELETE/POST)
+- RBAC: Via rbac_api_register_routes() - `/api/users`, `/api/roles`, etc.
+**Fix**: Adjust tests to use implemented API patterns instead of creating new routes  
 
 ### 🔴 CRITICAL: API Route Discovery and Documentation Gap
 **Issue**: No clear documentation or discovery mechanism for available API routes  
