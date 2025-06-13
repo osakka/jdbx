@@ -168,7 +168,9 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   json_value_t* users_result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
   json_free(query);
   
-  if (!users_result || users_result->type != JSON_ARRAY || users_result->value.array.size == 0) {
+  /* Extract documents array from response object */
+  json_value_t* users_documents = json_object_get(users_result, "documents");
+  if (!users_documents || users_documents->type != JSON_ARRAY || users_documents->value.array.size == 0) {
     LOG_INFO("No users found - creating default admin user.");
     
     /* Create default admin user */

@@ -112,7 +112,9 @@ int rbac_db_exists(database_t* db) {
   json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
   json_free(query);
   
-  if (!result || result->type != JSON_ARRAY || result->value.array.size == 0) {
+  /* Extract documents array from response object */
+  json_value_t* documents = json_object_get(result, "documents");
+  if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
     if (result) json_free(result);
     return 0;
   }
@@ -255,15 +257,17 @@ rbac_system_t* rbac_db_load(database_t* db) {
   json_value_t* users_result = db_query_documents(db, RBAC_USERS_COLLECTION, all_users_query);
   json_free(all_users_query);
   
-  if (!users_result || users_result->type != JSON_ARRAY) {
+  /* Extract documents array from response object */
+  json_value_t* users_documents = json_object_get(users_result, "documents");
+  if (!users_documents || users_documents->type != JSON_ARRAY) {
     if (users_result) json_free(users_result);
     rbac_free(rbac);
     return NULL;
   }
   
   /* Add each user to users object */
-  for (size_t i = 0; i < users_result->value.array.size; i++) {
-    json_value_t* user_doc = users_result->value.array.items[i];
+  for (size_t i = 0; i < users_documents->value.array.size; i++) {
+    json_value_t* user_doc = users_documents->value.array.items[i];
     if (user_doc->type == JSON_OBJECT) {
       json_value_t* id_val = json_object_get(user_doc, "id");
       if (id_val && id_val->type == JSON_STRING) {
@@ -286,15 +290,17 @@ rbac_system_t* rbac_db_load(database_t* db) {
   json_value_t* roles_result = db_query_documents(db, RBAC_ROLES_COLLECTION, all_roles_query);
   json_free(all_roles_query);
   
-  if (!roles_result || roles_result->type != JSON_ARRAY) {
+  /* Extract documents array from response object */
+  json_value_t* roles_documents = json_object_get(roles_result, "documents");
+  if (!roles_documents || roles_documents->type != JSON_ARRAY) {
     if (roles_result) json_free(roles_result);
     rbac_free(rbac);
     return NULL;
   }
   
   /* Add each role to roles object */
-  for (size_t i = 0; i < roles_result->value.array.size; i++) {
-    json_value_t* role_doc = roles_result->value.array.items[i];
+  for (size_t i = 0; i < roles_documents->value.array.size; i++) {
+    json_value_t* role_doc = roles_documents->value.array.items[i];
     if (role_doc->type == JSON_OBJECT) {
       json_value_t* id_val = json_object_get(role_doc, "id");
       if (id_val && id_val->type == JSON_STRING) {
@@ -419,7 +425,9 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
   json_free(query);
   
-  if (result && result->type == JSON_ARRAY && result->value.array.size > 0) {
+  /* Extract documents array from response object */
+  json_value_t* existing_users = json_object_get(result, "documents");
+  if (existing_users && existing_users->type == JSON_ARRAY && existing_users->value.array.size > 0) {
     LOG_ERROR("Username %s already exists", username);
     json_free(result);
     return NULL;
@@ -667,7 +675,9 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   json_value_t* result = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
   json_free(query);
   
-  if (result && result->type == JSON_ARRAY && result->value.array.size > 0) {
+  /* Extract documents array from response object */
+  json_value_t* existing_roles = json_object_get(result, "documents");
+  if (existing_roles && existing_roles->type == JSON_ARRAY && existing_roles->value.array.size > 0) {
     LOG_ERROR("Role with name %s already exists", name);
     json_free(result);
     return NULL;

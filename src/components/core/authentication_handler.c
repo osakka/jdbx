@@ -15,6 +15,10 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+
+/* Global bootstrap synchronization mutex */
+static pthread_mutex_t g_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int g_bootstrap_completed = 0;
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   LOG_DEBUG("Starting login handler.");
   
@@ -72,77 +76,93 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (ctx->db && ctx->db->is_bootstrap_mode) {
     const char* deferred_bootstrap = getenv("JDBX_DEFERRED_BOOTSTRAP");
     if (deferred_bootstrap && strcmp(deferred_bootstrap, "1") == 0) {
-      LOG_INFO("Performing deferred bootstrap - creating admin user");
       
-      /* Create admin role and user now that server is fully initialized */
-      char* admin_role_id = NULL;
-      if (create_default_admin_role(ctx->db, &admin_role_id)) {
-        if (admin_role_id) {
-          if (create_default_admin_user(ctx->db, admin_role_id)) {
-            LOG_INFO("Admin user created successfully, now creating library documents");
-            
-            /* Create library documents for system and default libraries */
-            /* These were created as physical structures but need metadata documents */
-            
-            /* Create system library document */
-            json_value_t* system_lib_doc = json_create_object();
-            json_object_set(system_lib_doc, "type", json_create_string("library"));
-            json_object_set(system_lib_doc, "name", json_create_string("system"));
-            json_object_set(system_lib_doc, "template", json_create_string("system"));
-            json_object_set(system_lib_doc, "owner", json_create_string("admin"));
-            json_object_set(system_lib_doc, "description", json_create_string("System library for internal operations"));
-            
-            /* Add timestamps */
-            time_t now = time(NULL);
-            char timestamp[64];
-            struct tm* utc_tm = gmtime(&now);
-            strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
-            json_object_set(system_lib_doc, "created_at", json_create_string(timestamp));
-            json_object_set(system_lib_doc, "updated_at", json_create_string(timestamp));
-            
-            /* Insert system library document */
-            json_value_t* system_lib_result = db_insert_document(ctx->db, "documents", system_lib_doc);
-            if (system_lib_result) {
-              json_value_t* system_lib_id_val = json_object_get(system_lib_result, "uuid");
-              if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
-                LOG_INFO("Created system library document: %s", system_lib_id_val->value.string);
+      /* Use mutex to ensure bootstrap only happens once across all threads */
+      pthread_mutex_lock(&g_bootstrap_mutex);
+      
+      /* Double-check pattern: another thread might have completed bootstrap */
+      if (g_bootstrap_completed) {
+        pthread_mutex_unlock(&g_bootstrap_mutex);
+        LOG_DEBUG("Bootstrap already completed by another thread");
+      } else {
+        LOG_INFO("Performing deferred bootstrap - creating admin user");
+        
+        /* Create admin role and user now that server is fully initialized */
+        char* admin_role_id = NULL;
+        if (create_default_admin_role(ctx->db, &admin_role_id)) {
+          if (admin_role_id) {
+            if (create_default_admin_user(ctx->db, admin_role_id)) {
+              LOG_INFO("Admin user created successfully, now creating library documents");
+              
+              /* Create library documents for system and default libraries */
+              /* These were created as physical structures but need metadata documents */
+              
+              /* Create system library document */
+              json_value_t* system_lib_doc = json_create_object();
+              json_object_set(system_lib_doc, "type", json_create_string("library"));
+              json_object_set(system_lib_doc, "name", json_create_string("system"));
+              json_object_set(system_lib_doc, "template", json_create_string("system"));
+              json_object_set(system_lib_doc, "owner", json_create_string("admin"));
+              json_object_set(system_lib_doc, "description", json_create_string("System library for internal operations"));
+              
+              /* Add timestamps */
+              time_t now = time(NULL);
+              char timestamp[64];
+              struct tm* utc_tm = gmtime(&now);
+              strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+              json_object_set(system_lib_doc, "created_at", json_create_string(timestamp));
+              json_object_set(system_lib_doc, "updated_at", json_create_string(timestamp));
+              
+              /* Insert system library document */
+              json_value_t* system_lib_result = db_insert_document(ctx->db, "documents", system_lib_doc);
+              if (system_lib_result) {
+                json_value_t* system_lib_id_val = json_object_get(system_lib_result, "uuid");
+                if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
+                  LOG_INFO("Created system library document: %s", system_lib_id_val->value.string);
+                }
+                json_free(system_lib_result);
+              } else {
+                LOG_WARNING("Failed to create system library document");
               }
-              json_free(system_lib_result);
-            } else {
-              LOG_WARNING("Failed to create system library document");
-            }
-            json_free(system_lib_doc);
-            
-            /* Create default library document */
-            json_value_t* default_lib_doc = json_create_object();
-            json_object_set(default_lib_doc, "type", json_create_string("library"));
-            json_object_set(default_lib_doc, "name", json_create_string("default"));
-            json_object_set(default_lib_doc, "template", json_create_string("standard"));
-            json_object_set(default_lib_doc, "owner", json_create_string("admin"));
-            json_object_set(default_lib_doc, "description", json_create_string("Default library for general use"));
-            json_object_set(default_lib_doc, "created_at", json_create_string(timestamp));
-            json_object_set(default_lib_doc, "updated_at", json_create_string(timestamp));
-            
-            /* Insert default library document */
-            json_value_t* default_lib_result = db_insert_document(ctx->db, "documents", default_lib_doc);
-            if (default_lib_result) {
-              json_value_t* default_lib_id_val = json_object_get(default_lib_result, "uuid");
-              if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
-                LOG_INFO("Created default library document: %s", default_lib_id_val->value.string);
+              json_free(system_lib_doc);
+              
+              /* Create default library document */
+              json_value_t* default_lib_doc = json_create_object();
+              json_object_set(default_lib_doc, "type", json_create_string("library"));
+              json_object_set(default_lib_doc, "name", json_create_string("default"));
+              json_object_set(default_lib_doc, "template", json_create_string("standard"));
+              json_object_set(default_lib_doc, "owner", json_create_string("admin"));
+              json_object_set(default_lib_doc, "description", json_create_string("Default library for general use"));
+              json_object_set(default_lib_doc, "created_at", json_create_string(timestamp));
+              json_object_set(default_lib_doc, "updated_at", json_create_string(timestamp));
+              
+              /* Insert default library document */
+              json_value_t* default_lib_result = db_insert_document(ctx->db, "documents", default_lib_doc);
+              if (default_lib_result) {
+                json_value_t* default_lib_id_val = json_object_get(default_lib_result, "uuid");
+                if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
+                  LOG_INFO("Created default library document: %s", default_lib_id_val->value.string);
+                }
+                json_free(default_lib_result);
+              } else {
+                LOG_WARNING("Failed to create default library document");
               }
-              json_free(default_lib_result);
-            } else {
-              LOG_WARNING("Failed to create default library document");
+              json_free(default_lib_doc);
+              
+              LOG_INFO("Deferred bootstrap completed successfully with library documents");
+              /* Disable bootstrap mode */
+              ctx->db->is_bootstrap_mode = 0;
+              unsetenv("JDBX_DEFERRED_BOOTSTRAP");
+              
+              /* Mark bootstrap as completed */
+              g_bootstrap_completed = 1;
             }
-            json_free(default_lib_doc);
-            
-            LOG_INFO("Deferred bootstrap completed successfully with library documents");
-            /* Disable bootstrap mode */
-            ctx->db->is_bootstrap_mode = 0;
-            unsetenv("JDBX_DEFERRED_BOOTSTRAP");
           }
           free(admin_role_id);
         }
+        
+        /* Release bootstrap mutex */
+        pthread_mutex_unlock(&g_bootstrap_mutex);
       }
     }
   }
@@ -253,24 +273,28 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         json_object_set(session_query, "active", json_create_boolean(1));
         
         /* Query system/sessions collection in JDBX architecture */
-        json_value_t* existing_sessions = db_query_documents(ctx->db, "system/sessions", session_query);
+        json_value_t* existing_sessions_response = db_query_documents(ctx->db, "system/sessions", session_query);
         json_free(session_query);
         
-        if (existing_sessions && existing_sessions->type == JSON_ARRAY) {
-          int session_count = json_array_size(existing_sessions);
-          LOG_DEBUG("Found %d existing active sessions for user", session_count);
-          
-          /* Invalidate each existing session */
-          for (size_t i = 0; i < existing_sessions->value.array.size; i++) {
-            json_value_t* session = json_array_get(existing_sessions, i);
-            json_value_t* session_id_val = json_object_get(session, "uuid");
-            if (session_id_val && session_id_val->type == JSON_STRING) {
-              const char* old_session_id = session_id_val->value.string;
-              LOG_INFO("Invalidating old session: %s", old_session_id);
-              rbac_db_invalidate_session(ctx->db, old_session_id);
+        if (existing_sessions_response) {
+          /* Extract documents array from response object */
+          json_value_t* existing_sessions = json_object_get(existing_sessions_response, "documents");
+          if (existing_sessions && existing_sessions->type == JSON_ARRAY) {
+            int session_count = json_array_size(existing_sessions);
+            LOG_DEBUG("Found %d existing active sessions for user", session_count);
+            
+            /* Invalidate each existing session */
+            for (size_t i = 0; i < existing_sessions->value.array.size; i++) {
+              json_value_t* session = json_array_get(existing_sessions, i);
+              json_value_t* session_id_val = json_object_get(session, "uuid");
+              if (session_id_val && session_id_val->type == JSON_STRING) {
+                const char* old_session_id = session_id_val->value.string;
+                LOG_INFO("Invalidating old session: %s", old_session_id);
+                rbac_db_invalidate_session(ctx->db, old_session_id);
+              }
             }
           }
-          json_free(existing_sessions);
+          json_free(existing_sessions_response);
         }
         
         /* Extract client info from request */

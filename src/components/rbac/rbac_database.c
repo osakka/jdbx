@@ -481,15 +481,16 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
     return NULL;
   }
   
-  /* Check if user found - db_find returns array directly */
-  if (!result || result->type != JSON_ARRAY || json_array_size(result) == 0) {
+  /* Extract documents array from response object */
+  json_value_t* documents = json_object_get(result, "documents");
+  if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
     TRACE_RBAC("User not found: %s", username);
     json_free(result);
     return NULL;
   }
   
   /* Get first user document */
-  json_value_t* user_doc = json_array_get(result, 0);
+  json_value_t* user_doc = json_array_get(documents, 0);
   
   /* Create rbac_user_t structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
