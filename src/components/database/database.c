@@ -499,13 +499,12 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
     collection_t* coll = get_or_create_collection(library, collection);
     if (!coll) return NULL;
     
-    /* Generate ID if not present */
+    /* Generate UUID if not present */
     json_value_t* id_val = json_object_get(document, "uuid");
-    if (!id_val) id_val = json_object_get(document, "_id");
     char doc_id[64];
     if (!id_val) {
         snprintf(doc_id, sizeof(doc_id), "doc-%ld-%d", time(NULL), rand());
-        json_object_set(document, "_id", json_create_string(doc_id));
+        json_object_set(document, "uuid", json_create_string(doc_id));
     } else {
         strncpy(doc_id, json_get_string(id_val), sizeof(doc_id) - 1);
     }

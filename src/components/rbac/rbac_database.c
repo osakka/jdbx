@@ -86,7 +86,7 @@ static json_value_t* bootstrap_insert_document(const char* collection_path, json
   
   /* Add UUID to document for consistency */
   json_object_set(document, "uuid", json_create_string(doc_id));
-  json_object_set(document, "_id", json_create_string(doc_id));
+  /* uuid field already set above, no need for _id */
   
   /* Add timestamps */
   time_t now = time(NULL);

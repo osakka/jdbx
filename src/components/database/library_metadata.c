@@ -236,7 +236,7 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
     
     /* Build library document */
     json_value_t* lib_doc = json_create_object();
-    json_object_set(lib_doc, "_id", json_create_string(library_name));
+    json_object_set(lib_doc, "uuid", json_create_string(library_name));
     json_object_set(lib_doc, "name", json_create_string(metadata->library_name));
     
     /* Add type */

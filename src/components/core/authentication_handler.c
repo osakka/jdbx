@@ -204,10 +204,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
           /* Invalidate each existing session */
           for (size_t i = 0; i < existing_sessions->value.array.size; i++) {
             json_value_t* session = json_array_get(existing_sessions, i);
-            json_value_t* session_id_val = json_object_get(session, "_id");
-            if (!session_id_val) {
-              session_id_val = json_object_get(session, "uuid");
-            }
+            json_value_t* session_id_val = json_object_get(session, "uuid");
             if (session_id_val && session_id_val->type == JSON_STRING) {
               const char* old_session_id = session_id_val->value.string;
               LOG_INFO("Invalidating old session: %s", old_session_id);

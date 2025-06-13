@@ -909,7 +909,7 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   json_value_t* proj_value;
   json_object_foreach(projection, proj_key, proj_value) {
     if (strcmp(proj_key, "uuid") == 0) {
-      continue; /* _id is special, skip it for mode determination */
+      continue; /* uuid is special, skip it for mode determination */
     }
     
     if (proj_value->type == JSON_INTEGER || proj_value->type == JSON_BOOLEAN) {
@@ -935,7 +935,7 @@ json_value_t* query_apply_projection(json_value_t* document, json_value_t* proje
   /* Create a new document with projected fields */
   json_value_t* result = json_create_object();
   
-  /* Handle _id field specially */
+  /* Handle uuid field specially */
   json_value_t* id_proj = json_object_get(projection, "uuid");
   int include_id = 1; /* Include by default */
   
