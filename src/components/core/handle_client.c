@@ -684,6 +684,11 @@ void handle_client(void* client_data) {
   shutdown(client_fd, SHUT_WR);
   close(client_fd);
   
+  /* Mark file descriptor as closed to prevent double-close */
+  if (client) {
+    client->client_fd = -1; /* Use -1 to indicate closed */
+  }
+  
   /* Free client data with safety checks */
   if (client) {
     if (g_logger) {
@@ -761,14 +766,14 @@ cleanup:
     client_cleanup_ssl(client);
   }
   
-  /* Close file descriptor if still open */
-  if (client_fd > 0) {
+  /* Close file descriptor if still open and not already closed */
+  if (client_fd > 0 && (!client || client->client_fd != -1)) {
     if (g_logger) {
       TRACE_NET("CONNECTION_FD_CLOSE: fd=%d, closing file descriptor", client_fd);
     }
     close(client_fd);
     if (client) {
-      client->client_fd = 0; /* Clear FD in client struct */
+      client->client_fd = -1; /* Use -1 to indicate closed */
     }
   }
   

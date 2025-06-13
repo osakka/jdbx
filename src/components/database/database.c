@@ -522,6 +522,11 @@ json_value_t* db_list_collections(database_t* db) {
     
     /* Lock-free iteration through libraries */
     skiplist_iterator_t* lib_iter = skiplist_iterator_create(g_db.libraries);
+    if (!lib_iter) {
+        if (g_logger) LOG_ERROR("Failed to create library iterator for collections list");
+        return all_collections; /* Return empty array */
+    }
+    
     void* lib_key = NULL;
     size_t lib_key_len = 0;
     void* lib_value = NULL;
@@ -535,6 +540,12 @@ json_value_t* db_list_collections(database_t* db) {
         
         /* Iterate through collections in this library */
         skiplist_iterator_t* coll_iter = skiplist_iterator_create(lib->collections);
+        if (!coll_iter) {
+            if (g_logger) LOG_WARNING("Failed to create collection iterator for library '%s'", lib->name);
+            pthread_rwlock_unlock(&lib->lock);
+            continue; /* Skip this library and continue with next */
+        }
+        
         void* coll_key = NULL;
         size_t coll_key_len = 0;
         void* coll_value = NULL;
@@ -548,12 +559,16 @@ json_value_t* db_list_collections(database_t* db) {
             snprintf(full_path, sizeof(full_path), "%s/%s", lib->name, coll->name);
             json_array_append(all_collections, json_create_string(full_path));
         }
-        skiplist_iterator_destroy(coll_iter);
+        if (coll_iter) {
+            skiplist_iterator_destroy(coll_iter);
+        }
         
         pthread_rwlock_unlock(&lib->lock);
     }
     
-    skiplist_iterator_destroy(lib_iter);
+    if (lib_iter) {
+        skiplist_iterator_destroy(lib_iter);
+    }
     
     return all_collections;
 }

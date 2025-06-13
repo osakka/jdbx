@@ -1186,12 +1186,31 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
-  /* Parse document */
-  json_value_t* doc = json_parse(request->body);
-  if (!doc || doc->type != JSON_OBJECT) {
-    if (doc) json_free(doc);
+  /* Parse request body */
+  json_value_t* parsed = json_parse(request->body);
+  if (!parsed || parsed->type != JSON_OBJECT) {
+    if (parsed) json_free(parsed);
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid document\"}", "application/json");
+                 "{\"error\":\"Invalid request body\"}", "application/json");
+  }
+  
+  /* Handle nested structure: {"library":"...", "collection":"...", "document":{...}} */
+  json_value_t* doc = NULL;
+  json_value_t* nested_doc = json_object_get(parsed, "document");
+  if (nested_doc) {
+    /* Extract document from nested structure */
+    doc = json_deep_copy(nested_doc);
+    json_free(parsed);
+    if (!doc || doc->type != JSON_OBJECT) {
+      if (doc) json_free(doc);
+      return create_http_response(HTTP_BAD_REQUEST, 
+                   "{\"error\":\"Invalid document in nested structure\"}", "application/json");
+    }
+    LOG_DEBUG("Extracted document from nested structure for unified documents");
+  } else {
+    /* Use flat structure directly */
+    doc = parsed;
+    LOG_DEBUG("Using flat document structure for unified documents");
   }
   
   /* Resolve JavaScript functions in document */
