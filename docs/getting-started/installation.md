@@ -3,7 +3,7 @@
 **Version**: 3.3.0  
 **Last Updated**: June 12, 2025
 
-This guide covers installing JSONdb v3.3.0 with its lock-free JDBX architecture.
+This guide covers installing JDBX v3.3.0 with its lock-free JDBX architecture.
 
 ## System Requirements
 
@@ -29,7 +29,7 @@ This guide covers installing JSONdb v3.3.0 with its lock-free JDBX architecture.
 - **Make**: Standard build system
 
 #### Optional  
-- **QuickJS**: Included with JSONdb for JavaScript integration
+- **QuickJS**: Included with JDBX for JavaScript integration
 - **Git**: For source code management and updates
 
 ## Installation Methods
@@ -66,27 +66,27 @@ brew install ossp-uuid openssl
 
 ```bash
 # Clone repository
-git clone <repository-url> jsondb
-cd jsondb
+git clone <repository-url> jdbx
+cd jdbx
 
 # Verify directory structure
 ls -la src/
 
-# Build JSONdb
+# Build JDBX
 cd src && make
 
 # Verify successful build
-ls -la ../build/bin/jsondb_server
-ls -la ../build/lib/libjsondb.a
+ls -la ../build/bin/jdbxd
+ls -la ../build/lib/libjdbx.a
 ```
 
 #### 3. Build Output Verification
 
 After successful compilation, you should see:
 ```
-../build/bin/jsondb_server     # Main server executable
-../build/bin/jsondb_tools      # Administration tools
-../build/lib/libjsondb.a       # Static library
+../build/bin/jdbxd     # Main server executable
+../build/bin/jdbx_tools      # Administration tools
+../build/lib/libjdbx.a       # Static library
 ../build/obj/                  # Compiled object files
 ```
 
@@ -94,110 +94,110 @@ After successful compilation, you should see:
 
 ### Basic Configuration
 
-JSONdb uses a three-tier configuration system:
+JDBX uses a three-tier configuration system:
 
 1. **Environment Variables** (lowest priority)
 2. **Command Line Arguments** (medium priority)  
 3. **Database Configuration** (highest priority)
 
 #### Environment Configuration File
-Create `/opt/jsondb/share/config/jsondb.env`:
+Create `/opt/jdbx/share/config/jdbx.env`:
 ```bash
 # Database configuration
-JSONDB_DB_PATH=/opt/jsondb/build/var/jsondb.jdbx
-JSONDB_HOST=0.0.0.0
-JSONDB_PORT=5000
+JDBX_DB_PATH=/opt/jdbx/build/var/jdbx.jdbx
+JDBX_HOST=0.0.0.0
+JDBX_PORT=5000
 
 # SSL configuration (optional)
-JSONDB_USE_SSL=false
-JSONDB_SSL_CERT=/etc/ssl/certs/jsondb.pem
-JSONDB_SSL_KEY=/etc/ssl/private/jsondb.key
+JDBX_USE_SSL=false
+JDBX_SSL_CERT=/etc/ssl/certs/jdbx.pem
+JDBX_SSL_KEY=/etc/ssl/private/jdbx.key
 
 # Performance tuning
-JSONDB_THREAD_POOL_MIN=4
-JSONDB_THREAD_POOL_MAX=16
-JSONDB_CACHE_SIZE=50MB
+JDBX_THREAD_POOL_MIN=4
+JDBX_THREAD_POOL_MAX=16
+JDBX_CACHE_SIZE=50MB
 
 # Logging
-JSONDB_LOG_LEVEL=INFO
-JSONDB_LOG_FILE=/opt/jsondb/build/var/jsondb.log
+JDBX_LOG_LEVEL=INFO
+JDBX_LOG_FILE=/opt/jdbx/build/var/jdbx.log
 ```
 
 ### Production Security Setup
 
-#### 1. Create JSONdb User (Recommended)
+#### 1. Create JDBX User (Recommended)
 ```bash
-# Create dedicated user for JSONdb
-sudo useradd -r -s /bin/false jsondb
-sudo mkdir -p /opt/jsondb/build/var
-sudo chown -R jsondb:jsondb /opt/jsondb
+# Create dedicated user for JDBX
+sudo useradd -r -s /bin/false jdbx
+sudo mkdir -p /opt/jdbx/build/var
+sudo chown -R jdbx:jdbx /opt/jdbx
 ```
 
 #### 2. SSL Certificate Setup
 ```bash
 # Generate self-signed certificate for testing
 sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
-  -keyout /etc/ssl/private/jsondb.key \\
-  -out /etc/ssl/certs/jsondb.pem
+  -keyout /etc/ssl/private/jdbx.key \\
+  -out /etc/ssl/certs/jdbx.pem
 
 # Set proper permissions
-sudo chmod 600 /etc/ssl/private/jsondb.key
-sudo chmod 644 /etc/ssl/certs/jsondb.pem
+sudo chmod 600 /etc/ssl/private/jdbx.key
+sudo chmod 644 /etc/ssl/certs/jdbx.pem
 ```
 
-## Starting JSONdb
+## Starting JDBX
 
 ### Development Mode
 
 ```bash
-# Start JSONdb server (development)
-cd /opt/jsondb
-./build/jsondb_runtime.sh start
+# Start JDBX server (development)
+cd /opt/jdbx
+./build/jdbx_runtime.sh start
 
 # Check status
-./build/jsondb_runtime.sh status
+./build/jdbx_runtime.sh status
 
 # View logs
-tail -f /opt/jsondb/build/var/jsondb.log
+tail -f /opt/jdbx/build/var/jdbx.log
 
 # Stop server
-./build/jsondb_runtime.sh stop
+./build/jdbx_runtime.sh stop
 ```
 
 ### Production Mode with SSL
 
 ```bash
 # Start with SSL enabled
-cd /opt/jsondb
-JSONDB_USE_SSL=true ./build/jsondb_runtime.sh start
+cd /opt/jdbx
+JDBX_USE_SSL=true ./build/jdbx_runtime.sh start
 
 # Or use direct configuration
-./build/bin/jsondb_server \\
+./build/bin/jdbxd \\
   --host 0.0.0.0 \\
   --port 5443 \\
   --ssl \\
-  --ssl-cert /etc/ssl/certs/jsondb.pem \\
-  --ssl-key /etc/ssl/private/jsondb.key \\
+  --ssl-cert /etc/ssl/certs/jdbx.pem \\
+  --ssl-key /etc/ssl/private/jdbx.key \\
   --daemon
 ```
 
 ### Systemd Service (Production)
 
-Create `/etc/systemd/system/jsondb.service`:
+Create `/etc/systemd/system/jdbx.service`:
 ```ini
 [Unit]
-Description=JSONdb Document Database
+Description=JDBX Document Database
 After=network.target
 
 [Service]
 Type=forking
-User=jsondb
-Group=jsondb
-WorkingDirectory=/opt/jsondb
-ExecStart=/opt/jsondb/build/jsondb_runtime.sh start
-ExecStop=/opt/jsondb/build/jsondb_runtime.sh stop
+User=jdbx
+Group=jdbx
+WorkingDirectory=/opt/jdbx
+ExecStart=/opt/jdbx/build/jdbx_runtime.sh start
+ExecStop=/opt/jdbx/build/jdbx_runtime.sh stop
 ExecReload=/bin/kill -HUP $MAINPID
-PIDFile=/opt/jsondb/build/var/jsondb.pid
+PIDFile=/opt/jdbx/build/var/jdbx.pid
 Restart=always
 RestartSec=10
 
@@ -205,7 +205,7 @@ RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/jsondb/build/var
+ReadWritePaths=/opt/jdbx/build/var
 
 [Install]
 WantedBy=multi-user.target
@@ -214,9 +214,9 @@ WantedBy=multi-user.target
 Enable and start:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable jsondb
-sudo systemctl start jsondb
-sudo systemctl status jsondb
+sudo systemctl enable jdbx
+sudo systemctl start jdbx
+sudo systemctl status jdbx
 ```
 
 ## Verification
@@ -245,10 +245,10 @@ open http://localhost:5000/admin
 
 ```bash
 # Check JDBX database file exists
-ls -la /opt/jsondb/build/var/jsondb.jdbx
+ls -la /opt/jdbx/build/var/jdbx.jdbx
 
 # Check log file for errors
-grep ERROR /opt/jsondb/build/var/jsondb.log
+grep ERROR /opt/jdbx/build/var/jdbx.log
 ```
 
 ## Troubleshooting
@@ -267,8 +267,8 @@ gcc --version  # Should be 4.9+
 #### 2. Permission Errors
 ```bash
 # Fix file permissions
-sudo chown -R $USER:$USER /opt/jsondb
-chmod 755 /opt/jsondb/build/bin/jsondb_server
+sudo chown -R $USER:$USER /opt/jdbx
+chmod 755 /opt/jdbx/build/bin/jdbxd
 ```
 
 #### 3. Port Already in Use
@@ -278,26 +278,26 @@ netstat -tulpn | grep :5000
 lsof -i :5000
 
 # Use different port
-JSONDB_PORT=5001 ./build/jsondb_runtime.sh start
+JDBX_PORT=5001 ./build/jdbx_runtime.sh start
 ```
 
 #### 4. SSL Certificate Issues
 ```bash
 # Verify certificate
-openssl x509 -in /etc/ssl/certs/jsondb.pem -text -noout
+openssl x509 -in /etc/ssl/certs/jdbx.pem -text -noout
 
 # Check private key
-openssl rsa -in /etc/ssl/private/jsondb.key -check
+openssl rsa -in /etc/ssl/private/jdbx.key -check
 ```
 
 ### Debug Mode
 
 ```bash
 # Start with debug logging
-JSONDB_LOG_LEVEL=DEBUG ./build/jsondb_runtime.sh start
+JDBX_LOG_LEVEL=DEBUG ./build/jdbx_runtime.sh start
 
 # Monitor detailed logs
-tail -f /opt/jsondb/build/var/jsondb.log | grep DEBUG
+tail -f /opt/jdbx/build/var/jdbx.log | grep DEBUG
 ```
 
 ## Next Steps
@@ -316,7 +316,7 @@ tail -f /opt/jsondb/build/var/jsondb.log | grep DEBUG
 - **Multi-Library Support**: Tenant isolation with library namespaces
 
 ### Migration from v3.2.x
-JSONdb v3.3.0 is backward compatible with v3.2.x data files. The JDBX backend will automatically migrate existing data on first startup.
+JDBX v3.3.0 is backward compatible with v3.2.x data files. The JDBX backend will automatically migrate existing data on first startup.
 
 ---
 

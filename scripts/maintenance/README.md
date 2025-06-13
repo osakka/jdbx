@@ -1,6 +1,6 @@
 # maintenance Scripts
 
-This directory contains scripts for maintenance operations in the JSONdb project.
+This directory contains scripts for maintenance operations in the JDBX project.
 
 ## Scripts
 

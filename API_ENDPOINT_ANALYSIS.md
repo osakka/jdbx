@@ -1,8 +1,8 @@
-# JSONdb API Endpoint Analysis Report
+# JDBX API Endpoint Analysis Report
 
 ## Summary
 
-The JSONdb server has a critical issue where almost all API endpoints hang indefinitely when they try to interact with the unified documents architecture. Only a few endpoints that don't require database access are working properly.
+The JDBX server has a critical issue where almost all API endpoints hang indefinitely when they try to interact with the unified documents architecture. Only a few endpoints that don't require database access are working properly.
 
 ## Working Endpoints
 
@@ -86,7 +86,7 @@ When attempting login at `/api/auth/login`, the server:
 5. **HANGS** - Never returns from the query operation
 
 ### 2. JDBX Implementation Problem
-The hanging occurs in the JDBX (JSONdb Binary format) storage backend:
+The hanging occurs in the JDBX (JDBX Binary format) storage backend:
 - The `jdbx_find_documents` function appears to enter a deadlock or infinite loop
 - Thread locks (pthread_rwlock) may be causing deadlock conditions
 - The `find_collection` function tries to load the "documents" collection but may not be properly initialized
@@ -126,7 +126,7 @@ if (storage_backend) {
 ```
 
 This means:
-- The JSONDB_STORAGE_BACKEND environment variable is ignored
+- The JDBX_STORAGE_BACKEND environment variable is ignored
 - The --storage-backend command line argument is ignored
 - JDBX is forced as the only storage backend
 - The mmap backend has been removed or disabled
@@ -148,4 +148,4 @@ The unified documents architecture is completely broken because:
 3. There is no fallback to the previous working mmap implementation
 4. The server is effectively unusable for any database operations
 
-The v3.2.0 release with "JDBX storage backend and unified documents architecture" has introduced a complete regression, making the JSONdb server non-functional for its core purpose.
+The v3.2.0 release with "JDBX storage backend and unified documents architecture" has introduced a complete regression, making the JDBX server non-functional for its core purpose.

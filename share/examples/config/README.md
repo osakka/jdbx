@@ -1,6 +1,6 @@
 # Configuration Examples
 
-This directory contains example configuration files for JSONdb. These files serve as templates that you can copy and modify for your own use.
+This directory contains example configuration files for JDBX. These files serve as templates that you can copy and modify for your own use.
 
 ## Available Configuration Examples
 

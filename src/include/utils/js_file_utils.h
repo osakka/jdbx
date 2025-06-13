@@ -1,5 +1,5 @@
-#ifndef JSONDB_JS_FILE_UTILS_H
-#define JSONDB_JS_FILE_UTILS_H
+#ifndef JDBX_JS_FILE_UTILS_H
+#define JDBX_JS_FILE_UTILS_H
 
 #include "utils/logger.h"
 #include <stddef.h>
@@ -19,4 +19,4 @@ void js_file_set_cache_path(const char* path);
 /* Save cache to disk - automatically called on program exit */
 void js_file_save_cache(void);
 
-#endif /* JSONDB_JS_FILE_UTILS_H */
+#endif /* JDBX_JS_FILE_UTILS_H */

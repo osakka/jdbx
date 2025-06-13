@@ -1,6 +1,6 @@
-# JSONdb Guides
+# JDBX Guides
 
-> Comprehensive how-to guides for common JSONdb tasks and advanced features
+> Comprehensive how-to guides for common JDBX tasks and advanced features
 
 ## Guide Categories
 
@@ -8,7 +8,7 @@
 - **[Authentication Guide](authentication-guide.md)** - Set up secure authentication with JWT
 - **[RBAC Setup](rbac-setup.md)** - Configure role-based access control
 - **[JavaScript Development](javascript-development-guide.md)** - Create validators, transformers, and functions
-- **[Query Language Guide](query-guide.md)** - Master JSONdb's query syntax
+- **[Query Language Guide](query-guide.md)** - Master JDBX's query syntax
 
 ### Performance & Optimization
 - **[Performance Tuning](performance-tuning.md)** - Optimize for your workload
@@ -17,13 +17,13 @@
 - **[Batch Operations](batch-operations.md)** - High-throughput data ingestion
 
 ### Production Operations
-- **[Production Deployment](production-deployment.md)** - Deploy JSONdb in production
+- **[Production Deployment](production-deployment.md)** - Deploy JDBX in production
 - **[Monitoring Setup](monitoring.md)** - Monitor health and performance
 - **[Backup and Recovery](backup-recovery.md)** - Data protection strategies
 - **[High Availability](high-availability.md)** - Build resilient systems
 
 ### Integration
-- **[Client Libraries](client-libraries.md)** - Use JSONdb from various languages
+- **[Client Libraries](client-libraries.md)** - Use JDBX from various languages
 - **[REST API Integration](rest-integration.md)** - Integrate with existing systems
 - **[Migration Guide](migration-guide.md)** - Migrate from other databases
 - **[Import/Export](import-export.md)** - Move data in and out
@@ -55,8 +55,8 @@ Have a use case that's not covered? We welcome contributions! See our [Contribut
 ## Quick Links
 
 ### Most Popular Guides
-1. [Authentication Guide](authentication-guide.md) - Essential for securing JSONdb
-2. [JavaScript Development](javascript-development-guide.md) - Extend JSONdb with custom logic
+1. [Authentication Guide](authentication-guide.md) - Essential for securing JDBX
+2. [JavaScript Development](javascript-development-guide.md) - Extend JDBX with custom logic
 3. [Production Deployment](production-deployment.md) - Get ready for production
 4. [Performance Tuning](performance-tuning.md) - Optimize for speed
 

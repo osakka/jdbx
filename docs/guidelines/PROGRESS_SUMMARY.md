@@ -1,4 +1,4 @@
-# JSONdb Project Progress Summary
+# JDBX Project Progress Summary
 
 Current State: v1.0.2-structure
 Last Updated: 2025-05-12
@@ -6,7 +6,7 @@ Last Updated: 2025-05-12
 ## Completed Milestones
 
 ### Repository Reorganization
-We have successfully completed a comprehensive reorganization of the JSONdb codebase following the Clean Tabletop Policy and Repository Organization Guidelines. This provides us with:
+We have successfully completed a comprehensive reorganization of the JDBX codebase following the Clean Tabletop Policy and Repository Organization Guidelines. This provides us with:
 
 1. **One source of truth**: All code is properly organized in standard directories
 2. **One build system**: Unified Makefile with proper component organization

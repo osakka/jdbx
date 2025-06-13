@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to JSONdb will be documented in this file.
+All notable changes to JDBX will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -23,7 +23,7 @@ This release implements a comprehensive lock-free database architecture with sur
   - Removed `jdbx_database.c` and `jdbx_database.h` - kept only `database_jdbx_only.c`
   - Updated Makefile to reference single JDBX implementation (line 119)
   - Moved obsolete patch files to trash (hash index corruption patches)
-  - Organized test files in proper `/opt/jsondb/tests/` directory
+  - Organized test files in proper `/opt/jdbx/tests/` directory
 - **ZERO WARNINGS**: Achieved completely clean compilation with -Wall -Wextra
   - Fixed unused parameter warnings with proper (void) casts
   - Resolved duplicate skiplist implementations (kept lock-free version)
@@ -124,7 +124,7 @@ This release introduces adaptive indexing capabilities and fixes a critical conn
 
 ### 🚀 High-Performance Database Transformation
 
-This major release transforms JSONdb into a high-performance database capable of handling billion-document collections with sub-millisecond response times.
+This major release transforms JDBX into a high-performance database capable of handling billion-document collections with sub-millisecond response times.
 
 #### Core Architecture Overhaul
 - **MEMORY-MAPPED STORAGE**: Zero-copy data access with configurable sizes (256MB - 100GB)
@@ -170,7 +170,7 @@ This major release transforms JSONdb into a high-performance database capable of
 - **LOCK-FREE QUEUE**: Michael & Scott algorithm implementation for thread pool work distribution
 - **EVENT-DRIVEN I/O**: epoll() based server for 10x connection scalability vs traditional threading
 - **SERVER MODE SELECTION**: Automatic switching between standard and high-performance modes
-- **ENVIRONMENT CONFIG**: Runtime performance tuning via JSONDB_SERVER_MODE and JSONDB_MAX_CONNECTIONS
+- **ENVIRONMENT CONFIG**: Runtime performance tuning via JDBX_SERVER_MODE and JDBX_MAX_CONNECTIONS
 
 #### Code Quality & Build System
 - **ZERO WARNINGS**: Fixed all compilation warnings with -Wall -Wextra flags
@@ -386,7 +386,7 @@ This major release transforms JSONdb into a high-performance database capable of
 
 #### Monitoring Infrastructure
 - **ADDED**: Comprehensive server monitoring script
-- **LOCATION**: `/opt/jsondb/scripts/monitor_server.sh`
+- **LOCATION**: `/opt/jdbx/scripts/monitor_server.sh`
 - **FEATURES**:
   - Process health monitoring
   - Memory usage tracking
@@ -661,10 +661,10 @@ This major release transforms JSONdb into a high-performance database capable of
 
 ### 🔧 Runtime Script Improvements
 
-- **IMPROVED**: Simplified and cleaned up `jsondb_runtime.sh` script (40% size reduction)
+- **IMPROVED**: Simplified and cleaned up `jdbx_runtime.sh` script (40% size reduction)
 - **ORGANIZED**: Environment configuration with two-tier system:
-  - Template: `/opt/jsondb/share/config/jsondb.env` (examples and documentation)
-  - Running config: `/opt/jsondb/var/jsondb.env` (user customizations)
+  - Template: `/opt/jdbx/share/config/jdbx.env` (examples and documentation)
+  - Running config: `/opt/jdbx/var/jdbx.env` (user customizations)
 - **SIMPLIFIED**: Removed complex workarounds for resolved socket binding issues
 - **UPDATED**: Accurate server flag mapping to match actual server capabilities
 - **ENHANCED**: Professional configuration management with absolute paths
@@ -791,10 +791,10 @@ This major release transforms JSONdb into a high-performance database capable of
 
 ```bash
 # Force binary format (auto-detection by default)
-JSONDB_BINARY_FORMAT=1
+JDBX_BINARY_FORMAT=1
 
 # Set size threshold for auto-detection (default: 10MB)
-JSONDB_BINARY_SIZE_THRESHOLD=10485760
+JDBX_BINARY_SIZE_THRESHOLD=10485760
 ```
 
 ### 🙏 Contributors
@@ -806,7 +806,7 @@ This release was made possible by the comprehensive work on binary persistence i
 - [Binary Format Documentation](docs/BINARY_FORMAT.md)
 - [Performance Benchmarks](docs/BINARY_FORMAT.md#performance-improvements)
 - [API Documentation](docs/api/API.md)
-- [GitHub Repository](https://github.com/yourusername/jsondb)
+- [GitHub Repository](https://github.com/yourusername/jdbx)
 
 ---
 

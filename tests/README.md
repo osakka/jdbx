@@ -1,6 +1,6 @@
 # Tests Directory
 
-This directory contains all tests for the JSONdb project, organized by component and type.
+This directory contains all tests for the JDBX project, organized by component and type.
 
 ## Directory Structure
 

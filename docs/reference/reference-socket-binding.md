@@ -1,9 +1,9 @@
-# JSONdb Socket Binding Reference
+# JDBX Socket Binding Reference
 
 **Version**: 2.0.7  
 **Last Updated**: January 2025
 
-This comprehensive reference documents the socket binding implementation in JSONdb server, consolidating all socket binding documentation into a single source of truth.
+This comprehensive reference documents the socket binding implementation in JDBX server, consolidating all socket binding documentation into a single source of truth.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This comprehensive reference documents the socket binding implementation in JSON
 
 ## Overview
 
-The JSONdb server uses a robust socket binding implementation that ensures reliable network connectivity in both foreground and daemon modes. The implementation has been thoroughly tested and addresses all known edge cases.
+The JDBX server uses a robust socket binding implementation that ensures reliable network connectivity in both foreground and daemon modes. The implementation has been thoroughly tested and addresses all known edge cases.
 
 ### Key Features
 
@@ -225,8 +225,8 @@ void verify_socket_state(int socket_fd) {
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_HOST` | Server binding address | `0.0.0.0` |
-| `JSONDB_PORT` | Server listening port | `5000` |
+| `JDBX_HOST` | Server binding address | `0.0.0.0` |
+| `JDBX_PORT` | Server listening port | `5000` |
 
 ### Configuration File
 
@@ -304,8 +304,8 @@ lsof -i :5000
 Enable debug logging for detailed socket information:
 
 ```bash
-export JSONDB_LOG_LEVEL=debug
-./bin/jsondb_server
+export JDBX_LOG_LEVEL=debug
+./bin/jdbxd
 ```
 
 ## Testing
@@ -314,7 +314,7 @@ export JSONDB_LOG_LEVEL=debug
 
 1. **Start Server**
    ```bash
-   build/jsondb_runtime.sh start
+   build/jdbx_runtime.sh start
    ```
 
 2. **Verify Socket**

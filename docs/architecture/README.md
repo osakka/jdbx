@@ -1,10 +1,10 @@
-# JSONdb Architecture Documentation
+# JDBX Architecture Documentation
 
-> Deep dive into JSONdb's design, architecture, and implementation details
+> Deep dive into JDBX's design, architecture, and implementation details
 
 ## Architecture Overview
 
-JSONdb is built with a modular, layered architecture optimized for performance and scalability. This section provides comprehensive documentation of the system's design and implementation.
+JDBX is built with a modular, layered architecture optimized for performance and scalability. This section provides comprehensive documentation of the system's design and implementation.
 
 ## Core Components
 

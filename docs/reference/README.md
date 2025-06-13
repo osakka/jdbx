@@ -1,6 +1,6 @@
-# JSONdb Reference Documentation
+# JDBX Reference Documentation
 
-> Comprehensive technical reference for all JSONdb features and configurations
+> Comprehensive technical reference for all JDBX features and configurations
 
 ## Reference Categories
 
@@ -47,7 +47,7 @@
 |---------|---------|-------------|
 | Port | 5000 | Server listen port |
 | Host | 0.0.0.0 | Bind address |
-| Database Path | var/data/jsondb/db.jdb | Database file path |
+| Database Path | var/data/jdbx/db.jdb | Database file path |
 | Log Level | INFO | Logging verbosity |
 | Cache Size | 10MB | Document cache size |
 | SSL Enabled | true | SSL/TLS encryption enabled |
@@ -100,7 +100,7 @@ Location: `_system_config` collection (highest priority in 3-tier config system)
     "ssl_key": "/etc/ssl/private/server.key"
   },
   "database": {
-    "path": "var/data/jsondb/db.jdb",
+    "path": "var/data/jdbx/db.jdb",
     "mmap_size": "10GB"
   },
   "cache": {
@@ -117,20 +117,20 @@ Location: `_system_config` collection (highest priority in 3-tier config system)
 ```
 
 ### Environment Configuration
-File: `/opt/jsondb/share/config/jsondb.env`
+File: `/opt/jdbx/share/config/jdbx.env`
 
 ```bash
 # Server settings
-JSONDB_PORT=5000
-JSONDB_HOST=0.0.0.0
+JDBX_PORT=5000
+JDBX_HOST=0.0.0.0
 
 # Database settings
-JSONDB_DATABASE_PATH=/opt/jsondb/build/var
-JSONDB_LOG_LEVEL=INFO
+JDBX_DATABASE_PATH=/opt/jdbx/build/var
+JDBX_LOG_LEVEL=INFO
 
 # Performance
-JSONDB_CACHE_SIZE=1073741824  # 1GB in bytes
-JSONDB_THREAD_POOL_SIZE=16
+JDBX_CACHE_SIZE=1073741824  # 1GB in bytes
+JDBX_THREAD_POOL_SIZE=16
 ```
 
 ## API Endpoints Quick Reference
@@ -164,34 +164,34 @@ See [REST API Reference](../api/rest-api.md) for complete documentation.
 ### Server Commands
 ```bash
 # Start server
-./build/jsondb_runtime.sh start
+./build/jdbx_runtime.sh start
 
 # Stop server
-./build/jsondb_runtime.sh stop
+./build/jdbx_runtime.sh stop
 
 # Check status
-./build/jsondb_runtime.sh status
+./build/jdbx_runtime.sh status
 
 # View logs
-./build/jsondb_runtime.sh logs
+./build/jdbx_runtime.sh logs
 ```
 
 ### Direct Binary Options
 ```bash
 # Custom port
-jsondb_server --port 8080
+jdbxd --port 8080
 
 # Disable SSL
-jsondb_server --no-ssl
+jdbxd --no-ssl
 
 # Custom SSL certificates
-jsondb_server --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
+jdbxd --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
 
 # Debug mode
-jsondb_server --log-level DEBUG
+jdbxd --log-level DEBUG
 
 # Thread pool configuration
-jsondb_server --thread-pool-min 8 --thread-pool-max 32
+jdbxd --thread-pool-min 8 --thread-pool-max 32
 ```
 
 ## File Formats

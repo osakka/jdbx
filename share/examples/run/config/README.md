@@ -1,6 +1,6 @@
 # Runtime Configuration Examples
 
-This directory contains example runtime configuration files that can be used when running JSONdb server. These are actual example configuration files that have been used in testing and development.
+This directory contains example runtime configuration files that can be used when running JDBX server. These are actual example configuration files that have been used in testing and development.
 
 ## Available Configuration Files
 

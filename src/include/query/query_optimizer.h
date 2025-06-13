@@ -7,7 +7,7 @@
 #include "query/query_language.h"
 #include "index/btree_disk.h"
 
-/* Cost-based query optimizer for JSONdb
+/* Cost-based query optimizer for JDBX
  * Generates optimal execution plans for complex queries
  */
 

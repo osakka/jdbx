@@ -1,6 +1,6 @@
 # js Scripts
 
-This directory contains scripts for js operations in the JSONdb project.
+This directory contains scripts for js operations in the JDBX project.
 
 ## Scripts
 

@@ -82,7 +82,7 @@ else
 endif
 
 # Default target
-all: directories libjsondb server tools
+all: directories libjdbx server tools
 
 # Create build directories
 directories:
@@ -120,22 +120,22 @@ OPTIMIZED_OBJS = $(CORE_OBJS) ../build/obj/components/core/authentication_handle
 ALL_OBJS = $(OBJS) $(THREAD_POOL_OBJ)
 
 # Build static library
-libjsondb: $(OPTIMIZED_OBJS)
-	@echo "Creating libjsondb.a with optimized implementations..."
-	ar rcs $(LIB_DIR)/libjsondb.a $(OPTIMIZED_OBJS)
+libjdbx: $(OPTIMIZED_OBJS)
+	@echo "Creating libjdbx.a with optimized implementations..."
+	ar rcs $(LIB_DIR)/libjdbx.a $(OPTIMIZED_OBJS)
 
 # Build server with new main.c
-server: $(OBJ_DIR)/components/main.o libjsondb
-	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS) -lm
+server: $(OBJ_DIR)/components/main.o libjdbx
+	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jdbxd -L$(LIB_DIR) -ljdbx $(SERVER_LDFLAGS) -lm
 
 # Target to build with new modular main.c
-server-modular: libjsondb
+server-modular: libjdbx
 	$(CC) $(CFLAGS) -c $(SRC_DIR)/components/main.c.modular -o $(OBJ_DIR)/components/main.o
-	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jsondb_server -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS) -lm
+	$(CC) $(OBJ_DIR)/components/main.o -o $(BIN_DIR)/jdbxd -L$(LIB_DIR) -ljdbx $(SERVER_LDFLAGS) -lm
 
 # Build tools
-tools: libjsondb $(OBJ_DIR)/components/tools/jsondb_tools.o
-	$(CC) $(OBJ_DIR)/components/tools/jsondb_tools.o -o $(BIN_DIR)/jsondb_tools -L$(LIB_DIR) -ljsondb $(SERVER_LDFLAGS)
+tools: libjdbx $(OBJ_DIR)/components/tools/jdbx_tools.o
+	$(CC) $(OBJ_DIR)/components/tools/jdbx_tools.o -o $(BIN_DIR)/jdbx-tools -L$(LIB_DIR) -ljdbx $(SERVER_LDFLAGS)
 
 # Compile rule for .c files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c

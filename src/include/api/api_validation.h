@@ -1,5 +1,5 @@
-#ifndef JSONDB_API_VALIDATION_H
-#define JSONDB_API_VALIDATION_H
+#ifndef JDBX_API_VALIDATION_H
+#define JDBX_API_VALIDATION_H
 
 /**
  * @file api_validation.h
@@ -149,4 +149,4 @@ http_response_t* api_validate_json_boolean(json_value_t* json,
                                           int required, 
                                           int* value_out);
 
-#endif /* JSONDB_API_VALIDATION_H */
+#endif /* JDBX_API_VALIDATION_H */

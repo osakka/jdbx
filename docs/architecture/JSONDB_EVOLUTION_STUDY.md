@@ -1,11 +1,11 @@
-# JSONdb Evolution Study: Embedded Intelligence & Library Paradigm
+# JDBX Evolution Study: Embedded Intelligence & Library Paradigm
 
 **Date**: June 9, 2025  
 **Version**: v3.2.0 Proposal
 
 ## Executive Summary
 
-This study examines a fundamental evolution of JSONdb from a document database with JavaScript support to an intelligent, self-validating database system with embedded logic at every level.
+This study examines a fundamental evolution of JDBX from a document database with JavaScript support to an intelligent, self-validating database system with embedded logic at every level.
 
 ## Current State Analysis
 
@@ -314,4 +314,4 @@ How should existing systems migrate?
 4. Performance testing and optimization
 5. Gradual rollout with monitoring
 
-This evolution transforms JSONdb from a document store to an intelligent, self-managing database system that embeds business logic at the data layer, ensuring consistency, reducing application complexity, and enabling new paradigms like the library system.
+This evolution transforms JDBX from a document store to an intelligent, self-managing database system that embeds business logic at the data layer, ensuring consistency, reducing application complexity, and enabling new paradigms like the library system.

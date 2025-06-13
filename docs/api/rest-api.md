@@ -4,11 +4,11 @@
 **Last Updated**: June 12, 2025  
 **Base URL**: `http://localhost:5000/api`
 
-Complete REST API documentation for JSONdb v3.3.0 with lock-free architecture and field-level operations.
+Complete REST API documentation for JDBX v3.3.0 with lock-free architecture and field-level operations.
 
 ## Authentication
 
-JSONdb uses JWT (JSON Web Tokens) for authentication with database-backed RBAC.
+JDBX uses JWT (JSON Web Tokens) for authentication with database-backed RBAC.
 
 ### Login
 ```http
@@ -159,7 +159,7 @@ Authorization: Bearer <token>
 
 ## Field-Level Operations (v3.3.0)
 
-JSONdb v3.3.0 introduces granular field-level operations for efficient document manipulation.
+JDBX v3.3.0 introduces granular field-level operations for efficient document manipulation.
 
 ### Read Specific Field
 ```http
@@ -198,7 +198,7 @@ Authorization: Bearer <token>
 
 ## Library Management (Multi-Tenant)
 
-JSONdb v3.3.0 supports multi-library architecture for tenant isolation.
+JDBX v3.3.0 supports multi-library architecture for tenant isolation.
 
 ### List Libraries
 ```http
@@ -481,7 +481,7 @@ All API endpoints return consistent error responses:
 
 ## Rate Limiting
 
-JSONdb implements rate limiting to protect against abuse:
+JDBX implements rate limiting to protect against abuse:
 
 **Default Limits:**
 - Authenticated users: 1000 requests/minute
@@ -497,7 +497,7 @@ X-RateLimit-Reset: 1718234460
 
 ## WebSocket API (Real-time)
 
-For real-time updates, JSONdb supports WebSocket connections:
+For real-time updates, JDBX supports WebSocket connections:
 
 ```javascript
 const ws = new WebSocket('ws://localhost:5000/api/ws');

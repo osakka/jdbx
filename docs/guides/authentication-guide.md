@@ -1,7 +1,7 @@
 # Authentication System Fix Plan
 
 ## Overview
-The JSONdb server crashes when attempting to register users, indicating critical issues in the RBAC/authentication system. This plan outlines the systematic approach to fix these issues.
+The JDBX server crashes when attempting to register users, indicating critical issues in the RBAC/authentication system. This plan outlines the systematic approach to fix these issues.
 
 ## Root Cause Analysis
 - Server crashes during user registration

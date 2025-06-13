@@ -152,8 +152,8 @@
 - `initialize/threads.c` - Thread initialization
 
 #### Tools (2 files)
-- `tools/jsondb_metrics.c` - Metrics tools
-- `tools/jsondb_tools.c` - General tools
+- `tools/jdbx_metrics.c` - Metrics tools
+- `tools/jdbx_tools.c` - General tools
 
 #### Query Engine (1 file)
 - `query/query_language.c` - Query language implementation

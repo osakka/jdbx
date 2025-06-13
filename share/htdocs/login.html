@@ -62,7 +62,7 @@
     <div class="container">
         <div class="login-container">
             <div class="logo">
-                <img src="/resources/jsondb_logo_dark.svg" alt="JSONdb" data-theme-logo style="width: 200px; margin-bottom: 20px;">
+                <img src="/resources/jdbx_logo_dark.svg" alt="JDBX" data-theme-logo style="width: 200px; margin-bottom: 20px;">
             </div>
             
             <form id="loginForm">
@@ -112,9 +112,9 @@
             .then(data => {
                 if (data.token) {
                     // Store the JWT token
-                    localStorage.setItem('jsondb_auth_token', data.token);
+                    localStorage.setItem('jdbx_auth_token', data.token);
                     if (data.refresh_token) {
-                        localStorage.setItem('jsondb_refresh_token', data.refresh_token);
+                        localStorage.setItem('jdbx_refresh_token', data.refresh_token);
                     }
                     // Redirect to dashboard
                     window.location.href = '/';

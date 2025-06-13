@@ -1,10 +1,10 @@
-# JSONdb Demo Application - Product Catalog
+# JDBX Demo Application - Product Catalog
 
-This demo showcases JSONdb as a backend for a simple e-commerce product catalog application.
+This demo showcases JDBX as a backend for a simple e-commerce product catalog application.
 
 ## Features
 
-- **Product Listing**: Browse products stored in JSONdb
+- **Product Listing**: Browse products stored in JDBX
 - **Search**: Search products by name, SKU, or description
 - **Category Filtering**: Filter products by category
 - **Shopping Cart**: Add products to cart (stored in localStorage)
@@ -13,10 +13,10 @@ This demo showcases JSONdb as a backend for a simple e-commerce product catalog 
 
 ## Setup
 
-1. **Ensure JSONdb server is running**:
+1. **Ensure JDBX server is running**:
    ```bash
-   cd /opt/jsondb
-   build/jsondb_runtime.sh start
+   cd /opt/jdbx
+   build/jdbx_runtime.sh start
    ```
 
 2. **Create demo data** (if not already created):
@@ -25,7 +25,7 @@ This demo showcases JSONdb as a backend for a simple e-commerce product catalog 
    # Some sample products have already been created
    ```
 
-3. **Access the applications** (served by JSONdb's integrated web server):
+3. **Access the applications** (served by JDBX's integrated web server):
    - Admin Dashboard: http://localhost:5000/
    - Demo Application: http://localhost:5000/demo.html
    - Metrics Dashboard: http://localhost:5000/metrics_demo.html
@@ -35,7 +35,7 @@ This demo showcases JSONdb as a backend for a simple e-commerce product catalog 
 
 ```
 ┌─────────────────┐     ┌────────────────────────────┐
-│   Web Browser   │────▶│     JSONdb Server          │
+│   Web Browser   │────▶│     JDBX Server          │
 │                 │     │     (Port 5000)            │
 └─────────────────┘     │                            │
                         │ ┌────────────────────────┐ │
@@ -84,13 +84,13 @@ This demo showcases JSONdb as a backend for a simple e-commerce product catalog 
    }
    ```
 
-3. **Add user accounts**: Integrate with JSONdb's RBAC system for user authentication
+3. **Add user accounts**: Integrate with JDBX's RBAC system for user authentication
 
 4. **Implement inventory tracking**: Update product stock levels when orders are placed
 
 5. **Add product images**: Store image URLs in product documents
 
-## JSONdb Features Demonstrated
+## JDBX Features Demonstrated
 
 - **Document Storage**: Products stored as JSON documents
 - **Collections**: Organized data in the `demo_products` collection
@@ -101,18 +101,18 @@ This demo showcases JSONdb as a backend for a simple e-commerce product catalog 
 
 ## Troubleshooting
 
-1. **"Error loading products"**: Ensure JSONdb server is running on port 5000
-2. **CORS errors**: JSONdb server includes CORS headers by default
+1. **"Error loading products"**: Ensure JDBX server is running on port 5000
+2. **CORS errors**: JDBX server includes CORS headers by default
 3. **Authentication issues**: The demo works without authentication, but you can add auth tokens if needed
 
 ## Next Steps
 
-This demo shows the basics of using JSONdb as a backend. You can:
+This demo shows the basics of using JDBX as a backend. You can:
 
-- Build more complex queries using JSONdb's query language
+- Build more complex queries using JDBX's query language
 - Implement data validation using JavaScript validators
 - Add data transformations for computed fields
 - Create indexes for better search performance
 - Use the transaction API for atomic operations
 
-Visit the admin dashboard to explore more JSONdb features!
+Visit the admin dashboard to explore more JDBX features!

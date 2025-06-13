@@ -1,6 +1,6 @@
 # Repository Reorganization Plan
 
-Based on our repository organization guidelines and the GIT_GUIDELINES.md document, this plan outlines the specific steps to restructure the JSONdb repository for better maintainability and adherence to best practices.
+Based on our repository organization guidelines and the GIT_GUIDELINES.md document, this plan outlines the specific steps to restructure the JDBX repository for better maintainability and adherence to best practices.
 
 ## Current Implementation State
 
@@ -91,13 +91,13 @@ The reorganization will be implemented in a single commit to maintain a clean hi
 After reorganization, the repository will follow this structure:
 
 ```
-jsondb/
+jdbx/
 ├── LICENSE           # License file
 ├── README.md         # Project overview
 ├── CONTRIBUTING.md   # Contribution guidelines
 ├── Makefile          # Main Makefile
 ├── include/          # Public header files
-│   └── jsondb/       # Main public API headers
+│   └── jdbx/       # Main public API headers
 ├── src/              # Source code (properly organized)
 ├── doc/              # Documentation (renamed from docs)
 ├── examples/         # Example code and usage

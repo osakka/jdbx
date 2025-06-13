@@ -1,6 +1,6 @@
-# JSONdb Project Structure
+# JDBX Project Structure
 
-This document provides an overview of the JSONdb project structure after the repository reorganization and consolidation (v1.1.0-structure).
+This document provides an overview of the JDBX project structure after the repository reorganization and consolidation (v1.1.0-structure).
 
 ## Overview
 
@@ -9,7 +9,7 @@ The repository has been reorganized following the principles outlined in the [Re
 ## Directory Structure
 
 ```
-jsondb/
+jdbx/
 ├── README.md               # Project overview and documentation
 ├── CONTRIBUTING.md         # Contribution guidelines
 ├── build/                  # Build output directory
@@ -19,7 +19,7 @@ jsondb/
 ├── src/                    # Source code
 │   ├── Makefile            # Main build system
 │   ├── include/            # Global header files - include path for all components
-│   │   ├── jsondb.h        # Main include file
+│   │   ├── jdbx.h        # Main include file
 │   │   ├── api/            # API header files
 │   │   │   └── *.h         # API-specific headers
 │   │   ├── core/           # Core header files
@@ -88,14 +88,14 @@ jsondb/
 │   │   └── validators/     # Document validators
 │   └── man/                # Manual pages
 └── data/                   # Variable data (during runtime)
-    ├── jsondb/             # Database files
+    ├── jdbx/             # Database files
     ├── log/                # Log files
     └── run/                # Runtime files (PIDs, sockets)
 ```
 
 ## Key Files
 
-- `src/include/jsondb.h`: Main include file for the project
+- `src/include/jdbx.h`: Main include file for the project
 - `src/components/main.c`: Entry point for the server
 - `src/components/js/js_engine.c`: JavaScript engine integration
 - `src/Makefile`: Main build system
@@ -110,7 +110,7 @@ The project uses a component-based organization with a clean separation between 
 4. **Discoverability**: Developers can quickly find all related files in a consistent, predictable structure.
 5. **Maintenance**: Changes to a component can be made in one place, reducing the risk of inconsistencies.
 
-Headers are located in `src/include/` (organized by component), while all implementation files are in `src/components/` (also organized by component). The main include file `jsondb.h` is located at `src/include/jsondb.h`.
+Headers are located in `src/include/` (organized by component), while all implementation files are in `src/components/` (also organized by component). The main include file `jdbx.h` is located at `src/include/jdbx.h`.
 
 ## Build System
 

@@ -1,10 +1,10 @@
-# JSONdb Logging Standards
+# JDBX Logging Standards
 
 **Last Updated**: January 31, 2025
 
 ## Overview
 
-JSONdb uses a unified, high-performance logging system designed for both development and production environments. The system supports dynamic log level control, trace-by-functionality, and consistent message formatting.
+JDBX uses a unified, high-performance logging system designed for both development and production environments. The system supports dynamic log level control, trace-by-functionality, and consistent message formatting.
 
 ## Log Format
 
@@ -57,17 +57,17 @@ TRACE_API("Handling %s request to %s", method, path);
 ### Command Line Flags
 ```bash
 # Set log level
-./jsondb_server --log-level=debug
+./jdbxd --log-level=debug
 
 # Enable trace categories
-./jsondb_server --log-level=trace --trace-categories="database,auth"
+./jdbxd --log-level=trace --trace-categories="database,auth"
 ```
 
 ### Environment Variables
 ```bash
-export JSONDB_LOG_LEVEL="debug"
-export JSONDB_TRACE_CATEGORIES="database,rbac,api"
-./jsondb_server
+export JDBX_LOG_LEVEL="debug"
+export JDBX_TRACE_CATEGORIES="database,rbac,api"
+./jdbxd
 ```
 
 ### Runtime API Control

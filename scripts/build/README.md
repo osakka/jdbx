@@ -1,6 +1,6 @@
 # build Scripts
 
-This directory contains scripts for build operations in the JSONdb project.
+This directory contains scripts for build operations in the JDBX project.
 
 ## Scripts
 

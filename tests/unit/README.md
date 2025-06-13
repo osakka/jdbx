@@ -1,6 +1,6 @@
 # unit Tests
 
-This directory contains tests for the unit components of JSONdb.
+This directory contains tests for the unit components of JDBX.
 
 ## Test Files
 

@@ -1,9 +1,9 @@
-# JSONdb JavaScript Integration Reference
+# JDBX JavaScript Integration Reference
 
 **Version**: 2.0.7  
 **Last Updated**: January 2025
 
-This comprehensive guide documents the JavaScript integration in JSONdb, powered by QuickJS engine.
+This comprehensive guide documents the JavaScript integration in JDBX, powered by QuickJS engine.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This comprehensive guide documents the JavaScript integration in JSONdb, powered
 
 ## Overview
 
-JSONdb integrates the QuickJS JavaScript engine to provide powerful scripting capabilities for data manipulation, validation, and transformation.
+JDBX integrates the QuickJS JavaScript engine to provide powerful scripting capabilities for data manipulation, validation, and transformation.
 
 ### Key Features
 
@@ -33,7 +33,7 @@ JSONdb integrates the QuickJS JavaScript engine to provide powerful scripting ca
 
 ### QuickJS Integration
 
-JSONdb uses QuickJS, a small and embeddable JavaScript engine that supports:
+JDBX uses QuickJS, a small and embeddable JavaScript engine that supports:
 - ES2020 specification
 - Modules (ES6 modules)
 - Async/await
@@ -282,7 +282,7 @@ db.registerValidator('users', validateUser);
 
 Execute script file:
 ```bash
-./bin/jsondb_server -js_eval_file validators/user.js
+./bin/jdbxd -js_eval_file validators/user.js
 ```
 
 ## Path Resolution
@@ -299,9 +299,9 @@ JavaScript files are searched in the following order:
 ### Default Directories
 
 ```
-/opt/jsondb/
+/opt/jdbx/
 ├── bin/
-│   └── jsondb_server
+│   └── jdbxd
 ├── share/
 │   └── js/
 │       ├── functions/
@@ -490,10 +490,10 @@ db.registerFunction('search', `
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_JS_ENABLED` | Enable JavaScript | `true` |
-| `JSONDB_JS_TIMEOUT` | Execution timeout (ms) | `5000` |
-| `JSONDB_JS_MEMORY_LIMIT` | Memory limit (MB) | `128` |
-| `JSONDB_JS_CACHE` | Enable file caching | `true` |
+| `JDBX_JS_ENABLED` | Enable JavaScript | `true` |
+| `JDBX_JS_TIMEOUT` | Execution timeout (ms) | `5000` |
+| `JDBX_JS_MEMORY_LIMIT` | Memory limit (MB) | `128` |
+| `JDBX_JS_CACHE` | Enable file caching | `true` |
 
 ## Troubleshooting
 
@@ -502,7 +502,7 @@ db.registerFunction('search', `
 1. **Script Not Found**
    - Check file path and search directories
    - Ensure proper permissions on script files
-   - Verify JSONDB_SHARE_DIR is set correctly
+   - Verify JDBX_SHARE_DIR is set correctly
 
 2. **Execution Timeout**
    - Optimize JavaScript code

@@ -1,12 +1,12 @@
-# JSONdb JavaScript Examples
+# JDBX JavaScript Examples
 
-This directory contains comprehensive examples of JavaScript validators, transformers, and functions for the JSONdb system.
+This directory contains comprehensive examples of JavaScript validators, transformers, and functions for the JDBX system.
 
 ## Quick Start
 
 ### 1. Install Example Scripts
 
-Use the examples from `comprehensive_examples.js` to create your own scripts. Simply copy the JSON structure and paste it into the appropriate collection in the JSONdb browser interface:
+Use the examples from `comprehensive_examples.js` to create your own scripts. Simply copy the JSON structure and paste it into the appropriate collection in the JDBX browser interface:
 
 - **Validators** → `_validators` collection
 - **Transformers** → `_transformers` collection  
@@ -16,7 +16,7 @@ Use the examples from `comprehensive_examples.js` to create your own scripts. Si
 
 Here's a quick way to install the email validator example:
 
-1. Navigate to the `_validators` collection in JSONdb browser
+1. Navigate to the `_validators` collection in JDBX browser
 2. Click "Create Document"
 3. Paste this JSON:
 
@@ -29,7 +29,7 @@ Here's a quick way to install the email validator example:
     "enabled": true,
     "code": "function validate(document, context) {\n    const errors = [];\n    const warnings = [];\n    \n    if (!document.email) {\n        errors.push('Email is required');\n    } else {\n        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n        if (!emailRegex.test(document.email)) {\n            errors.push('Invalid email format');\n        }\n    }\n    \n    return {\n        valid: errors.length === 0,\n        errors,\n        warnings\n    };\n}",
     "version": "1.0.0",
-    "author": "JSONdb Examples"
+    "author": "JDBX Examples"
 }
 ```
 
@@ -299,7 +299,7 @@ function validate(document, context) {
 
 Check server logs to see debug output:
 ```bash
-tail -f /opt/jsondb/var/jsondb_server.log
+tail -f /opt/jdbx/var/jdbxd.log
 ```
 
 ## Advanced Usage
@@ -343,14 +343,14 @@ function transform(document, context) {
 ## Documentation
 
 For complete documentation, see:
-- [JavaScript Development Guide](/opt/jsondb/docs/guides/javascript-development-guide.md)
-- [API Documentation](/opt/jsondb/docs/api/)
-- [RBAC Configuration Guide](/opt/jsondb/docs/guides/rbac-setup.md)
+- [JavaScript Development Guide](/opt/jdbx/docs/guides/javascript-development-guide.md)
+- [API Documentation](/opt/jdbx/docs/api/)
+- [RBAC Configuration Guide](/opt/jdbx/docs/guides/rbac-setup.md)
 
 ## Support
 
 For issues or questions:
-1. Check the JSONdb logs for error details
+1. Check the JDBX logs for error details
 2. Use the browser's real-time validation features
 3. Review the comprehensive examples in this directory
 4. Consult the development guide for advanced topics

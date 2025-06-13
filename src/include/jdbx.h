@@ -1,13 +1,13 @@
 /**
- * @file jsondb.h
- * @brief Main header file for the JSONdb library
+ * @file jdbx.h
+ * @brief Main header file for the JDBX library
  *
- * This header includes all the necessary components for using JSONdb.
+ * This header includes all the necessary components for using JDBX.
  * For more specific functionality, include the appropriate component headers.
  */
 
-#ifndef JSONDB_H
-#define JSONDB_H
+#ifndef JDBX_H
+#define JDBX_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,4 +43,4 @@ extern "C" {
 }
 #endif
 
-#endif /* JSONDB_H */
+#endif /* JDBX_H */

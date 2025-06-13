@@ -22,9 +22,9 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
     /* Get database file basename */
     const char* db_file = config->db_file;
     if (!db_file || strlen(db_file) == 0) {
-        db_file = getenv("JSONDB_DB_FILE");
+        db_file = getenv("JDBX_DB_FILE");
         if (!db_file) {
-            db_file = "var/jsondb";
+            db_file = "var/jdbx";
         }
     }
     

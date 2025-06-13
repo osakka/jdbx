@@ -73,10 +73,10 @@ When including headers from other components, always use the full path:
 
 ## Main Entry Point
 
-For the main entry point, use the unified jsondb.h header:
+For the main entry point, use the unified jdbx.h header:
 
 ```c
-#include "src/include/jsondb.h"
+#include "src/include/jdbx.h"
 ```
 
 ## External Libraries
@@ -100,9 +100,9 @@ For QuickJS, use the path:
 
 A migration script (`scripts/maintenance/fix_includes_final.sh`) has been created to automatically update include paths across the codebase. This script:
 
-1. Updates `include/jsondb/` references to use `src/include/`
+1. Updates `include/jdbx/` references to use `src/include/`
 2. Updates relative paths using `../include/` to use `src/include/`
-3. Updates the basic `jsondb.h` inclusion to `src/include/jsondb.h`
+3. Updates the basic `jdbx.h` inclusion to `src/include/jdbx.h`
 4. Updates QuickJS header references
 5. Standardizes component references
 

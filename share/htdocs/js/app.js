@@ -1,6 +1,6 @@
-// JSONdb Single Page Application
+// JDBX Single Page Application
 const API_BASE_URL = '';
-let authToken = localStorage.getItem('jsondb_auth_token');
+let authToken = localStorage.getItem('jdbx_auth_token');
 let currentView = 'dashboard';
 let refreshInterval = null;
 
@@ -89,7 +89,7 @@ let sessionCheckInterval = null;
 
 async function validateSession() {
     // Always get fresh token from localStorage
-    const currentToken = localStorage.getItem('jsondb_auth_token');
+    const currentToken = localStorage.getItem('jdbx_auth_token');
     authToken = currentToken; // Update global variable
     
     console.log('Session validation starting, token present:', !!currentToken);
@@ -114,8 +114,8 @@ async function validateSession() {
             console.log('Session invalid (401), redirecting to login');
             console.log('Token was:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
             // Clear tokens
-            localStorage.removeItem('jsondb_auth_token');
-            localStorage.removeItem('jsondb_refresh_token');
+            localStorage.removeItem('jdbx_auth_token');
+            localStorage.removeItem('jdbx_refresh_token');
             // Clear session check interval
             if (sessionCheckInterval) {
                 clearInterval(sessionCheckInterval);
@@ -377,8 +377,8 @@ function switchView(view) {
 
 // Logout
 function logout() {
-    localStorage.removeItem('jsondb_auth_token');
-    localStorage.removeItem('jsondb_refresh_token');
+    localStorage.removeItem('jdbx_auth_token');
+    localStorage.removeItem('jdbx_refresh_token');
     window.location.href = '/login.html';
 }
 
@@ -412,7 +412,7 @@ function createNotificationContainer() {
 // API helper
 async function apiRequest(endpoint, options = {}) {
     // Always get fresh token from localStorage to handle token refresh/updates
-    const currentToken = localStorage.getItem('jsondb_auth_token');
+    const currentToken = localStorage.getItem('jdbx_auth_token');
     const defaultOptions = {
         headers: {
             'Authorization': `Bearer ${currentToken}`,
@@ -452,8 +452,8 @@ async function apiRequest(endpoint, options = {}) {
                     throw new Error(error.error || 'Unauthorized');
                 }
                 // For other endpoints, kick out
-                localStorage.removeItem('jsondb_auth_token');
-                localStorage.removeItem('jsondb_refresh_token');
+                localStorage.removeItem('jdbx_auth_token');
+                localStorage.removeItem('jdbx_refresh_token');
                 // Clear session check interval
                 if (sessionCheckInterval) {
                     clearInterval(sessionCheckInterval);
@@ -2715,7 +2715,7 @@ function recordScriptPerformanceMetrics(metrics) {
     
     // Store in localStorage for persistence
     try {
-        localStorage.setItem('jsondb_performance_metrics', JSON.stringify(performanceMetrics));
+        localStorage.setItem('jdbx_performance_metrics', JSON.stringify(performanceMetrics));
     } catch (e) {
         console.warn('Failed to store performance metrics:', e);
     }
@@ -2750,7 +2750,7 @@ async function sendPerformanceMetricsToServer(metrics) {
 // Load performance metrics from localStorage
 function loadPerformanceMetrics() {
     try {
-        const stored = localStorage.getItem('jsondb_performance_metrics');
+        const stored = localStorage.getItem('jdbx_performance_metrics');
         if (stored) {
             performanceMetrics = JSON.parse(stored);
         }
@@ -3246,7 +3246,7 @@ function initializeVersioningSystem() {
     
     // Load any cached version data
     try {
-        const cached = localStorage.getItem('jsondb_script_versions');
+        const cached = localStorage.getItem('jdbx_script_versions');
         if (cached) {
             scriptVersions = JSON.parse(cached);
         }
@@ -6391,7 +6391,7 @@ function clearPerformanceHistory() {
         };
         
         try {
-            localStorage.removeItem('jsondb_performance_metrics');
+            localStorage.removeItem('jdbx_performance_metrics');
         } catch (e) {
             console.warn('Failed to clear performance metrics from localStorage:', e);
         }
@@ -6443,7 +6443,7 @@ function showPerformanceReport() {
 function generatePerformanceReport(dashboardData) {
     const timestamp = new Date().toISOString();
     
-    let report = `JSONdb JavaScript Performance Report
+    let report = `JDBX JavaScript Performance Report
 Generated: ${timestamp}
 ======================================
 
@@ -6521,7 +6521,7 @@ function exportPerformanceData() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `jsondb-performance-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `jdbx-performance-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     
@@ -6751,7 +6751,7 @@ function renderUsers() {
 async function loadRoles() {
     console.log('=== loadRoles called ===');
     console.log('Current view:', currentView);
-    console.log('Auth token exists:', !!localStorage.getItem('jsondb_auth_token'));
+    console.log('Auth token exists:', !!localStorage.getItem('jdbx_auth_token'));
     
     try {
         const response = await apiRequest('/api/rbac/roles');
@@ -7229,7 +7229,7 @@ function populateRoleSelects() {
 // ===== API DOCUMENTATION =====
 function initializeAPI() {
     if (!window.swaggerUI) {
-        const token = localStorage.getItem('jsondb_auth_token');
+        const token = localStorage.getItem('jdbx_auth_token');
         
         window.swaggerUI = SwaggerUIBundle({
             url: "/openapi.json",
@@ -7447,7 +7447,7 @@ async function performBackup() {
             
             // If backup data is returned, trigger download
             if (data.backup_data) {
-                downloadBackup(data.backup_data, data.filename || 'jsondb_backup.json');
+                downloadBackup(data.backup_data, data.filename || 'jdbx_backup.json');
             }
         } else {
             const error = await response.json();
@@ -7690,7 +7690,7 @@ async function exportToJSON() {
         
         if (response.ok) {
             const data = await response.json();
-            downloadBackup(data, `jsondb_export_${new Date().toISOString().split('T')[0]}.json`);
+            downloadBackup(data, `jdbx_export_${new Date().toISOString().split('T')[0]}.json`);
             showOperationResult(true, 'Database exported successfully');
         } else {
             const error = await response.json();
@@ -8069,7 +8069,7 @@ async function loadWelcomePanel() {
 
 function logout() {
     // Clear auth token
-    localStorage.removeItem('jsondb_auth_token');
+    localStorage.removeItem('jdbx_auth_token');
     authToken = null;
     
     // Clear any intervals
@@ -8105,7 +8105,7 @@ function addTerminalLine(text, type = 'text') {
     
     const prompt = document.createElement('span');
     prompt.className = 'terminal-prompt';
-    prompt.textContent = 'jsondb>';
+    prompt.textContent = 'jdbx>';
     
     const content = document.createElement('span');
     content.className = `terminal-${type}`;
@@ -8125,7 +8125,7 @@ function clearTerminal() {
     
     terminalContent.innerHTML = `
         <div class="terminal-line">
-            <span class="terminal-prompt">jsondb&gt;</span>
+            <span class="terminal-prompt">jdbx&gt;</span>
             <span class="terminal-text">Terminal cleared.</span>
         </div>
     `;
@@ -8205,7 +8205,7 @@ async function runTerminalCommand(command) {
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `jsondb-export-${new Date().toISOString().split('T')[0]}.json`;
+                    a.download = `jdbx-export-${new Date().toISOString().split('T')[0]}.json`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);

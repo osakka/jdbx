@@ -1,10 +1,10 @@
-# JSONdb Development Documentation
+# JDBX Development Documentation
 
-> Resources for building, testing, and contributing to JSONdb
+> Resources for building, testing, and contributing to JDBX
 
 ## Development Overview
 
-This section contains everything you need to develop JSONdb, contribute to the project, or build extensions.
+This section contains everything you need to develop JDBX, contribute to the project, or build extensions.
 
 ## Developer Guides
 
@@ -14,7 +14,7 @@ This section contains everything you need to develop JSONdb, contribute to the p
 - **[Project Structure](project-structure.md)** - Understanding the codebase
 
 ### Contributing
-- **[Contributing Guide](contributing.md)** - How to contribute to JSONdb
+- **[Contributing Guide](contributing.md)** - How to contribute to JDBX
 - **[Code Style Guide](code-style.md)** - Coding standards and conventions
 - **[Git Workflow](git-workflow.md)** - Branching and commit guidelines
 
@@ -37,9 +37,9 @@ This section contains everything you need to develop JSONdb, contribute to the p
 
 ### 1. Fork and Clone
 ```bash
-git clone https://github.com/yourusername/jsondb.git
-cd jsondb
-git remote add upstream https://github.com/jsondb/jsondb.git
+git clone https://github.com/yourusername/jdbx.git
+cd jdbx
+git remote add upstream https://github.com/jdbx/jdbx.git
 ```
 
 ### 2. Build
@@ -110,7 +110,7 @@ git push origin feature/your-feature
 ## Project Structure
 
 ```
-jsondb/
+jdbx/
 ├── src/              # Source code
 │   ├── components/   # Main components
 │   ├── include/      # Header files
@@ -147,7 +147,7 @@ jsondb/
 ### Memory Issues
 ```bash
 # Run with valgrind
-valgrind --leak-check=full ./build/jsondb_server
+valgrind --leak-check=full ./build/jdbxd
 
 # Use address sanitizer
 make clean && make CFLAGS="-fsanitize=address"
@@ -156,7 +156,7 @@ make clean && make CFLAGS="-fsanitize=address"
 ### Performance
 ```bash
 # Profile with perf
-perf record ./build/jsondb_server
+perf record ./build/jdbxd
 perf report
 
 # Generate flame graph
@@ -169,7 +169,7 @@ perf script | flamegraph.pl > flame.svg
 ulimit -c unlimited
 
 # Debug core
-gdb ./build/jsondb_server core
+gdb ./build/jdbxd core
 ```
 
 ## Common Tasks
@@ -206,9 +206,9 @@ gdb ./build/jsondb_server core
 
 ## Getting Help
 
-- **Development Chat**: [Discord](https://discord.gg/jsondb)
-- **Issues**: [GitHub Issues](https://github.com/jsondb/jsondb/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/jsondb/jsondb/discussions)
+- **Development Chat**: [Discord](https://discord.gg/jdbx)
+- **Issues**: [GitHub Issues](https://github.com/jdbx/jdbx/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jdbx/jdbx/discussions)
 
 ## See Also
 

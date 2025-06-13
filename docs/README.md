@@ -1,9 +1,9 @@
-# JSONdb Documentation
+# JDBX Documentation
 
 **Version**: 3.3.0  
 **Last Updated**: June 12, 2025
 
-Welcome to the comprehensive documentation for JSONdb - a high-performance document database built specifically for JSON data with lock-free architecture and enterprise-grade features.
+Welcome to the comprehensive documentation for JDBX - a high-performance document database built specifically for JSON data with lock-free architecture and enterprise-grade features.
 
 ## 📚 Documentation Structure
 
@@ -13,7 +13,7 @@ This documentation follows a clear categorization system. **Only this README exi
 
 | Category | Purpose | Start Here |
 |----------|---------|------------|
-| **[Getting Started](getting-started/)** | New to JSONdb? | [Installation Guide](getting-started/installation.md) |
+| **[Getting Started](getting-started/)** | New to JDBX? | [Installation Guide](getting-started/installation.md) |
 | **[Guides](guides/)** | Step-by-step tutorials | [Authentication Guide](guides/authentication.md) |
 | **[API Reference](api/)** | Complete API documentation | [REST API](api/rest-api.md) |
 | **[Architecture](architecture/)** | System design and internals | [JDBX Storage](architecture/jdbx-storage.md) |

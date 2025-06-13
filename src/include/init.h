@@ -1,5 +1,5 @@
-#ifndef JSONDB_INIT_H
-#define JSONDB_INIT_H
+#ifndef JDBX_INIT_H
+#define JDBX_INIT_H
 
 #include "utils/logger.h"
 #include "utils/config_loader.h"
@@ -137,4 +137,4 @@ init_status_t create_required_directories(server_config_t* config);
 log_level_t parse_log_level(const char* level_str);
 pid_t read_pid_file(void);
 
-#endif /* JSONDB_INIT_H */
+#endif /* JDBX_INIT_H */

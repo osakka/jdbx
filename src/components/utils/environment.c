@@ -141,23 +141,23 @@ int load_environment_config(server_config_t* config) {
   }
   
   /* Get base paths */
-  const char* base_dir = getenv("JSONDB_BASE_PATH");
+  const char* base_dir = getenv("JDBX_BASE_PATH");
   if (!base_dir) {
     /* Try alternative name for backward compatibility */
-    base_dir = getenv("JSONDB_BASE_DIR");
+    base_dir = getenv("JDBX_BASE_DIR");
   }
   
   /* Get additional path configuration */
-//   const char* doc_path = getenv("JSONDB_DOC_PATH");
-//   const char* var_path = getenv("JSONDB_VAR_PATH");
+//   const char* doc_path = getenv("JDBX_DOC_PATH");
+//   const char* var_path = getenv("JDBX_VAR_PATH");
   
   /* Get paths from environment variables with defaults */
-  const char* db_dir = getenv("JSONDB_DB_DIR");
-  const char* log_file = getenv("JSONDB_LOG_FILE");
-  const char* pid_file = getenv("JSONDB_PID_FILE");
-  const char* web_root = getenv("JSONDB_WEB_ROOT");
-  const char* ssl_cert_file = getenv("JSONDB_SSL_CERT");
-  const char* ssl_key_file = getenv("JSONDB_SSL_KEY");
+  const char* db_dir = getenv("JDBX_DB_DIR");
+  const char* log_file = getenv("JDBX_LOG_FILE");
+  const char* pid_file = getenv("JDBX_PID_FILE");
+  const char* web_root = getenv("JDBX_WEB_ROOT");
+  const char* ssl_cert_file = getenv("JDBX_SSL_CERT");
+  const char* ssl_key_file = getenv("JDBX_SSL_KEY");
   
   /* Update config with environment variables if they exist */
   if (db_dir) {
@@ -195,23 +195,23 @@ int load_environment_config(server_config_t* config) {
   /* JDBX is the only storage backend - ignore env variable */
   
   /* Get numeric configuration from environment */
-  const char* port_str = getenv("JSONDB_PORT");
+  const char* port_str = getenv("JDBX_PORT");
   if (port_str) {
     config->port = atoi(port_str);
   }
   
-  const char* host = getenv("JSONDB_HOST");
+  const char* host = getenv("JDBX_HOST");
   if (host) {
     free(config->host);
     config->host = strdup(host);
   }
   
-  const char* verbose_mode = getenv("JSONDB_VERBOSE");
+  const char* verbose_mode = getenv("JDBX_VERBOSE");
   if (verbose_mode) {
     config->verbose_mode = (strcmp(verbose_mode, "true") == 0 || strcmp(verbose_mode, "1") == 0);
   }
   
-  const char* log_level = getenv("JSONDB_LOG_LEVEL");
+  const char* log_level = getenv("JDBX_LOG_LEVEL");
   if (log_level) {
     if (strcmp(log_level, "error") == 0) {
       config->log_level = LOG_LEVEL_ERROR;
@@ -226,104 +226,104 @@ int load_environment_config(server_config_t* config) {
     }
   }
   
-  const char* max_connections = getenv("JSONDB_MAX_CONNECTIONS");
+  const char* max_connections = getenv("JDBX_MAX_CONNECTIONS");
   if (max_connections) {
     config->max_connections = atoi(max_connections);
   }
   
-  const char* use_ssl = getenv("JSONDB_USE_SSL");
+  const char* use_ssl = getenv("JDBX_USE_SSL");
   if (use_ssl) {
     config->use_ssl = (strcmp(use_ssl, "true") == 0 || strcmp(use_ssl, "1") == 0);
   }
   
   /* Thread pool configuration */
-  const char* thread_pool_min = getenv("JSONDB_THREAD_POOL_MIN");
+  const char* thread_pool_min = getenv("JDBX_THREAD_POOL_MIN");
   if (thread_pool_min) {
     config->thread_pool_min = atoi(thread_pool_min);
   }
   
-  const char* thread_pool_max = getenv("JSONDB_THREAD_POOL_MAX");
+  const char* thread_pool_max = getenv("JDBX_THREAD_POOL_MAX");
   if (thread_pool_max) {
     config->thread_pool_max = atoi(thread_pool_max);
   }
   
-  const char* thread_pool_queue_size = getenv("JSONDB_THREAD_POOL_QUEUE_SIZE");
+  const char* thread_pool_queue_size = getenv("JDBX_THREAD_POOL_QUEUE_SIZE");
   if (thread_pool_queue_size) {
     config->thread_pool_queue_size = atoi(thread_pool_queue_size);
   }
   
-  const char* thread_pool_idle_timeout = getenv("JSONDB_THREAD_POOL_IDLE_TIMEOUT");
+  const char* thread_pool_idle_timeout = getenv("JDBX_THREAD_POOL_IDLE_TIMEOUT");
   if (thread_pool_idle_timeout) {
     config->thread_pool_idle_timeout = atoi(thread_pool_idle_timeout);
   }
   
   /* Cache configuration */
-  const char* cache_enabled = getenv("JSONDB_CACHE_ENABLED");
+  const char* cache_enabled = getenv("JDBX_CACHE_ENABLED");
   if (cache_enabled) {
     config->cache_enabled = (strcmp(cache_enabled, "true") == 0 || strcmp(cache_enabled, "1") == 0);
   }
   
-  const char* cache_max_size = getenv("JSONDB_CACHE_MAX_SIZE");
+  const char* cache_max_size = getenv("JDBX_CACHE_MAX_SIZE");
   if (cache_max_size) {
     config->cache_max_size = atol(cache_max_size);
   }
   
-  const char* cache_ttl = getenv("JSONDB_CACHE_TTL");
+  const char* cache_ttl = getenv("JDBX_CACHE_TTL");
   if (cache_ttl) {
     config->cache_ttl = atoi(cache_ttl);
   }
   
   /* Metrics configuration */
-  const char* metrics_enabled = getenv("JSONDB_METRICS_ENABLED");
+  const char* metrics_enabled = getenv("JDBX_METRICS_ENABLED");
   if (metrics_enabled) {
     config->metrics_enabled = (strcmp(metrics_enabled, "true") == 0 || strcmp(metrics_enabled, "1") == 0);
   }
   
-  const char* metrics_retention = getenv("JSONDB_METRICS_RETENTION");
+  const char* metrics_retention = getenv("JDBX_METRICS_RETENTION");
   if (metrics_retention) {
     config->metrics_retention = atoi(metrics_retention);
   }
   
   /* Adaptive indexing configuration */
-  const char* index_query_threshold = getenv("JSONDB_INDEX_QUERY_THRESHOLD");
+  const char* index_query_threshold = getenv("JDBX_INDEX_QUERY_THRESHOLD");
   if (index_query_threshold) {
     config->index_query_threshold = atoi(index_query_threshold);
   }
   
-  const char* index_time_threshold = getenv("JSONDB_INDEX_TIME_THRESHOLD");
+  const char* index_time_threshold = getenv("JDBX_INDEX_TIME_THRESHOLD");
   if (index_time_threshold) {
     config->index_time_threshold = atoi(index_time_threshold);
   }
   
-  const char* index_query_threshold_system = getenv("JSONDB_INDEX_QUERY_THRESHOLD_SYSTEM");
+  const char* index_query_threshold_system = getenv("JDBX_INDEX_QUERY_THRESHOLD_SYSTEM");
   if (index_query_threshold_system) {
     config->index_query_threshold_system = atoi(index_query_threshold_system);
   }
   
-  const char* index_time_threshold_system = getenv("JSONDB_INDEX_TIME_THRESHOLD_SYSTEM");
+  const char* index_time_threshold_system = getenv("JDBX_INDEX_TIME_THRESHOLD_SYSTEM");
   if (index_time_threshold_system) {
     config->index_time_threshold_system = atoi(index_time_threshold_system);
   }
   
-  const char* index_startup_delay = getenv("JSONDB_INDEX_STARTUP_DELAY");
+  const char* index_startup_delay = getenv("JDBX_INDEX_STARTUP_DELAY");
   if (index_startup_delay) {
     config->index_startup_delay = atoi(index_startup_delay);
   }
   
-  const char* index_check_interval = getenv("JSONDB_INDEX_CHECK_INTERVAL");
+  const char* index_check_interval = getenv("JDBX_INDEX_CHECK_INTERVAL");
   if (index_check_interval) {
     config->index_check_interval = atoi(index_check_interval);
   }
   
   /* Apply log configuration to active logger if it exists */
   if (g_logger) {
-    const char* runtime_log_level = getenv("JSONDB_LOG_LEVEL");
+    const char* runtime_log_level = getenv("JDBX_LOG_LEVEL");
     if (runtime_log_level) {
       log_level_t level = logger_parse_level(runtime_log_level);
       logger_set_level(level);
     }
     
-    const char* trace_categories = getenv("JSONDB_TRACE_CATEGORIES");
+    const char* trace_categories = getenv("JDBX_TRACE_CATEGORIES");
     if (trace_categories) {
       trace_category_t mask = logger_parse_trace(trace_categories);
       logger_set_trace_mask(mask);

@@ -1,4 +1,4 @@
-# JSONdb Performance Optimization Implementation Plan
+# JDBX Performance Optimization Implementation Plan
 
 **Version**: 1.0  
 **Created**: January 2025  
@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive optimization plan for JSONdb, targeting high-gain improvements in memory usage, CPU consumption, and storage efficiency. All optimizations are designed to maintain backward compatibility and service reliability.
+This document outlines a comprehensive optimization plan for JDBX, targeting high-gain improvements in memory usage, CPU consumption, and storage efficiency. All optimizations are designed to maintain backward compatibility and service reliability.
 
 ## Optimization Categories
 
@@ -192,4 +192,4 @@ static json_value_t* json_deep_copy(json_value_t* value) {
 
 ## Conclusion
 
-This optimization plan targets the highest-impact areas of the JSONdb codebase. By focusing on memory efficiency, concurrency improvements, and algorithmic optimizations, we can achieve significant performance gains without compromising reliability or functionality.
+This optimization plan targets the highest-impact areas of the JDBX codebase. By focusing on memory efficiency, concurrency improvements, and algorithmic optimizations, we can achieve significant performance gains without compromising reliability or functionality.

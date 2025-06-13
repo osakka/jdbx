@@ -1,6 +1,6 @@
 # Welcome Panel Feature
 
-The JSONdb dashboard now includes a customizable welcome/introduction panel that can display markdown content to users.
+The JDBX dashboard now includes a customizable welcome/introduction panel that can display markdown content to users.
 
 ## Features
 
@@ -14,7 +14,7 @@ The JSONdb dashboard now includes a customizable welcome/introduction panel that
 
 1. **Run the setup script** (requires authentication token):
    ```bash
-   cd /opt/jsondb/share/examples
+   cd /opt/jdbx/share/examples
    ./setup_welcome_panel.sh YOUR_AUTH_TOKEN
    ```
 
@@ -29,7 +29,7 @@ The JSONdb dashboard now includes a customizable welcome/introduction panel that
     "_id": "welcome-panel-config",
     "type": "welcome_panel",
     "enabled": true,
-    "title": "Welcome to JSONdb",
+    "title": "Welcome to JDBX",
     "version": "v1",
     "content": "# Your Markdown Content Here\n\nSupports **bold**, *italic*, [links](url), etc."
 }

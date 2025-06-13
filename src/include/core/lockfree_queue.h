@@ -1,5 +1,5 @@
 /**
- * Lock-free work queue for JSONdb thread pool
+ * Lock-free work queue for JDBX thread pool
  * 
  * Phase 3 optimization: Lock-free concurrency for maximum throughput
  */

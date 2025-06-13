@@ -25,7 +25,7 @@ const char* format_bytes(uint64_t bytes) {
 /* Initialize production configuration */
 void production_config_init(const char* config_level) {
     if (!config_level) {
-        config_level = getenv("JSONDB_CONFIG_LEVEL");
+        config_level = getenv("JDBX_CONFIG_LEVEL");
     }
     
     if (!config_level || strcmp(config_level, "development") == 0) {

@@ -1,6 +1,6 @@
-# JSONdb Repository Organization Guidelines
+# JDBX Repository Organization Guidelines
 
-This document outlines the guidelines for organizing the JSONdb repository to maintain a clean, maintainable, and efficient project structure.
+This document outlines the guidelines for organizing the JDBX repository to maintain a clean, maintainable, and efficient project structure.
 
 ## Core Principles
 
@@ -16,7 +16,7 @@ This document outlines the guidelines for organizing the JSONdb repository to ma
 The repository should follow this top-level structure:
 
 ```
-jsondb/
+jdbx/
 ├── LICENSE           # License file
 ├── README.md         # Project overview, quickstart guide
 ├── CONTRIBUTING.md   # Contribution guidelines
@@ -55,7 +55,7 @@ Public header files should mirror the organization of `src/`:
 
 ```
 include/
-├── jsondb/           # Main public API headers
+├── jdbx/           # Main public API headers
 ├── core/             # Core declarations
 ├── js/               # JavaScript engine declarations
 ├── query/            # Query language declarations
@@ -163,4 +163,4 @@ tests/
 4. **Versioning**: Use semantic versioning for releases
 5. **Changelog**: Maintain a detailed changelog for each release
 
-By following these guidelines, the JSONdb project will maintain a clean, organized, and efficient repository structure that enhances developer productivity and project maintainability.
+By following these guidelines, the JDBX project will maintain a clean, organized, and efficient repository structure that enhances developer productivity and project maintainability.

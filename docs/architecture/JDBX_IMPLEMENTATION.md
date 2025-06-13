@@ -1,4 +1,4 @@
-# JDBX (JSONdb eXtended) Implementation
+# JDBX (JDBX eXtended) Implementation
 
 **Date**: June 11, 2025  
 **Status**: Production Ready with Single-File Architecture  
@@ -7,7 +7,7 @@
 
 ## Overview
 
-JDBX is JSONdb's single-file database format designed for high-performance document storage with ACID compliance. It implements a B-tree data structure with Write-Ahead Logging (WAL) on top of memory-mapped file storage.
+JDBX is JDBX's single-file database format designed for high-performance document storage with ACID compliance. It implements a B-tree data structure with Write-Ahead Logging (WAL) on top of memory-mapped file storage.
 
 ## Architecture
 
@@ -73,15 +73,15 @@ JDBX can be selected as the storage backend through multiple methods:
 
 1. **Environment File** (Recommended):
    ```bash
-   # In /opt/jsondb/build/var/jsondb.env
-   JSONDB_STORAGE_BACKEND=jdbx
-   JSONDB_JDBX_INITIAL_SIZE=104857600    # 100MB
-   JSONDB_JDBX_WAL_SIZE=10485760         # 10MB
+   # In /opt/jdbx/build/var/jdbx.env
+   JDBX_STORAGE_BACKEND=jdbx
+   JDBX_JDBX_INITIAL_SIZE=104857600    # 100MB
+   JDBX_JDBX_WAL_SIZE=10485760         # 10MB
    ```
 
 2. **Command Line Arguments**:
    ```bash
-   jsondb_server --storage-backend=jdbx \
+   jdbxd --storage-backend=jdbx \
                  --jdbx-initial-size=104857600 \
                  --jdbx-wal-size=10485760
    ```
@@ -89,14 +89,14 @@ JDBX can be selected as the storage backend through multiple methods:
 3. **Runtime Script** (Easiest):
    ```bash
    # Configure in environment file, then:
-   ./build/jsondb_runtime.sh start
+   ./build/jdbx_runtime.sh start
    ```
 
 4. **Environment Variables**:
    ```bash
-   export JSONDB_STORAGE_BACKEND=jdbx
-   export JSONDB_JDBX_INITIAL_SIZE=104857600
-   export JSONDB_JDBX_WAL_SIZE=10485760
+   export JDBX_STORAGE_BACKEND=jdbx
+   export JDBX_JDBX_INITIAL_SIZE=104857600
+   export JDBX_JDBX_WAL_SIZE=10485760
    ```
 
 ### Single-File Implementation
@@ -160,13 +160,13 @@ backend->ops->delete(backend, "doc-123");
 
 1. **Check Configuration**:
    ```bash
-   ./build/jsondb_runtime.sh status
+   ./build/jdbx_runtime.sh status
    # Should show: "Storage backend: jdbx"
    ```
 
 2. **Verify Server Startup**:
    ```bash
-   ./build/jsondb_runtime.sh start
+   ./build/jdbx_runtime.sh start
    # Look for: "[INIT:CONFIG] Storage backend set to jdbx"
    ```
 
@@ -181,17 +181,17 @@ backend->ops->delete(backend, "doc-123");
 The complete environment file template includes JDBX settings:
 ```bash
 # Storage backend type: "mmap" (default) or "jdbx" (high-performance B-tree)
-JSONDB_STORAGE_BACKEND=jdbx
+JDBX_STORAGE_BACKEND=jdbx
 
 # JDBX-specific configuration (when using jdbx backend)
-JSONDB_JDBX_INITIAL_SIZE=104857600          # 100MB initial file size
-JSONDB_JDBX_WAL_SIZE=10485760               # 10MB WAL size
+JDBX_JDBX_INITIAL_SIZE=104857600          # 100MB initial file size
+JDBX_JDBX_WAL_SIZE=10485760               # 10MB WAL size
 ```
 
 ## Testing
 
 ### Unit Tests
-Located in `/opt/jsondb/tests/unit/`:
+Located in `/opt/jdbx/tests/unit/`:
 - `test_jdbx_basic.c` - Basic operations
 - `test_jdbx_reopen.c` - Persistence and recovery
 - `test_jdbx_simple.c` - Simple integration test
@@ -201,13 +201,13 @@ Complete end-to-end testing through the runtime script and API endpoints.
 
 ### Running Tests
 ```bash
-cd /opt/jsondb/tests/unit
+cd /opt/jdbx/tests/unit
 make test_jdbx_basic && ./test_jdbx_basic
 make test_jdbx_reopen && ./test_jdbx_reopen
 make test_jdbx_simple && ./test_jdbx_simple
 
 # Production integration test
-./build/jsondb_runtime.sh restart
+./build/jdbx_runtime.sh restart
 curl -k https://localhost:5000/api/health
 ```
 
@@ -256,7 +256,7 @@ JDBX fully supports the unified documents architecture where:
 The WAL implementation provides:
 - Durability guarantees for all write operations
 - Fast recovery from crashes
-- Configurable WAL size through `JSONDB_JDBX_WAL_SIZE`
+- Configurable WAL size through `JDBX_JDBX_WAL_SIZE`
 - Automatic checkpointing when WAL reaches 75% capacity
 
 ## Future Enhancements
@@ -292,23 +292,23 @@ The WAL implementation provides:
 ### Debug Mode
 Enable debug logging for JDBX operations:
 ```bash
-export JSONDB_LOG_LEVEL=debug
+export JDBX_LOG_LEVEL=debug
 ```
 
 ### Recovery Tools
 ```bash
 # Check database integrity
-jsondb_tools --check /path/to/database.jdbx
+jdbx_tools --check /path/to/database.jdbx
 
 # Repair corrupted database
-jsondb_tools --repair /path/to/database.jdbx
+jdbx_tools --repair /path/to/database.jdbx
 
 # Dump database contents
-jsondb_tools --dump /path/to/database.jdbx
+jdbx_tools --dump /path/to/database.jdbx
 ```
 
 ## Conclusion
 
-JDBX provides a robust, high-performance single-file storage solution for JSONdb. The implementation successfully integrates with the existing database architecture while providing significant performance improvements for document-centric workloads.
+JDBX provides a robust, high-performance single-file storage solution for JDBX. The implementation successfully integrates with the existing database architecture while providing significant performance improvements for document-centric workloads.
 
 The storage backend abstraction ensures that applications can seamlessly switch between MMAP and JDBX storage without code changes, making JDBX an ideal choice for production deployments requiring high performance and data integrity.

@@ -541,14 +541,14 @@ int index_metrics_register_prometheus_metrics(void) {
     
     /* Create Prometheus-style metrics */
     g_index_queries_total = metrics_create_counter(g_metrics_registry,
-        "jsondb_index_queries_total",
+        "jdbx_index_queries_total",
         "Total number of queries using indexes"
     );
     
     /* Create histogram with reasonable buckets for query duration (in seconds) */
     double query_buckets[] = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0};
     g_index_query_duration_seconds = metrics_create_histogram(g_metrics_registry,
-        "jsondb_index_query_duration_seconds",
+        "jdbx_index_query_duration_seconds",
         "Query execution time in seconds",
         query_buckets, sizeof(query_buckets) / sizeof(query_buckets[0])
     );
@@ -556,18 +556,18 @@ int index_metrics_register_prometheus_metrics(void) {
     /* Create histogram with buckets for maintenance operations */
     double maint_buckets[] = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0};
     g_index_maintenance_duration_seconds = metrics_create_histogram(g_metrics_registry,
-        "jsondb_index_maintenance_duration_seconds",
+        "jdbx_index_maintenance_duration_seconds",
         "Index maintenance operation time in seconds",
         maint_buckets, sizeof(maint_buckets) / sizeof(maint_buckets[0])
     );
     
     g_index_size_bytes_gauge = metrics_create_gauge(g_metrics_registry,
-        "jsondb_index_size_bytes",
+        "jdbx_index_size_bytes",
         "Current size of indexes in bytes"
     );
     
     g_index_effectiveness_gauge = metrics_create_gauge(g_metrics_registry,
-        "jsondb_index_effectiveness",
+        "jdbx_index_effectiveness",
         "Index effectiveness score (0-100)"
     );
     

@@ -1,5 +1,5 @@
 /**
- * Server mode selector for JSONdb
+ * Server mode selector for JDBX
  * 
  * Allows choosing between standard thread-pool server and high-performance epoll server
  * based on configuration or environment variables.
@@ -23,7 +23,7 @@ typedef enum {
  */
 static server_mode_t get_server_mode(void) {
     /* Check environment variable first */
-    const char* mode_env = getenv("JSONDB_SERVER_MODE");
+    const char* mode_env = getenv("JDBX_SERVER_MODE");
     if (mode_env) {
         if (strcasecmp(mode_env, "epoll") == 0 || strcasecmp(mode_env, "high_performance") == 0) {
             return SERVER_MODE_EPOLL;
@@ -34,7 +34,7 @@ static server_mode_t get_server_mode(void) {
     }
     
     /* Check for high connection load indicators */
-    const char* max_conn_env = getenv("JSONDB_MAX_CONNECTIONS");
+    const char* max_conn_env = getenv("JDBX_MAX_CONNECTIONS");
     if (max_conn_env) {
         int max_connections = atoi(max_conn_env);
         if (max_connections > 1000) {

@@ -1,6 +1,6 @@
 # RBAC Technical Reference
 
-Complete technical reference for JSONdb's Role-Based Access Control system.
+Complete technical reference for JDBX's Role-Based Access Control system.
 
 ## Table of Contents
 1. [System Architecture](#system-architecture)
@@ -240,7 +240,7 @@ RBAC Architecture
 **Standard Claims:**
 ```json
 {
-  "iss": "jsondb",
+  "iss": "jdbx",
   "sub": "user_document_id",
   "exp": 1234567890,
   "iat": 1234567890,
@@ -467,11 +467,11 @@ CREATE INDEX idx_roles_name ON _roles(name)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JSONDB_JWT_SECRET` | (random) | JWT signing secret |
-| `JSONDB_SESSION_TIMEOUT` | 1800 | Session timeout (seconds) |
-| `JSONDB_MAX_SESSIONS` | 5 | Max sessions per user |
-| `JSONDB_BCRYPT_COST` | 10 | Password hashing cost |
-| `JSONDB_TOKEN_CLEANUP_INTERVAL` | 300 | Token cleanup interval (seconds) |
+| `JDBX_JWT_SECRET` | (random) | JWT signing secret |
+| `JDBX_SESSION_TIMEOUT` | 1800 | Session timeout (seconds) |
+| `JDBX_MAX_SESSIONS` | 5 | Max sessions per user |
+| `JDBX_BCRYPT_COST` | 10 | Password hashing cost |
+| `JDBX_TOKEN_CLEANUP_INTERVAL` | 300 | Token cleanup interval (seconds) |
 
 ### Database Configuration
 

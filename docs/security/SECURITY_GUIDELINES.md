@@ -1,6 +1,6 @@
-# JSONdb Security Guidelines
+# JDBX Security Guidelines
 
-This document outlines security best practices for deploying and using JSONdb in production environments. Following these guidelines will help ensure your JSONdb deployment is secure against common threats.
+This document outlines security best practices for deploying and using JDBX in production environments. Following these guidelines will help ensure your JDBX deployment is secure against common threats.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This document outlines security best practices for deploying and using JSONdb in
 
 ### Role-Based Access Control (RBAC)
 
-JSONdb includes a comprehensive RBAC system that you should use to enforce least privilege principles:
+JDBX includes a comprehensive RBAC system that you should use to enforce least privilege principles:
 
 ```json
 {
@@ -95,7 +95,7 @@ Always enable SSL/TLS in production:
 ### Network Isolation
 
 1. **Firewall rules** - Only expose necessary ports (default 8080/8443)
-2. **Private networking** - Run JSONdb on a private subnet when possible
+2. **Private networking** - Run JDBX on a private subnet when possible
 3. **Rate limiting** - Implement rate limiting at the network level
 
 ## Data Protection
@@ -131,7 +131,7 @@ Always enable SSL/TLS in production:
 
 ## Input Validation
 
-JSONdb provides input validation utilities that should be used for all user-supplied data:
+JDBX provides input validation utilities that should be used for all user-supplied data:
 
 ### Client-Side Implementation
 
@@ -171,7 +171,7 @@ function saveDocument(collection, docId, data) {
 
 When using Docker or similar container technologies:
 
-1. **Non-root user** - Run JSONdb as a non-privileged user
+1. **Non-root user** - Run JDBX as a non-privileged user
 2. **Read-only filesystem** - Mount data directories as read-write, everything else as read-only
 3. **Resource limits** - Set CPU, memory, and file descriptor limits
 4. **Seccomp profiles** - Restrict available system calls
@@ -183,24 +183,24 @@ FROM ubuntu:20.04 AS builder
 # Build step...
 
 FROM ubuntu:20.04
-RUN groupadd -r jsondb && useradd -r -g jsondb jsondb
-COPY --from=builder /app/jsondb_server /usr/local/bin/
-RUN chmod 550 /usr/local/bin/jsondb_server
+RUN groupadd -r jdbx && useradd -r -g jdbx jdbx
+COPY --from=builder /app/jdbxd /usr/local/bin/
+RUN chmod 550 /usr/local/bin/jdbxd
 
 # Configure directories with appropriate permissions
-RUN mkdir -p /var/data/jsondb /var/log/jsondb /etc/jsondb
-RUN chown -R jsondb:jsondb /var/data/jsondb /var/log/jsondb /etc/jsondb
-RUN chmod 750 /var/data/jsondb /var/log/jsondb
-RUN chmod 550 /etc/jsondb
+RUN mkdir -p /var/data/jdbx /var/log/jdbx /etc/jdbx
+RUN chown -R jdbx:jdbx /var/data/jdbx /var/log/jdbx /etc/jdbx
+RUN chmod 750 /var/data/jdbx /var/log/jdbx
+RUN chmod 550 /etc/jdbx
 
 # Copy config files
-COPY config.json /etc/jsondb/
-COPY rbac.json /etc/jsondb/
+COPY config.json /etc/jdbx/
+COPY rbac.json /etc/jdbx/
 
-USER jsondb
+USER jdbx
 EXPOSE 8443
-VOLUME ["/var/data/jsondb", "/var/log/jsondb"]
-CMD ["/usr/local/bin/jsondb_server", "--config", "/etc/jsondb/config.json"]
+VOLUME ["/var/data/jdbx", "/var/log/jdbx"]
+CMD ["/usr/local/bin/jdbxd", "--config", "/etc/jdbx/config.json"]
 ```
 
 ## Monitoring and Auditing
@@ -218,7 +218,7 @@ CMD ["/usr/local/bin/jsondb_server", "--config", "/etc/jsondb/config.json"]
 {
   "logging": {
     "level": "info",
-    "file": "/var/log/jsondb/server.log",
+    "file": "/var/log/jdbx/server.log",
     "max_size_mb": 100,
     "max_files": 10,
     "security_audit": true
@@ -244,7 +244,7 @@ CMD ["/usr/local/bin/jsondb_server", "--config", "/etc/jsondb/config.json"]
     "interval_hours": 24,
     "retention_count": 14,
     "encrypt_backups": true,
-    "encryption_key_file": "/etc/jsondb/backup_encryption.key"
+    "encryption_key_file": "/etc/jdbx/backup_encryption.key"
   }
 }
 ```
@@ -258,6 +258,6 @@ CMD ["/usr/local/bin/jsondb_server", "--config", "/etc/jsondb/config.json"]
 
 ---
 
-By following these guidelines, you'll significantly enhance the security posture of your JSONdb deployment. Remember that security is an ongoing process requiring regular review and updates based on emerging threats and best practices.
+By following these guidelines, you'll significantly enhance the security posture of your JDBX deployment. Remember that security is an ongoing process requiring regular review and updates based on emerging threats and best practices.
 
 Last Updated: 2025-05-12

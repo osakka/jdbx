@@ -1,6 +1,6 @@
 # Database JavaScript Functions
 
-This directory contains JavaScript functions for use with the JSONdb JavaScript integration. These functions provide database utilities and examples that can be imported and used in your JavaScript code.
+This directory contains JavaScript functions for use with the JDBX JavaScript integration. These functions provide database utilities and examples that can be imported and used in your JavaScript code.
 
 ## Available Functions
 
@@ -11,7 +11,7 @@ This directory contains JavaScript functions for use with the JSONdb JavaScript 
 
 ## Usage
 
-These functions can be imported into your JavaScript code using the JSONdb JavaScript integration API:
+These functions can be imported into your JavaScript code using the JDBX JavaScript integration API:
 
 ```javascript
 // Load a function from the functions directory
@@ -21,7 +21,7 @@ const dbHelpers = require('db_helpers');
 const result = dbHelpers.validateDocument(myDoc);
 ```
 
-The functions are automatically available through the JavaScript path resolution system in JSONdb.
+The functions are automatically available through the JavaScript path resolution system in JDBX.
 
 ## Adding New Functions
 

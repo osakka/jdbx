@@ -1,6 +1,6 @@
 # Example Data Files
 
-This directory contains example data files that can be used to test and demonstrate JSONdb functionality.
+This directory contains example data files that can be used to test and demonstrate JDBX functionality.
 
 ## Available Data Files
 
@@ -13,7 +13,7 @@ These data files can be used with the example scripts in the `examples/basic` di
 Example:
 
 ```bash
-# Load sample data into JSONdb
+# Load sample data into JDBX
 node ../basic/load_data.js sample_data.json
 ```
 
@@ -21,7 +21,7 @@ node ../basic/load_data.js sample_data.json
 
 ### sample_data.json
 
-Contains a collection of sample records that demonstrate the document structure used in JSONdb. This file is useful for:
+Contains a collection of sample records that demonstrate the document structure used in JDBX. This file is useful for:
 - Testing database operations
 - Demonstrating query functionality
 - Providing a starting point for new users

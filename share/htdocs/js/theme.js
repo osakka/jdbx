@@ -44,7 +44,7 @@
 
     // Get stored theme or default to light
     function getStoredTheme() {
-        return localStorage.getItem('jsondb_theme') || 'light';
+        return localStorage.getItem('jdbx_theme') || 'light';
     }
 
     // Set theme
@@ -61,7 +61,7 @@
         root.setAttribute('data-theme', theme);
         
         // Store preference
-        localStorage.setItem('jsondb_theme', theme);
+        localStorage.setItem('jdbx_theme', theme);
         
         // Update toggle button if it exists
         updateToggleButton(theme);
@@ -82,9 +82,9 @@
         const logos = document.querySelectorAll('img[data-theme-logo]');
         logos.forEach(logo => {
             if (theme === 'dark') {
-                logo.src = '/resources/jsondb_logo_white.svg';
+                logo.src = '/resources/jdbx_logo_white.svg';
             } else {
-                logo.src = '/resources/jsondb_logo_dark.svg';
+                logo.src = '/resources/jdbx_logo_dark.svg';
             }
         });
     }

@@ -42,8 +42,8 @@ src/
 │   ├── memory/               # Memory management utilities
 │   └── metrics.c
 └── tools/                    # Standalone tools (built separately)
-    ├── jsondb_metrics.c
-    └── jsondb_tools.c
+    ├── jdbx_metrics.c
+    └── jdbx_tools.c
 
 include/
 ├── api/

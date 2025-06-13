@@ -1,8 +1,8 @@
-# JSONdb Logging Standards
+# JDBX Logging Standards
 
 ## Overview
 
-This document defines the logging standards for the JSONdb project to ensure consistency, clarity, and appropriate information disclosure across all components.
+This document defines the logging standards for the JDBX project to ensure consistency, clarity, and appropriate information disclosure across all components.
 
 ## Log Format
 

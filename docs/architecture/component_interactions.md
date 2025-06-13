@@ -1,10 +1,10 @@
-# JSONdb Component Interactions
+# JDBX Component Interactions
 
-This document describes the key interactions between components in the JSONdb system. Understanding these interactions is crucial for maintaining and extending the codebase.
+This document describes the key interactions between components in the JDBX system. Understanding these interactions is crucial for maintaining and extending the codebase.
 
 ## Core Component Overview
 
-JSONdb consists of the following primary components that interact with each other:
+JDBX consists of the following primary components that interact with each other:
 
 - **Core Server**: HTTP server, request handling, and lifecycle management
 - **Database Engine**: JSON storage, indexing, and query processing

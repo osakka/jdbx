@@ -1,12 +1,12 @@
-# JSONdb Development Guidelines
+# JDBX Development Guidelines
 
-**Last Updated**: June 12, 2025 (v3.3.0)
+**Last Updated**: June 13, 2025 (v4.0.0 - JDBX Rebranding)
 
 ## Core Principles
 
 - Do not make minimal implementations. Delete partial concept files and ideas. Focus on:
   1. One source of truth
-  2. One build (always result is bin/jsondb_server)
+  2. One build (always result is bin/jdbxd)
   3. One clear goal
   4. Build with full functionality
   5. Always fix, never regress
@@ -31,10 +31,10 @@
 
 ## Configuration Management Guidelines
 
-The JSONdb server implements a comprehensive three-tier configuration system:
+The JDBX server implements a comprehensive three-tier configuration system:
 
-1. **Environment File** (Lowest Priority): `/opt/jsondb/share/config/jsondb.env`
-2. **Binary Flags** (Medium Priority): Command-line arguments to jsondb_server
+1. **Environment File** (Lowest Priority): `/opt/jdbx/share/config/jdbx.env`
+2. **Binary Flags** (Medium Priority): Command-line arguments to jdbxd
 3. **Database Config** (Highest Priority): `_system_config` collection for runtime changes
 
 ### Configuration Principles:
@@ -52,31 +52,31 @@ The JSONdb server implements a comprehensive three-tier configuration system:
 
 1. ONLY BUILD USING THE MAKEFILE in src/ directory:
    ```
-   cd /opt/jsondb/src && make
+   cd /opt/jdbx/src && make
    ```
 
 2. ALWAYS run the server in daemon mode, never in foreground mode:
    ```
-   cd /opt/jsondb && build/jsondb_runtime.sh start
+   cd /opt/jdbx && build/jdbx_runtime.sh start
    ```
 
 3. ALWAYS interact with the server using the runtime script:
    ```
    # Start server
-   build/jsondb_runtime.sh start
+   build/jdbx_runtime.sh start
    
    # Check status
-   build/jsondb_runtime.sh status
+   build/jdbx_runtime.sh status
    
    # Stop server
-   build/jsondb_runtime.sh stop
+   build/jdbx_runtime.sh stop
    ```
 
 4. NEVER run binaries from the build directory directly, only use the runtime script.
 
 5. ALWAYS examine logs for debugging, never rely on stdout/stderr:
    ```
-   cat /opt/jsondb/var/jsondb_server.log
+   cat /opt/jdbx/var/jdbxd.log
    ```
    
 6. The server runs on port 5000 by default. You can change this in the runtime script.
@@ -120,7 +120,7 @@ This modular approach ensures proper sequencing, better error handling, and clea
 
 ## Binary Persistence System
 
-The JSONdb server includes a complete binary persistence system with automatic data saves:
+The JDBX server includes a complete binary persistence system with automatic data saves:
 
 1. **Binary Format**: Database stored in efficient binary format (.jdb) with TLV encoding
 2. **Automatic Saves**: Triggered by buffer thresholds (50 operations OR 1MB) and periodic saves (30s)
@@ -137,13 +137,13 @@ The JSONdb server includes a complete binary persistence system with automatic d
 - `src/include/database/database.h` - Persistence thread structure definitions
 
 ### Database File:
-- Location: `/opt/jsondb/build/var/database.jdb`
+- Location: `/opt/jdbx/build/var/database.jdb`
 - Format: Binary with magic number 0x4A534442 ("JSDB")
 - Persistence: Automatic saves ensure data durability across server restarts
 
 ## Adaptive Indexing System (v3.1.0)
 
-The JSONdb server now includes an advanced adaptive indexing system that automatically creates and manages indexes based on query patterns:
+The JDBX server now includes an advanced adaptive indexing system that automatically creates and manages indexes based on query patterns:
 
 1. **Query Pattern Tracking**: All database queries are tracked with field path extraction
 2. **Automatic Index Creation**: Background thread analyzes patterns and creates indexes
@@ -228,7 +228,7 @@ The project follows strict logging standards:
 
 ## SSL/TLS Implementation (v3.1.0)
 
-The JSONdb server includes complete SSL/TLS support with production-ready security:
+The JDBX server includes complete SSL/TLS support with production-ready security:
 
 1. **SSL Enforcement**: Properly rejects HTTP connections when SSL enabled (HTTP 400 response)
 2. **Large File Support**: Fixed SSL_write buffer handling for files larger than SSL buffer
@@ -242,7 +242,7 @@ The JSONdb server includes complete SSL/TLS support with production-ready securi
 10. **TLS Version Support**: Modern TLS 1.3 with backward compatibility
 
 ### SSL Configuration Options:
-- Environment: `JSONDB_USE_SSL=true`, `JSONDB_SSL_CERT=/path/to/cert.pem`, `JSONDB_SSL_KEY=/path/to/key.pem`
+- Environment: `JDBX_USE_SSL=true`, `JDBX_SSL_CERT=/path/to/cert.pem`, `JDBX_SSL_KEY=/path/to/key.pem`
 - CLI Flags: `--ssl`, `--ssl-cert=/path/to/cert.pem`, `--ssl-key=/path/to/key.pem`
 - Runtime: Via runtime script or direct binary execution
 
@@ -254,7 +254,7 @@ The JSONdb server includes complete SSL/TLS support with production-ready securi
 
 ## JavaScript Integration System (v2.0.10)
 
-The JSONdb server features a comprehensive JavaScript integration system with enterprise-grade management capabilities:
+The JDBX server features a comprehensive JavaScript integration system with enterprise-grade management capabilities:
 
 ### Core JavaScript Components
 

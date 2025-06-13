@@ -1,11 +1,11 @@
-#ifndef JSONDB_SSL_H
-#define JSONDB_SSL_H
+#ifndef JDBX_SSL_H
+#define JDBX_SSL_H
 
 /**
  * @file ssl.h
- * @brief SSL/TLS support for the JSONdb server
+ * @brief SSL/TLS support for the JDBX server
  *
- * This header provides SSL/TLS functionality for securing the JSONdb server communications.
+ * This header provides SSL/TLS functionality for securing the JDBX server communications.
  * It wraps OpenSSL functionality and provides a simpler interface for the server.
  */
 
@@ -163,4 +163,4 @@ ssl_error_t ssl_get_peer_certificate_info(ssl_connection_t *conn, char *buffer, 
  */
 ssl_error_t ssl_set_verify_mode(ssl_context_t *ctx, int verify_mode);
 
-#endif /* JSONDB_SSL_H */
+#endif /* JDBX_SSL_H */

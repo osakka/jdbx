@@ -1,6 +1,6 @@
 # Include Structure Migration
 
-This document summarizes the migration of the include structure in the JSONdb project.
+This document summarizes the migration of the include structure in the JDBX project.
 
 ## Migration Overview
 
@@ -18,7 +18,7 @@ The include structure has been completely migrated to use a consistent component
 
 Before:
 ```
-/include/jsondb/            # Root-level include directory
+/include/jdbx/            # Root-level include directory
 └── [component directories]
 
 /src/components/            # Source components with headers
@@ -38,7 +38,7 @@ After:
 
 Before:
 ```c
-#include "include/jsondb/component/header.h"
+#include "include/jdbx/component/header.h"
 // or
 #include "../include/header.h"
 // or
@@ -69,7 +69,7 @@ scripts/maintenance/fix_includes_final.sh
 ```
 
 This script handles:
-- Converting `include/jsondb/*` paths to `src/include/*` 
+- Converting `include/jdbx/*` paths to `src/include/*` 
 - Converting relative paths like `../include/*` to `src/include/*`
 - Converting references to component headers to the consistent format
 - Updating QuickJS header references
@@ -96,7 +96,7 @@ All files that were updated were manually verified to ensure:
 
 3. For the main entry point that needs most components, use the unified header:
    ```c
-   #include "src/include/jsondb.h"
+   #include "src/include/jdbx.h"
    ```
 
 4. When adding new headers, always place them in the appropriate component directory in `src/include/`.

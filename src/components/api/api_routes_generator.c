@@ -13,9 +13,9 @@ const char* generate_api_routes_json(api_context_t* ctx) {
   
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "{\n \"openapi\": \"3.0.0\",\n");
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, " \"info\": {\n");
-  offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  \"title\": \"JSONdb API\",\n");
+  offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  \"title\": \"JDBX API\",\n");
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  \"version\": \"1.0.7\",\n");
-  offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  \"description\": \"RESTful API for JSONdb - A lightweight JSON document database\"\n");
+  offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  \"description\": \"RESTful API for JDBX - A lightweight JSON document database\"\n");
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, " },\n");
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, " \"servers\": [\n");
   offset += snprintf(json_buffer + offset, sizeof(json_buffer) - offset, "  {\"url\": \"/\", \"description\": \"Current server\"}\n");

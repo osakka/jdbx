@@ -2,7 +2,7 @@
 
 ## Overview
 
-JSONdb implements a flexible multi-role permission system where:
+JDBX implements a flexible multi-role permission system where:
 - Users can have multiple roles
 - Roles can be nested (inherit from parent roles)
 - Documents can grant permissions to multiple roles
@@ -143,4 +143,4 @@ function resolvePermissions(user, document, field) {
 2. **Hierarchical**: Role inheritance reduces duplication
 3. **Granular**: Field-level control with regex patterns
 4. **Performant**: Permissions cached per request
-5. **Natural**: Fits JSONdb's document model perfectly
+5. **Natural**: Fits JDBX's document model perfectly

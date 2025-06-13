@@ -70,7 +70,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   /* Check if we need to perform deferred bootstrap */
   if (ctx->db && ctx->db->is_bootstrap_mode) {
-    const char* deferred_bootstrap = getenv("JSONDB_DEFERRED_BOOTSTRAP");
+    const char* deferred_bootstrap = getenv("JDBX_DEFERRED_BOOTSTRAP");
     if (deferred_bootstrap && strcmp(deferred_bootstrap, "1") == 0) {
       LOG_INFO("Performing deferred bootstrap - creating admin user");
       
@@ -82,7 +82,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
             LOG_INFO("Deferred bootstrap completed successfully");
             /* Disable bootstrap mode */
             ctx->db->is_bootstrap_mode = 0;
-            unsetenv("JSONDB_DEFERRED_BOOTSTRAP");
+            unsetenv("JDBX_DEFERRED_BOOTSTRAP");
           }
           free(admin_role_id);
         }

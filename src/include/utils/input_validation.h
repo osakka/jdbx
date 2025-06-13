@@ -1,9 +1,9 @@
-#ifndef JSONDB_INPUT_VALIDATION_H
-#define JSONDB_INPUT_VALIDATION_H
+#ifndef JDBX_INPUT_VALIDATION_H
+#define JDBX_INPUT_VALIDATION_H
 
 /**
  * @file input_validation.h
- * @brief Input validation utilities for JSONdb
+ * @brief Input validation utilities for JDBX
  *
  * This header provides functions for validating user inputs to prevent
  * security vulnerabilities like SQL injection, path traversal, and XSS.
@@ -185,4 +185,4 @@ validation_error_t validate_document_id(const char* id);
  */
 validation_error_t validate_collection_pattern(const char* pattern);
 
-#endif /* JSONDB_INPUT_VALIDATION_H */
+#endif /* JDBX_INPUT_VALIDATION_H */

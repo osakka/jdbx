@@ -1,5 +1,5 @@
 /**
- * Lock-free work queue implementation for JSONdb
+ * Lock-free work queue implementation for JDBX
  * 
  * Phase 3 optimization: Lock-free concurrency for maximum throughput
  * Uses atomic operations and memory barriers for thread-safe operations

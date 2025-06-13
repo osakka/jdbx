@@ -1,6 +1,6 @@
-# Production Readiness Roadmap for JSONdb
+# Production Readiness Roadmap for JDBX
 
-This document outlines the specific criteria and milestones needed to bring JSONdb to production-grade quality and reliability.
+This document outlines the specific criteria and milestones needed to bring JDBX to production-grade quality and reliability.
 
 ## Current Status: Production Readiness Progress
 
@@ -127,9 +127,9 @@ This document outlines the specific criteria and milestones needed to bring JSON
 
 ## Conclusion
 
-JSONdb is making excellent progress toward production readiness, with many high-priority items already completed. The focus should now be on completing the security hardening and performance optimization to ensure a robust, secure, and efficient database system ready for production use.
+JDBX is making excellent progress toward production readiness, with many high-priority items already completed. The focus should now be on completing the security hardening and performance optimization to ensure a robust, secure, and efficient database system ready for production use.
 
-The implementation of the comprehensive testing framework and backup/recovery system marks a significant milestone in JSONdb's journey to production readiness. These features provide the necessary safeguards and quality assurance mechanisms required for mission-critical deployments.
+The implementation of the comprehensive testing framework and backup/recovery system marks a significant milestone in JDBX's journey to production readiness. These features provide the necessary safeguards and quality assurance mechanisms required for mission-critical deployments.
 
 This roadmap will be regularly updated as items are completed and new requirements are identified.
 

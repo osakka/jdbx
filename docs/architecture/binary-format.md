@@ -1,17 +1,17 @@
-# JSONdb Binary Format
+# JDBX Binary Format
 
-This implementation adds binary format support to the JSONdb server, providing significant performance improvements for large databases.
+This implementation adds binary format support to the JDBX server, providing significant performance improvements for large databases.
 
 ## Installation
 
-To build JSONdb with binary format support:
+To build JDBX with binary format support:
 
 ```bash
-cd /opt/jsondb/src
+cd /opt/jdbx/src
 make -f Makefile.binary
 ```
 
-This will create the binary-optimized database server in `/opt/jsondb/build/bin/jsondb_server`.
+This will create the binary-optimized database server in `/opt/jdbx/build/bin/jdbxd`.
 
 ## Usage
 
@@ -20,17 +20,17 @@ This will create the binary-optimized database server in `/opt/jsondb/build/bin/
 The server can be started using the standard runtime script - it will automatically use binary format for large databases:
 
 ```bash
-cd /opt/jsondb
-build/jsondb_runtime.sh start
+cd /opt/jdbx
+build/jdbx_runtime.sh start
 ```
 
 ### Forcing Binary Format
 
-To explicitly use binary format regardless of database size, set the `JSONDB_BINARY_FORMAT` environment variable:
+To explicitly use binary format regardless of database size, set the `JDBX_BINARY_FORMAT` environment variable:
 
 ```bash
-cd /opt/jsondb
-JSONDB_BINARY_FORMAT=1 build/jsondb_runtime.sh start
+cd /opt/jdbx
+JDBX_BINARY_FORMAT=1 build/jdbx_runtime.sh start
 ```
 
 ### Converting Existing Databases
@@ -38,8 +38,8 @@ JSONDB_BINARY_FORMAT=1 build/jsondb_runtime.sh start
 To convert an existing JSON database to binary format:
 
 ```bash
-cd /opt/jsondb/build/bin
-./jsondb_tools convert --input=/path/to/json_db.json --output=/path/to/binary_db.bin
+cd /opt/jdbx/build/bin
+./jdbx_tools convert --input=/path/to/json_db.json --output=/path/to/binary_db.bin
 ```
 
 ## Benchmarking
@@ -47,8 +47,8 @@ cd /opt/jsondb/build/bin
 A benchmark tool is provided to compare performance between JSON and binary formats:
 
 ```bash
-cd /opt/jsondb/build/bin
-./jsondb_benchmark --docs=10000 --size=1024 --queries=100
+cd /opt/jdbx/build/bin
+./jdbx_benchmark --docs=10000 --size=1024 --queries=100
 ```
 
 This will:
@@ -79,9 +79,9 @@ The binary format behavior can be configured through environment variables:
 
 | Variable                   | Default | Description                                   |
 |----------------------------|---------|-----------------------------------------------|
-| JSONDB_BINARY_FORMAT       | 0       | Force binary format (1) or auto-detect (0)    |
-| JSONDB_BINARY_SIZE_THRESHOLD | 10485760 | Size threshold in bytes for auto-detection (10MB) |
-| JSONDB_BINARY_COMPRESSION  | 0       | Enable compression for binary format          |
+| JDBX_BINARY_FORMAT       | 0       | Force binary format (1) or auto-detect (0)    |
+| JDBX_BINARY_SIZE_THRESHOLD | 10485760 | Size threshold in bytes for auto-detection (10MB) |
+| JDBX_BINARY_COMPRESSION  | 0       | Enable compression for binary format          |
 
 ## Limitations
 
@@ -143,4 +143,4 @@ The binary format is optimized for large databases. For small databases (<10MB),
 
 ## Further Reading
 
-For more detailed information, see the [Binary Format Documentation](/opt/jsondb/docs/binary_format.md).
+For more detailed information, see the [Binary Format Documentation](/opt/jdbx/docs/binary_format.md).

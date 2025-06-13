@@ -215,7 +215,7 @@ typedef struct {
 /**
  * Initialize and run the server with the thread pool implementation
  *
- * This is the main entry point for starting the JSONdb server.
+ * This is the main entry point for starting the JDBX server.
  * It handles signal setup, socket initialization, thread pool creation,
  * and runs the server in the current thread.
  *
@@ -262,7 +262,7 @@ const char* get_content_type_from_extension(const char* extension);
 char* read_file_content(const char* filepath, size_t* size);
 
 /* Admin authentication settings */
-#define ADMIN_AUTH_COOKIE_NAME "jsondb_admin_auth"
+#define ADMIN_AUTH_COOKIE_NAME "jdbx_admin_auth"
 #define ADMIN_AUTH_COOKIE_TTL 3600  /* 1 hour in seconds */
 
 /* Admin authentication functions */

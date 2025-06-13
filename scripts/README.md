@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains all scripts used for building, testing, and maintaining the JSONdb project.
+This directory contains all scripts used for building, testing, and maintaining the JDBX project.
 
 ## Directory Structure
 

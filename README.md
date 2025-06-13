@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="share/resources/jsondb_logo_white.svg" alt="JSONdb Logo" width="400">
+  <img src="share/resources/jdbx_logo_white.svg" alt="JDBX Logo" width="400">
   <p>
     <a href="#features">Features</a> •
     <a href="#architecture">Architecture</a> •
@@ -10,9 +10,9 @@
   </p>
 </div>
 
-# JSONdb
+# JDBX
 
-JSONdb is a high-performance document database built specifically for JSON data, featuring lock-free architecture and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, it combines the simplicity of JSON with advanced indexing, JDBX single-file storage, and a powerful query optimizer. JSONdb features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a comprehensive RESTful API.
+JDBX is a high-performance document database built specifically for JSON data, featuring lock-free architecture and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, it combines the simplicity of JSON with advanced indexing, JDBX single-file storage, and a powerful query optimizer. JDBX features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a comprehensive RESTful API.
 
 **Latest Version**: 3.3.0 (June 12, 2025)  
 **Architecture**: Lock-Free JDBX Storage Backend
@@ -62,10 +62,10 @@ JSONdb is a high-performance document database built specifically for JSON data,
 ## Architecture
 
 <div align="center">
-  <img src="share/resources/jsondb_architecture.svg" alt="JSONdb v3.3.0 Architecture" width="700">
+  <img src="share/resources/jdbx_architecture.svg" alt="JDBX v3.3.0 Architecture" width="700">
 </div>
 
-JSONdb v3.3.0 uses a modern, lock-free layered architecture:
+JDBX v3.3.0 uses a modern, lock-free layered architecture:
 
 ### **Storage Layer**
 - **JDBX Backend**: Single-file hierarchical database with B-tree structure
@@ -111,31 +111,31 @@ sudo apt-get update && sudo apt-get install gcc libuuid-dev libssl-dev
 # CentOS/RHEL/Fedora  
 sudo dnf install gcc uuid-devel openssl-devel
 
-# Build JSONdb
+# Build JDBX
 git clone <repository-url>
-cd jsondb/src && make
+cd jdbx/src && make
 
 # Verify build completed successfully
-ls ../build/bin/jsondb_server
+ls ../build/bin/jdbxd
 ```
 
 ### Starting the Server
 
 ```bash
-# Start JSONdb server (daemon mode)
-./build/jsondb_runtime.sh start
+# Start JDBX server (daemon mode)
+./build/jdbx_runtime.sh start
 
 # Check server status and logs
-./build/jsondb_runtime.sh status
-cat /opt/jsondb/build/var/jsondb.log
+./build/jdbx_runtime.sh status
+cat /opt/jdbx/build/var/jdbx.log
 
 # Stop server when needed
-./build/jsondb_runtime.sh stop
+./build/jdbx_runtime.sh stop
 ```
 
 **Default Configuration:**
 - **Port**: 5000 (HTTP) or 5443 (HTTPS if SSL enabled)
-- **Database File**: `/opt/jsondb/build/var/jsondb.jdbx`
+- **Database File**: `/opt/jdbx/build/var/jdbx.jdbx`
 - **Admin Interface**: `http://localhost:5000/admin`
 - **API Base**: `http://localhost:5000/api`
 
@@ -149,7 +149,7 @@ cat /opt/jsondb/build/var/jsondb.log
 
 ## JavaScript Integration
 
-JSONdb features enterprise-grade JavaScript integration with comprehensive script management:
+JDBX features enterprise-grade JavaScript integration with comprehensive script management:
 
 ### Document Validators
 
@@ -243,7 +243,7 @@ function calculateOrderMetrics(args) {
 
 ## API Reference
 
-JSONdb provides a comprehensive RESTful API with OpenAPI 3.0 specification:
+JDBX provides a comprehensive RESTful API with OpenAPI 3.0 specification:
 
 ### Authentication Endpoints
 ```bash
@@ -339,7 +339,7 @@ Comprehensive documentation is available in the `/docs` directory:
 
 ## Performance Benchmarks
 
-JSONdb v3.3.0 delivers exceptional performance with lock-free architecture:
+JDBX v3.3.0 delivers exceptional performance with lock-free architecture:
 
 | Operation | Response Time | Throughput | Notes |
 |-----------|---------------|------------|-------|
@@ -364,7 +364,7 @@ We welcome contributions! Please see our [Contributing Guide](docs/development/c
 
 ## License
 
-JSONdb is licensed under [Your License]. See `LICENSE` file for details.
+JDBX is licensed under [Your License]. See `LICENSE` file for details.
 
 ## Support & Community
 

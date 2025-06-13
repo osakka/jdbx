@@ -1,4 +1,4 @@
-# JSONdb Documentation Standards
+# JDBX Documentation Standards
 
 ## Document Naming Schema
 
@@ -90,7 +90,7 @@ Brief description of what this document covers.
 - Explain any prerequisites
 
 #### Versioning
-- Document the JSONdb version the documentation applies to
+- Document the JDBX version the documentation applies to
 - Note any version-specific features
 - Mark deprecated features clearly
 

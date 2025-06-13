@@ -127,7 +127,7 @@ static void init_search_paths() {
   add_search_path("./src/js/transformers");
   
   /* Check environment variable for additional paths */
-  char *js_path = getenv("JSONDB_JS_PATH");
+  char *js_path = getenv("JDBX_JS_PATH");
   if (js_path) {
     /* Split by colon */
     char *path = strtok(js_path, ":");

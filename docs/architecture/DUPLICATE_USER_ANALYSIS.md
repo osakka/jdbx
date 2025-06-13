@@ -2,7 +2,7 @@
 
 ## Overview
 
-The JSONdb codebase has multiple locations where admin users are created, which can lead to duplicate admin users being created during initialization. This document analyzes where admin users are created and what password hashes are used.
+The JDBX codebase has multiple locations where admin users are created, which can lead to duplicate admin users being created during initialization. This document analyzes where admin users are created and what password hashes are used.
 
 ## Admin User Creation Locations
 

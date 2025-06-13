@@ -183,4 +183,4 @@ json_value_t* query = json_parse("{\"price\": {\"$gt\": 5.0}}");
 json_value_t* results = jdbx_find(db, "myapp/products", query);
 ```
 
-This clean architectural break will make JSONdb more scalable, maintainable, and performant.
+This clean architectural break will make JDBX more scalable, maintainable, and performant.

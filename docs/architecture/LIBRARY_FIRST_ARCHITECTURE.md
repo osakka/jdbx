@@ -1,7 +1,7 @@
 # Library-First Architecture Implementation Plan
 
 ## Overview
-Transform JSONdb to treat libraries as first-class citizens with session-based library context, removing the need for path prefixes in API calls.
+Transform JDBX to treat libraries as first-class citizens with session-based library context, removing the need for path prefixes in API calls.
 
 ## Core Concept
 - Libraries become a session context (like SQL's `USE database`)

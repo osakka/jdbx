@@ -117,7 +117,7 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
       LOG_INFO("Initializing socket on %s:%d", 
           config->host ? config->host : "0.0.0.0", config->port);
     } else {
-      printf("Starting JSONdb server on port %d...\n", config->port);
+      printf("Starting JDBX server on port %d...\n", config->port);
     }
     
     if (init_socket(config) != INIT_OK) {

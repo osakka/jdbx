@@ -6,7 +6,7 @@
 
 /**
  * @file config_loader.h
- * @brief Configuration loading and management for the JSONdb server
+ * @brief Configuration loading and management for the JDBX server
  */
 
 /* Global configuration structure */

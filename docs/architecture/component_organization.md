@@ -45,7 +45,7 @@ The build process is straightforward:
 1. The main `src/Makefile` handles all builds.
 2. Headers are included using their component-relative paths (e.g., `#include "database/database.h"`).
 3. The build compiles all implementation files from `src/components/`.
-4. The output is a single binary at `bin/jsondb_server`.
+4. The output is a single binary at `bin/jdbxd`.
 
 ## Development Guidelines
 

@@ -41,7 +41,7 @@ We've made the following significant improvements to the codebase:
    - Fixed the build dependency graph for proper compilation order
 
 4. **Fixed Multiple Main Function Issue**:
-   - Properly separated jsondb_tools executable from the main server
+   - Properly separated jdbx_tools executable from the main server
    - Excluded tools files with their own main() functions from the server build
    - Prevented duplicate main() function conflicts during linking
    - Updated Makefile to build tools as separate executables
@@ -65,13 +65,13 @@ The server now builds successfully with no linking errors. Some warnings remain,
 To address the specific issue with multiple main() functions:
 
 ```
-main.c:(.text+0x1ff): multiple definition of `main'; obj/tools/jsondb_metrics.o:jsondb_metrics.c:(.text+0x2739): first defined here
+main.c:(.text+0x1ff): multiple definition of `main'; obj/tools/jdbx_metrics.o:jdbx_metrics.c:(.text+0x2739): first defined here
 ```
 
 We took the following steps:
 
 1. **Excluded tools from the main build**:
-   - Modified the Makefile to exclude jsondb_metrics.c and jsondb_tools.c from the main server build
+   - Modified the Makefile to exclude jdbx_metrics.c and jdbx_tools.c from the main server build
    - Set `TOOLS_OBJ =` to an empty value to avoid including tools objects in the server
 
 2. **Created separate build paths**:
@@ -92,7 +92,7 @@ We have verified that the server builds successfully:
 $ make clean && make && ls -l bin/
 # Output showing successful build
 total 4180
--rwxr-xr-x 1 claude-3 ldap_users 4279632 May 11 04:19 jsondb_server
+-rwxr-xr-x 1 claude-3 ldap_users 4279632 May 11 04:19 jdbxd
 ```
 
 The server executable is now built without any linking errors. There are still some format string warnings in the transaction visualization code, but these don't prevent successful compilation and can be addressed in future work.

@@ -99,9 +99,9 @@ This document contains detailed analysis of issues identified in BUILD_STATUS.md
 
 **Action Items:**
 - [x] Update all documentation references from 8080 to 5000
-- [x] Update curl examples to use correct port (modified `/opt/jsondb/share/examples/curl_examples.sh`)
-- [x] Update Python client example to use correct port (modified `/opt/jsondb/share/examples/client/python_client.py`)
-- [x] Update visualization examples to use correct port (modified `/opt/jsondb/share/examples/visualization_examples.sh`)
+- [x] Update curl examples to use correct port (modified `/opt/jdbx/share/examples/curl_examples.sh`)
+- [x] Update Python client example to use correct port (modified `/opt/jdbx/share/examples/client/python_client.py`)
+- [x] Update visualization examples to use correct port (modified `/opt/jdbx/share/examples/visualization_examples.sh`)
 - [ ] Add note about port configurability in main documentation
 
 ## 7. Collection and Document API Issues

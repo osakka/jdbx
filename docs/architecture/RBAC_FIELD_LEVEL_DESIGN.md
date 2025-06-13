@@ -1,4 +1,4 @@
-# Field-Level RBAC Design for JSONdb
+# Field-Level RBAC Design for JDBX
 
 ## Overview
 

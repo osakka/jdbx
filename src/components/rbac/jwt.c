@@ -903,7 +903,7 @@ jwt_token_t* jwt_create_refresh_token(const char* secret, const char* user_id, t
   /* Set token claims */
   TRACE_AUTH("Setting refresh token claims.");
   jwt_set_subject(token, user_id);
-  jwt_set_issuer(token, "jsondb");
+  jwt_set_issuer(token, "jdbx");
   
   /* Set expiration (defaults to 7 days if not specified) */
   if (expiry == 0) {
@@ -939,7 +939,7 @@ char* jwt_create_token_pair(const char* secret, const char* user_id, const char*
   /* Set access token claims */
   TRACE_AUTH("Setting access token claims.");
   jwt_set_subject(access_token, user_id);
-  jwt_set_issuer(access_token, "jsondb");
+  jwt_set_issuer(access_token, "jdbx");
   jwt_set_expiration(access_token, time(NULL) + (30 * 60)); /* 30 minutes */
   jwt_add_claim(access_token, "username", json_create_string(username));
   jwt_add_claim(access_token, "type", json_create_string("access"));

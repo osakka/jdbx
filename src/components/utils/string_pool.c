@@ -1,5 +1,5 @@
 /**
- * High-performance string interning implementation for JSONdb
+ * High-performance string interning implementation for JDBX
  * 
  * Uses a hash table with chaining for fast O(1) lookups and insertions.
  * Thread-safe with fine-grained locking per bucket to minimize contention.

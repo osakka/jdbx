@@ -6,10 +6,10 @@
  * which are used by indexed document operations.
  */
 
-#ifndef JSONDB_DOCUMENT_INDEX_TYPES_H
-#define JSONDB_DOCUMENT_INDEX_TYPES_H
+#ifndef JDBX_DOCUMENT_INDEX_TYPES_H
+#define JDBX_DOCUMENT_INDEX_TYPES_H
 
 /* Forward declaration of document_index_t type */
 typedef struct document_index document_index_t;
 
-#endif /* JSONDB_DOCUMENT_INDEX_TYPES_H */
+#endif /* JDBX_DOCUMENT_INDEX_TYPES_H */

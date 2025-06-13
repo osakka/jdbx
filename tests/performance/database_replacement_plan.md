@@ -3,7 +3,7 @@
 ## Current Database Structure Analysis
 
 ### Overview
-The current database implementation is spread across multiple files in `/opt/jsondb/src/components/database/`:
+The current database implementation is spread across multiple files in `/opt/jdbx/src/components/database/`:
 
 1. **db.c** (1219 lines) - Main database implementation with binary format support
 2. **database_with_optimizations.c** (838 lines) - Alternative implementation with optimizations

@@ -1,8 +1,8 @@
-# JSONdb Web Interface - Complete Summary
+# JDBX Web Interface - Complete Summary
 
 ## Overview
 
-JSONdb includes a fully integrated web server that serves static files and web applications from the `/share/htdocs` directory. No additional web server is needed - everything runs on the same port (default: 5000).
+JDBX includes a fully integrated web server that serves static files and web applications from the `/share/htdocs` directory. No additional web server is needed - everything runs on the same port (default: 5000).
 
 ## Available Web Applications
 
@@ -14,7 +14,7 @@ JSONdb includes a fully integrated web server that serves static files and web a
 - Default credentials: `admin`/`admin`
 
 ### 2. **Product Catalog Demo** (`/demo.html`)
-- E-commerce application demonstrating JSONdb capabilities
+- E-commerce application demonstrating JDBX capabilities
 - Features:
   - Product browsing with search and filters
   - Shopping cart functionality
@@ -31,7 +31,7 @@ JSONdb includes a fully integrated web server that serves static files and web a
 ## Architecture
 
 ```
-JSONdb Server (Port 5000)
+JDBX Server (Port 5000)
 ├── RESTful API (/api/*)
 │   ├── Collections API
 │   ├── Documents API
@@ -50,8 +50,8 @@ JSONdb Server (Port 5000)
 
 ## Key Features Demonstrated
 
-1. **No Additional Dependencies**: Everything runs from the JSONdb server
-2. **Integrated Authentication**: Uses JSONdb's authentication system
+1. **No Additional Dependencies**: Everything runs from the JDBX server
+2. **Integrated Authentication**: Uses JDBX's authentication system
 3. **Real-time Data**: Direct connection to the database
 4. **CORS Support**: Built-in cross-origin resource sharing
 5. **Schema-less Storage**: Flexible document structure
@@ -66,10 +66,10 @@ JSONdb Server (Port 5000)
 
 ## Accessing the Applications
 
-1. Start JSONdb server:
+1. Start JDBX server:
    ```bash
-   cd /opt/jsondb
-   build/jsondb_runtime.sh start
+   cd /opt/jdbx
+   build/jdbx_runtime.sh start
    ```
 
 2. Open in browser:
@@ -80,9 +80,9 @@ JSONdb Server (Port 5000)
 ## Benefits of Integrated Web Server
 
 - **Single Process**: No need to manage multiple servers
-- **Unified Configuration**: Web root configured in JSONdb settings
+- **Unified Configuration**: Web root configured in JDBX settings
 - **Consistent Security**: Same authentication across API and web
 - **Simplified Deployment**: One binary, one port, complete solution
 - **Better Performance**: No proxy overhead between web server and API
 
-This demonstrates JSONdb as not just a database, but a complete application platform!
+This demonstrates JDBX as not just a database, but a complete application platform!

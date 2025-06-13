@@ -6,13 +6,13 @@
 
 ## Overview
 
-JSONdb v3.2.0 introduces a revolutionary unified documents architecture where everything is treated as a document with type-based discrimination. This design provides unprecedented flexibility while maintaining high performance and data integrity.
+JDBX v3.2.0 introduces a revolutionary unified documents architecture where everything is treated as a document with type-based discrimination. This design provides unprecedented flexibility while maintaining high performance and data integrity.
 
 ## Core Principles
 
 ### Everything is a Document
 
-All entities in JSONdb are now stored as documents in a single 'documents' collection:
+All entities in JDBX are now stored as documents in a single 'documents' collection:
 
 - **Users**: `{"type": "user", "username": "john@library1", "library": "library1", ...}`
 - **Roles**: `{"type": "role", "name": "admin", "library": "library1", ...}`
@@ -275,13 +275,13 @@ Built-in tools assist with migration:
 
 ```bash
 # Convert existing data to unified format
-jsondb_tools --migrate-to-unified /path/to/database
+jdbx_tools --migrate-to-unified /path/to/database
 
 # Verify unified architecture
-jsondb_tools --verify-unified /path/to/database
+jdbx_tools --verify-unified /path/to/database
 
 # Generate migration report
-jsondb_tools --migration-report /path/to/database
+jdbx_tools --migration-report /path/to/database
 ```
 
 ## Security Implications
@@ -321,7 +321,7 @@ Key files implementing the unified architecture:
 The documents collection uses a flexible schema:
 
 ```sql
--- Conceptual schema (JSONdb uses document storage)
+-- Conceptual schema (JDBX uses document storage)
 documents {
   uuid: string (primary key),
   type: string (indexed),
@@ -362,8 +362,8 @@ Specialized handlers for each document type:
 
 ## Conclusion
 
-The unified documents architecture represents a fundamental evolution in JSONdb's design, providing unparalleled flexibility while maintaining the performance and reliability that JSONdb is known for. This architecture enables true multi-tenancy, simplifies data management, and provides a foundation for future enhancements.
+The unified documents architecture represents a fundamental evolution in JDBX's design, providing unparalleled flexibility while maintaining the performance and reliability that JDBX is known for. This architecture enables true multi-tenancy, simplifies data management, and provides a foundation for future enhancements.
 
-The library-first design ensures that organizations can deploy JSONdb in complex multi-tenant scenarios while maintaining complete data isolation and security. The system actor model eliminates privileged backdoors while ensuring that all system operations remain auditable and controllable.
+The library-first design ensures that organizations can deploy JDBX in complex multi-tenant scenarios while maintaining complete data isolation and security. The system actor model eliminates privileged backdoors while ensuring that all system operations remain auditable and controllable.
 
-This architecture positions JSONdb as a leading solution for modern document database requirements, supporting everything from simple single-tenant applications to complex multi-tenant SaaS platforms.
+This architecture positions JDBX as a leading solution for modern document database requirements, supporting everything from simple single-tenant applications to complex multi-tenant SaaS platforms.

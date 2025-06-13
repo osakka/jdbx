@@ -57,7 +57,7 @@
     <script>
         // Check auth status
         function checkAuth() {
-            const token = localStorage.getItem('jsondb_auth_token');
+            const token = localStorage.getItem('jdbx_auth_token');
             const status = document.getElementById('auth-status');
             if (token) {
                 status.className = 'status success';
@@ -110,8 +110,8 @@
         }
         
         function clearAuth() {
-            localStorage.removeItem('jsondb_auth_token');
-            localStorage.removeItem('jsondb_refresh_token');
+            localStorage.removeItem('jdbx_auth_token');
+            localStorage.removeItem('jdbx_refresh_token');
             checkAuth();
             alert('Authentication cleared. Please reload the Admin UI.');
         }

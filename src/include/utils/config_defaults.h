@@ -3,10 +3,10 @@
 
 /**
  * @file config_defaults.h
- * @brief Centralized default configuration values for JSONdb
+ * @brief Centralized default configuration values for JDBX
  * 
  * This file contains all default configuration values used throughout
- * the JSONdb server. It serves as a single source of truth for defaults,
+ * the JDBX server. It serves as a single source of truth for defaults,
  * making configuration management more maintainable and consistent.
  */
 
@@ -32,23 +32,23 @@
  * Path Defaults (relative to install directory unless absolute)
  * 
  * These paths can be overridden using environment variables:
- * - JSONDB_BASE_PATH: Base installation directory (auto-detected by default)
- * - JSONDB_DOC_PATH: Documentation directory
- * - JSONDB_VAR_PATH: Variable data directory
- * - Individual path overrides (e.g., JSONDB_DB_DIR, JSONDB_LOG_FILE, etc.)
+ * - JDBX_BASE_PATH: Base installation directory (auto-detected by default)
+ * - JDBX_DOC_PATH: Documentation directory
+ * - JDBX_VAR_PATH: Variable data directory
+ * - Individual path overrides (e.g., JDBX_DB_DIR, JDBX_LOG_FILE, etc.)
  *============================================================================*/
 
 /** Default database file basename - JDBX auto-generates .jdbx and .wal */
-#define DEFAULT_DB_FILE "var/jsondb"
+#define DEFAULT_DB_FILE "var/jdbx"
 
 /** Default RBAC config file path */
-#define DEFAULT_RBAC_PATH "var/data/jsondb/rbac.json"
+#define DEFAULT_RBAC_PATH "var/data/jdbx/rbac.json"
 
 /** Default PID file path */
-#define DEFAULT_PID_FILE "var/run/jsondb/jsondb_server.pid"
+#define DEFAULT_PID_FILE "var/run/jdbx/jdbxd.pid"
 
 /** Default log file path */
-#define DEFAULT_LOG_FILE "var/log/jsondb/server.log"
+#define DEFAULT_LOG_FILE "var/log/jdbx/server.log"
 
 /** Default admin web interface root directory */
 #define DEFAULT_WEB_ROOT "share/htdocs"
@@ -96,7 +96,7 @@
  *============================================================================*/
 
 /** Default database directory (deprecated - use DEFAULT_DB_FILE) */
-#define DEFAULT_DATABASE_DIR "/opt/jsondb/data"
+#define DEFAULT_DATABASE_DIR "/opt/jdbx/data"
 
 /* JDBX is the ONLY storage backend - no selection needed */
 

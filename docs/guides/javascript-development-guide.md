@@ -1,8 +1,8 @@
-# JSONdb JavaScript Development Guide
+# JDBX JavaScript Development Guide
 
 ## Overview
 
-JSONdb provides a powerful JavaScript integration system that allows you to create validators, transformers, and functions that work natively with your database. Scripts are stored as regular JSON documents and execute using the QuickJS engine with full RBAC integration.
+JDBX provides a powerful JavaScript integration system that allows you to create validators, transformers, and functions that work natively with your database. Scripts are stored as regular JSON documents and execute using the QuickJS engine with full RBAC integration.
 
 ## Table of Contents
 
@@ -113,7 +113,7 @@ JavaScript scripts are stored as regular JSON documents in their respective coll
 
 ### 1. Create Script Document
 
-Navigate to the appropriate collection (`_validators`, `_transformers`, or `_functions`) in the JSONdb browser interface and create a new document.
+Navigate to the appropriate collection (`_validators`, `_transformers`, or `_functions`) in the JDBX browser interface and create a new document.
 
 ### 2. Define Script Metadata
 
@@ -317,7 +317,7 @@ function validate(document, context) {
 
 ### 1. Browser Integration
 
-Use the JSONdb browser interface to:
+Use the JDBX browser interface to:
 - Test validators in real-time as you type
 - Preview transformations on sample data
 - Execute functions with custom input
@@ -464,11 +464,11 @@ Transformers can be chained by having multiple scripts with the same tags. They 
 
 ### Getting Help
 
-- Check the JSONdb logs for detailed error messages
+- Check the JDBX logs for detailed error messages
 - Use the browser's real-time validation features
 - Review the comprehensive examples provided
 - Monitor execution metrics for performance insights
 
 ---
 
-This guide provides the foundation for developing powerful JavaScript integrations with JSONdb. For additional examples and advanced use cases, see the `/opt/jsondb/share/examples/js-examples/` directory.
+This guide provides the foundation for developing powerful JavaScript integrations with JDBX. For additional examples and advanced use cases, see the `/opt/jdbx/share/examples/js-examples/` directory.

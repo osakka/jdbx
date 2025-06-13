@@ -2,7 +2,7 @@
 
 ## Overview
 
-The JSONdb function embedding system allows JavaScript functions to be defined either inline within documents or referenced from a centralized functions collection. This provides flexibility and reusability for validators, transformers, and lifecycle hooks.
+The JDBX function embedding system allows JavaScript functions to be defined either inline within documents or referenced from a centralized functions collection. This provides flexibility and reusability for validators, transformers, and lifecycle hooks.
 
 ## Function Types
 

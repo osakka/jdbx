@@ -1,6 +1,6 @@
 # performance Tests
 
-This directory contains tests for the performance components of JSONdb.
+This directory contains tests for the performance components of JDBX.
 
 ## Test Files
 

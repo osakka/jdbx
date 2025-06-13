@@ -11,17 +11,17 @@ Ensure 100% compliance with three-tier configuration priority system:
 ## Phase 1: Fix Critical Hardcoded Values (IMMEDIATE)
 
 ### 1.1 Remove Hardcoded Paths
-- [ ] Fix `/opt/jsondb` fallback in config_loader.c
+- [ ] Fix `/opt/jdbx` fallback in config_loader.c
 - [ ] Remove hardcoded documentation path in main.c
 - [ ] Update runtime script to use configurable paths
 - [ ] Add BASE_PATH configuration option
 
 ### 1.2 Add Missing Environment Variables
-- [ ] JSONDB_BASE_PATH
-- [ ] JSONDB_DOC_PATH
-- [ ] JSONDB_VAR_PATH
-- [ ] JSONDB_BUILD_PATH
-- [ ] JSONDB_SHARE_PATH
+- [ ] JDBX_BASE_PATH
+- [ ] JDBX_DOC_PATH
+- [ ] JDBX_VAR_PATH
+- [ ] JDBX_BUILD_PATH
+- [ ] JDBX_SHARE_PATH
 
 ## Phase 2: Complete Command-Line Flag Implementation
 
@@ -65,14 +65,14 @@ Ensure 100% compliance with three-tier configuration priority system:
       "daemon": true,
       "ssl": {
         "enabled": true,
-        "cert_path": "/etc/ssl/certs/jsondb.crt",
-        "key_path": "/etc/ssl/private/jsondb.key"
+        "cert_path": "/etc/ssl/certs/jdbx.crt",
+        "key_path": "/etc/ssl/private/jdbx.key"
       }
     },
     "paths": {
-      "base": "/opt/jsondb",
-      "var": "/opt/jsondb/var",
-      "log": "/opt/jsondb/var/jsondb_server.log"
+      "base": "/opt/jdbx",
+      "var": "/opt/jdbx/var",
+      "log": "/opt/jdbx/var/jdbxd.log"
     },
     "thread_pool": {
       "min_threads": 4,
@@ -115,14 +115,14 @@ Ensure 100% compliance with three-tier configuration priority system:
 
 ## Phase 4: Update Runtime Scripts
 
-### 4.1 jsondb_runtime.sh Updates
+### 4.1 jdbx_runtime.sh Updates
 - [ ] Remove all hardcoded paths
 - [ ] Use environment variables consistently
 - [ ] Add configuration file detection
 - [ ] Support all command-line flags
 
 ### 4.2 Create Configuration Template
-- [ ] Create jsondb.env.template with all options
+- [ ] Create jdbx.env.template with all options
 - [ ] Document each configuration option
 - [ ] Provide production-ready defaults
 

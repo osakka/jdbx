@@ -1,4 +1,4 @@
-# JSONdb Evolution Implementation Plan
+# JDBX Evolution Implementation Plan
 
 ## Summary of Decisions
 

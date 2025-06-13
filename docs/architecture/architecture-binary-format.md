@@ -1,8 +1,8 @@
-# JSONdb Binary Format Architecture
+# JDBX Binary Format Architecture
 
 ## Overview
 
-JSONdb uses a custom binary format (.jdb) designed to optimize storage and access for JSON documents, collections, and indexes. The binary format provides significant performance improvements over JSON, especially for large databases, while maintaining data integrity through checksums and proper serialization.
+JDBX uses a custom binary format (.jdb) designed to optimize storage and access for JSON documents, collections, and indexes. The binary format provides significant performance improvements over JSON, especially for large databases, while maintaining data integrity through checksums and proper serialization.
 
 ## Binary Format Specification
 
@@ -196,9 +196,9 @@ binary_register_type_handler(
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JSONDB_BINARY_FORMAT` | 0 | Force binary format (1) or auto-detect (0) |
-| `JSONDB_BINARY_SIZE_THRESHOLD` | 10485760 | Auto-detection threshold (10MB) |
-| `JSONDB_BINARY_COMPRESSION` | 0 | Enable compression (future) |
+| `JDBX_BINARY_FORMAT` | 0 | Force binary format (1) or auto-detect (0) |
+| `JDBX_BINARY_SIZE_THRESHOLD` | 10485760 | Auto-detection threshold (10MB) |
+| `JDBX_BINARY_COMPRESSION` | 0 | Enable compression (future) |
 
 ### Persistence Thresholds
 
@@ -247,32 +247,32 @@ binary_register_type_handler(
 
 ### Building with Binary Support
 ```bash
-cd /opt/jsondb/src
+cd /opt/jdbx/src
 make  # Binary support is built-in
 ```
 
 ### Starting Server with Binary Format
 ```bash
 # Auto-detection (default)
-cd /opt/jsondb
-build/jsondb_runtime.sh start
+cd /opt/jdbx
+build/jdbx_runtime.sh start
 
 # Force binary format
-JSONDB_BINARY_FORMAT=1 build/jsondb_runtime.sh start
+JDBX_BINARY_FORMAT=1 build/jdbx_runtime.sh start
 ```
 
 ### Converting Between Formats
 ```bash
-cd /opt/jsondb/build/bin
-./jsondb_tools convert \
+cd /opt/jdbx/build/bin
+./jdbx_tools convert \
     --input=/path/to/json_db.json \
     --output=/path/to/binary_db.jdb
 ```
 
 ### Performance Benchmarking
 ```bash
-cd /opt/jsondb/build/bin
-./jsondb_benchmark \
+cd /opt/jdbx/build/bin
+./jdbx_benchmark \
     --docs=10000 \
     --size=1024 \
     --queries=100
@@ -316,7 +316,7 @@ cd /opt/jsondb/build/bin
 
 ## Summary
 
-The JSONdb binary format provides a robust, high-performance storage solution with:
+The JDBX binary format provides a robust, high-performance storage solution with:
 - 4-5x performance improvement for large databases
 - Automatic persistence with configurable triggers
 - Thread-safe operation with proper error handling

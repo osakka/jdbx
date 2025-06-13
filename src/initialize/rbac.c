@@ -75,7 +75,7 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
     INIT_LOG_PROGRESS("RBAC", "Bootstrap mode enabled - admin creation will be handled during first API request");
     
     /* Mark that we need to create admin on first opportunity */
-    setenv("JSONDB_DEFERRED_BOOTSTRAP", "1", 1);
+    setenv("JDBX_DEFERRED_BOOTSTRAP", "1", 1);
     
     INIT_LOG_SUCCESS("RBAC", "Bootstrap mode configured - admin will be created automatically");
   }

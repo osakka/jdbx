@@ -4,20 +4,20 @@ This document explains how to properly use the JSON Database Server with its bin
 
 ## Recommended Method: Using the Runtime Script
 
-The easiest way to manage the JSONdb server is using the `jsondb_runtime.sh` script:
+The easiest way to manage the JDBX server is using the `jdbx_runtime.sh` script:
 
 ```bash
 # Start the server
-./build/jsondb_runtime.sh start
+./build/jdbx_runtime.sh start
 
 # Check server status
-./build/jsondb_runtime.sh status
+./build/jdbx_runtime.sh status
 
 # Stop the server
-./build/jsondb_runtime.sh stop
+./build/jdbx_runtime.sh stop
 
 # Restart the server
-./build/jsondb_runtime.sh restart
+./build/jdbx_runtime.sh restart
 ```
 
 The runtime script:
@@ -31,8 +31,8 @@ The runtime script:
 
 The JSON Database Server uses binary-relative paths for all operations. This means:
 
-1. All paths are resolved relative to the location of the `jsondb_server` binary.
-2. When the binary is in `/path/to/bin/jsondb_server`, all relative paths are resolved relative to `/path/to/`.
+1. All paths are resolved relative to the location of the `jdbxd` binary.
+2. When the binary is in `/path/to/bin/jdbxd`, all relative paths are resolved relative to `/path/to/`.
 3. This makes the server more portable as it can be installed anywhere without modifying configuration files.
 
 ## Directory Structure
@@ -40,15 +40,15 @@ The JSON Database Server uses binary-relative paths for all operations. This mea
 The server expects the following directory structure relative to the binary location:
 
 ```
-/path/to/bin/jsondb_server    # The server binary
+/path/to/bin/jdbxd    # The server binary
 /path/to/var/                 # Root for all variable data
-  ├── data/jsondb/            # Database files
+  ├── data/jdbx/            # Database files
   │     └── db.json           # Main database file
   │     └── rbac.json         # RBAC configuration
-  ├── log/jsondb/             # Log files
+  ├── log/jdbx/             # Log files
   │     └── server.log        # Main server log
   └── run/                    # Runtime files
-        └── jsondb_server.pid # PID file when running
+        └── jdbxd.pid # PID file when running
 ```
 
 The server will create these directories automatically if they don't exist.
@@ -61,16 +61,16 @@ You can also control the server directly using command-line arguments, though us
 
 ```bash
 # Start the server in daemon mode (default)
-./bin/jsondb_server
+./bin/jdbxd
 
 # Start the server in foreground mode (for debugging only)
-./bin/jsondb_server --foreground
+./bin/jdbxd --foreground
 
 # Check server status
-./bin/jsondb_server --status
+./bin/jdbxd --status
 
 # Stop a running server
-./bin/jsondb_server --stop
+./bin/jdbxd --stop
 ```
 
 ### Customizing Paths
@@ -79,29 +79,29 @@ All paths are relative to the binary location by default, but you can override t
 
 ```bash
 # Use custom PID file
-./bin/jsondb_server --pid-file custom/path/to/server.pid
+./bin/jdbxd --pid-file custom/path/to/server.pid
 
 # Use custom log file
-./bin/jsondb_server --log-file custom/path/to/server.log
+./bin/jdbxd --log-file custom/path/to/server.log
 
 # Use absolute paths
-./bin/jsondb_server --pid-file /absolute/path/to/server.pid --log-file /absolute/path/to/server.log
+./bin/jdbxd --pid-file /absolute/path/to/server.pid --log-file /absolute/path/to/server.log
 ```
 
 ### Other Options
 
 ```bash
 # Set a custom port
-./bin/jsondb_server --port 8080
+./bin/jdbxd --port 8080
 
 # Set a specific host
-./bin/jsondb_server --host my.domain.com
+./bin/jdbxd --host my.domain.com
 
 # Run JavaScript file and exit
-./bin/jsondb_server --js script.js
+./bin/jdbxd --js script.js
 
 # Set log level
-./bin/jsondb_server --log-level debug
+./bin/jdbxd --log-level debug
 ```
 
 ## Server State Management
@@ -110,7 +110,7 @@ All paths are relative to the binary location by default, but you can override t
 
 When starting the server, it checks:
 1. If there's a PID file and the process with that PID is running
-2. If any other `jsondb_server` process is running (even without a PID file)
+2. If any other `jdbxd` process is running (even without a PID file)
 3. In both cases, it will refuse to start if another instance is already running
 
 ### Stopping the Server
@@ -147,14 +147,14 @@ The server has improved PID file handling for reliability:
 
 ## Common Issues
 
-- **Server already running**: Ensure no other server instance is running with `./build/jsondb_runtime.sh status`
+- **Server already running**: Ensure no other server instance is running with `./build/jdbx_runtime.sh status`
 - **Cannot write to PID file**: Ensure the `/path/to/var/run/` directory exists and is writable
-- **Cannot write to log file**: Ensure the `/path/to/var/log/jsondb/` directory exists and is writable
-- **Stale PID file**: If the server crashed previously, restart it with `./build/jsondb_runtime.sh restart` to clean up stale PID files
+- **Cannot write to log file**: Ensure the `/path/to/var/log/jdbx/` directory exists and is writable
+- **Stale PID file**: If the server crashed previously, restart it with `./build/jdbx_runtime.sh restart` to clean up stale PID files
 
 ## Best Practices
 
-1. Use the `jsondb_runtime.sh` script for managing the server in all environments
+1. Use the `jdbx_runtime.sh` script for managing the server in all environments
 2. Always use proper control commands rather than manually killing processes
 3. When installing, ensure the server has write permissions to its var/ directory
 4. Check the log file when troubleshooting unexpected behavior
@@ -170,5 +170,5 @@ The server can read settings from a configuration file. Place the `config.json` 
 Use `--version` to display the version information:
 
 ```bash
-./bin/jsondb_server --version
+./bin/jdbxd --version
 ```

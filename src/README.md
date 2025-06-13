@@ -1,9 +1,9 @@
-# JSONdb Source Code
+# JDBX Source Code
 
 **Version**: 3.3.0  
 **Last Updated**: June 12, 2025
 
-This directory contains the source code for the JSONdb project.
+This directory contains the source code for the JDBX project.
 
 ## Structure
 

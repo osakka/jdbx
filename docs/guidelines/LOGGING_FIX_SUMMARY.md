@@ -3,7 +3,7 @@
 ## Date: January 2025
 
 ### Objective
-Comprehensive audit and fix of logging consistency across the entire JSONdb codebase to ensure:
+Comprehensive audit and fix of logging consistency across the entire JDBX codebase to ensure:
 - Unified logging format
 - Appropriate log levels for target audience
 - Category-specific trace logging

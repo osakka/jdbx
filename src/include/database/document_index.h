@@ -6,8 +6,8 @@
  * which are used for fast document lookups.
  */
 
-#ifndef JSONDB_DOCUMENT_INDEX_H
-#define JSONDB_DOCUMENT_INDEX_H
+#ifndef JDBX_DOCUMENT_INDEX_H
+#define JDBX_DOCUMENT_INDEX_H
 
 #include "database/indexed_ops.h"
 #include "database/document_index_types.h"
@@ -35,4 +35,4 @@ int remove_from_index(document_index_t* index, const char* id);
  */
 json_value_t* find_collection(database_t* db, const char* collection_name);
 
-#endif /* JSONDB_DOCUMENT_INDEX_H */
+#endif /* JDBX_DOCUMENT_INDEX_H */

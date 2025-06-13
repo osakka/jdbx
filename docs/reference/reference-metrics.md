@@ -1,9 +1,9 @@
-# JSONdb Metrics System Reference
+# JDBX Metrics System Reference
 
 **Version**: 2.0.7  
 **Last Updated**: January 2025
 
-This comprehensive guide documents the JSONdb metrics system, including collection, storage, and analysis capabilities.
+This comprehensive guide documents the JDBX metrics system, including collection, storage, and analysis capabilities.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This comprehensive guide documents the JSONdb metrics system, including collecti
 
 ## Overview
 
-The JSONdb metrics system provides comprehensive monitoring and performance analysis capabilities. It uses a time-series approach with fixed documents to ensure scalability and high performance.
+The JDBX metrics system provides comprehensive monitoring and performance analysis capabilities. It uses a time-series approach with fixed documents to ensure scalability and high performance.
 
 ### Key Features
 
@@ -141,8 +141,8 @@ Tracks connection statistics:
 ### Implementation Details
 
 The metrics system is implemented in:
-- `/opt/jsondb/src/components/utils/metrics_persistence.c`
-- `/opt/jsondb/src/components/utils/metrics.c`
+- `/opt/jdbx/src/components/utils/metrics_persistence.c`
+- `/opt/jdbx/src/components/utils/metrics.c`
 
 ### Key Functions
 
@@ -245,10 +245,10 @@ Content-Type: application/json
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_METRICS_ENABLED` | Enable metrics collection | `true` |
-| `JSONDB_METRICS_DIR` | Metrics storage directory | `${JSONDB_VAR_DIR}/metrics` |
-| `JSONDB_METRICS_INTERVAL` | Update interval (seconds) | `60` |
-| `JSONDB_METRICS_RETENTION` | Data retention (minutes) | `15` |
+| `JDBX_METRICS_ENABLED` | Enable metrics collection | `true` |
+| `JDBX_METRICS_DIR` | Metrics storage directory | `${JDBX_VAR_DIR}/metrics` |
+| `JDBX_METRICS_INTERVAL` | Update interval (seconds) | `60` |
+| `JDBX_METRICS_RETENTION` | Data retention (minutes) | `15` |
 
 ### Configuration File
 
@@ -289,7 +289,7 @@ The current implementation achieves:
 
 Configure Grafana to query the metrics API:
 
-1. Add JSONdb as a data source
+1. Add JDBX as a data source
 2. Use the `/api/metrics` endpoint
 3. Configure authentication headers
 4. Import provided dashboards
@@ -300,7 +300,7 @@ Export metrics in Prometheus format:
 
 ```bash
 # Using the metrics exporter
-./bin/jsondb_metrics_exporter --port=9090
+./bin/jdbx_metrics_exporter --port=9090
 
 # Or via API transformation
 curl -H "Authorization: Bearer $TOKEN" \

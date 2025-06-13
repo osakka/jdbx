@@ -1,9 +1,9 @@
-# JSONdb Transaction System Reference
+# JDBX Transaction System Reference
 
 **Version**: 2.0.7  
 **Last Updated**: January 2025
 
-This comprehensive guide documents the JSONdb transaction system, including ACID compliance, isolation levels, and advanced features.
+This comprehensive guide documents the JDBX transaction system, including ACID compliance, isolation levels, and advanced features.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This comprehensive guide documents the JSONdb transaction system, including ACID
 
 ## Overview
 
-The JSONdb transaction system provides ACID-compliant transactions for maintaining data consistency across multiple operations. It supports concurrent transactions, automatic retry mechanisms, and comprehensive logging.
+The JDBX transaction system provides ACID-compliant transactions for maintaining data consistency across multiple operations. It supports concurrent transactions, automatic retry mechanisms, and comprehensive logging.
 
 ### Key Features
 
@@ -446,10 +446,10 @@ async function executeWithTransaction(operations) {
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_TXN_MAX_CONCURRENT` | Max concurrent transactions | `1000` |
-| `JSONDB_TXN_DEFAULT_TIMEOUT` | Default timeout (ms) | `30000` |
-| `JSONDB_TXN_LOG_SLOW` | Log slow transactions | `true` |
-| `JSONDB_TXN_SLOW_THRESHOLD` | Slow transaction threshold (ms) | `10000` |
+| `JDBX_TXN_MAX_CONCURRENT` | Max concurrent transactions | `1000` |
+| `JDBX_TXN_DEFAULT_TIMEOUT` | Default timeout (ms) | `30000` |
+| `JDBX_TXN_LOG_SLOW` | Log slow transactions | `true` |
+| `JDBX_TXN_SLOW_THRESHOLD` | Slow transaction threshold (ms) | `10000` |
 
 ## References
 

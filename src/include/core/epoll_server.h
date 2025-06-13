@@ -1,5 +1,5 @@
 /**
- * High-performance epoll-based server for JSONdb
+ * High-performance epoll-based server for JDBX
  * 
  * Phase 3 optimization: Event-driven I/O with epoll()
  */

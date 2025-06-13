@@ -1,8 +1,8 @@
-# JSONdb Enhanced Admin UI Documentation
+# JDBX Enhanced Admin UI Documentation
 
 ## Overview
 
-The JSONdb admin interface has been significantly enhanced with new features including auto-generated API documentation, full RBAC management, an enhanced document browser, and comprehensive metrics/analytics dashboards.
+The JDBX admin interface has been significantly enhanced with new features including auto-generated API documentation, full RBAC management, an enhanced document browser, and comprehensive metrics/analytics dashboards.
 
 ## New Features
 
@@ -102,8 +102,8 @@ share/htdocs/
 ```
 
 ### API Integration
-All interfaces use the JSONdb REST API with JWT authentication:
-- Token stored in localStorage as `jsondb_auth_token`
+All interfaces use the JDBX REST API with JWT authentication:
+- Token stored in localStorage as `jdbx_auth_token`
 - Automatic redirect to login on authentication failure
 - Consistent error handling with toast notifications
 

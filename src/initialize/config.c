@@ -346,9 +346,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   } else {
     /* Auto-discover environment files in priority order */
     const char* env_files[] = {
-      "jsondb.env",                                    /* Local directory override */
-      "/opt/jsondb/build/var/jsondb.env",             /* Running configuration */
-      "/opt/jsondb/share/config/jsondb.env",          /* Template defaults */
+      "jdbx.env",                                    /* Local directory override */
+      "/opt/jdbx/build/var/jdbx.env",             /* Running configuration */
+      "/opt/jdbx/share/config/jdbx.env",          /* Template defaults */
       NULL
     };
     

@@ -1,6 +1,6 @@
 # Thread Pool Implementation
 
-This document describes the thread pool implementation for the JSONdb server, which is designed to efficiently handle multiple client connections in a scalable and resource-efficient manner.
+This document describes the thread pool implementation for the JDBX server, which is designed to efficiently handle multiple client connections in a scalable and resource-efficient manner.
 
 ## Overview
 
@@ -163,4 +163,4 @@ Testing the thread pool implementation involves:
 
 ## Conclusion
 
-The thread pool implementation provides an efficient and scalable way to handle client connections in the JSONdb server. It improves performance, resource utilization, and system stability under various load conditions.
+The thread pool implementation provides an efficient and scalable way to handle client connections in the JDBX server. It improves performance, resource utilization, and system stability under various load conditions.

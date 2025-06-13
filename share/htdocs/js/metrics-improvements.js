@@ -1,4 +1,4 @@
-// Enhanced Metrics Implementation for JSONdb
+// Enhanced Metrics Implementation for JDBX
 // Adds proper legends, units, tooltips, and error tracking
 
 // Helper function to format bytes with appropriate units

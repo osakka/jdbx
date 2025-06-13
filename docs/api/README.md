@@ -1,17 +1,17 @@
-# JSONdb API Documentation
+# JDBX API Documentation
 
-> Complete reference for all JSONdb APIs and interfaces
+> Complete reference for all JDBX APIs and interfaces
 
 ## API Categories
 
 ### REST API
-The primary interface for interacting with JSONdb:
+The primary interface for interacting with JDBX:
 - **[REST API Reference](rest-api.md)** - Complete HTTP endpoint documentation
 - **[Authentication](rest-api.md#authentication)** - JWT-based authentication
 - **[Error Handling](rest-api.md#error-handling)** - Error codes and responses
 
 ### JavaScript API
-Extend JSONdb with custom logic:
+Extend JDBX with custom logic:
 - **[JavaScript API](javascript-api.md)** - Script execution endpoints
 - **[Validators](javascript-api.md#validators)** - Document validation scripts
 - **[Transformers](javascript-api.md#transformers)** - Data transformation scripts
@@ -61,7 +61,7 @@ Content-Type: application/json
 
 ## API Versioning
 
-JSONdb uses URL-based versioning:
+JDBX uses URL-based versioning:
 - Current version: `/api/` (v1)
 - Future versions: `/api/v2/`, `/api/v3/`, etc.
 - Backward compatibility maintained within major versions

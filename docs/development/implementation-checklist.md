@@ -1,6 +1,6 @@
-# JSONdb Implementation Checklist
+# JDBX Implementation Checklist
 
-This document tracks the validation and implementation status of all JSONdb features and endpoints. It will help ensure consistency and completeness as we move forward with development.
+This document tracks the validation and implementation status of all JDBX features and endpoints. It will help ensure consistency and completeness as we move forward with development.
 
 ## Core Functionality
 

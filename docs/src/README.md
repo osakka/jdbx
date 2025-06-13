@@ -1,6 +1,6 @@
-# JSONdb Source Code Structure
+# JDBX Source Code Structure
 
-This directory contains the complete source code for the JSONdb server.
+This directory contains the complete source code for the JDBX server.
 
 ## Directory Organization
 
@@ -14,7 +14,7 @@ This directory contains the complete source code for the JSONdb server.
 
 ## Build System
 
-The project uses a single Makefile (`src/Makefile`) to build the entire system. The output is a single executable at `bin/jsondb_server`.
+The project uses a single Makefile (`src/Makefile`) to build the entire system. The output is a single executable at `bin/jdbxd`.
 
 To build:
 ```

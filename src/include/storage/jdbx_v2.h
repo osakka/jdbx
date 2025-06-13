@@ -1,5 +1,5 @@
-#ifndef JSONDB_JDBX_V2_H
-#define JSONDB_JDBX_V2_H
+#ifndef JDBX_JDBX_V2_H
+#define JDBX_JDBX_V2_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -106,4 +106,4 @@ json_value_t* jdbx_v2_get_schema(jdbx_database_v2_t* db, const char* collection_
 /* Utility functions */
 int jdbx_v2_parse_path(const char* path, char* library, size_t lib_size, char* collection, size_t coll_size);
 
-#endif /* JSONDB_JDBX_V2_H */
+#endif /* JDBX_JDBX_V2_H */

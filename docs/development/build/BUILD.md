@@ -189,7 +189,7 @@ make LDFLAGS="-pthread -lm -luuid -lssl -lcrypto"
 After building, you can run the server using:
 
 ```bash
-./bin/jsondb
+./bin/jdbx
 ```
 
 Or using the make shortcut:
@@ -351,6 +351,6 @@ make test  # If tests are available
 After building successfully:
 
 1. Configure the server by creating a `config.json` file (see `config.json.example`)
-2. Run the server with `./bin/jsondb` or `make run`
+2. Run the server with `./bin/jdbx` or `make run`
 3. Access the API at `http://localhost:5000` (default)
 4. Access the admin interface at `http://localhost:5000/admin`

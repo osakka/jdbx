@@ -1,6 +1,6 @@
 # scripts Tests
 
-This directory contains tests for the scripts components of JSONdb.
+This directory contains tests for the scripts components of JDBX.
 
 ## Test Files
 

@@ -1,6 +1,6 @@
-# JSONdb Security Testing Framework
+# JDBX Security Testing Framework
 
-This directory contains security tests for verifying the security posture of JSONdb in a production environment.
+This directory contains security tests for verifying the security posture of JDBX in a production environment.
 
 ## Security Test Categories
 

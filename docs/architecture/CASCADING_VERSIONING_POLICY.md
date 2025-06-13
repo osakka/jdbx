@@ -2,7 +2,7 @@
 
 ## Overview
 
-The JSONdb cascading versioning policy system provides a hierarchical approach to document versioning that cascades from Library → Collection → Document levels. Each level can override settings from its parent, providing flexible versioning control.
+The JDBX cascading versioning policy system provides a hierarchical approach to document versioning that cascades from Library → Collection → Document levels. Each level can override settings from its parent, providing flexible versioning control.
 
 ## Architecture
 

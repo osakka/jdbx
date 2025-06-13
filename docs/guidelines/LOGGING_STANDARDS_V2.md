@@ -1,8 +1,8 @@
-# JSONdb Logging Standards V2.0
+# JDBX Logging Standards V2.0
 
 ## Overview
 
-This document defines the comprehensive logging standards for JSONdb to ensure consistency, actionability, and appropriate audience targeting across all log messages.
+This document defines the comprehensive logging standards for JDBX to ensure consistency, actionability, and appropriate audience targeting across all log messages.
 
 ## Log Format Standard
 
@@ -150,13 +150,13 @@ TRACE_DB("Complex calculation result: %d", expensive_function());
 
 ### 1. Environment Variables (Lowest Priority)
 ```bash
-export JSONDB_LOG_LEVEL=DEBUG
-export JSONDB_TRACE_CATEGORIES=database,rbac,api
+export JDBX_LOG_LEVEL=DEBUG
+export JDBX_TRACE_CATEGORIES=database,rbac,api
 ```
 
 ### 2. Command Line Flags (Medium Priority)
 ```bash
-./jsondb_server --log-level DEBUG --trace-categories database,api
+./jdbxd --log-level DEBUG --trace-categories database,api
 ```
 
 ### 3. Runtime API (Highest Priority)

@@ -1,6 +1,6 @@
 # integration Tests
 
-This directory contains tests for the integration components of JSONdb.
+This directory contains tests for the integration components of JDBX.
 
 ## Test Files
 

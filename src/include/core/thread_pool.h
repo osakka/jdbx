@@ -1,5 +1,5 @@
-#ifndef JSONDB_THREAD_POOL_H
-#define JSONDB_THREAD_POOL_H
+#ifndef JDBX_THREAD_POOL_H
+#define JDBX_THREAD_POOL_H
 
 #include <pthread.h>
 #include <stdlib.h>
@@ -111,4 +111,4 @@ void thread_pool_destroy(thread_pool_t* pool);
  */
 int thread_pool_adjust(thread_pool_t* pool, int min_threads, int max_threads);
 
-#endif /* JSONDB_THREAD_POOL_H */
+#endif /* JDBX_THREAD_POOL_H */

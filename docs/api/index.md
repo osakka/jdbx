@@ -1,6 +1,6 @@
-# JSONdb API Documentation
+# JDBX API Documentation
 
-Complete API reference and guides for JSONdb server.
+Complete API reference and guides for JDBX server.
 
 ## Quick Links
 
@@ -14,7 +14,7 @@ Complete API reference and guides for JSONdb server.
 - **[RBAC Technical Reference](../reference/rbac.md)** - Technical RBAC implementation details
 
 ### Core Functionality
-- **[Query Language Reference](../reference/query-language.md)** - JSONdb query syntax
+- **[Query Language Reference](../reference/query-language.md)** - JDBX query syntax
 - **[Database Schema](../reference/database-schema.md)** - Database structure and system collections
 - **[Performance Optimization](../reference/performance-optimization.md)** - API performance best practices
 
@@ -39,8 +39,8 @@ Complete API reference and guides for JSONdb server.
 
 ### 1. Server Setup
 ```bash
-# Start the JSONdb server
-cd /opt/jsondb && build/jsondb_runtime.sh start
+# Start the JDBX server
+cd /opt/jdbx && build/jdbx_runtime.sh start
 
 # Verify server is running
 curl http://localhost:5000/health
@@ -108,7 +108,7 @@ All API responses use JSON format with consistent error handling:
 
 ## Authentication Methods
 
-JSONdb supports multiple authentication methods:
+JDBX supports multiple authentication methods:
 
 1. **Session Tokens** - Short-lived tokens (30 minutes) for interactive use
 2. **API Tokens** - Long-lived tokens (1 year default) for programmatic access
@@ -162,16 +162,16 @@ The API is compatible with all standard HTTP clients:
 ### Log Analysis
 ```bash
 # Check server logs
-cat /opt/jsondb/var/jsondb_server.log | tail -50
+cat /opt/jdbx/var/jdbxd.log | tail -50
 
 # Filter for API errors
-grep "ERROR\|WARN" /opt/jsondb/var/jsondb_server.log
+grep "ERROR\|WARN" /opt/jdbx/var/jdbxd.log
 ```
 
 ### Debug Mode
 ```bash
 # Start server with debug logging
-LOG_LEVEL=DEBUG build/jsondb_runtime.sh start
+LOG_LEVEL=DEBUG build/jdbx_runtime.sh start
 ```
 
 ## Related Documentation

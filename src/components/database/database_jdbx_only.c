@@ -1,5 +1,5 @@
 /*
- * JSONdb Database - Clean Hierarchical Implementation
+ * JDBX Database - Clean Hierarchical Implementation
  * Single source of truth: Libraries → Collections → Documents
  * No backward compatibility, just clean architecture
  */
@@ -239,12 +239,12 @@ database_t* db_init(const char* path) {
     
     if (!db_path || strlen(db_path) == 0) {
         /* Try environment variable first */
-        db_path = getenv("JSONDB_DB_PATH");
+        db_path = getenv("JDBX_DB_PATH");
         if (!db_path) {
             /* Use default JDBX path */
-            db_path = getenv("JSONDB_DB_PATH");
+            db_path = getenv("JDBX_DB_PATH");
             if (!db_path) {
-                db_path = "/opt/jsondb/build/var/jsondb.jdbx";
+                db_path = "/opt/jdbx/build/var/jdbx.jdbx";
             }
         }
     }
@@ -259,8 +259,8 @@ database_t* db_init(const char* path) {
         snprintf(jdbx_path, sizeof(jdbx_path), "%.*s.jdbx", 
                  (int)(strlen(db_path) - 4), db_path);
     } else {
-        /* Directory path, append jsondb.jdbx */
-        snprintf(jdbx_path, sizeof(jdbx_path), "%s/jsondb.jdbx", db_path);
+        /* Directory path, append jdbx.jdbx */
+        snprintf(jdbx_path, sizeof(jdbx_path), "%s/jdbx.jdbx", db_path);
     }
     
     LOG_INFO("Initializing clean hierarchical database at %s", jdbx_path);

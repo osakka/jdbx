@@ -1,4 +1,4 @@
-# JSONdb RBAC Logical Design
+# JDBX RBAC Logical Design
 
 ## Core Principles
 

@@ -6,20 +6,20 @@ This document provides information on how to use the `tests/server/test_server.s
 
 ## Server Management
 
-For everyday server management, use the `jsondb_runtime.sh` script:
+For everyday server management, use the `jdbx_runtime.sh` script:
 
 ```bash
 # Start the server
-./build/jsondb_runtime.sh start
+./build/jdbx_runtime.sh start
 
 # Check server status
-./build/jsondb_runtime.sh status
+./build/jdbx_runtime.sh status
 
 # Stop the server
-./build/jsondb_runtime.sh stop
+./build/jdbx_runtime.sh stop
 
 # Restart the server
-./build/jsondb_runtime.sh restart
+./build/jdbx_runtime.sh restart
 ```
 
 See the [Server Usage Guide](/docs/reference/SERVER_USAGE.md) for complete details.
@@ -138,5 +138,5 @@ For visualization formats, the script checks whether the proper format data stru
 
 - The server runs on port 8080 by default
 - Test data is stored in `./tests/data`
-- The script automatically detects whether the server binary is named `jsondb_server` or `jsondb`
+- The script automatically detects whether the server binary is named `jdbxd` or `jdbx`
 - The script ensures the server is properly shut down even if tests fail

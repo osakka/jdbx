@@ -1,5 +1,5 @@
 /**
- * Configuration-specific string interning for JSONdb
+ * Configuration-specific string interning for JDBX
  * 
  * Provides specialized string pools for different types of strings
  * to achieve maximum performance benefits from string interning.

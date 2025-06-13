@@ -1,11 +1,11 @@
-# JSONdb Documentation Taxonomy & Standards
+# JDBX Documentation Taxonomy & Standards
 
 **Version**: 3.3.0  
 **Last Updated**: June 12, 2025
 
 ## Documentation Taxonomy
 
-This document defines the authoritative taxonomy and naming standards for all JSONdb documentation.
+This document defines the authoritative taxonomy and naming standards for all JDBX documentation.
 
 ### Primary Categories
 

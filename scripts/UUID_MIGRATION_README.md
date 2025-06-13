@@ -19,7 +19,7 @@ This directory contains three scripts to help with the systematic migration from
 ./uuid_migration_helper.sh
 ```
 
-**Output**: Creates `/opt/jsondb/uuid_migration_analysis/` directory with:
+**Output**: Creates `/opt/jdbx/uuid_migration_analysis/` directory with:
 - Individual analysis files for each source file
 - `migration_templates.txt` - Code templates for each pattern type
 - `migration_summary.txt` - Summary report of all files
@@ -113,7 +113,7 @@ This directory contains three scripts to help with the systematic migration from
 
 3. **Backup**: Always backup before running automated updates:
    - `uuid_migration_auto_update.sh` creates automatic backups
-   - Backups are timestamped in `/opt/jsondb/uuid_migration_backup_*`
+   - Backups are timestamped in `/opt/jdbx/uuid_migration_backup_*`
 
 4. **Testing**: After updates:
    - Ensure all code compiles without warnings

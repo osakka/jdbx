@@ -1,11 +1,11 @@
-#ifndef JSONDB_HEALTH_API_H
-#define JSONDB_HEALTH_API_H
+#ifndef JDBX_HEALTH_API_H
+#define JDBX_HEALTH_API_H
 
 #include "api/api.h"
 
 /**
  * @file health_api.h
- * @brief Health and metrics API functions for JSONdb.
+ * @brief Health and metrics API functions for JDBX.
  */
 
 /**
@@ -57,4 +57,4 @@ http_response_t* api_handle_metrics_available(api_context_t *ctx, http_request_t
  */
 void register_health_api_endpoints(api_context_t *ctx);
 
-#endif /* JSONDB_HEALTH_API_H */
+#endif /* JDBX_HEALTH_API_H */

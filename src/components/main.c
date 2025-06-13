@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize production configuration before database */
-  const char* config_level = getenv("JSONDB_CONFIG_LEVEL");
+  const char* config_level = getenv("JDBX_CONFIG_LEVEL");
   if (!config_level) {
     config_level = "development";  /* Default to development */
   }

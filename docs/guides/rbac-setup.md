@@ -1,6 +1,6 @@
 # RBAC Setup Guide
 
-A comprehensive guide to setting up and configuring Role-Based Access Control in JSONdb.
+A comprehensive guide to setting up and configuring Role-Based Access Control in JDBX.
 
 ## Table of Contents
 1. [Quick Start](#quick-start)
@@ -16,9 +16,9 @@ A comprehensive guide to setting up and configuring Role-Based Access Control in
 
 ### Initial Admin Setup
 
-1. **Start JSONdb Server**
+1. **Start JDBX Server**
    ```bash
-   cd /opt/jsondb && build/jsondb_runtime.sh start
+   cd /opt/jdbx && build/jdbx_runtime.sh start
    ```
 
 2. **Access Admin Interface**
@@ -87,7 +87,7 @@ curl -X PUT http://localhost:5000/api/rbac/users/USER_ID/password \
 
 ### Understanding Roles
 
-JSONdb uses a hierarchical role system where each role defines a set of permissions. Roles can be assigned to users to grant specific access levels.
+JDBX uses a hierarchical role system where each role defines a set of permissions. Roles can be assigned to users to grant specific access levels.
 
 **Built-in Roles:**
 - `admin` - Full system access
@@ -137,7 +137,7 @@ admin (Full Access)
 
 ### Permission Types
 
-JSONdb supports five permission levels:
+JDBX supports five permission levels:
 - `CREATE` - Can create new documents
 - `READ` - Can read existing documents  
 - `UPDATE` - Can modify existing documents
@@ -382,12 +382,12 @@ curl -X GET http://localhost:5000/api/auth/validate \
 
 **Check RBAC logs:**
 ```bash
-grep "RBAC\|Auth" /opt/jsondb/build/var/jsondb.log | tail -50
+grep "RBAC\|Auth" /opt/jdbx/build/var/jdbx.log | tail -50
 ```
 
 **Permission denied logs:**
 ```bash
-grep "Permission denied\|Unauthorized" /opt/jsondb/build/var/jsondb.log
+grep "Permission denied\|Unauthorized" /opt/jdbx/build/var/jdbx.log
 ```
 
 ## Best Practices

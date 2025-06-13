@@ -1,17 +1,17 @@
-# Getting Started with JSONdb
+# Getting Started with JDBX
 
-> Everything you need to know to start using JSONdb in your projects
+> Everything you need to know to start using JDBX in your projects
 
 ## Quick Navigation
 
 - **[Installation Guide](installation.md)** - System requirements and installation steps
 - **[Quick Start Tutorial](quick-start.md)** - Get up and running in 5 minutes
 - **[Configuration Basics](configuration.md)** - Essential configuration options
-- **[First Application](first-app.md)** - Build your first JSONdb application
+- **[First Application](first-app.md)** - Build your first JDBX application
 
-## What is JSONdb?
+## What is JDBX?
 
-JSONdb is a high-performance document database designed for JSON data. It combines the simplicity of document stores with the performance of traditional databases, capable of handling billion-document collections with sub-millisecond response times.
+JDBX is a high-performance document database designed for JSON data. It combines the simplicity of document stores with the performance of traditional databases, capable of handling billion-document collections with sub-millisecond response times.
 
 ## Key Features at a Glance
 
@@ -38,7 +38,7 @@ Before you begin, ensure you have:
 3. Review [Configuration Basics](configuration.md)
 4. Build your [First Application](first-app.md)
 
-### 2. Evaluating JSONdb
+### 2. Evaluating JDBX
 1. Check out our [Performance Benchmarks](../reference/performance-benchmarks.md)
 2. Review the [Architecture Overview](../architecture/README.md)
 3. Explore the [API Reference](../api/README.md)
@@ -55,12 +55,12 @@ Before you begin, ensure you have:
 - **Documentation**: You're in the right place!
 - **API Reference**: See [REST API](../api/rest-api.md)
 - **Troubleshooting**: Check [Common Issues](../reference/troubleshooting.md)
-- **Community**: Join our [GitHub Discussions](https://github.com/jsondb/jsondb/discussions)
+- **Community**: Join our [GitHub Discussions](https://github.com/jdbx/jdbx/discussions)
 
 ## Next Steps
 
-Ready to get started? Head to the [Installation Guide](installation.md) to begin your JSONdb journey!
+Ready to get started? Head to the [Installation Guide](installation.md) to begin your JDBX journey!
 
 ---
 
-*Last updated for JSONdb v3.0.0*
+*Last updated for JDBX v3.0.0*

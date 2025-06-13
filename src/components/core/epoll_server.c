@@ -1,5 +1,5 @@
 /**
- * High-performance epoll-based server implementation for JSONdb
+ * High-performance epoll-based server implementation for JDBX
  * 
  * This implements Phase 3 optimization: Event-driven I/O with epoll()
  * to achieve 10x connection scalability improvement.

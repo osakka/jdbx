@@ -6,8 +6,8 @@
  * which are used by the database and cache subsystems.
  */
 
-#ifndef JSONDB_CACHE_HELPERS_H
-#define JSONDB_CACHE_HELPERS_H
+#ifndef JDBX_CACHE_HELPERS_H
+#define JDBX_CACHE_HELPERS_H
 
 #include "database/database.h"
 #include <time.h>
@@ -57,4 +57,4 @@ int store_query_result(database_t* db, const char* collection_name,
  */
 int process_cache_invalidations(database_t* db);
 
-#endif /* JSONDB_CACHE_HELPERS_H */
+#endif /* JDBX_CACHE_HELPERS_H */

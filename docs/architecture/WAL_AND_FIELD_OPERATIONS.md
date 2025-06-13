@@ -7,13 +7,13 @@
 
 ## Overview
 
-JSONdb implements Write-Ahead Logging (WAL) for durability and field-level operations for granular document manipulation. This document details both systems and their integration with the overall architecture.
+JDBX implements Write-Ahead Logging (WAL) for durability and field-level operations for granular document manipulation. This document details both systems and their integration with the overall architecture.
 
 ## Write-Ahead Logging (WAL)
 
 ### Purpose
 
-WAL provides ACID properties for JSONdb operations:
+WAL provides ACID properties for JDBX operations:
 
 1. **Atomicity**: Operations complete fully or not at all
 2. **Consistency**: Database remains consistent after crashes
@@ -91,7 +91,7 @@ int wal_write_page(wal_t* wal, uint32_t page_num, void* data, size_t size) {
 
 #### Recovery Process
 
-On startup, JSONdb performs WAL recovery:
+On startup, JDBX performs WAL recovery:
 
 1. **Read WAL Header**: Validate WAL integrity
 2. **Find Checkpoint**: Locate last valid checkpoint
@@ -104,13 +104,13 @@ WAL behavior is configurable through environment variables:
 
 ```bash
 # WAL size (default: 10MB)
-JSONDB_JDBX_WAL_SIZE=10485760
+JDBX_JDBX_WAL_SIZE=10485760
 
 # Checkpoint interval (default: 1000 operations)
-JSONDB_WAL_CHECKPOINT_INTERVAL=1000
+JDBX_WAL_CHECKPOINT_INTERVAL=1000
 
 # WAL sync mode (default: fsync)
-JSONDB_WAL_SYNC_MODE=fsync  # Options: fsync, fdatasync, none
+JDBX_WAL_SYNC_MODE=fsync  # Options: fsync, fdatasync, none
 ```
 
 ### Performance Considerations
@@ -439,4 +439,4 @@ Track field-level operation performance:
 
 ## Conclusion
 
-The combination of Write-Ahead Logging and field-level operations provides JSONdb with enterprise-grade durability and performance. WAL ensures data consistency across failures while field-level operations enable efficient manipulation of large documents. Together, they form the foundation for JSONdb's reliability and scalability in production environments.
+The combination of Write-Ahead Logging and field-level operations provides JDBX with enterprise-grade durability and performance. WAL ensures data consistency across failures while field-level operations enable efficient manipulation of large documents. Together, they form the foundation for JDBX's reliability and scalability in production environments.

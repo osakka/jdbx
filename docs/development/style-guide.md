@@ -1,6 +1,6 @@
-# JSONdb Documentation Style Guide
+# JDBX Documentation Style Guide
 
-> The definitive guide for writing clear, consistent, and maintainable documentation for JSONdb
+> The definitive guide for writing clear, consistent, and maintainable documentation for JDBX
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@
 
 ## Overview
 
-This style guide ensures consistency across all JSONdb documentation. It covers naming conventions, formatting standards, and content guidelines that all contributors should follow.
+This style guide ensures consistency across all JDBX documentation. It covers naming conventions, formatting standards, and content guidelines that all contributors should follow.
 
 ## Voice and Tone
 
@@ -40,7 +40,7 @@ This style guide ensures consistency across all JSONdb documentation. It covers 
 
 ### Examples
 
-✅ **Good**: "To start the server, run `./build/jsondb_runtime.sh start`"
+✅ **Good**: "To start the server, run `./build/jdbx_runtime.sh start`"
 
 ❌ **Avoid**: "You might want to consider possibly starting the server by executing the runtime script"
 
@@ -141,7 +141,7 @@ Common issues and solutions.
    ````markdown
    ```bash
    # Always specify the language
-   ./build/jsondb_runtime.sh start
+   ./build/jdbx_runtime.sh start
    ```
    
    ```javascript
@@ -155,7 +155,7 @@ Common issues and solutions.
 
 4. **Inline Code**
    - Use backticks for commands: `npm install`
-   - Use backticks for file paths: `/opt/jsondb/config.json`
+   - Use backticks for file paths: `/opt/jdbx/config.json`
    - Use backticks for function names: `db_insert_document()`
 
 5. **Tables**
@@ -179,7 +179,7 @@ Common issues and solutions.
 1. **Complete and Runnable**
    ```javascript
    // ✅ Good: Complete example
-   const db = require('jsondb-client');
+   const db = require('jdbx-client');
    
    async function createUser() {
      const client = await db.connect('http://localhost:5000');
@@ -205,10 +205,10 @@ Common issues and solutions.
 3. **Add Explanatory Comments**
    ```bash
    # Start the server with custom configuration
-   JSONDB_PORT=8080 ./build/jsondb_runtime.sh start
+   JDBX_PORT=8080 ./build/jdbx_runtime.sh start
    
    # Check server status
-   ./build/jsondb_runtime.sh status
+   ./build/jdbx_runtime.sh status
    ```
 
 ### Formatting
@@ -323,7 +323,7 @@ json_free(doc);
 
 2. **Feature Flags**
    ```markdown
-   > **Note**: This feature requires JSONdb v2.5.0 or later
+   > **Note**: This feature requires JDBX v2.5.0 or later
    ```
 
 3. **Deprecation Notices**

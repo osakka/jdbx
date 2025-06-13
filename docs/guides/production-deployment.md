@@ -1,4 +1,4 @@
-# JSONdb Production Readiness Plan
+# JDBX Production Readiness Plan
 
 ## Current Performance Status
 

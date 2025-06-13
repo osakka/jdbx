@@ -1,5 +1,5 @@
 /**
- * Configuration-specific string interning for JSONdb
+ * Configuration-specific string interning for JDBX
  * 
  * This implements specialized string pools for configuration values
  * to achieve the 40% allocation reduction target in Phase 2.

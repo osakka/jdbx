@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 /**
- * High-performance string interning pool for JSONdb
+ * High-performance string interning pool for JDBX
  * 
  * This provides string deduplication and interning for commonly used strings
  * such as JSON field names, document IDs, and collection names. Reduces memory

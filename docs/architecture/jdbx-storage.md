@@ -4,7 +4,7 @@
 **Last Updated**: June 12, 2025  
 **Implementation**: `src/components/database/database_jdbx_only.c`
 
-This document describes the JDBX (JSONdb eXtended) storage backend, the core storage architecture of JSONdb v3.3.0.
+This document describes the JDBX (JDBX eXtended) storage backend, the core storage architecture of JDBX v3.3.0.
 
 ## Overview
 
@@ -24,7 +24,7 @@ JDBX is a single-file, hierarchical database storage backend designed for high-p
 ### Database File Layout
 
 ```
-jsondb.jdbx
+jdbx.jdbx
 ├── Header (Magic Number: 0x4A534442 "JSDB")
 ├── Metadata Section
 │   ├── Version Information
@@ -44,10 +44,10 @@ jsondb.jdbx
 
 ```bash
 # Default database file
-/opt/jsondb/build/var/jsondb.jdbx
+/opt/jdbx/build/var/jdbx.jdbx
 
 # Configuration determines path
-JSONDB_DB_PATH=/custom/path/database.jdbx
+JDBX_DB_PATH=/custom/path/database.jdbx
 
 # Automatic .jdbx extension handling
 /path/to/dir/database     → /path/to/dir/database.jdbx
@@ -270,7 +270,7 @@ extern server_config_t* g_server_config;
 size_t initial_size = 100 * 1024 * 1024; // Default 100MB
 
 // Environment variable override
-JSONDB_JDBX_INITIAL_SIZE=268435456  # 256MB
+JDBX_JDBX_INITIAL_SIZE=268435456  # 256MB
 
 // Growth strategy: Automatic extension on demand
 ```
@@ -279,13 +279,13 @@ JSONDB_JDBX_INITIAL_SIZE=268435456  # 256MB
 
 ```bash
 # Environment configuration for JDBX
-JSONDB_DB_PATH=/fast/nvme/jsondb.jdbx        # Use fastest storage
-JSONDB_MMAP_PREFAULT=true                    # Pre-fault memory pages
-JSONDB_CACHE_SIZE=134217728                  # 128MB cache size
+JDBX_DB_PATH=/fast/nvme/jdbx.jdbx        # Use fastest storage
+JDBX_MMAP_PREFAULT=true                    # Pre-fault memory pages
+JDBX_CACHE_SIZE=134217728                  # 128MB cache size
 
 # Thread pool configuration
-JSONDB_THREAD_POOL_MIN=4                     # Minimum threads
-JSONDB_THREAD_POOL_MAX=16                    # Maximum threads
+JDBX_THREAD_POOL_MIN=4                     # Minimum threads
+JDBX_THREAD_POOL_MAX=16                    # Maximum threads
 ```
 
 ## Migration and Compatibility
@@ -335,11 +335,11 @@ if (calculated_crc != stored_crc) {
 
 ```bash
 # Enable JDBX debug logging
-JSONDB_LOG_LEVEL=DEBUG ./build/jsondb_runtime.sh start
+JDBX_LOG_LEVEL=DEBUG ./build/jdbx_runtime.sh start
 
 # Key debug messages to monitor
-grep "get_or_create_library" /opt/jsondb/build/var/jsondb.log
-grep "JDBX" /opt/jsondb/build/var/jsondb.log
+grep "get_or_create_library" /opt/jdbx/build/var/jdbx.log
+grep "JDBX" /opt/jdbx/build/var/jdbx.log
 ```
 
 ### Profiling Lock Contention

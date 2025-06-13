@@ -1,9 +1,9 @@
-# JSONdb Configuration Reference
+# JDBX Configuration Reference
 
 **Version**: 2.0.6  
 **Last Updated**: January 2025
 
-This comprehensive guide covers all configuration options for JSONdb, including environment variables, configuration files, and command-line arguments.
+This comprehensive guide covers all configuration options for JDBX, including environment variables, configuration files, and command-line arguments.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This comprehensive guide covers all configuration options for JSONdb, including 
 
 ## Configuration Hierarchy
 
-JSONdb applies configuration settings in the following order (highest precedence first):
+JDBX applies configuration settings in the following order (highest precedence first):
 
 1. **Command-line arguments** - Override all other settings
 2. **Environment variables** - Override configuration files and defaults
@@ -25,7 +25,7 @@ JSONdb applies configuration settings in the following order (highest precedence
 
 ## Configuration Files
 
-JSONdb supports two configuration file formats:
+JDBX supports two configuration file formats:
 
 ### JSON Format
 
@@ -40,12 +40,12 @@ Create a `config.json` file:
     "timeout": 30
   },
   "database": {
-    "path": "var/data/jsondb/db.json",
+    "path": "var/data/jdbx/db.json",
     "auto_save": true,
     "save_interval": 60
   },
   "rbac": {
-    "path": "var/data/jsondb/rbac.json",
+    "path": "var/data/jdbx/rbac.json",
     "auto_save": true,
     "save_interval": 60
   },
@@ -53,7 +53,7 @@ Create a `config.json` file:
     "secret": "REPLACE_THIS_WITH_A_SECURE_SECRET_KEY",
     "expiration": 86400,
     "algorithm": "HS256",
-    "issuer": "jsondb"
+    "issuer": "jdbx"
   },
   "ssl": {
     "enabled": false,
@@ -63,7 +63,7 @@ Create a `config.json` file:
   },
   "logging": {
     "level": "info",
-    "file": "var/log/jsondb/server.log",
+    "file": "var/log/jdbx/server.log",
     "console": true,
     "max_size": 10485760,
     "max_files": 5
@@ -101,12 +101,12 @@ host = 0.0.0.0
 max_connections = 100
 
 # Database configuration
-db_path = var/data/jsondb/db.json
+db_path = var/data/jdbx/db.json
 auto_save = true
 save_interval = 60
 
 # RBAC configuration
-rbac_path = var/data/jsondb/rbac.json
+rbac_path = var/data/jdbx/rbac.json
 
 # JWT configuration
 jwt_secret = REPLACE_THIS_WITH_A_SECURE_SECRET_KEY
@@ -114,104 +114,104 @@ jwt_expiration = 86400
 
 # Logging configuration
 log_level = info
-log_file = var/log/jsondb/server.log
+log_file = var/log/jdbx/server.log
 ```
 
 ### Loading Configuration Files
 
 ```bash
 # Specify configuration file
-./bin/jsondb_server -config /path/to/config.json
+./bin/jdbxd -config /path/to/config.json
 
 # Or use the runtime script
-build/jsondb_runtime.sh start --config=/path/to/config.json
+build/jdbx_runtime.sh start --config=/path/to/config.json
 ```
 
 ## Environment Variables
 
-JSONdb supports comprehensive environment variable configuration:
+JDBX supports comprehensive environment variable configuration:
 
 ### Core Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_BASE_DIR` | Base installation directory | `/opt/jsondb` |
-| `JSONDB_VAR_DIR` | Variable data directory | `${JSONDB_BASE_DIR}/var` |
-| `JSONDB_SHARE_DIR` | Shared resources directory | `${JSONDB_BASE_DIR}/share` |
+| `JDBX_BASE_DIR` | Base installation directory | `/opt/jdbx` |
+| `JDBX_VAR_DIR` | Variable data directory | `${JDBX_BASE_DIR}/var` |
+| `JDBX_SHARE_DIR` | Shared resources directory | `${JDBX_BASE_DIR}/share` |
 
 ### Server Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_PORT` | Server listening port | `5000` |
-| `JSONDB_HOST` | Server binding address | `0.0.0.0` |
-| `JSONDB_MAX_CONNECTIONS` | Maximum concurrent connections | `100` |
-| `JSONDB_TIMEOUT` | Connection timeout (seconds) | `30` |
-| `JSONDB_THREAD_POOL_MIN` | Minimum thread pool size | `4` |
-| `JSONDB_THREAD_POOL_MAX` | Maximum thread pool size | `16` |
+| `JDBX_PORT` | Server listening port | `5000` |
+| `JDBX_HOST` | Server binding address | `0.0.0.0` |
+| `JDBX_MAX_CONNECTIONS` | Maximum concurrent connections | `100` |
+| `JDBX_TIMEOUT` | Connection timeout (seconds) | `30` |
+| `JDBX_THREAD_POOL_MIN` | Minimum thread pool size | `4` |
+| `JDBX_THREAD_POOL_MAX` | Maximum thread pool size | `16` |
 
 ### Database Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_DB_PATH` | Database file path | `${JSONDB_VAR_DIR}/data/jsondb/db.json` |
-| `JSONDB_DB_DIR` | Database directory | `${JSONDB_VAR_DIR}/jsondb_database.json` |
-| `JSONDB_AUTO_SAVE` | Enable auto-save | `true` |
-| `JSONDB_SAVE_INTERVAL` | Auto-save interval (seconds) | `60` |
+| `JDBX_DB_PATH` | Database file path | `${JDBX_VAR_DIR}/data/jdbx/db.json` |
+| `JDBX_DB_DIR` | Database directory | `${JDBX_VAR_DIR}/jdbx_database.json` |
+| `JDBX_AUTO_SAVE` | Enable auto-save | `true` |
+| `JDBX_SAVE_INTERVAL` | Auto-save interval (seconds) | `60` |
 
 ### RBAC Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_RBAC_FILE` | RBAC configuration file | `${JSONDB_VAR_DIR}/data/jsondb/rbac.json` |
-| `JSONDB_RBAC_PATH` | Alternative RBAC path | `${JSONDB_VAR_DIR}/json_rbac.json` |
+| `JDBX_RBAC_FILE` | RBAC configuration file | `${JDBX_VAR_DIR}/data/jdbx/rbac.json` |
+| `JDBX_RBAC_PATH` | Alternative RBAC path | `${JDBX_VAR_DIR}/json_rbac.json` |
 
 ### JWT Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_JWT_SECRET` | JWT signing secret | `REPLACE_THIS_WITH_A_SECURE_SECRET_KEY` |
-| `JSONDB_JWT_EXPIRATION` | Token expiration (seconds) | `86400` |
-| `JSONDB_JWT_ALGORITHM` | JWT algorithm | `HS256` |
-| `JSONDB_JWT_ISSUER` | JWT issuer | `jsondb` |
+| `JDBX_JWT_SECRET` | JWT signing secret | `REPLACE_THIS_WITH_A_SECURE_SECRET_KEY` |
+| `JDBX_JWT_EXPIRATION` | Token expiration (seconds) | `86400` |
+| `JDBX_JWT_ALGORITHM` | JWT algorithm | `HS256` |
+| `JDBX_JWT_ISSUER` | JWT issuer | `jdbx` |
 
 ### SSL/TLS Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_USE_SSL` | Enable SSL/TLS | `false` |
-| `JSONDB_SSL_ENABLED` | Alternative SSL enable flag | `false` |
-| `JSONDB_SSL_CERT_FILE` | SSL certificate file | `${JSONDB_VAR_DIR}/ssl/server.crt` |
-| `JSONDB_SSL_KEY_FILE` | SSL private key file | `${JSONDB_VAR_DIR}/ssl/server.key` |
-| `JSONDB_SSL_CA_FILE` | Certificate authority file | `${JSONDB_VAR_DIR}/ssl/ca.crt` |
+| `JDBX_USE_SSL` | Enable SSL/TLS | `false` |
+| `JDBX_SSL_ENABLED` | Alternative SSL enable flag | `false` |
+| `JDBX_SSL_CERT_FILE` | SSL certificate file | `${JDBX_VAR_DIR}/ssl/server.crt` |
+| `JDBX_SSL_KEY_FILE` | SSL private key file | `${JDBX_VAR_DIR}/ssl/server.key` |
+| `JDBX_SSL_CA_FILE` | Certificate authority file | `${JDBX_VAR_DIR}/ssl/ca.crt` |
 
 ### Logging Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_LOG_LEVEL` | Log level (error, warning, info, debug, trace) | `info` |
-| `JSONDB_LOG_FILE` | Log file path | `${JSONDB_VAR_DIR}/log/jsondb/server.log` |
-| `JSONDB_LOG_CONSOLE` | Log to console | `true` |
-| `JSONDB_LOG_MAX_SIZE` | Max log file size (bytes) | `10485760` |
-| `JSONDB_LOG_MAX_FILES` | Max rotated log files | `5` |
-| `JSONDB_VERBOSE` | Enable verbose logging | `false` |
+| `JDBX_LOG_LEVEL` | Log level (error, warning, info, debug, trace) | `info` |
+| `JDBX_LOG_FILE` | Log file path | `${JDBX_VAR_DIR}/log/jdbx/server.log` |
+| `JDBX_LOG_CONSOLE` | Log to console | `true` |
+| `JDBX_LOG_MAX_SIZE` | Max log file size (bytes) | `10485760` |
+| `JDBX_LOG_MAX_FILES` | Max rotated log files | `5` |
+| `JDBX_VERBOSE` | Enable verbose logging | `false` |
 
 ### Feature Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_JS_ENABLED` | Enable JavaScript support | `true` |
-| `JSONDB_WEB_ROOT` | Web admin interface root | `${JSONDB_SHARE_DIR}/htdocs` |
-| `JSONDB_PID_FILE` | PID file path | `${JSONDB_VAR_DIR}/run/jsondb/jsondb_server.pid` |
+| `JDBX_JS_ENABLED` | Enable JavaScript support | `true` |
+| `JDBX_WEB_ROOT` | Web admin interface root | `${JDBX_SHARE_DIR}/htdocs` |
+| `JDBX_PID_FILE` | PID file path | `${JDBX_VAR_DIR}/run/jdbx/jdbxd.pid` |
 
 ### Directory Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JSONDB_VALIDATORS_DIR` | Validators directory | `${JSONDB_VAR_DIR}/validators` |
-| `JSONDB_TRANSFORMS_DIR` | Transforms directory | `${JSONDB_VAR_DIR}/transforms` |
-| `JSONDB_METRICS_DIR` | Metrics directory | `${JSONDB_VAR_DIR}/metrics` |
-| `JSONDB_BACKUP_DIR` | Backup directory | `${JSONDB_VAR_DIR}/backups` |
+| `JDBX_VALIDATORS_DIR` | Validators directory | `${JDBX_VAR_DIR}/validators` |
+| `JDBX_TRANSFORMS_DIR` | Transforms directory | `${JDBX_VAR_DIR}/transforms` |
+| `JDBX_METRICS_DIR` | Metrics directory | `${JDBX_VAR_DIR}/metrics` |
+| `JDBX_BACKUP_DIR` | Backup directory | `${JDBX_VAR_DIR}/backups` |
 
 ## Configuration Options Reference
 
@@ -228,7 +228,7 @@ JSONdb supports comprehensive environment variable configuration:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `database.path` | string | `"var/data/jsondb/db.json"` | Database file path (relative to binary) |
+| `database.path` | string | `"var/data/jdbx/db.json"` | Database file path (relative to binary) |
 | `database.auto_save` | boolean | `true` | Enable automatic saving of changes |
 | `database.save_interval` | integer | `60` | Auto-save interval in seconds |
 
@@ -236,7 +236,7 @@ JSONdb supports comprehensive environment variable configuration:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `rbac.path` | string | `"var/data/jsondb/rbac.json"` | RBAC configuration file path |
+| `rbac.path` | string | `"var/data/jdbx/rbac.json"` | RBAC configuration file path |
 | `rbac.auto_save` | boolean | `true` | Enable automatic saving of RBAC changes |
 | `rbac.save_interval` | integer | `60` | RBAC auto-save interval in seconds |
 
@@ -247,7 +247,7 @@ JSONdb supports comprehensive environment variable configuration:
 | `jwt.secret` | string | See security note | JWT signing secret key |
 | `jwt.expiration` | integer | `86400` | Token expiration time in seconds (1 day) |
 | `jwt.algorithm` | string | `"HS256"` | JWT signing algorithm |
-| `jwt.issuer` | string | `"jsondb"` | JWT issuer identifier |
+| `jwt.issuer` | string | `"jdbx"` | JWT issuer identifier |
 
 ### SSL Settings
 
@@ -263,7 +263,7 @@ JSONdb supports comprehensive environment variable configuration:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `logging.level` | string | `"info"` | Log level: error, warning, info, debug, trace |
-| `logging.file` | string | `"var/log/jsondb/server.log"` | Log file path |
+| `logging.file` | string | `"var/log/jdbx/server.log"` | Log file path |
 | `logging.console` | boolean | `true` | Also log to console/stdout |
 | `logging.max_size` | integer | `10485760` | Max log file size before rotation (10MB) |
 | `logging.max_files` | integer | `5` | Number of rotated log files to keep |
@@ -309,12 +309,12 @@ JSONdb supports comprehensive environment variable configuration:
     "timeout": 60
   },
   "database": {
-    "path": "/data/jsondb/production.jdb",
+    "path": "/data/jdbx/production.jdb",
     "auto_save": true,
     "save_interval": 30
   },
   "rbac": {
-    "path": "/data/jsondb/rbac.json",
+    "path": "/data/jdbx/rbac.json",
     "auto_save": true,
     "save_interval": 30
   },
@@ -322,16 +322,16 @@ JSONdb supports comprehensive environment variable configuration:
     "secret": "your-very-secure-secret-key-here",
     "expiration": 3600,
     "algorithm": "HS256",
-    "issuer": "my-jsondb-server"
+    "issuer": "my-jdbx-server"
   },
   "ssl": {
     "enabled": true,
-    "cert_path": "/etc/ssl/certs/jsondb.crt",
-    "key_path": "/etc/ssl/private/jsondb.key"
+    "cert_path": "/etc/ssl/certs/jdbx.crt",
+    "key_path": "/etc/ssl/private/jdbx.key"
   },
   "logging": {
     "level": "info",
-    "file": "/var/log/jsondb/server.log",
+    "file": "/var/log/jdbx/server.log",
     "console": false,
     "max_size": 52428800,
     "max_files": 10
@@ -360,68 +360,68 @@ JSONdb supports comprehensive environment variable configuration:
 
 ### Environment File Example
 
-Create a file `jsondb.env`:
+Create a file `jdbx.env`:
 
 ```bash
 #!/bin/bash
-# JSONdb Production Environment Configuration
+# JDBX Production Environment Configuration
 
 # Base directories
-export JSONDB_BASE_DIR="/opt/jsondb"
-export JSONDB_VAR_DIR="/var/lib/jsondb"
-export JSONDB_LOG_DIR="/var/log/jsondb"
+export JDBX_BASE_DIR="/opt/jdbx"
+export JDBX_VAR_DIR="/var/lib/jdbx"
+export JDBX_LOG_DIR="/var/log/jdbx"
 
 # Server configuration
-export JSONDB_PORT="5432"
-export JSONDB_HOST="0.0.0.0"
-export JSONDB_MAX_CONNECTIONS="200"
-export JSONDB_THREAD_POOL_MIN="8"
-export JSONDB_THREAD_POOL_MAX="32"
+export JDBX_PORT="5432"
+export JDBX_HOST="0.0.0.0"
+export JDBX_MAX_CONNECTIONS="200"
+export JDBX_THREAD_POOL_MIN="8"
+export JDBX_THREAD_POOL_MAX="32"
 
 # Database paths
-export JSONDB_DB_PATH="/data/jsondb/production.jdb"
-export JSONDB_RBAC_FILE="/data/jsondb/rbac.json"
+export JDBX_DB_PATH="/data/jdbx/production.jdb"
+export JDBX_RBAC_FILE="/data/jdbx/rbac.json"
 
 # Security
-export JSONDB_JWT_SECRET="your-very-secure-secret-key-here"
-export JSONDB_JWT_EXPIRATION="3600"
-export JSONDB_USE_SSL="true"
-export JSONDB_SSL_CERT_FILE="/etc/ssl/certs/jsondb.crt"
-export JSONDB_SSL_KEY_FILE="/etc/ssl/private/jsondb.key"
+export JDBX_JWT_SECRET="your-very-secure-secret-key-here"
+export JDBX_JWT_EXPIRATION="3600"
+export JDBX_USE_SSL="true"
+export JDBX_SSL_CERT_FILE="/etc/ssl/certs/jdbx.crt"
+export JDBX_SSL_KEY_FILE="/etc/ssl/private/jdbx.key"
 
 # Logging
-export JSONDB_LOG_LEVEL="info"
-export JSONDB_LOG_FILE="${JSONDB_LOG_DIR}/server.log"
-export JSONDB_LOG_CONSOLE="false"
+export JDBX_LOG_LEVEL="info"
+export JDBX_LOG_FILE="${JDBX_LOG_DIR}/server.log"
+export JDBX_LOG_CONSOLE="false"
 
 # Features
-export JSONDB_JS_ENABLED="true"
-export JSONDB_VERBOSE="false"
+export JDBX_JS_ENABLED="true"
+export JDBX_VERBOSE="false"
 ```
 
 Load and use:
 
 ```bash
 # Using runtime script
-build/jsondb_runtime.sh start --env-file=jsondb.env
+build/jdbx_runtime.sh start --env-file=jdbx.env
 
 # Or source directly
-source jsondb.env
-./bin/jsondb_server
+source jdbx.env
+./bin/jdbxd
 ```
 
 ### Command-Line Override Example
 
 ```bash
 # Override specific settings via command line
-./bin/jsondb_server \
+./bin/jdbxd \
   -config production.json \
   -port 5678 \
   -host 127.0.0.1 \
   -verbose
 
 # Or with environment variables
-JSONDB_PORT=5678 JSONDB_LOG_LEVEL=debug ./bin/jsondb_server
+JDBX_PORT=5678 JDBX_LOG_LEVEL=debug ./bin/jdbxd
 ```
 
 ## Security Considerations

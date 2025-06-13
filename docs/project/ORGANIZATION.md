@@ -1,13 +1,13 @@
-# JSONdb Project Organization
+# JDBX Project Organization
 
-This document defines the organization principles for the JSONdb project to maintain clarity and prevent duplication.
+This document defines the organization principles for the JDBX project to maintain clarity and prevent duplication.
 
 ## Directory Structure Principles
 
 The project follows a conventional structure with clear responsibilities:
 
 ```
-jsondb/
+jdbx/
 ├── build/            # GENERATED: Build artifacts only, never source code
 ├── docs/             # Documentation for all aspects of the project
 ├── scripts/          # Well-defined utility scripts (never hacks)

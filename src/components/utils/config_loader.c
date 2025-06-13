@@ -128,8 +128,8 @@ void config_init_binary_dir(void) {
         LOG_WARNING("Cannot get current working directory: %s", strerror(errno));
         LOG_DEBUG("Falling back to base path resolution.");
       }
-      /* Try JSONDB_BASE_PATH environment variable first */
-      const char* base_path = getenv("JSONDB_BASE_PATH");
+      /* Try JDBX_BASE_PATH environment variable first */
+      const char* base_path = getenv("JDBX_BASE_PATH");
       if (base_path) {
         strncpy(g_binary_dir, base_path, PATH_MAX - 1);
       } else {

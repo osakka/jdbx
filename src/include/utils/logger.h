@@ -1,5 +1,5 @@
-#ifndef JSONDB_LOGGER_H
-#define JSONDB_LOGGER_H
+#ifndef JDBX_LOGGER_H
+#define JDBX_LOGGER_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,4 +107,4 @@ void logger_trace(trace_category_t category, const char* file, int line,
 #define TRACE_METRICS(...)  logger_trace(TRACE_METRICS, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define TRACE_MEMORY(...)   logger_trace(TRACE_MEMORY, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
-#endif /* JSONDB_LOGGER_H */
+#endif /* JDBX_LOGGER_H */

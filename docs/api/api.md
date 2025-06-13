@@ -1,6 +1,6 @@
-# JSONdb REST API Documentation
+# JDBX REST API Documentation
 
-Complete REST API reference for JSONdb server.
+Complete REST API reference for JDBX server.
 
 **Version**: 3.1.0  
 **Last Updated**: June 8, 2025  
@@ -31,7 +31,7 @@ Complete REST API reference for JSONdb server.
 
 ## Authentication
 
-The JSONdb API uses JWT (JSON Web Token) for authentication. Include the token in the `Authorization` header:
+The JDBX API uses JWT (JSON Web Token) for authentication. Include the token in the `Authorization` header:
 
 ```
 Authorization: Bearer <your-jwt-token>
@@ -838,8 +838,8 @@ Lists available metric types.
 
 ## Configuration
 
-JSONdb implements a three-tier configuration system with the following priority:
-1. **Environment File** (lowest): `/opt/jsondb/share/config/jsondb.env`
+JDBX implements a three-tier configuration system with the following priority:
+1. **Environment File** (lowest): `/opt/jdbx/share/config/jdbx.env`
 2. **Binary Flags** (medium): Command-line arguments
 3. **Database Config** (highest): `_system_config` collection
 
@@ -857,7 +857,7 @@ Returns current server configuration.
     "ssl_enabled": true,
     "ssl_cert": "/etc/ssl/certs/server.pem",
     "ssl_key": "/etc/ssl/private/server.key",
-    "db_path": "var/data/jsondb/db.jdb",
+    "db_path": "var/data/jdbx/db.jdb",
     "cache_enabled": true,
     "cache_size": 10485760,
     "log_level": "INFO",
@@ -1421,7 +1421,7 @@ curl -X POST http://localhost:5000/api/transactions/txn-123/commit \
 
 ## Notes
 
-1. **Binary Persistence**: Database is automatically saved to `var/data/jsondb/db.jdb` using binary format with TLV encoding
+1. **Binary Persistence**: Database is automatically saved to `var/data/jdbx/db.jdb` using binary format with TLV encoding
 2. **Adaptive Indexing**: v3.1.0 includes automatic index creation based on query patterns (10+ queries, 50ms+ average time)
 3. **Three-Tier Configuration**: Environment → CLI flags → Database config (highest priority)
 4. **Metrics Storage**: Metrics are stored in the `_system_metrics` collection with configurable retention (default: 15 data points)
