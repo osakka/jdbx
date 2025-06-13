@@ -360,21 +360,15 @@ bool skiplist_iterator_next(skiplist_iterator_t* iter,
                            void** value, size_t* value_len) {
     if (!iter || !iter->current) return false;
     
-    /* Return current item */
+    /* Return direct pointers to current item - no copying needed */
     if (key) {
-        *key = malloc(iter->current->key_len);
-        if (*key) {
-            memcpy(*key, iter->current->key, iter->current->key_len);
-            if (key_len) *key_len = iter->current->key_len;
-        }
+        *key = iter->current->key;
+        if (key_len) *key_len = iter->current->key_len;
     }
     
     if (value) {
-        *value = malloc(iter->current->value_len);
-        if (*value) {
-            memcpy(*value, iter->current->value, iter->current->value_len);
-            if (value_len) *value_len = iter->current->value_len;
-        }
+        *value = iter->current->value;
+        if (value_len) *value_len = iter->current->value_len;
     }
     
     /* Move to next non-marked node */

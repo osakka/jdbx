@@ -13,6 +13,8 @@ case "$1" in
         pkill -f jdbxd 2>/dev/null || true
         sleep 1
         rm -f "$PID_FILE"
+        # Clean database for fresh start
+        rm -f build/var/database.jdb build/var/jdbx.jdbx build/var/jdbx.wal
         JDBX_DEFERRED_BOOTSTRAP=1 JDBX_INITIAL_ADMIN_USER=admin JDBX_INITIAL_ADMIN_PASSWORD=admin $DAEMON --daemon
         ;;
     stop)

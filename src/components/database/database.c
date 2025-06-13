@@ -564,6 +564,8 @@ json_value_t* db_list_collections(database_t* db) {
         }
         
         pthread_rwlock_unlock(&lib->lock);
+        
+        /* Note: skiplist iterator returns direct pointers, no cleanup needed */
     }
     
     if (lib_iter) {
@@ -1079,6 +1081,8 @@ json_value_t* db_find(database_t* db, const char* collection_path, const char* q
                 count++;
             }
         }
+        
+        /* Note: skiplist iterator returns direct pointers, no cleanup needed */
     }
     
     skiplist_iterator_destroy(iter);
