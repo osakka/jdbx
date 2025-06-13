@@ -1,3 +1,18 @@
+/**
+ * @file json.c
+ * @brief High-performance JSON parsing and manipulation library
+ * 
+ * Provides comprehensive JSON parsing, creation, and manipulation functions
+ * optimized for the JDBX database system. Features include:
+ * 
+ * - Fast streaming parser with minimal memory allocation
+ * - Native support for all JSON types (object, array, string, number, boolean, null)
+ * - Memory-efficient string handling with buffer pool integration
+ * - Deep copy operations for document cloning
+ * - Type-safe accessor functions with proper error handling
+ * - Optimized for database document storage and retrieval
+ */
+
 #include "utils/json.h"
 #include "utils/debug.h"
 #include "utils/buffer_pool.h"
@@ -11,7 +26,16 @@ static json_value_t* parse_value(const char** json);
 static char* stringify_value(json_value_t* value);
 static void skip_whitespace(const char** json);
 
-/* Helper functions for working with JSON values */
+/*==============================================================================
+ * JSON Value Accessor Functions
+ *============================================================================*/
+
+/**
+ * Get the type of a JSON value
+ * 
+ * @param value JSON value to examine
+ * @return JSON type enum, JSON_NULL if value is NULL
+ */
 json_type_t json_get_type(json_value_t* value) {
   if (!value) return JSON_NULL;
   return value->type;

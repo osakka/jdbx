@@ -1,7 +1,26 @@
-/*
- * JDBX Database - Lock-Free Hierarchical Implementation with JDBX Storage
- * Single source of truth: Libraries → Collections → Documents
- * Storage: JDBX page manager with WAL, B-tree, and caching
+/**
+ * @file database.c
+ * @brief Core JDBX database implementation with lock-free architecture
+ * 
+ * This module implements the main database interface using JDBX storage backend
+ * with Write-Ahead Logging (WAL), B-tree structures, and integrated caching.
+ * 
+ * Architecture:
+ * - Hierarchical structure: Libraries → Collections → Documents
+ * - Lock-free reads with minimal locking for writes
+ * - Single source of truth with global database instance
+ * - UUID-based document identification (no _id fields)
+ * 
+ * Storage Backend:
+ * - JDBX page manager with WAL for durability
+ * - B-tree indexing for performance
+ * - Skiplist structures for lock-free operations
+ * - Integrated caching for frequently accessed data
+ * 
+ * Thread Safety:
+ * - Lock-free library lookup using atomic operations
+ * - Reader/writer locks at collection level
+ * - Dedicated library creation mutex for race prevention
  */
 
 #include <stdio.h>
@@ -28,51 +47,76 @@
 #include "utils/skiplist.h"
 #include "utils/buffer_pool.h"
 
-/* Clean hierarchical database structure */
+/**
+ * Library structure - top level container for collections
+ * 
+ * Libraries provide namespace isolation and organizational structure.
+ * Each library contains its own set of collections and maintains
+ * independent access control and configuration.
+ */
 typedef struct library {
-    char name[64];
-    void* collections;  /* Skiplist of collections */
-    pthread_rwlock_t lock;
+    char name[64];               /**< Library name (max 63 chars + null) */
+    void* collections;           /**< Skiplist of collection_t structures */
+    pthread_rwlock_t lock;       /**< Reader/writer lock for thread safety */
 } library_t;
 
+/**
+ * Collection structure - container for documents within a library
+ * 
+ * Collections hold documents and their associated indexes, schemas,
+ * and metadata. Each collection maintains its own locking for
+ * concurrent access while preserving data consistency.
+ */
 typedef struct collection {
-    char name[64];
-    char library[64];
-    void* documents;    /* Skiplist of documents */
-    void* indexes;      /* Skiplist of indexes */
-    json_value_t* schema;
-    pthread_rwlock_t lock;
+    char name[64];               /**< Collection name (max 63 chars + null) */
+    char library[64];            /**< Parent library name for reference */
+    void* documents;             /**< Skiplist of document pointers by UUID */
+    void* indexes;               /**< Skiplist of field indexes for queries */
+    json_value_t* schema;        /**< Optional JSON schema for validation */
+    pthread_rwlock_t lock;       /**< Reader/writer lock for thread safety */
 } collection_t;
 
-/* JDBX Database with lock-free architecture */
+/**
+ * Main JDBX database structure with lock-free architecture
+ * 
+ * This structure represents the complete database instance including
+ * persistent storage, in-memory indexes, caching, and coordination
+ * mechanisms for concurrent access.
+ */
 typedef struct {
     /* JDBX storage engine */
-    jdbx_page_manager_t* page_manager;  /* WAL, B-tree, caching */
+    jdbx_page_manager_t* page_manager;   /**< WAL, B-tree, caching backend */
     
     /* Lock-free hierarchical structure */
-    void* libraries;           /* Skiplist of libraries */
-    pthread_rwlock_t lock;
-    bool initialized;
-    char path[256];
+    void* libraries;                     /**< Skiplist of library_t structures */
+    pthread_rwlock_t lock;               /**< Database-wide coordination lock */
+    bool initialized;                    /**< Initialization status flag */
+    char path[256];                      /**< Database file path */
     
-    /* Integrated components */
-    generic_cache_t* query_cache;
-    generic_cache_t* doc_cache;
+    /* Integrated performance components */
+    generic_cache_t* query_cache;        /**< Query result cache (1000 entries) */
+    generic_cache_t* doc_cache;          /**< Document cache (10000 entries) */
     
-    /* Compatibility facade */
-    database_t facade;
+    /* Legacy API compatibility */
+    database_t facade;                   /**< Compatibility interface wrapper */
 } jdbx_database_t;
 
-/* Global database instance */
+/**
+ * Global database instance - single source of truth
+ * 
+ * This is the primary database instance used throughout the application.
+ * Initialized once during startup and shared across all components.
+ * Thread-safe access is managed through the embedded locking mechanisms.
+ */
 static jdbx_database_t g_db = {
-    .page_manager = NULL,
-    .libraries = NULL,
-    .lock = PTHREAD_RWLOCK_INITIALIZER,
-    .initialized = false,
-    .path = {0},
-    .query_cache = NULL,
-    .doc_cache = NULL,
-    .facade = {0}
+    .page_manager = NULL,                    /**< Initialized by db_init() */
+    .libraries = NULL,                       /**< Created during initialization */
+    .lock = PTHREAD_RWLOCK_INITIALIZER,      /**< Ready for immediate use */
+    .initialized = false,                    /**< Set to true after db_init() */
+    .path = {0},                             /**< Set during initialization */
+    .query_cache = NULL,                     /**< Created during initialization */
+    .doc_cache = NULL,                       /**< Created during initialization */
+    .facade = {0}                            /**< Legacy compatibility interface */
 };
 
 /* Forward declarations */
@@ -81,14 +125,32 @@ static collection_t* get_or_create_collection(const char* library_name, const ch
 static int parse_collection_path(const char* path, char* library, char* collection);
 static int skiplist_string_compare(const void* a, size_t a_len, const void* b, size_t b_len);
 
-/* Helper: String comparison for skiplist */
+/**
+ * String comparison function for skiplist operations
+ * 
+ * @param a First string to compare
+ * @param a_len Length of first string (unused - strings are null-terminated)
+ * @param b Second string to compare  
+ * @param b_len Length of second string (unused - strings are null-terminated)
+ * @return Standard strcmp result: <0, 0, or >0
+ */
 static int skiplist_string_compare(const void* a, size_t a_len, const void* b, size_t b_len) {
     (void)a_len; /* Strings are null-terminated */
     (void)b_len;
     return strcmp((const char*)a, (const char*)b);
 }
 
-/* Helper: Parse library/collection path */
+/**
+ * Parse collection path into library and collection components
+ * 
+ * Handles paths in format "library/collection" or just "collection".
+ * If no library is specified, "default" library is used.
+ * 
+ * @param path Input path string (e.g., "mylib/mycoll" or "mycoll")
+ * @param library Output buffer for library name (must be 64+ bytes)
+ * @param collection Output buffer for collection name (must be 64+ bytes)
+ * @return 0 on success, -1 on invalid parameters
+ */
 static int parse_collection_path(const char* path, char* library, char* collection) {
     if (!path || !library || !collection) return -1;
     
@@ -222,6 +284,23 @@ static collection_t* get_or_create_collection(const char* library_name, const ch
  * Database Initialization - Pure JDBX Implementation
  *============================================================================*/
 
+/**
+ * Initialize JDBX database instance
+ * 
+ * Creates or opens a JDBX database at the specified path, initializing all
+ * internal structures, caches, and subsystems. This is the main entry point
+ * for database operations and must be called before any other database functions.
+ * 
+ * Features initialized:
+ * - JDBX page manager with WAL support
+ * - Lock-free skiplist structures for libraries/collections
+ * - Query and document caches for performance
+ * - System libraries and collections
+ * - Adaptive indexing and query tracking
+ * 
+ * @param path Database file path (NULL for default: /opt/jdbx/build/var/jdbx.jdbx)
+ * @return Database instance pointer on success, NULL on failure
+ */
 database_t* db_init(const char* path) {
     pthread_rwlock_wrlock(&g_db.lock);
     
@@ -483,6 +562,24 @@ json_value_t* db_list_collections(database_t* db) {
  * Document Operations
  *============================================================================*/
 
+/**
+ * Insert a document into the specified collection
+ * 
+ * Creates a new document in the collection with automatic UUID generation
+ * if not provided. Updates all relevant indexes and stores persistently
+ * in the JDBX backend. Thread-safe operation with proper locking.
+ * 
+ * Document Processing:
+ * - Generates UUID if not present (format: "doc-timestamp-random")
+ * - Adds _created_at and _modified_at timestamps
+ * - Updates all field indexes for query performance
+ * - Stores in both memory (skiplist) and persistent storage (JDBX)
+ * 
+ * @param db Database instance (currently unused - uses global instance)
+ * @param collection_path Collection path (format: "library/collection" or "collection")
+ * @param document JSON document to insert (will be modified with UUID/timestamps)
+ * @return Copy of inserted document with generated fields, NULL on failure
+ */
 json_value_t* db_insert(database_t* db, const char* collection_path, json_value_t* document) {
     (void)db; /* Unused - we use global */
     

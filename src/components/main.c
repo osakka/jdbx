@@ -1,3 +1,29 @@
+/**
+ * @file main.c
+ * @brief JDBX Database Server - Main Entry Point
+ * 
+ * This is the primary entry point for the JDBX database server daemon.
+ * Handles command-line argument parsing, initialization sequence coordination,
+ * and graceful startup/shutdown procedures.
+ * 
+ * Initialization Sequence:
+ * 1. Configuration loading and validation
+ * 2. Logger initialization with configured levels
+ * 3. Database backend initialization (JDBX with WAL)
+ * 4. RBAC system setup with JWT authentication
+ * 5. API routing and handler registration
+ * 6. Thread pool and network socket initialization
+ * 7. Daemon mode setup (if requested)
+ * 8. Main server event loop
+ * 
+ * Features:
+ * - Command-line configuration overrides
+ * - Daemon mode with PID file management  
+ * - Graceful shutdown on SIGTERM/SIGINT
+ * - Production-ready defaults with development overrides
+ * - Comprehensive error handling and recovery
+ */
+
 #include "init.h"
 #include "utils/logger.h"
 #include "utils/config_loader.h"
