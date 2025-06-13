@@ -1016,8 +1016,26 @@ void db_complete_bootstrap(database_t* db) {
 
 int db_needs_bootstrap(database_t* db) {
     (void)db;
-    /* Check if system collections exist and have data */
-    return !db_collection_exists(db, "system/users") || !db_collection_exists(db, "system/roles");
+    /* Check if admin user exists in system/users collection */
+    if (!db_collection_exists(db, "system/users") || !db_collection_exists(db, "system/roles")) {
+        return 1; /* Collections don't exist */
+    }
+    
+    /* Check if there are any users in system/users collection */
+    json_value_t* empty_query = json_create_object();
+    json_value_t* users = db_query_documents(db, "system/users", empty_query);
+    json_free(empty_query);
+    
+    if (!users) {
+        return 1; /* Query failed, probably need bootstrap */
+    }
+    
+    /* Check if users array is empty */
+    json_value_t* documents = json_object_get(users, "documents");
+    int needs_bootstrap = (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0);
+    
+    json_free(users);
+    return needs_bootstrap;
 }
 
 /* Cache operations */
