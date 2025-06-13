@@ -20,9 +20,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 /* Maximum recursion depth to prevent stack overflow */
-#define MAX_JSON_RECURSION_DEPTH 100
+#define MAX_JSON_RECURSION_DEPTH 20  /* Reduced from 100 to prevent stack overflow */
+
+/* Maximum JSON input size to prevent memory exhaustion */
+#define MAX_JSON_INPUT_SIZE (5 * 1024 * 1024)  /* 5MB limit */
+
+/* Maximum string length in JSON */
+#define MAX_JSON_STRING_LENGTH (1024 * 1024)  /* 1MB per string */
 
 /* Forward declarations */
 static json_value_t* parse_value_with_depth(const char** json, int depth);
@@ -404,18 +411,33 @@ static char* parse_string(const char** json) {
   
   const char* start = *json;
   char* result = NULL;
+  size_t char_count = 0;
   
-  /* Find closing quote */
+  /* Find closing quote with bounds checking */
   while (**json && **json != '"') {
+    /* Check string length limit to prevent memory exhaustion */
+    if (char_count >= MAX_JSON_STRING_LENGTH) {
+      /* String too long - return NULL to indicate parsing error */
+      return NULL;
+    }
+    
     /* Handle escaped characters */
     if (**json == '\\' && *(*json + 1) != '\0') {
       (*json)++;
+      char_count++;
     }
     (*json)++;
+    char_count++;
   }
   
   if (**json == '"') {
     size_t length = *json - start;
+    
+    /* Double-check length before allocation */
+    if (length > MAX_JSON_STRING_LENGTH) {
+      return NULL;
+    }
+    
     result = (char*)buffer_pool_alloc(length + 1);
     if (result) {
       /* Copy string without the quotes */
@@ -931,6 +953,48 @@ static json_value_t* parse_array(const char** json) {
 json_value_t* json_parse(const char* json_str) {
   if (!json_str) {
     return NULL;
+  }
+  
+  /* Check input size to prevent memory exhaustion attacks */
+  size_t input_length = strlen(json_str);
+  if (input_length > MAX_JSON_INPUT_SIZE) {
+    /* Input too large - refuse to parse */
+    return NULL;
+  }
+  
+  /* Check for obviously malformed input patterns that could cause infinite loops */
+  if (input_length > 0) {
+    /* Count braces to catch obviously malformed JSON early */
+    int open_braces = 0, close_braces = 0;
+    int open_brackets = 0, close_brackets = 0;
+    bool in_string = false;
+    bool escaped = false;
+    
+    for (size_t i = 0; i < input_length; i++) {
+      char c = json_str[i];
+      
+      if (!in_string) {
+        if (c == '{') open_braces++;
+        else if (c == '}') close_braces++;
+        else if (c == '[') open_brackets++;
+        else if (c == ']') close_brackets++;
+        else if (c == '"') in_string = true;
+      } else {
+        if (escaped) {
+          escaped = false;
+        } else if (c == '\\') {
+          escaped = true;
+        } else if (c == '"') {
+          in_string = false;
+        }
+      }
+    }
+    
+    /* Basic sanity check - braces should be balanced or at least not obviously wrong */
+    if (open_braces > close_braces + 10 || open_brackets > close_brackets + 10) {
+      /* Likely malformed JSON with missing closing braces/brackets */
+      return NULL;
+    }
   }
   
   const char* json = json_str;

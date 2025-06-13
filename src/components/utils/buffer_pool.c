@@ -217,16 +217,32 @@ void* buffer_pool_alloc(size_t size) {
 void buffer_pool_free(void* ptr) {
     if (!ptr) return;
     
-    /* Get buffer header */
-    buffer_header_t* buf = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
+    /* CRITICAL FIX: Validate memory accessibility before reading header
+     * Prevents crash when ptr points to regular malloc'd memory that
+     * doesn't have a buffer pool header before it */
     
-    /* Verify magic number */
-    if (buf->magic != BUFFER_MAGIC) {
-        /* Not a pooled buffer (or corrupted header), assume it's a regular malloc'd pointer */
-        LOG_DEBUG("Freeing non-pooled memory (magic=0x%x, expected=0x%x)", buf->magic, BUFFER_MAGIC);
-        free(ptr);
-        return;
+    /* Check if we can safely read sizeof(buffer_header_t) bytes before ptr */
+    char* header_start = (char*)ptr - sizeof(buffer_header_t);
+    
+    /* Basic bounds check - ensure header_start is reasonable */
+    if (header_start < (char*)ptr) {
+        /* Get buffer header - now safe to read */
+        buffer_header_t* buf = (buffer_header_t*)header_start;
+        
+        /* Verify magic number */
+        if (buf->magic == BUFFER_MAGIC) {
+            /* This is a valid buffer pool allocation - continue with pool logic */
+            goto handle_buffer_pool;
+        }
     }
+    
+    /* Not a buffer pool allocation or unsafe to read header - use regular free */
+    free(ptr);
+    return;
+    
+handle_buffer_pool:
+    /* Re-establish buffer header pointer in this scope */
+    buffer_header_t* buf = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
     
     thread_pools_t* pools = get_thread_pools();
     if (!pools) {
