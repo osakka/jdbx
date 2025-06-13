@@ -1,3 +1,26 @@
+/**
+ * @file thread_pool.c
+ * @brief High-performance scalable thread pool implementation
+ * 
+ * Provides a production-ready thread pool with dynamic scaling, work queue
+ * management, and comprehensive monitoring. Optimized for JDBX server
+ * workloads with configurable thread management policies.
+ * 
+ * Features:
+ * - Dynamic thread scaling (min/max bounds with idle timeout)
+ * - Thread-safe work queue with condition variable signaling
+ * - Graceful shutdown with worker thread coordination
+ * - Comprehensive metrics and monitoring
+ * - Configurable queue depth and thread lifecycle management
+ * - Support for high-concurrency server operations
+ * 
+ * Architecture:
+ * - Work items queued via thread-safe FIFO queue
+ * - Worker threads block on condition variables for efficiency
+ * - Manager thread handles scaling decisions and cleanup
+ * - Proper resource cleanup on shutdown with timeout handling
+ */
+
 #include "core/thread_pool.h"
 #include "utils/logger.h"
 #include <stdio.h>

@@ -1,3 +1,33 @@
+/**
+ * @file ssl.c
+ * @brief SSL/TLS implementation for secure JDBX communications
+ * 
+ * Provides comprehensive SSL/TLS support for JDBX database server with
+ * enterprise-grade security features and performance optimizations.
+ * Handles secure client connections, certificate management, and
+ * encrypted data transmission.
+ * 
+ * Security Features:
+ * - TLS 1.3 support with backward compatibility
+ * - X.509 certificate validation and management
+ * - Session caching for performance (128 sessions, 5-minute timeout)
+ * - Proper SSL read/write with retry logic for non-blocking sockets
+ * - Protection against common SSL/TLS vulnerabilities
+ * - Large file transfer support with proper buffer handling
+ * 
+ * Performance Optimizations:
+ * - SSL session reuse to reduce handshake overhead
+ * - Optimized buffer management for large data transfers
+ * - Non-blocking I/O with proper WANT_READ/WANT_WRITE handling
+ * - Connection pooling integration
+ * 
+ * Certificate Management:
+ * - Standard certificate paths (/etc/ssl/certs/, /etc/ssl/private/)
+ * - Runtime certificate configuration
+ * - Certificate validation and chain verification
+ * - Support for both self-signed and CA-signed certificates
+ */
+
 #include "utils/ssl.h"
 #include "utils/logger.h"
 

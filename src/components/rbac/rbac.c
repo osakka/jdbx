@@ -1,3 +1,27 @@
+/**
+ * @file rbac.c
+ * @brief Role-Based Access Control (RBAC) security implementation
+ * 
+ * Implements comprehensive RBAC system for JDBX database server with
+ * enterprise-grade security features including secure password hashing,
+ * role-based permissions, and JWT-based authentication.
+ * 
+ * Security Features:
+ * - PBKDF2 password hashing with salt (10,000 iterations)
+ * - HMAC-SHA-256 for message authentication
+ * - Role-based permission matrix with granular control
+ * - Session management with JWT tokens
+ * - Database-backed user and role persistence
+ * - Protection against timing attacks and brute force
+ * 
+ * Architecture:
+ * - User authentication with secure credential verification
+ * - Role assignment and permission inheritance
+ * - Permission checking for API endpoints and database operations
+ * - Integration with database backend for persistence
+ * - JWT token generation and validation for stateless authentication
+ */
+
 #include "rbac/rbac.h"
 #include "rbac/rbac_database.h"
 #include "utils/logger.h"

@@ -1,3 +1,37 @@
+/**
+ * @file api.c
+ * @brief Core API routing and request handling system
+ * 
+ * Implements the central API dispatch system for JDBX database server,
+ * handling HTTP request routing, authentication, authorization, and
+ * response generation. Provides unified interface for all database
+ * and administrative operations.
+ * 
+ * Request Processing Pipeline:
+ * 1. HTTP request parsing and validation
+ * 2. Route matching and parameter extraction
+ * 3. Authentication verification (JWT token validation)
+ * 4. Authorization checking (RBAC permission verification)
+ * 5. Handler function dispatch with context
+ * 6. Response formatting and error handling
+ * 7. Metrics collection and logging
+ * 
+ * Supported Operations:
+ * - Database CRUD operations (collections, documents, indexes)
+ * - User management and authentication
+ * - System administration and configuration
+ * - Metrics and monitoring endpoints
+ * - JavaScript integration and execution
+ * - Library management and multi-tenancy
+ * 
+ * Features:
+ * - RESTful API design with consistent URL patterns
+ * - JWT-based stateless authentication
+ * - Role-based access control with fine-grained permissions
+ * - Request/response metrics and performance monitoring
+ * - Comprehensive error handling with appropriate HTTP status codes
+ */
+
 #include "api/api.h"
 #include "api/session_api.h"
 #include "api/library_api.h"

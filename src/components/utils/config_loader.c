@@ -1,3 +1,40 @@
+/**
+ * @file config_loader.c
+ * @brief Three-tier configuration management system for JDBX
+ * 
+ * Implements comprehensive configuration loading and management with
+ * a sophisticated priority system and runtime flexibility. Supports
+ * multiple configuration sources with proper precedence handling.
+ * 
+ * Configuration Priority (lowest to highest):
+ * 1. **Compiled Defaults**: Hard-coded production-ready values
+ * 2. **Environment File**: Key-value pairs from jdbx.env
+ * 3. **Environment Variables**: Runtime environment overrides  
+ * 4. **Command Line Flags**: Explicit runtime parameters
+ * 5. **Database Config**: Live configuration updates (highest priority)
+ * 
+ * Features:
+ * - Automatic environment file discovery and loading
+ * - Path normalization and validation
+ * - SSL certificate path resolution
+ * - Thread pool configuration with scaling parameters
+ * - Database backend configuration (JDBX vs MMAP)
+ * - Network settings with security defaults
+ * - Performance tuning parameters
+ * - Development vs production configuration profiles
+ * 
+ * Path Management:
+ * - Automatic relative to absolute path conversion
+ * - Binary directory detection and resolution
+ * - SSL certificate standard path discovery
+ * - Database file path generation and validation
+ * 
+ * Runtime Updates:
+ * - Live configuration updates via database backend
+ * - Configuration reload without server restart
+ * - Thread-safe configuration access
+ */
+
 #include "utils/config_loader.h"
 #include "utils/config_defaults.h"
 #include "utils/json.h"

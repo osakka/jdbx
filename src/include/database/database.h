@@ -1,3 +1,28 @@
+/**
+ * @file database.h
+ * @brief JDBX Database System - Core Interface Definitions
+ * 
+ * This header defines the primary database interface for the JDBX system,
+ * including data structures, function prototypes, and configuration constants
+ * for database operations, schema validation, and persistence management.
+ * 
+ * Key Components:
+ * - Database instance management and lifecycle
+ * - Document CRUD operations with UUID-based identification
+ * - Collection and library management
+ * - Schema validation and enforcement
+ * - Index creation and management
+ * - Persistence and caching configuration
+ * - Thread-safe operations with proper locking
+ * 
+ * Architecture:
+ * - Hierarchical structure: Libraries → Collections → Documents
+ * - UUID-based document identification (no _id fields)
+ * - JDBX storage backend with WAL support
+ * - Lock-free reads with minimal write locking
+ * - Integrated caching and indexing
+ */
+
 #ifndef DATABASE_H
 #define DATABASE_H
 
