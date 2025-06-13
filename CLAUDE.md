@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 13, 2025 (v4.0.0 - JDBX Rebranding)
+**Last Updated**: June 13, 2025 (v4.0.1 - Authentication Session Lookup Fix)
 
 ## Core Principles
 
@@ -496,7 +496,33 @@ Regular code audits ensure quality:
    - PBKDF2 placeholder with SHA256 fallback (temporary)
    - All system actors comply with RBAC
 
-## Recent Updates (v3.1.1 - June 9, 2025)
+## Recent Updates (v4.0.1 - June 13, 2025)
+
+### Critical Authentication Session Lookup Fix
+1. **Database Query Format Standardization**: Fixed inconsistent return format from `db_query_documents`
+   - Root cause: Unified documents restructure changed query response format but authentication handler expected old format
+   - Solution: Standardized `db_query_documents` to return `{"documents": array, "count": N}` consistently
+   - Updated authentication handler to extract `documents` field from wrapped response
+   - Zero regressions: All API endpoints continue working with consistent format
+
+2. **Session Management Resolution**: Complete authentication flow now works end-to-end
+   - Login endpoint: ✅ Credential validation and JWT token generation
+   - Session storage: ✅ Sessions properly stored in system/sessions collection  
+   - Session lookup: ✅ Authentication can find and validate stored sessions
+   - Protected endpoints: ✅ JWT tokens work for accessing authenticated APIs
+
+3. **Single Source of Truth Enforcement**: Maintained consistent database interface
+   - One unified query response format across all components
+   - No duplicate implementations of query result processing
+   - Clean integration with existing API endpoints and authentication flows
+
+### Technical Implementation Details
+- **File**: `src/components/database/database.c` - `db_query_documents()` function standardized
+- **File**: `src/components/core/authentication_handler.c` - Updated to handle wrapped response format
+- **Testing**: Full authentication cycle confirmed (login → JWT → API access)
+- **Compatibility**: Zero breaking changes to existing API consumers
+
+## Previous Updates (v3.1.1 - June 9, 2025)
 
 ### Code Quality Improvements
 1. **Zero Compiler Warnings**: Achieved clean compilation with -Wall -Wextra
