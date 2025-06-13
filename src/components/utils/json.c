@@ -21,7 +21,11 @@
 #include <string.h>
 #include <ctype.h>
 
+/* Maximum recursion depth to prevent stack overflow */
+#define MAX_JSON_RECURSION_DEPTH 100
+
 /* Forward declarations */
+static json_value_t* parse_value_with_depth(const char** json, int depth);
 static json_value_t* parse_value(const char** json);
 static char* stringify_value(json_value_t* value);
 static void skip_whitespace(const char** json);
@@ -425,7 +429,11 @@ static char* parse_string(const char** json) {
   return result;
 }
 
-static json_value_t* parse_object(const char** json) {
+static json_value_t* parse_object_with_depth(const char** json, int depth) {
+  if (depth > MAX_JSON_RECURSION_DEPTH) {
+    return NULL; /* Recursion depth exceeded */
+  }
+  
   if (**json != '{') {
     return NULL;
   }
@@ -470,7 +478,7 @@ static json_value_t* parse_object(const char** json) {
     skip_whitespace(json);
     
     /* Parse value */
-    json_value_t* value = parse_value(json);
+    json_value_t* value = parse_value_with_depth(json, depth + 1);
     if (!value) {
       buffer_pool_free(key);
       json_free(object);
@@ -498,7 +506,11 @@ static json_value_t* parse_object(const char** json) {
   return object;
 }
 
-static json_value_t* parse_array(const char** json) {
+static json_value_t* parse_array_with_depth(const char** json, int depth) {
+  if (depth > MAX_JSON_RECURSION_DEPTH) {
+    return NULL; /* Recursion depth exceeded */
+  }
+  
   if (**json != '[') {
     return NULL;
   }
@@ -523,7 +535,7 @@ static json_value_t* parse_array(const char** json) {
     skip_whitespace(json);
     
     /* Parse value */
-    json_value_t* value = parse_value(json);
+    json_value_t* value = parse_value_with_depth(json, depth + 1);
     if (!value) {
       json_free(array);
       return NULL;
@@ -549,7 +561,11 @@ static json_value_t* parse_array(const char** json) {
   return array;
 }
 
-static json_value_t* parse_value(const char** json) {
+static json_value_t* parse_value_with_depth(const char** json, int depth) {
+  if (depth > MAX_JSON_RECURSION_DEPTH) {
+    return NULL; /* Recursion depth exceeded */
+  }
+  
   skip_whitespace(json);
   
   if (**json == '\0') {
@@ -557,9 +573,9 @@ static json_value_t* parse_value(const char** json) {
   }
   
   if (**json == '{') {
-    return parse_object(json);
+    return parse_object_with_depth(json, depth + 1);
   } else if (**json == '[') {
-    return parse_array(json);
+    return parse_array_with_depth(json, depth + 1);
   } else if (**json == '"') {
     char* str = parse_string(json);
     if (!str) {
@@ -900,6 +916,18 @@ static char* stringify_value(json_value_t* value) {
 }
 
 /* Public API functions */
+static json_value_t* parse_value(const char** json) {
+  return parse_value_with_depth(json, 0);
+}
+
+static json_value_t* parse_object(const char** json) {
+  return parse_object_with_depth(json, 0);
+}
+
+static json_value_t* parse_array(const char** json) {
+  return parse_array_with_depth(json, 0);
+}
+
 json_value_t* json_parse(const char* json_str) {
   if (!json_str) {
     return NULL;
