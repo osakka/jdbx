@@ -316,7 +316,7 @@ void jwt_free(jwt_token_t* token) {
     if (token->payload->iss) buffer_pool_free_safe(token->payload->iss);
     if (token->payload->sub) buffer_pool_free_safe(token->payload->sub);
     if (token->payload->aud) buffer_pool_free_safe(token->payload->aud);
-    if (token->payload->jti) buffer_pool_free_safe(token->payload->jti);
+    if (token->payload->jti) free(token->payload->jti);
     if (token->payload->claims) json_free(token->payload->claims);
     buffer_pool_free_safe(token->payload);
   }
@@ -737,9 +737,9 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* jti = json_object_get(payload, "jti");
   if (jti && jti->type == JSON_STRING) {
     if (token->payload->jti) {
-      buffer_pool_free_safe(token->payload->jti);
+      free(token->payload->jti);
     }
-    token->payload->jti = buffer_pool_strdup(jti->value.string);
+    token->payload->jti = strdup(jti->value.string);
   }
   
   /* Add all other claims */
@@ -768,7 +768,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   
   /* Set signature and token string */
   token->signature = buffer_pool_strdup(signature_b64);
-  token->token_str = buffer_pool_strdup(token_str);
+  token->token_str = strdup(token_str);
   
   /* Clean up */
   json_free(header);
@@ -1057,7 +1057,7 @@ void jwt_payload_free(jwt_payload_t* payload) {
   if (payload->iss) buffer_pool_free_safe(payload->iss);
   if (payload->sub) buffer_pool_free_safe(payload->sub);
   if (payload->aud) buffer_pool_free_safe(payload->aud);
-  if (payload->jti) buffer_pool_free_safe(payload->jti);
+  if (payload->jti) free(payload->jti);  /* strdup allocated */
   if (payload->claims) json_free(payload->claims);
   
   buffer_pool_free_safe(payload);

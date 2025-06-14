@@ -5,6 +5,7 @@
 #include "database/database.h"
 #include "utils/logger.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
@@ -256,19 +257,20 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
       json_value_t* last_seen_val = json_object_get(session, "last_seen");
       
       if (user_val && user_val->type == JSON_STRING) {
-        session_user = user_val->value.string;
+        /* Create a safe copy of session user to avoid use-after-free */
+        session_user = buffer_pool_strdup(user_val->value.string);
       }
       if (id_val && id_val->type == JSON_STRING) {
-        session_id = id_val->value.string;
+        session_id = buffer_pool_strdup(id_val->value.string);
       }
       if (expires_val && expires_val->type == JSON_STRING) {
-        session_expires = expires_val->value.string;
+        session_expires = buffer_pool_strdup(expires_val->value.string);
       }
       if (created_val && created_val->type == JSON_STRING) {
-        session_created = created_val->value.string;
+        session_created = buffer_pool_strdup(created_val->value.string);
       }
       if (last_seen_val && last_seen_val->type == JSON_STRING) {
-        session_last_seen = last_seen_val->value.string;
+        session_last_seen = buffer_pool_strdup(last_seen_val->value.string);
       }
     }
     json_free(session_results);
@@ -368,6 +370,23 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   if (g_logger) {
     TRACE_AUTH("Authentication flow end - client=%s, result=%s, user=%s", 
         client_ip, result ? "success" : "failure", session_user);
+  }
+  
+  /* Clean up session variable copies to prevent use-after-free */
+  if (session_user) {
+    buffer_pool_free_safe((char*)session_user);
+  }
+  if (session_id) {
+    buffer_pool_free_safe((char*)session_id);
+  }
+  if (session_expires) {
+    buffer_pool_free_safe((char*)session_expires);
+  }
+  if (session_created) {
+    buffer_pool_free_safe((char*)session_created);
+  }
+  if (session_last_seen) {
+    buffer_pool_free_safe((char*)session_last_seen);
   }
   
   free(token);

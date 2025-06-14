@@ -243,8 +243,13 @@ bool skiplist_delete(skiplist_t* list, const void* key, size_t key_len) {
             return false;
         }
         
-        /* Mark for deletion from top to bottom */
+        /* Mark for deletion from top to bottom with hazard pointer protection */
         skiplist_node_t* node_to_delete = succs[0];
+        
+        /* Protect the node we're about to delete to prevent use-after-free */
+        HP_PROTECT_PTR(hp_rec, 1, node_to_delete);
+        __sync_synchronize(); /* Ensure protection is visible to other threads */
+        
         for (int level = SKIPLIST_MAX_LEVEL - 1; level >= 1; level--) {
             succ = atomic_load(&node_to_delete->next[level]);
             marked = ((uintptr_t)succ & 1);
@@ -346,9 +351,12 @@ skiplist_iterator_t* skiplist_iterator_create(skiplist_t* list) {
     return iter;
 }
 
-/* Destroy iterator */
+/* Destroy iterator with hazard pointer cleanup */
 void skiplist_iterator_destroy(skiplist_iterator_t* iter) {
     if (!iter) return;
+    
+    /* Add memory barrier to ensure all pending operations complete */
+    __sync_synchronize();
     
     hp_release_record(iter->hp_record);
     free(iter);
