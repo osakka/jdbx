@@ -45,18 +45,36 @@ static char* base64_encode(const unsigned char* input, int length) {
 
 /* Base64 decode a string */
 static unsigned char* base64_decode(const char* input, int* output_length) {
+  if (!input || !output_length) return NULL;
+  
   int input_len = strlen(input);
   if (input_len % 4 != 0) return NULL;
   
+  /* Validate input contains only valid base64 characters */
+  for (int k = 0; k < input_len; k++) {
+    char c = input[k];
+    if (!(c >= 'A' && c <= 'Z') && 
+        !(c >= 'a' && c <= 'z') && 
+        !(c >= '0' && c <= '9') && 
+        c != '+' && c != '/' && c != '=') {
+      /* Invalid base64 character found */
+      return NULL;
+    }
+  }
+  
   int decoded_len = input_len / 4 * 3;
-  if (input[input_len-1] == '=') decoded_len--;
-  if (input[input_len-2] == '=') decoded_len--;
+  if (input_len > 0 && input[input_len-1] == '=') decoded_len--;
+  if (input_len > 1 && input[input_len-2] == '=') decoded_len--;
   
   unsigned char* output = (unsigned char*)buffer_pool_alloc(decoded_len + 1);
   if (!output) return NULL;
   
   /* Create reverse lookup table */
-  unsigned char decode_table[256] = {0};
+  unsigned char decode_table[256];
+  /* Initialize all to invalid value */
+  memset(decode_table, 255, sizeof(decode_table));
+  
+  /* Set valid characters */
   for (int i = 0; i < 64; i++) {
     decode_table[(unsigned char)base64_chars[i]] = i;
   }
@@ -594,26 +612,40 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
 
 /* Decode JWT token */
 jwt_token_t* jwt_decode(const char* token_str) {
-  if (!token_str) {
+  if (!token_str || strlen(token_str) == 0) {
+    return NULL;
+  }
+  
+  /* Basic format validation - JWT must have at least 2 dots */
+  int dot_count = 0;
+  for (const char* p = token_str; *p; p++) {
+    if (*p == '.') dot_count++;
+  }
+  if (dot_count != 2) {
+    /* Invalid JWT format - must have exactly 2 dots */
     return NULL;
   }
   
   /* Split token into parts */
   char* token_copy = buffer_pool_strdup(token_str);
+  if (!token_copy) {
+    return NULL;
+  }
+  
   char* header_b64 = strtok(token_copy, ".");
-  if (!header_b64) {
+  if (!header_b64 || strlen(header_b64) == 0) {
     buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   char* payload_b64 = strtok(NULL, ".");
-  if (!payload_b64) {
+  if (!payload_b64 || strlen(payload_b64) == 0) {
     buffer_pool_free_safe(token_copy);
     return NULL;
   }
   
   char* signature_b64 = strtok(NULL, ".");
-  if (!signature_b64) {
+  if (!signature_b64 || strlen(signature_b64) == 0) {
     buffer_pool_free_safe(token_copy);
     return NULL;
   }
