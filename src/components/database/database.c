@@ -696,8 +696,20 @@ json_value_t* db_find_by_id(database_t* db, const char* collection_path, const c
     pthread_rwlock_unlock(&lib->lock);
     
     void* doc_ptr = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
-    json_value_t* doc = doc_ptr ? *(json_value_t**)doc_ptr : NULL;
-    json_value_t* result = doc ? json_deep_copy(doc) : NULL;
+    json_value_t* doc = NULL;
+    json_value_t* result = NULL;
+    
+    if (doc_ptr) {
+        /* Load pointer atomically - volatile ensures we read the current value */
+        volatile json_value_t** volatile_ptr = (volatile json_value_t**)doc_ptr;
+        doc = *volatile_ptr;
+        __sync_synchronize(); /* Memory barrier */
+        
+        /* Safely perform deep copy with null check */
+        if (doc) {
+            result = json_deep_copy(doc);
+        }
+    }
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -805,17 +817,25 @@ json_value_t* db_update(database_t* db, const char* collection_path, const char*
     /* Index maintenance is handled by the adaptive indexer in the background */
     LOG_DEBUG("Skipping index updates during document update to prevent iterator race conditions");
     
-    /* Update document in storage - use safer in-place replacement to avoid skiplist_delete */
+    /* Update document in storage - use atomic pointer replacement to prevent race conditions */
     size_t old_doc_len;
     void* old_doc_ptr = skiplist_search(coll->documents, id, strlen(id) + 1, &old_doc_len);
     if (old_doc_ptr) {
-        json_value_t* old_doc = *(json_value_t**)old_doc_ptr;
-        json_free(old_doc);
-        
-        /* In-place replacement: update the pointer in the existing skiplist entry */
-        /* This avoids the dangerous skiplist_delete operation that causes race conditions */
-        *(json_value_t**)old_doc_ptr = doc;
+        /* Atomic pointer replacement to prevent JSON deep copy race conditions */
+        json_value_t* old_doc = (json_value_t*)__sync_lock_test_and_set((json_value_t**)old_doc_ptr, doc);
         __sync_synchronize();  /* Memory barrier to ensure visibility */
+        
+        /* 
+         * NOTE: We cannot safely free old_doc here due to potential race conditions.
+         * Other threads might still be accessing it via json_deep_copy().
+         * This creates a memory leak, but prevents crashes.
+         * A proper solution would require reference counting or hazard pointers.
+         * For now, we accept the leak to maintain stability.
+         */
+        if (old_doc) {
+            /* TODO: Implement proper reference counting to safely free old_doc */
+            LOG_DEBUG("Document replaced atomically (old document leaked to prevent race conditions)");
+        }
     } else {
         /* Document doesn't exist, insert new entry */
         skiplist_insert(coll->documents, id, strlen(id) + 1, &doc, sizeof(json_value_t*));
@@ -940,8 +960,10 @@ json_value_t* db_find(database_t* db, const char* collection_path, const char* q
     while (skiplist_iterator_next(iter, &key, &key_len, &value, &value_len)) {
         if (limit > 0 && count >= limit) break;
         
-        /* value contains the pointer value, dereference it */
-        json_value_t* doc = *(json_value_t**)value;
+        /* Load pointer atomically - volatile ensures we read the current value */
+        volatile json_value_t** volatile_ptr = (volatile json_value_t**)value;
+        json_value_t* doc = *volatile_ptr;
+        __sync_synchronize(); /* Memory barrier */
         
         /* Safety check for null document */
         if (!doc) {
