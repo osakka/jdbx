@@ -223,13 +223,10 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   
   /* Create timestamp */
   time_t timestamp = time(NULL);
-  char iso_time[32];
-  struct tm* tm_info = gmtime(&timestamp);
-  strftime(iso_time, sizeof(iso_time), "%Y-%m-%dT%H:%M:%SZ", tm_info);
   
   /* Create data point */
   json_value_t* data_point = json_deep_copy(current_data);
-  json_object_set(data_point, "timestamp", json_create_string(iso_time));
+  json_object_set(data_point, "timestamp", json_create_integer(timestamp));
   
   /* Find or get metric ID */
   char* metric_id = *metric_id_ptr;
@@ -251,7 +248,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
     int values_changed = !current_values || !json_equals(current_values, current_data);
     
     /* Always update the timestamp */
-    json_object_set(existing, "updated_at", json_create_string(iso_time));
+    json_object_set(existing, "updated_at", json_create_integer(timestamp));
     
     /* Only append new data point if values have changed */
     if (values_changed) {
@@ -313,8 +310,8 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
     
     /* Set current values and timestamps */
     json_object_set(new_doc, "current", json_deep_copy(current_data));
-    json_object_set(new_doc, "created_at", json_create_string(iso_time));
-    json_object_set(new_doc, "updated_at", json_create_string(iso_time));
+    json_object_set(new_doc, "created_at", json_create_integer(timestamp));
+    json_object_set(new_doc, "updated_at", json_create_integer(timestamp));
     
     document_to_save = new_doc;
   }

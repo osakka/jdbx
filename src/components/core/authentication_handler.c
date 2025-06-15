@@ -105,13 +105,10 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(system_lib_doc, "owner", json_create_string("admin"));
               json_object_set(system_lib_doc, "description", json_create_string("System library for internal operations"));
               
-              /* Add timestamps */
+              /* Add timestamps - use Unix timestamp integers for consistency */
               time_t now = time(NULL);
-              char timestamp[64];
-              struct tm* utc_tm = gmtime(&now);
-              strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
-              json_object_set(system_lib_doc, "created_at", json_create_string(timestamp));
-              json_object_set(system_lib_doc, "updated_at", json_create_string(timestamp));
+              json_object_set(system_lib_doc, "created_at", json_create_integer(now));
+              json_object_set(system_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert system library document */
               json_value_t* system_lib_result = db_insert_document(ctx->db, "documents", system_lib_doc);
@@ -133,8 +130,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(default_lib_doc, "template", json_create_string("standard"));
               json_object_set(default_lib_doc, "owner", json_create_string("admin"));
               json_object_set(default_lib_doc, "description", json_create_string("Default library for general use"));
-              json_object_set(default_lib_doc, "created_at", json_create_string(timestamp));
-              json_object_set(default_lib_doc, "updated_at", json_create_string(timestamp));
+              json_object_set(default_lib_doc, "created_at", json_create_integer(now));
+              json_object_set(default_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert default library document */
               json_value_t* default_lib_result = db_insert_document(ctx->db, "documents", default_lib_doc);

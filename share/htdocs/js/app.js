@@ -4,13 +4,13 @@ let authToken = localStorage.getItem('jdbx_auth_token');
 let currentView = 'dashboard';
 let refreshInterval = null;
 
-// Polling configuration
+// Polling configuration - conservative intervals to prevent server overload
 const POLLING_INTERVALS = {
-    dashboard: 30000,     // 30 seconds for dashboard
-    browser: 60000,       // 60 seconds for browser
-    metrics: 30000,       // 30 seconds for metrics
-    rbac: 30000,          // 30 seconds for RBAC (faster for session updates)
-    operations: 60000     // 60 seconds for operations
+    dashboard: 60000,     // 60 seconds for dashboard
+    browser: 300000,      // 5 minutes for browser (very conservative)
+    metrics: 60000,       // 60 seconds for metrics
+    rbac: 60000,          // 60 seconds for RBAC
+    operations: 120000    // 2 minutes for operations
 };
 
 // Chart instances
@@ -322,11 +322,28 @@ function switchView(view) {
                 break;
             case 'browser':
                 initializeBrowser();
-                // Set up polling for browser if collection is selected
-                if (POLLING_INTERVALS.browser && currentCollection) {
-                    refreshInterval = setInterval(() => {
-                        if (currentCollection) {
-                            loadDocuments(currentCollection, true);
+                // Set up polling for browser - refresh both libraries/collections list and documents
+                if (POLLING_INTERVALS.browser) {
+                    refreshInterval = setInterval(async () => {
+                        try {
+                            // Only poll if we're still in browser view to avoid unnecessary requests
+                            if (currentView !== 'browser') {
+                                return;
+                            }
+                            
+                            // Refresh libraries and collections list with timeout
+                            await Promise.race([
+                                loadLibraries(),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error('Polling timeout')), 10000))
+                            ]);
+                            
+                            // If a collection is selected, also refresh its documents
+                            if (currentCollection) {
+                                loadDocuments(currentCollection, true);
+                            }
+                        } catch (error) {
+                            console.warn('Browser polling error (non-critical):', error.message);
+                            // Don't stop polling on error, just log it
                         }
                     }, POLLING_INTERVALS.browser);
                 }

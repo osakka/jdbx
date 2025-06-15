@@ -238,11 +238,11 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_free(session_query);
   
   int session_found = 0;
-  const char* session_user = "unknown";
-  const char* session_id = "unknown";
-  const char* session_expires = "unknown";
-  const char* session_created = "unknown";
-  const char* session_last_seen = "unknown";
+  const char* session_user = NULL;
+  const char* session_id = NULL;
+  const char* session_expires = NULL;
+  const char* session_created = NULL;
+  const char* session_last_seen = NULL;
   
   if (session_results) {
     json_value_t* documents = json_object_get(session_results, "documents");

@@ -95,12 +95,10 @@ static int create_system_actor(database_t* db, const char* username, const char*
     /* No password for system actors - they can't login */
     json_object_set(actor, "password_hash", json_create_null());
     
-    /* Timestamps */
-    char timestamp[64];
+    /* Timestamps - use Unix timestamp integers for consistency */
     time_t now = time(NULL);
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    json_object_set(actor, "created_at", json_create_string(timestamp));
-    json_object_set(actor, "updated_at", json_create_string(timestamp));
+    json_object_set(actor, "created_at", json_create_integer(now));
+    json_object_set(actor, "updated_at", json_create_integer(now));
     
     /* Owner is self */
     json_object_set(actor, "owner", json_create_string(username));
@@ -734,14 +732,12 @@ void add_document_system_fields(json_value_t* doc, const char* type,
     }
     
     /* Timestamps */
-    char timestamp[64];
     time_t now = time(NULL);
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     
     if (!json_object_get(doc, "created_at")) {
-        json_object_set(doc, "created_at", json_create_string(timestamp));
+        json_object_set(doc, "created_at", json_create_integer(now));
     }
-    json_object_set(doc, "updated_at", json_create_string(timestamp));
+    json_object_set(doc, "updated_at", json_create_integer(now));
     
     /* Version if not set */
     if (!json_object_get(doc, "version")) {
