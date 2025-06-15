@@ -39,8 +39,8 @@ test_data.json
 test_logs/
 var/
 build/metrics/
-# We track libjsondb.a to ensure consistent binary state
-# build/lib/libjsondb.a
+# Build artifacts - never commit compiled libraries
+build/lib/
 build/obj/
 build/test_js_run.js
 

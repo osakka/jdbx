@@ -985,16 +985,57 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
           json_object_set(enhanced_coll, "name", json_create_string(coll_path));
         }
         
-        /* Query document count for this collection */
-        json_value_t* count_result = db_find(ctx->db, coll_path, NULL, NULL, -1, 0, NULL);
-        size_t doc_count = 0;
-        if (count_result && count_result->type == JSON_ARRAY) {
-          doc_count = json_array_size(count_result);
-          json_free(count_result);
+        /* Query document count using unified documents approach */
+        json_value_t* count_query = json_create_object();
+        
+        /* Get collection and library names from the enhanced collection object */
+        json_value_t* coll_name_val = json_object_get(enhanced_coll, "name");
+        json_value_t* lib_name_val = json_object_get(enhanced_coll, "library");
+        
+        if (coll_name_val && lib_name_val && 
+            coll_name_val->type == JSON_STRING && lib_name_val->type == JSON_STRING) {
+          
+          const char* collection_name = coll_name_val->value.string;
+          const char* library_name = lib_name_val->value.string;
+          
+          /* Map collection name to document type (same logic as document query) */
+          const char* doc_type = collection_name;
+          if (strcmp(collection_name, "users") == 0) doc_type = "user";
+          else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
+          else if (strcmp(collection_name, "permissions") == 0) doc_type = "permission";
+          else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
+          else if (strcmp(collection_name, "libraries") == 0) doc_type = "library";
+          else if (strcmp(collection_name, "collections") == 0) doc_type = "collection";
+          else if (strcmp(collection_name, "functions") == 0) doc_type = "function";
+          else if (strcmp(collection_name, "validators") == 0) doc_type = "validator";
+          else if (strcmp(collection_name, "transformers") == 0) doc_type = "transformer";
+          else if (strcmp(collection_name, "schemas") == 0) doc_type = "schema";
+          else if (strcmp(collection_name, "indexes") == 0) doc_type = "index";
+          else if (strcmp(collection_name, "metrics") == 0) doc_type = "metric";
+          else if (strcmp(collection_name, "audit") == 0) doc_type = "audit";
+          
+          json_object_set(count_query, "type", json_create_string(doc_type));
+          json_object_set(count_query, "library", json_create_string(library_name));
+        
+          json_value_t* count_result = db_query_documents(ctx->db, "documents", count_query);
+          
+          size_t doc_count = 0;
+          if (count_result) {
+            json_value_t* docs_array = json_object_get(count_result, "documents");
+            if (docs_array && docs_array->type == JSON_ARRAY) {
+              doc_count = json_array_size(docs_array);
+            }
+            json_free(count_result);
+          }
+          
+          /* Add document count to collection object */
+          json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
+        } else {
+          /* Fallback if collection/library names not available */
+          json_object_set(enhanced_coll, "document_count", json_create_number(0));
         }
         
-        /* Add document count to collection object */
-        json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
+        json_free(count_query);
         
         json_array_append(enhanced_collections, enhanced_coll);
       }
@@ -1619,98 +1660,53 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
    */
   json_value_t* documents = NULL;
   
-  /* Check if this is a system collection that should use unified documents */
-  if (strcmp(collection_name, "users") == 0 ||
-      strcmp(collection_name, "roles") == 0 ||
-      strcmp(collection_name, "permissions") == 0 ||
-      strcmp(collection_name, "sessions") == 0 ||
-      strcmp(collection_name, "libraries") == 0 ||
-      strcmp(collection_name, "collections") == 0 ||
-      strcmp(collection_name, "functions") == 0 ||
-      strcmp(collection_name, "validators") == 0 ||
-      strcmp(collection_name, "transformers") == 0 ||
-      strcmp(collection_name, "schemas") == 0 ||
-      strcmp(collection_name, "indexes") == 0 ||
-      strcmp(collection_name, "metrics") == 0 ||
-      strcmp(collection_name, "audit") == 0) {
-    
-    /* Query unified documents collection with type and library filters */
-    json_value_t* unified_query = json_create_object();
-    
-    /* Map collection name to document type */
-    const char* doc_type = NULL;
-    if (strcmp(collection_name, "users") == 0) doc_type = "user";
-    else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
-    else if (strcmp(collection_name, "permissions") == 0) doc_type = "permission";
-    else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
-    else if (strcmp(collection_name, "libraries") == 0) doc_type = "library";
-    else if (strcmp(collection_name, "collections") == 0) doc_type = "collection";
-    else if (strcmp(collection_name, "functions") == 0) doc_type = "function";
-    else if (strcmp(collection_name, "validators") == 0) doc_type = "validator";
-    else if (strcmp(collection_name, "transformers") == 0) doc_type = "transformer";
-    else if (strcmp(collection_name, "schemas") == 0) doc_type = "schema";
-    else if (strcmp(collection_name, "indexes") == 0) doc_type = "index";
-    else if (strcmp(collection_name, "metrics") == 0) doc_type = "metric";
-    else if (strcmp(collection_name, "audit") == 0) doc_type = "audit";
-    
-    if (doc_type) {
-      json_object_set(unified_query, "type", json_create_string(doc_type));
-      json_object_set(unified_query, "library", json_create_string(library_name));
-      
-      /* Merge user query if provided */
-      if (query && query->type == JSON_OBJECT) {
-        json_value_t* keys = json_object_get_keys(query);
-        if (keys && keys->type == JSON_ARRAY) {
-          for (size_t i = 0; i < json_array_size(keys); i++) {
-            json_value_t* key = json_array_get(keys, i);
-            if (key && key->type == JSON_STRING) {
-              json_value_t* value = json_object_get(query, key->value.string);
-              if (value) {
-                json_object_set(unified_query, key->value.string, json_clone(value));
-              }
-            }
+  /* Unified Documents Architecture: Everything queries the documents collection with type filters */
+  json_value_t* unified_query = json_create_object();
+  
+  /* Map collection name to document type */
+  const char* doc_type = collection_name; /* Default: use collection name as type */
+  
+  /* Special mappings for common collection names */
+  if (strcmp(collection_name, "users") == 0) doc_type = "user";
+  else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
+  else if (strcmp(collection_name, "permissions") == 0) doc_type = "permission";
+  else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
+  else if (strcmp(collection_name, "libraries") == 0) doc_type = "library";
+  else if (strcmp(collection_name, "collections") == 0) doc_type = "collection";
+  else if (strcmp(collection_name, "functions") == 0) doc_type = "function";
+  else if (strcmp(collection_name, "validators") == 0) doc_type = "validator";
+  else if (strcmp(collection_name, "transformers") == 0) doc_type = "transformer";
+  else if (strcmp(collection_name, "schemas") == 0) doc_type = "schema";
+  else if (strcmp(collection_name, "indexes") == 0) doc_type = "index";
+  else if (strcmp(collection_name, "metrics") == 0) doc_type = "metric";
+  else if (strcmp(collection_name, "audit") == 0) doc_type = "audit";
+  
+  /* Always add type and library filters for unified query */
+  json_object_set(unified_query, "type", json_create_string(doc_type));
+  json_object_set(unified_query, "library", json_create_string(library_name));
+  
+  /* Merge user query if provided */
+  if (query && query->type == JSON_OBJECT) {
+    json_value_t* keys = json_object_get_keys(query);
+    if (keys && keys->type == JSON_ARRAY) {
+      for (size_t i = 0; i < json_array_size(keys); i++) {
+        json_value_t* key = json_array_get(keys, i);
+        if (key && key->type == JSON_STRING) {
+          json_value_t* value = json_object_get(query, key->value.string);
+          if (value) {
+            json_object_set(unified_query, key->value.string, json_clone(value));
           }
-          json_free(keys);
         }
       }
-      
-      LOG_DEBUG("api_handle_documents_query: querying unified documents with type='%s', library='%s'", doc_type, library_name);
-      
-      /* Query the unified documents collection */
-      documents = db_query_documents(ctx->db, "documents", unified_query);
-      json_free(unified_query);
-    }
-  } else {
-    /* Regular user collection - query directly with full library/collection path */
-    char full_collection_path[256];
-    snprintf(full_collection_path, sizeof(full_collection_path), "%s/%s", library_name, collection_name);
-    LOG_DEBUG("api_handle_documents_query: querying user collection '%s'", full_collection_path);
-    documents = db_query_documents(ctx->db, full_collection_path, query);
-    
-    if (documents) {
-      json_value_t* docs_array = json_object_get(documents, "documents");
-      if (docs_array) {
-        LOG_DEBUG("api_handle_documents_query: query returned %zu documents", json_array_size(docs_array));
-      } else {
-        LOG_DEBUG("api_handle_documents_query: no documents array in result");
-      }
+      json_free(keys);
     }
   }
   
-  /* HYBRID FALLBACK: If no documents found in unified system, check physical collection */
-  if (documents && json_object_get(documents, "documents") && 
-      json_array_size(json_object_get(documents, "documents")) == 0) {
-    
-    /* Free the empty result */
-    json_free(documents);
-    
-    /* Try querying the physical collection with library prefix */
-    char full_collection_path[256];
-    snprintf(full_collection_path, sizeof(full_collection_path), "%s/%s", library_name, collection_name);
-    
-    LOG_DEBUG("api_handle_documents_query: falling back to physical collection '%s'", full_collection_path);
-    documents = db_query_documents(ctx->db, full_collection_path, query);
-  }
+  LOG_DEBUG("api_handle_documents_query: querying unified documents with type='%s', library='%s'", doc_type, library_name);
+  
+  /* Query the unified documents collection - single source of truth */
+  documents = db_query_documents(ctx->db, "documents", unified_query);
+  json_free(unified_query);
   
   if (query) {
     json_free(query);

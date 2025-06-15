@@ -625,9 +625,55 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
         strncpy(doc_id, json_get_string(id_val), sizeof(doc_id) - 1);
     }
     
-    /* Add metadata */
-    json_object_set(document, "created_at", json_create_integer(time(NULL)));
-    json_object_set(document, "modified_at", json_create_integer(time(NULL)));
+    /* Add mandatory system metadata for unified documents architecture */
+    time_t now = time(NULL);
+    json_object_set(document, "created_at", json_create_integer(now));
+    json_object_set(document, "modified_at", json_create_integer(now));
+    
+    /* Ensure mandatory 'library' field is set */
+    json_value_t* library_val = json_object_get(document, "library");
+    if (!library_val) {
+        json_object_set(document, "library", json_create_string(library));
+    }
+    
+    /* Ensure mandatory 'type' field is set - infer from collection name if missing */
+    json_value_t* type_val = json_object_get(document, "type");
+    if (!type_val) {
+        const char* doc_type = collection; /* Default: collection name as type */
+        
+        /* Map common collection names to proper document types */
+        if (strcmp(collection, "users") == 0) doc_type = "user";
+        else if (strcmp(collection, "roles") == 0) doc_type = "role";
+        else if (strcmp(collection, "sessions") == 0) doc_type = "session";
+        else if (strcmp(collection, "libraries") == 0) doc_type = "library";
+        else if (strcmp(collection, "permissions") == 0) doc_type = "permission";
+        else if (strcmp(collection, "functions") == 0) doc_type = "function";
+        else if (strcmp(collection, "validators") == 0) doc_type = "validator";
+        else if (strcmp(collection, "transformers") == 0) doc_type = "transformer";
+        else if (strcmp(collection, "schemas") == 0) doc_type = "schema";
+        else if (strcmp(collection, "indexes") == 0) doc_type = "index";
+        else if (strcmp(collection, "metrics") == 0) doc_type = "metric";
+        else if (strcmp(collection, "audit") == 0) doc_type = "audit";
+        
+        json_object_set(document, "type", json_create_string(doc_type));
+    }
+    
+    /* Ensure 'name' field exists - use username, title, or uuid as fallback */
+    json_value_t* name_val = json_object_get(document, "name");
+    if (!name_val) {
+        /* Try common name fields */
+        json_value_t* username_val = json_object_get(document, "username");
+        json_value_t* title_val = json_object_get(document, "title");
+        
+        if (username_val && username_val->type == JSON_STRING) {
+            json_object_set(document, "name", json_create_string(username_val->value.string));
+        } else if (title_val && title_val->type == JSON_STRING) {
+            json_object_set(document, "name", json_create_string(title_val->value.string));
+        } else {
+            /* Fallback to uuid */
+            json_object_set(document, "name", json_create_string(doc_id));
+        }
+    }
     
     LOG_DEBUG("db_insert: Acquiring write lock for collection %s", collection_path);
     pthread_rwlock_wrlock(&coll->lock);
@@ -756,6 +802,14 @@ json_value_t* db_update(database_t* db, const char* collection_path, const char*
     pthread_rwlock_wrlock(&coll->lock);
     pthread_rwlock_unlock(&lib->lock);
     
+    /* Helper function to check if a field is protected */
+    auto int is_protected_field(const char* field_name) {
+        return (strcmp(field_name, "uuid") == 0 ||
+                strcmp(field_name, "type") == 0 ||
+                strcmp(field_name, "library") == 0 ||
+                strcmp(field_name, "created_at") == 0);
+    };
+    
     /* Apply updates */
     if (update->type == JSON_OBJECT) {
         json_value_t* keys = json_object_get_keys(update);
@@ -778,8 +832,11 @@ json_value_t* db_update(database_t* db, const char* collection_path, const char*
                                 if (set_key_val && set_key_val->type == JSON_STRING) {
                                     const char* set_key = json_get_string(set_key_val);
                                     json_value_t* set_value = json_object_get(value, set_key);
-                                    if (set_value) {
+                                    /* Protect mandatory system fields in $set operations */
+                                    if (set_value && !is_protected_field(set_key)) {
                                         json_object_set(doc, set_key, json_deep_copy(set_value));
+                                    } else if (is_protected_field(set_key)) {
+                                        LOG_DEBUG("Blocked attempt to modify protected field via $set: %s", set_key);
                                     }
                                 }
                             }
@@ -794,15 +851,22 @@ json_value_t* db_update(database_t* db, const char* collection_path, const char*
                                 json_value_t* unset_key_val = json_array_get(unset_keys, j);
                                 if (unset_key_val && unset_key_val->type == JSON_STRING) {
                                     const char* unset_key = json_get_string(unset_key_val);
-                                    json_object_remove(doc, unset_key);
+                                    /* Protect mandatory system fields in $unset operations */
+                                    if (!is_protected_field(unset_key)) {
+                                        json_object_remove(doc, unset_key);
+                                    } else {
+                                        LOG_DEBUG("Blocked attempt to remove protected field via $unset: %s", unset_key);
+                                    }
                                 }
                             }
                             json_free(unset_keys);
                         }
                     } else {
-                        /* Direct field update */
-                        if (value) {
+                        /* Direct field update - protect system fields */
+                        if (value && !is_protected_field(key)) {
                             json_object_set(doc, key, json_deep_copy(value));
+                        } else if (is_protected_field(key)) {
+                            LOG_DEBUG("Blocked attempt to modify protected field: %s", key);
                         }
                     }
                 }
