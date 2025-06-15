@@ -68,10 +68,10 @@ init_status_t init_socket(server_config_t* config) {
   } else {
     /* It's a hostname that needs to be resolved - this might be problematic */
     if (g_logger) {
-      LOG_WARNING("[INIT:SOCKET] Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding", 
+      LOG_WARNING("Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding", 
             config->host);
     } else {
-      fprintf(stderr, "[INIT:SOCKET] WARNING: Hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding\n",
+      fprintf(stderr, "Socket initialization warning: hostname '%s' provided, using INADDR_ANY (0.0.0.0) for binding\n",
           config->host);
     }
     address.sin_addr.s_addr = INADDR_ANY;
@@ -124,13 +124,13 @@ init_status_t init_socket(server_config_t* config) {
   
   if (getsockopt(socket_fd, SOL_SOCKET, SO_ACCEPTCONN, &acceptconn, &acceptconn_len) < 0) {
     if (g_logger) {
-      LOG_WARNING("[INIT:SOCKET] Failed to check SO_ACCEPTCONN: %s", strerror(errno));
+      LOG_WARNING("Failed to check SO_ACCEPTCONN: %s", strerror(errno));
     } else {
-      fprintf(stderr, "[INIT:SOCKET] WARNING: Failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
+      fprintf(stderr, "Socket initialization warning: failed to check SO_ACCEPTCONN: %s\n", strerror(errno));
     }
   } else {
     if (g_logger) {
-      LOG_INFO("[INIT:SOCKET] Socket listening state: %s", 
+      LOG_INFO("Socket listening state: %s", 
           acceptconn ? "LISTENING" : "NOT LISTENING");
     } else {
       printf("[INIT:SOCKET] Socket listening state: %s\n", 

@@ -9,7 +9,7 @@
 /* Initialize logger system */
 init_status_t init_logger(server_config_t* config) {
   if (!config) {
-    fprintf(stderr, "FAILURE: NULL server configuration\n");
+    fprintf(stderr, "Logger initialization failed: null configuration provided\n");
     return INIT_LOGGER_ERROR;
   }
   
@@ -25,7 +25,7 @@ init_status_t init_logger(server_config_t* config) {
     /* In foreground mode, direct logs to stdout/stderr */
     
     if (!logger_init(NULL, config->log_level)) {
-      fprintf(stderr, "FAILURE: Failed to initialize console logger\n");
+      fprintf(stderr, "Console logger initialization failed\n");
       return INIT_LOGGER_ERROR;
     }
     
@@ -34,14 +34,14 @@ init_status_t init_logger(server_config_t* config) {
       g_logger->include_level = 1;   /* Include log level in console output */
       LOG_INFO("Console logger initialized with level %d", config->log_level);
     } else {
-      fprintf(stderr, "FAILURE: Logger global variable not set\n");
+      fprintf(stderr, "Logger global variable not initialized\n");
       return INIT_LOGGER_ERROR;
     }
   } else if (config->log_file) {
     /* In daemon mode with specified log file */
     
     if (!logger_init(config->log_file, config->log_level)) {
-      fprintf(stderr, "FAILURE: Failed to initialize file logger: %s\n",
+      fprintf(stderr, "File logger initialization failed: %s\n",
           config->log_file);
       return INIT_LOGGER_ERROR;
     }
@@ -49,7 +49,7 @@ init_status_t init_logger(server_config_t* config) {
     if (g_logger) {
       LOG_INFO("File logger initialized: %s", config->log_file);
     } else {
-      fprintf(stderr, "FAILURE: Logger global variable not set\n");
+      fprintf(stderr, "Logger global variable not initialized after file setup\n");
       return INIT_LOGGER_ERROR;
     }
   } else {
@@ -70,7 +70,7 @@ init_status_t init_logger(server_config_t* config) {
     }
     
     if (!logger_init(default_log_path, config->log_level)) {
-      fprintf(stderr, "FAILURE: Failed to initialize default logger: %s\n",
+      fprintf(stderr, "Default logger initialization failed: %s\n",
           default_log_path);
       free(default_log_path);
       return INIT_LOGGER_ERROR;

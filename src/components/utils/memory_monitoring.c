@@ -219,19 +219,20 @@ void memory_debug_print_summary(void) {
     
     pthread_mutex_lock(&g_memory_mutex);
     
-    LOG_INFO("=== Memory Debug Summary ===");
-    LOG_INFO("Total allocations: %zu", g_memory_stats.total_allocations);
-    LOG_INFO("Total deallocations: %zu", g_memory_stats.total_deallocations);
-    LOG_INFO("Current allocations: %zu", g_memory_stats.current_allocations);
-    LOG_INFO("Peak allocations: %zu", g_memory_stats.peak_allocations);
-    LOG_INFO("Total bytes allocated: %zu", g_memory_stats.total_bytes_allocated);
-    LOG_INFO("Current bytes allocated: %zu", g_memory_stats.current_bytes_allocated);
-    LOG_INFO("Peak bytes allocated: %zu", g_memory_stats.peak_bytes_allocated);
-    LOG_INFO("Malloc allocations: %zu", g_memory_stats.malloc_allocs);
-    LOG_INFO("Buffer pool allocations: %zu", g_memory_stats.buffer_pool_allocs);
-    LOG_INFO("Strdup allocations: %zu", g_memory_stats.strdup_allocs);
-    LOG_INFO("Mismatched frees: %zu", g_memory_stats.mismatched_frees);
-    LOG_INFO("=============================");
+    TRACE_MEMORY("Memory monitoring summary");
+    TRACE_MEMORY("Total allocations: %zu", g_memory_stats.total_allocations);
+    TRACE_MEMORY("Total deallocations: %zu", g_memory_stats.total_deallocations);
+    TRACE_MEMORY("Current allocations: %zu", g_memory_stats.current_allocations);
+    TRACE_MEMORY("Peak allocations: %zu", g_memory_stats.peak_allocations);
+    TRACE_MEMORY("Total bytes allocated: %zu", g_memory_stats.total_bytes_allocated);
+    TRACE_MEMORY("Current bytes allocated: %zu", g_memory_stats.current_bytes_allocated);
+    TRACE_MEMORY("Peak bytes allocated: %zu", g_memory_stats.peak_bytes_allocated);
+    TRACE_MEMORY("Malloc allocations: %zu", g_memory_stats.malloc_allocs);
+    TRACE_MEMORY("Buffer pool allocations: %zu", g_memory_stats.buffer_pool_allocs);
+    TRACE_MEMORY("Strdup allocations: %zu", g_memory_stats.strdup_allocs);
+    if (g_memory_stats.mismatched_frees > 0) {
+        LOG_WARNING("Memory allocation mismatches detected: %zu", g_memory_stats.mismatched_frees);
+    }
     
     pthread_mutex_unlock(&g_memory_mutex);
 }

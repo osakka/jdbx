@@ -286,6 +286,155 @@ http_response_t* api_handle_config_defaults(api_context_t* ctx, http_request_t* 
     return response;
 }
 
+/* GET /api/config/logging - Get current logging configuration */
+http_response_t* api_handle_logging_get(api_context_t* ctx, http_request_t* request) {
+    /* Extract username for permissions check */
+    char* username = extract_username_from_request(request);
+    if (!username) {
+        return create_http_response(HTTP_UNAUTHORIZED,
+            "{\"error\":\"Authentication required\"}", "application/json");
+    }
+    
+    /* Check permissions - user needs read access to system resources */
+    int has_permission = rbac_check_permission(ctx->rbac, username,
+                                             RBAC_DATABASE, "*", RBAC_READ);
+    if (!has_permission) {
+        free(username);
+        return create_http_response(HTTP_FORBIDDEN, 
+            "{\"error\":\"Access denied\"}", "application/json");
+    }
+    
+    free(username);
+    
+    /* Get current logging configuration */
+    json_value_t* result = json_create_object();
+    json_object_set(result, "status", json_create_string("success"));
+    
+    json_value_t* logging = json_create_object();
+    json_object_set(logging, "log_level", json_create_integer(logger_get_level()));
+    json_object_set(logging, "log_level_name", json_create_string(logger_level_string(logger_get_level())));
+    json_object_set(logging, "trace_mask", json_create_integer(logger_get_trace_mask()));
+    
+    /* Add trace category breakdown */
+    json_value_t* trace_categories = json_create_object();
+    trace_category_t mask = logger_get_trace_mask();
+    json_object_set(trace_categories, "database", json_create_boolean(mask & TRACE_DATABASE));
+    json_object_set(trace_categories, "rbac", json_create_boolean(mask & TRACE_RBAC));
+    json_object_set(trace_categories, "api", json_create_boolean(mask & TRACE_API));
+    json_object_set(trace_categories, "auth", json_create_boolean(mask & TRACE_AUTH));
+    json_object_set(trace_categories, "transaction", json_create_boolean(mask & TRACE_TRANSACTION));
+    json_object_set(trace_categories, "binary", json_create_boolean(mask & TRACE_BINARY));
+    json_object_set(trace_categories, "javascript", json_create_boolean(mask & TRACE_JAVASCRIPT));
+    json_object_set(trace_categories, "network", json_create_boolean(mask & TRACE_NETWORK));
+    json_object_set(trace_categories, "metrics", json_create_boolean(mask & TRACE_METRICS));
+    json_object_set(trace_categories, "memory", json_create_boolean(mask & TRACE_MEMORY));
+    json_object_set(logging, "trace_categories", trace_categories);
+    
+    json_object_set(result, "logging", logging);
+    
+    char* json_str = json_stringify(result);
+    json_free(result);
+    
+    http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
+    free(json_str);
+    return response;
+}
+
+/* PUT /api/config/logging - Update logging configuration */
+http_response_t* api_handle_logging_update(api_context_t* ctx, http_request_t* request) {
+    /* Extract username for permissions check */
+    char* username = extract_username_from_request(request);
+    if (!username) {
+        return create_http_response(HTTP_UNAUTHORIZED,
+            "{\"error\":\"Authentication required\"}", "application/json");
+    }
+    
+    /* Check admin permissions */
+    int has_admin_permission = rbac_check_permission(ctx->rbac, username,
+                                                   RBAC_DATABASE, "*", RBAC_ADMIN);
+    if (!has_admin_permission) {
+        free(username);
+        return create_http_response(HTTP_FORBIDDEN,
+            "{\"error\":\"Admin access required\"}", "application/json");
+    }
+    
+    /* Parse request body */
+    json_value_t* new_config = json_parse(request->body);
+    if (!new_config || new_config->type != JSON_OBJECT) {
+        free(username);
+        return create_http_response(HTTP_BAD_REQUEST,
+            "{\"error\":\"Invalid JSON in request body\"}", "application/json");
+    }
+    
+    int changes_made = 0;
+    
+    /* Update log level if provided */
+    json_value_t* log_level_val = json_object_get(new_config, "log_level");
+    if (log_level_val) {
+        if (log_level_val->type == JSON_INTEGER) {
+            log_level_t new_level = (log_level_t)log_level_val->value.integer;
+            if (new_level >= LOG_LEVEL_NONE && new_level <= LOG_LEVEL_TRACE) {
+                logger_set_level(new_level);
+                changes_made = 1;
+                LOG_INFO("Log level changed to %s by admin user: %s", 
+                         logger_level_string(new_level), username);
+            }
+        } else if (log_level_val->type == JSON_STRING) {
+            log_level_t new_level = logger_parse_level(log_level_val->value.string);
+            if (new_level != LOG_LEVEL_NONE || strcmp(log_level_val->value.string, "none") == 0) {
+                logger_set_level(new_level);
+                changes_made = 1;
+                LOG_INFO("Log level changed to %s by admin user: %s", 
+                         logger_level_string(new_level), username);
+            }
+        }
+    }
+    
+    /* Update trace categories if provided */
+    json_value_t* trace_categories = json_object_get(new_config, "trace_categories");
+    if (trace_categories && trace_categories->type == JSON_STRING) {
+        trace_category_t new_mask = logger_parse_trace(trace_categories->value.string);
+        logger_set_trace_mask(new_mask);
+        changes_made = 1;
+        LOG_INFO("Trace categories updated by admin user: %s", username);
+    }
+    
+    /* Handle individual trace category updates */
+    json_value_t* trace_mask_val = json_object_get(new_config, "trace_mask");
+    if (trace_mask_val && trace_mask_val->type == JSON_INTEGER) {
+        trace_category_t new_mask = (trace_category_t)trace_mask_val->value.integer;
+        logger_set_trace_mask(new_mask);
+        changes_made = 1;
+        LOG_INFO("Trace mask updated to %d by admin user: %s", new_mask, username);
+    }
+    
+    json_free(new_config);
+    free(username);
+    
+    if (!changes_made) {
+        return create_http_response(HTTP_BAD_REQUEST,
+            "{\"error\":\"No valid logging configuration provided\"}", "application/json");
+    }
+    
+    /* Return success response with current configuration */
+    json_value_t* result = json_create_object();
+    json_object_set(result, "status", json_create_string("success"));
+    json_object_set(result, "message", json_create_string("Logging configuration updated successfully"));
+    
+    json_value_t* current_logging = json_create_object();
+    json_object_set(current_logging, "log_level", json_create_integer(logger_get_level()));
+    json_object_set(current_logging, "log_level_name", json_create_string(logger_level_string(logger_get_level())));
+    json_object_set(current_logging, "trace_mask", json_create_integer(logger_get_trace_mask()));
+    json_object_set(result, "logging", current_logging);
+    
+    char* json_str = json_stringify(result);
+    json_free(result);
+    
+    http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
+    free(json_str);
+    return response;
+}
+
 /* Register configuration API routes */
 void register_config_api_routes(api_context_t* ctx) {
     if (!ctx) {
@@ -294,9 +443,9 @@ void register_config_api_routes(api_context_t* ctx) {
     }
     
     /* Check if we have enough space for our routes */
-    if (ctx->num_routes + 4 > ctx->max_routes) {
+    if (ctx->num_routes + 6 > ctx->max_routes) {
         LOG_ERROR("Cannot register config API routes - not enough space.");
-        LOG_ERROR("Current routes: %d, Max routes: %d, Need to add: 4", 
+        LOG_ERROR("Current routes: %d, Max routes: %d, Need to add: 6", 
              ctx->num_routes, ctx->max_routes);
         return;
     }
@@ -314,6 +463,12 @@ void register_config_api_routes(api_context_t* ctx) {
     ctx->routes[ctx->num_routes++] = (api_route_t){
         "/api/config/defaults", HTTP_GET, api_handle_config_defaults, 1
     };
+    ctx->routes[ctx->num_routes++] = (api_route_t){
+        "/api/config/logging", HTTP_GET, api_handle_logging_get, 1
+    };
+    ctx->routes[ctx->num_routes++] = (api_route_t){
+        "/api/config/logging", HTTP_PUT, api_handle_logging_update, 1
+    };
     
-    LOG_INFO("Configuration API routes registered - added 4 routes.");
+    LOG_INFO("Configuration API routes registered - added 6 routes.");
 }
