@@ -1,5 +1,5 @@
 #include "utils/ref_counter.h"
-#include "utils/debug.h"
+#include "utils/diagnostics.h"
 #include <stdlib.h>
 
 /**

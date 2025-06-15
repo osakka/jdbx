@@ -1,5 +1,5 @@
-#ifndef MEMORY_DEBUG_H
-#define MEMORY_DEBUG_H
+#ifndef MEMORY_MONITORING_H
+#define MEMORY_MONITORING_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -82,4 +82,4 @@ int memory_debug_enabled(void);
 
 /* Always provide memory debugging capability - controlled at runtime */
 
-#endif /* MEMORY_DEBUG_H */
+#endif /* MEMORY_MONITORING_H */

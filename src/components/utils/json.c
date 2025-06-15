@@ -14,7 +14,7 @@
  */
 
 #include "utils/json.h"
-#include "utils/debug.h"
+#include "utils/diagnostics.h"
 #include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>

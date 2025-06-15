@@ -1,5 +1,5 @@
 #include "utils/ref_json.h"
-#include "utils/debug.h"
+#include "utils/diagnostics.h"
 #include <stdlib.h>
 
 /* Map to track existing reference counted JSON values */
