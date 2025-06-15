@@ -14,9 +14,9 @@
 
 JDBX is a high-performance document database built specifically for JSON data, featuring lock-free architecture and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, it combines the simplicity of JSON with advanced indexing, JDBX single-file storage, and a powerful query optimizer. JDBX features native JavaScript integration for data validation, transformation, and querying, all within a secure RBAC framework accessible through a comprehensive RESTful API.
 
-**Latest Version**: 4.6.0 (June 15, 2025)  
-**Status**: 🔒 **Security Enhanced** - Enterprise-grade collection & document ownership protection  
-**Architecture**: Lock-Free JDBX Storage Backend with Comprehensive Security Model
+**Latest Version**: 4.7.0 (June 15, 2025)  
+**Status**: 🏷️ **Atomic Naming** - Semantic consistency & configuration management excellence  
+**Architecture**: Lock-Free JDBX Storage Backend with Three-Tier Configuration System
 
 ## Features
 

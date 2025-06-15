@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 15, 2025 (v4.6.0 - Code Audit Excellence & Zero-Warning Build)
+**Last Updated**: June 15, 2025 (v4.7.0 - Atomic Naming & Configuration Management Excellence)
 
 ## Core Principles
 
@@ -32,6 +32,31 @@
  25. Apply surgical fixes with zero regressions - identify root causes, not symptoms
  26. Implement proper NULL checks and error handling to prevent crashes
  27. Protect against security vulnerabilities (JSON overflow, buffer overflows, DoS attacks)
+
+## Atomic Naming Standards
+
+The JDBX project follows strict naming conventions for maximum clarity and maintainability:
+
+### Naming Principles:
+- **SEMANTIC CLARITY**: File names must clearly indicate current functionality, not past actions
+- **LOWERCASE SNAKE_CASE**: All files, functions, and variables use lowercase with underscores
+- **NO TEMPORAL PREFIXES**: Avoid fix_, tmp_, patch_, debug_, simple_, complex_, optimized_, new_, enhanced_
+- **GLOBAL VARIABLES**: Must use g_ prefix for clear distinguishability (e.g., g_server_config)
+- **SINGLE RESPONSIBILITY**: Each file name reflects one clear purpose
+
+### File Naming Examples:
+- ✅ **Good**: `memory_monitoring.c`, `server_thread_diagnostics.c`, `basic_functionality_test.js`
+- ❌ **Bad**: `memory_debug.c`, `fix_rbac_view.html`, `simple_test.js`
+
+### Function Naming:
+- Use descriptive verbs: `config_get_base_path()`, `memory_monitoring_init()`
+- Avoid abbreviations unless industry standard
+- Include context in log output since filename:line:function is automatic
+
+### Variable Naming:
+- Local variables: descriptive names, avoid `tmp`, `temp` beyond loop counters
+- Global variables: mandatory g_ prefix with semantic meaning
+- Constants: ALL_CAPS with descriptive names
 
 ## Configuration Management Guidelines
 
