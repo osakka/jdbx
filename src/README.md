@@ -1,9 +1,9 @@
 # JDBX Source Code
 
-**Version**: 3.3.0  
-**Last Updated**: June 12, 2025
+**Version**: 4.6.0  
+**Last Updated**: June 15, 2025
 
-This directory contains the source code for the JDBX project.
+This directory contains the source code for the JDBX project with enterprise-grade security and zero-warning build quality.
 
 ## Structure
 
