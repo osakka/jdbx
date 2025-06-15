@@ -760,17 +760,50 @@ function hasDataChanged(newData) {
 
 async function loadCollections() {
     try {
-        const response = await apiRequest('/api/collections');
+        // For dashboard stats, we need to get collections across all libraries
+        // Load libraries first if not already loaded
+        if (libraries.length === 0) {
+            await loadLibraries();
+        }
         
-        // Handle both formats: standard and array
-        let collectionsData = Array.isArray(response) ? response : (response.collections || []);
+        let allCollectionsData = [];
         
-        console.log('Raw collections response:', response);
-        
-        collectionsData = collectionsData.map(item => {
-            if (typeof item === 'string') {
-                return { name: item, documentCount: 0, isSystem: item.startsWith('_') };
+        // Load collections from all libraries for dashboard statistics
+        for (const library of libraries) {
+            try {
+                const response = await apiRequest(`/api/libraries/${library.name}/collections`);
+                let libraryCollections = Array.isArray(response) ? response : (response.collections || []);
+                
+                // Add library context to each collection
+                libraryCollections = libraryCollections.map(item => {
+                    if (typeof item === 'string') {
+                        return { 
+                            name: item, 
+                            library: library.name,
+                            documentCount: 0, 
+                            isSystem: item.startsWith('_') || item.startsWith('system_')
+                        };
+                    } else {
+                        return {
+                            ...item,
+                            library: library.name,
+                            isSystem: item.name && (item.name.startsWith('_') || item.name.startsWith('system_'))
+                        };
+                    }
+                });
+                
+                allCollectionsData = allCollectionsData.concat(libraryCollections);
+            } catch (error) {
+                console.warn(`Failed to load collections for library ${library.name}:`, error);
             }
+        }
+        
+        let collectionsData = allCollectionsData;
+        
+        console.log('Loaded collections from all libraries:', collectionsData);
+        
+        // Normalize the data format
+        collectionsData = collectionsData.map(item => {
             // Handle both documentCount and document_count fields
             if (item.document_count !== undefined && item.documentCount === undefined) {
                 item.documentCount = item.document_count;
@@ -779,9 +812,8 @@ async function loadCollections() {
             if (item.documentCount === undefined) {
                 item.documentCount = item.total_documents || item.document_count || 0;
             }
-            item.isSystem = item.name && item.name.startsWith('_');
             
-            console.log(`Collection ${item.name}: documentCount=${item.documentCount}, document_count=${item.document_count}`);
+            console.log(`Collection ${item.library}/${item.name}: documentCount=${item.documentCount}`);
             
             return item;
         });
@@ -1187,37 +1219,18 @@ async function initializeBrowser() {
 // Load libraries from unified documents
 async function loadLibraries() {
     try {
-        const response = await apiRequest('/api/collections/documents/documents?query=' + 
-            encodeURIComponent(JSON.stringify({ type: 'library' })));
+        // Use the correct libraries API endpoint that the server provides
+        const response = await apiRequest('/api/libraries');
         
-        if (response && response.documents) {
-            libraries = response.documents.map(doc => ({
-                name: doc.name,
-                description: doc.description,
-                quotas: doc.quotas || {},
-                settings: doc.settings || {},
-                created_at: doc.created_at
+        if (response && response.libraries) {
+            libraries = response.libraries.map(lib => ({
+                name: lib.name,
+                description: lib.description || `${lib.name} library`,
+                quotas: lib.quotas || {},
+                settings: lib.settings || {},
+                created_at: lib.created_at,
+                template: lib.template || 'standard'
             }));
-            
-            // Add system library if not present
-            if (!libraries.find(lib => lib.name === 'system')) {
-                libraries.unshift({
-                    name: 'system',
-                    description: 'System library for internal collections',
-                    quotas: {},
-                    settings: {}
-                });
-            }
-            
-            // Add default library if not present
-            if (!libraries.find(lib => lib.name === 'default')) {
-                libraries.unshift({
-                    name: 'default',
-                    description: 'Default library for user collections',
-                    quotas: {},
-                    settings: {}
-                });
-            }
             
             // Load collections first, then render library selector with counts
             await loadBrowserCollections();
@@ -1225,10 +1238,10 @@ async function loadLibraries() {
         }
     } catch (error) {
         console.error('Error loading libraries:', error);
-        // Fallback to system and default libraries
+        // Fallback to default libraries
         libraries = [
-            { name: 'default', description: 'Default library' },
-            { name: 'system', description: 'System library' }
+            { name: 'default', description: 'Default library for general use' },
+            { name: 'system', description: 'System library for internal operations' }
         ];
         renderLibrarySelector();
     }
@@ -1475,48 +1488,68 @@ let allCollections = [];
 
 async function loadBrowserCollections() {
     try {
-        // Load all collections and schemas
-        const [collectionsResponse, schemasResponse] = await Promise.all([
-            apiRequest('/api/collections'),
-            apiRequest('/api/schemas').catch(() => [])
-        ]);
+        // In unified architecture, collections are virtual based on document types
+        // We need to load collections for each library separately
+        allCollections = [];
         
-        // Handle both array response and object with collections property
-        let rawCollections = [];
-        if (Array.isArray(collectionsResponse)) {
-            rawCollections = collectionsResponse;
-        } else if (collectionsResponse.collections) {
-            rawCollections = collectionsResponse.collections;
+        for (const library of libraries) {
+            try {
+                const collectionsResponse = await apiRequest(`/api/libraries/${library.name}/collections`);
+                
+                // Handle the response format
+                let rawCollections = [];
+                if (Array.isArray(collectionsResponse)) {
+                    rawCollections = collectionsResponse;
+                } else if (collectionsResponse.collections) {
+                    rawCollections = collectionsResponse.collections;
+                }
+                
+                // Map to our format
+                const libraryCollections = rawCollections.map(item => {
+                    if (typeof item === 'string') {
+                        // Simple string format
+                        return { 
+                            name: item, 
+                            library: library.name,
+                            fullPath: `${library.name}/${item}`,
+                            documentCount: 0, 
+                            isSystem: item.startsWith('_') || item.startsWith('system_')
+                        };
+                    } else {
+                        // Object format with properties
+                        const name = item.name || '';
+                        const fullPath = `${library.name}/${name}`;
+                        return {
+                            name: name,
+                            library: library.name,
+                            fullPath: fullPath,
+                            documentCount: item.document_count || 0,
+                            isSystem: item.is_system || name.startsWith('_') || name.startsWith('system_')
+                        };
+                    }
+                });
+                
+                allCollections = allCollections.concat(libraryCollections);
+            } catch (error) {
+                console.warn(`Failed to load collections for library ${library.name}:`, error);
+                // Continue with other libraries
+            }
         }
         
-        // Store all collections globally first
-        allCollections = rawCollections.map(item => {
-            if (typeof item === 'string') {
-                // Old format: library/collection string
-                const parts = item.split('/');
-                const library = parts.length > 1 ? parts[0] : 'default';
-                const name = parts.length > 1 ? parts[1] : parts[0];
-                return { 
-                    name: name, 
-                    library: library,
-                    fullPath: item,
-                    documentCount: 0, 
-                    isSystem: name.startsWith('_') 
-                };
+        // Load schemas separately
+        try {
+            const schemasResponse = await apiRequest('/api/schemas');
+            if (schemasResponse && schemasResponse.schemas) {
+                schemas = schemasResponse.schemas;
+            } else if (Array.isArray(schemasResponse)) {
+                schemas = schemasResponse;
             } else {
-                // New format: object with library field
-                const name = item.name || '';
-                const library = item.library || 'default';
-                const fullPath = item.path || `${library}/${name}`;
-                return {
-                    name: name,
-                    library: library,
-                    fullPath: fullPath,
-                    documentCount: item.document_count || 0,
-                    isSystem: item.is_system || name.startsWith('_')
-                };
+                schemas = [];
             }
-        });
+        } catch (error) {
+            console.warn('Failed to load schemas:', error);
+            schemas = [];
+        }
         
         // Filter collections for current library
         filterCollectionsByLibrary();
@@ -1761,8 +1794,13 @@ async function selectCollection(collectionName) {
 
 async function loadDocuments(collectionPath, isPolling = false) {
     try {
-        // collectionPath is already library/collection format
-        const response = await apiRequest(`/api/collections/${collectionPath}/documents`);
+        // Parse library/collection path
+        const parts = collectionPath.split('/');
+        const library = parts[0] || 'default';
+        const collection = parts[1] || parts[0];
+        
+        // Use the unified documents API with library and collection filters
+        const response = await apiRequest(`/api/libraries/${library}/collections/${collection}/documents`);
         // Handle both array response and object with documents property
         const newDocuments = Array.isArray(response) ? response : (response.documents || []);
         
@@ -4854,16 +4892,151 @@ async function createNewCollection() {
 
 // Old editDocument function removed - now using toggleEditMode/saveDocument
 
-function deleteDocument() {
-    if (confirm('Are you sure you want to delete this document?')) {
-        alert('Delete document functionality coming soon!');
+// Document CRUD Operations
+async function saveDocument() {
+    try {
+        const editor = document.getElementById('documentEditor');
+        if (!editor || !currentDocument) {
+            showNotification('No document to save', 'warning');
+            return;
+        }
+        
+        // Get the current content from editor
+        const content = editor.value;
+        let parsedDocument;
+        
+        try {
+            parsedDocument = JSON.parse(content);
+        } catch (e) {
+            showNotification('Invalid JSON format', 'error');
+            return;
+        }
+        
+        // Parse library/collection from current path
+        const parts = currentCollection.split('/');
+        const library = parts[0] || 'default';
+        const collection = parts[1] || parts[0];
+        
+        // Use PUT to update the document
+        const response = await apiRequest(
+            `/api/libraries/${library}/collections/${collection}/documents/${currentDocument.uuid}`,
+            {
+                method: 'PUT',
+                body: JSON.stringify(parsedDocument)
+            }
+        );
+        
+        if (response) {
+            showNotification('Document saved successfully', 'success');
+            currentDocument = response;
+            
+            // Refresh the documents list
+            await loadDocuments(currentCollection);
+            
+            // Update the view with the saved document
+            selectDocument(currentDocument);
+        }
+    } catch (error) {
+        console.error('Error saving document:', error);
+        showNotification('Failed to save document: ' + error.message, 'error');
+    }
+}
+
+async function deleteDocument() {
+    if (!currentDocument) {
+        showNotification('No document selected', 'warning');
+        return;
+    }
+    
+    if (confirm(`Are you sure you want to delete the document "${currentDocument.name || currentDocument.uuid}"?`)) {
+        try {
+            // Parse library/collection from current path
+            const parts = currentCollection.split('/');
+            const library = parts[0] || 'default';
+            const collection = parts[1] || parts[0];
+            
+            // Use DELETE to remove the document
+            await apiRequest(
+                `/api/libraries/${library}/collections/${collection}/documents/${currentDocument.uuid}`,
+                { method: 'DELETE' }
+            );
+            
+            showNotification('Document deleted successfully', 'success');
+            
+            // Clear current document
+            currentDocument = null;
+            
+            // Refresh the documents list
+            await loadDocuments(currentCollection);
+            
+            // Clear the content viewer
+            document.getElementById('documentTitle').textContent = 'No document selected';
+            document.getElementById('contentViewer').innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <p>Select a document to view its content</p>
+                </div>
+            `;
+            
+            // Disable buttons
+            document.getElementById('editBtn').disabled = true;
+            document.getElementById('deleteBtn').disabled = true;
+            
+        } catch (error) {
+            console.error('Error deleting document:', error);
+            showNotification('Failed to delete document: ' + error.message, 'error');
+        }
+    }
+}
+
+async function createDocument() {
+    if (!currentCollection) {
+        showNotification('No collection selected', 'warning');
+        return;
+    }
+    
+    try {
+        // Parse library/collection from current path
+        const parts = currentCollection.split('/');
+        const library = parts[0] || 'default';
+        const collection = parts[1] || parts[0];
+        
+        // Create a basic document template
+        const newDocument = {
+            name: `new_document_${Date.now()}`,
+            content: "New document content",
+            created_by: "user" // This will be overwritten by the server
+        };
+        
+        // Use POST to create the document
+        const response = await apiRequest(
+            `/api/libraries/${library}/collections/${collection}/documents`,
+            {
+                method: 'POST',
+                body: JSON.stringify(newDocument)
+            }
+        );
+        
+        if (response) {
+            showNotification('Document created successfully', 'success');
+            
+            // Refresh the documents list
+            await loadDocuments(currentCollection);
+            
+            // Select the new document
+            currentDocument = response;
+            selectDocument(currentDocument);
+        }
+    } catch (error) {
+        console.error('Error creating document:', error);
+        showNotification('Failed to create document: ' + error.message, 'error');
     }
 }
 
 function copyToClipboard() {
     const content = document.querySelector('.json-viewer code').textContent;
     navigator.clipboard.writeText(content).then(() => {
-        alert('Document copied to clipboard!');
+        showNotification('Document copied to clipboard!', 'info');
     });
 }
 
