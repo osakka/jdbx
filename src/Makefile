@@ -31,7 +31,7 @@ TRANS_SRCS = $(wildcard $(SRC_DIR)/components/transaction/*.c)
 RBAC_SRCS = $(wildcard $(SRC_DIR)/components/rbac/*.c)
 UTILS_SRCS = $(wildcard $(SRC_DIR)/components/utils/*.c)
 TOOLS_SRCS = $(wildcard $(SRC_DIR)/components/tools/*.c)
-JS_SRCS = $(filter-out $(SRC_DIR)/components/js/js_file_utils.c,$(wildcard $(SRC_DIR)/components/js/*.c))
+JS_SRCS = $(wildcard $(SRC_DIR)/components/js/*.c)
 MAIN_SRC = $(SRC_DIR)/components/main.c
 
 # Performance optimization sources - JDBX ONLY!
