@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 15, 2025 (v4.7.0 - Atomic Naming & Configuration Management Excellence)
+**Last Updated**: June 15, 2025 (v4.8.0 - Single Source of Truth Architecture & Mandatory Field Protection)
 
 ## Core Principles
 
@@ -32,6 +32,7 @@
  25. Apply surgical fixes with zero regressions - identify root causes, not symptoms
  26. Implement proper NULL checks and error handling to prevent crashes
  27. Protect against security vulnerabilities (JSON overflow, buffer overflows, DoS attacks)
+ 28. ARCHITECTURAL RULE: Single Source of Truth - NO mixed routing, NO duplicate implementations, NO fallback logic
 
 ## Atomic Naming Standards
 
@@ -111,6 +112,90 @@ The JDBX server implements a comprehensive three-tier configuration system:
 6. The server runs on port 5000 by default. You can change this in the runtime script.
 
 7. DO NOT IMPLEMENT MOCK DATA OR DEMO MODE - ALWAYS WORK WITH REAL SERVER DATA.
+
+## 🏗️ SINGLE SOURCE OF TRUTH ARCHITECTURE
+
+**CRITICAL**: The JDBX server implements a unified documents architecture. Any deviation from this creates confusion and maintenance overhead.
+
+### Core Architectural Principles:
+
+1. **UNIFIED DOCUMENTS STORAGE**: All entities (users, roles, sessions, libraries, collections, etc.) are stored in the single `documents` collection
+2. **TYPE-BASED DISCRIMINATION**: Documents are filtered by `type` field (user, role, session, library, etc.)
+3. **LIBRARY NAMESPACE ISOLATION**: Multi-tenancy through `library` field filtering
+4. **NO MIXED ROUTING**: All document operations must use unified documents approach consistently
+
+### Mandatory System Fields (IMMUTABLE):
+- **uuid**: Document identifier (auto-generated, cannot be modified)
+- **type**: Document type classification (auto-inferred from collection, cannot be modified)
+- **library**: Multi-tenancy namespace (auto-set, cannot be modified)
+- **created_at**: Creation timestamp (auto-set, cannot be modified)
+- **name**: Display name (auto-fallback: username→title→uuid)
+
+### API Design Rules:
+
+1. **FORBIDDEN**: Mixed routing between unified documents and physical collections
+   ```c
+   // ❌ WRONG - Creates dual routing confusion
+   if (system_collection) {
+       documents = db_query_documents(ctx->db, "documents", unified_query);
+   } else {
+       documents = db_query_documents(ctx->db, "library/collection", query);
+   }
+   
+   // ✅ CORRECT - Single unified approach
+   json_object_set(unified_query, "type", json_create_string(doc_type));
+   json_object_set(unified_query, "library", json_create_string(library_name));
+   documents = db_query_documents(ctx->db, "documents", unified_query);
+   ```
+
+2. **FORBIDDEN**: Fallback logic to physical collections
+   ```c
+   // ❌ WRONG - Creates architectural confusion
+   if (empty_result) {
+       // Fallback to physical collection
+       documents = db_query_documents(ctx->db, "library/collection", query);
+   }
+   ```
+
+3. **REQUIRED**: Centralized collection→type mappings
+   ```c
+   // ✅ CORRECT - Centralized mapping logic
+   const char* doc_type = collection_name;
+   if (strcmp(collection_name, "users") == 0) doc_type = "user";
+   else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
+   // ... continue for all system collections
+   ```
+
+### Database Layer Rules:
+
+1. **MANDATORY FIELD PROTECTION**: Database layer automatically protects system fields
+2. **AUTO-POPULATION**: Missing mandatory fields automatically populated during insert
+3. **TYPE INFERENCE**: Document type auto-inferred from collection name if missing
+4. **ATOMIC OPERATIONS**: All updates use atomic pointer replacement to prevent race conditions
+
+### System Collection Access:
+
+**FORBIDDEN**: Direct system collection references
+```c
+// ❌ WRONG
+db_query_documents(ctx->db, "system/users", query);
+```
+
+**REQUIRED**: Unified documents with type filtering
+```c
+// ✅ CORRECT
+json_value_t* unified_query = json_create_object();
+json_object_set(unified_query, "type", json_create_string("user"));
+json_object_set(unified_query, "library", json_create_string("system"));
+documents = db_query_documents(ctx->db, "documents", unified_query);
+```
+
+### Architecture Enforcement:
+
+- **Code Reviews**: Must verify single source of truth compliance
+- **Testing**: All document operations must go through unified path
+- **Documentation**: Update docs to reflect unified architecture only
+- **Never Regress**: Once unified, never introduce mixed routing again
 
 ## Socket Binding Implementation
 
