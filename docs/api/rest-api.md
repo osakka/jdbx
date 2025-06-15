@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 3.3.0  
-**Last Updated**: June 12, 2025  
-**Base URL**: `http://localhost:5000/api`
+**Version**: 4.6.0  
+**Last Updated**: June 15, 2025  
+**Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v3.3.0 with lock-free architecture and field-level operations.
+Complete REST API documentation for JDBX v4.6.0 with enterprise-grade security and collection ownership protection.
 
 ## Authentication
 
@@ -41,6 +41,35 @@ Include JWT token in all authenticated requests:
 ```http
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
+
+## 🔒 Security Model (v4.6.0)
+
+JDBX implements enterprise-grade collection and document ownership security:
+
+### Collection Access Control
+- **System Collections**: Admin-only access for `system/*` collections (users, roles, sessions, etc.)
+- **User Namespaces**: Users restricted to `default` library or their own `username` library
+- **Cross-Library Access**: Requires explicit RBAC permissions
+
+### Permission Hierarchy
+```
+Admin Users:
+  ✅ Full access to all libraries and collections
+  ✅ Can create/modify/delete system collections
+  ✅ Can access any user's data
+
+Regular Users:
+  ✅ Can access default library collections
+  ✅ Can create collections in default or username library
+  ❌ Cannot access system collections for write operations
+  ❌ Cannot access other users' namespace libraries
+  ❌ Cannot create system_* or _system* named collections
+```
+
+### Error Responses
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: Valid token but insufficient permissions
+- `404 Not Found`: Collection/document doesn't exist or no access
 
 ### Token Refresh
 ```http

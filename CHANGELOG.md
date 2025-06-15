@@ -5,6 +5,137 @@ All notable changes to JDBX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2025-06-15
+
+### 🔒 COMPREHENSIVE COLLECTION & DOCUMENT OWNERSHIP SECURITY
+
+This release implements enterprise-grade security for collection and document operations with complete namespace isolation and admin-only system collection access.
+
+#### Security Enhancements
+- **COLLECTION OPERATIONS PROTECTION**: Comprehensive access control for collection creation and deletion
+  - Admin-only access to `system/` library collections
+  - User namespace enforcement (users restricted to `default` library or their own `username` library)
+  - Protection against `system_*` and `_system*` collection names for non-admins
+  - JWT authentication required for all collection operations
+
+- **DOCUMENT OPERATIONS SECURITY**: Complete protection for document create, update, and delete operations
+  - System collections require admin privileges for write access
+  - User namespace isolation for document operations across all CRUD operations
+  - Cross-library access requires explicit RBAC permissions
+  - Thread-safe JWT token parsing with comprehensive error handling
+
+- **SECURITY ARCHITECTURE**: Three-layer protection model
+  - Authentication → Authorization → Namespace Enforcement
+  - Full integration with `rbac_db_check_permission()` for fine-grained access control
+  - Attack prevention against privilege escalation and data exfiltration
+  - Enterprise-grade protection for critical system data
+
+#### Attack Prevention
+- Regular users cannot destroy system collections (`system/users`, `system/roles`, etc.)
+- Regular users cannot escalate privileges by modifying admin accounts
+- Regular users cannot access other users' data across library boundaries
+- Unauthenticated requests blocked with proper HTTP 401/403 responses
+- Invalid JWT tokens safely rejected without server crashes
+
+#### Technical Implementation
+- Added comprehensive security functions to all collection/document API handlers
+- Thread-safe user info extraction from JWT tokens using local buffers
+- Enhanced error handling for malformed authentication tokens
+- Permission model: Admin access for system operations, namespace isolation for regular users
+
+### Fixed
+- Server stability issues with invalid JWT token processing
+- Thread safety issues in JWT token parsing functions
+- Race conditions in security validation functions
+
+## [4.5.0] - 2025-06-14
+
+### 🔒 CRITICAL SECURITY HARDENING: JWT Validation and Input Security
+
+#### Security Enhancements
+- **JWT TOKEN SECURITY**: Comprehensive input validation prevents crashes and security vulnerabilities
+  - Enhanced base64 validation in `base64_decode()` to prevent buffer overflows
+  - Improved format validation for JWT tokens (exactly 2 dots required)
+  - Graceful handling of malformed tokens instead of server crashes
+  - Comprehensive input sanitization across authentication layer
+
+#### Fixed
+- JWT token validation crash scenarios resolved
+- Server stability under security testing scenarios improved
+- Memory safety in JWT processing functions enhanced
+
+## [4.4.0] - 2025-06-14
+
+### 🚀 PRODUCTION-READY STABILITY: Zero-Crash Architecture
+
+#### Performance Improvements
+- **CRITICAL STABILITY**: Eliminated JSON deep copy race conditions causing server instability
+- **ATOMIC OPERATIONS**: Implemented atomic pointer operations for thread-safe JSON access
+- **MEMORY MANAGEMENT**: Advanced memory management with atomic operations for enterprise-grade stability
+- Server stability improved from 4-5 requests max to 100+ concurrent requests with zero crashes
+
+#### Fixed
+- Race conditions in multi-threaded database access resolved
+- Session variable use-after-free in authentication handlers
+- JWT memory allocation mismatches (strdup vs buffer_pool_free conflicts)
+- Dangerous skiplist_delete operations causing memory corruption
+
+## [4.3.0] - 2025-06-13
+
+### 🔧 CRITICAL: Memory Leak Resolution
+
+#### Fixed
+- **CRITICAL MEMORY LEAK**: skiplist_iterator_next() memory allocation issue resolved
+- Server crashes after 4-5 sequential read operations eliminated
+- Memory exhaustion due to malloc/free mismatches in iterator path
+- Collections endpoint crashes and skiplist operation failures
+
+#### Performance
+- Eliminated ALL memory allocation/deallocation in iterator path
+- Maintained lock-free architecture and hazard pointer safety
+
+## [4.2.0] - 2025-06-13
+
+### 🛠️ CRITICAL STABILITY IMPROVEMENTS
+
+#### Fixed
+- **5 CRITICAL SERVER STABILITY ISSUES** identified and resolved through comprehensive end-to-end testing
+- Bootstrap library document creation gap (empty `/api/libraries` endpoint)
+- SSL connection stability (SSL_ERROR_SYSCALL crashes and file descriptor leaks)
+- Collections API NULL pointer crashes (segmentation faults on `/api/collections`)
+- JSON parser recursion depth overflow (stack overflow security vulnerability)
+- Document creation API crashes (nested vs flat JSON structure validation)
+
+#### Security
+- Protection against DoS attacks via JSON overflow
+- Enhanced SSL connection handling under concurrent load
+
+## [4.1.0] - 2025-06-13
+
+### 📊 JAVASCRIPT-ENHANCED METRICS SYSTEM
+
+#### Added
+- JavaScript analytics integration using JDBX's integrated QuickJS engine
+- Advanced analytics functions for error tracking and performance analysis
+- Database performance monitoring with query analysis and health scoring
+- Resource monitoring with predictive analysis capabilities
+- Temporal analysis with percentiles and anomaly detection
+
+#### Changed
+- Enhanced existing metrics system instead of creating parallel implementations
+- Maintained library-scoped metrics architecture with proper system aggregation
+- Single source of truth enforcement across entire metrics subsystem
+
+## [4.0.1] - 2025-06-13
+
+### 🔐 AUTHENTICATION FIXES
+
+#### Fixed
+- **CRITICAL**: Authentication session lookup database query format
+- Unified documents restructure compatibility with authentication handler
+- Session management resolution for complete authentication flow
+- Database query response format standardization
+
 ## [3.3.0] - 2025-06-12 (Updated)
 
 ### 🔥 Lock-Free Architecture & Single Source of Truth

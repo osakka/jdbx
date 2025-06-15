@@ -1,28 +1,64 @@
 # JDBX Documentation
 
-**Version**: 3.3.0  
-**Last Updated**: June 12, 2025
+**Version**: 4.6.0  
+**Last Updated**: June 15, 2025
 
 Welcome to the comprehensive documentation for JDBX - a high-performance document database built specifically for JSON data with lock-free architecture and enterprise-grade features.
 
+## 🔒 **v4.6.0 Security Update**
+This version introduces **enterprise-grade collection and document ownership security** with comprehensive namespace isolation and admin-only system collection access. See [Security Guidelines](security/SECURITY_GUIDELINES.md) for details.
+
 ## 📚 Documentation Structure
 
-This documentation follows a clear categorization system. **Only this README exists in the `/docs/` root** - all other content is properly categorized.
+This documentation follows industry-standard categorization. **Only this README exists in the `/docs/` root** - all content is properly categorized for easy navigation.
 
-### Quick Navigation
+### 🎯 Quick Navigation
 
-| Category | Purpose | Start Here |
-|----------|---------|------------|
-| **[Getting Started](getting-started/)** | New to JDBX? | [Installation Guide](getting-started/installation.md) |
-| **[Guides](guides/)** | Step-by-step tutorials | [Authentication Guide](guides/authentication.md) |
-| **[API Reference](api/)** | Complete API documentation | [REST API](api/rest-api.md) |
-| **[Architecture](architecture/)** | System design and internals | [JDBX Storage](architecture/jdbx-storage.md) |
-| **[Reference](reference/)** | Technical specifications | [Configuration Reference](reference/configuration.md) |
-| **[Development](development/)** | Contributing and building | [Build Guide](development/building.md) |
+| Category | Purpose | Key Documents |
+|----------|---------|---------------|
+| **[🚀 Getting Started](getting-started/)** | New to JDBX? | [Installation Guide](getting-started/installation.md) |
+| **[📖 Tutorials](tutorials/)** | Step-by-step learning | [Basic CRUD Operations](tutorials/basic/) |
+| **[🛠️ How-To Guides](how-to/)** | Problem-solving | [Troubleshooting](how-to/troubleshooting/) |
+| **[📚 Reference](reference/)** | Technical specifications | [API Reference](reference/api/), [Configuration](reference/configuration/) |
+| **[🏗️ Architecture](architecture/)** | System design & internals | [JDBX Storage](architecture/jdbx-storage.md), [Security Model](architecture/) |
+| **[🔧 Development](development/)** | Contributing & building | [Contributing Guide](development/CONTRIBUTING.md) |
+| **[🚀 Deployment](deployment/)** | Production operations | [Production Setup](deployment/production-deployment.md) |
+| **[🔐 Security](security/)** | Security guidelines | [Security Model](security/SECURITY_GUIDELINES.md) |
 
-### 🚀 Quick Start Paths
+### 🎯 Quick Start Paths
 
-**New Developer**: [Installation](getting-started/installation.md) → [Quick Start](getting-started/quick-start.md) → [First Application](getting-started/first-application.md)
+| User Type | Recommended Path |
+|-----------|------------------|
+| **New User** | [Installation](getting-started/installation.md) → [Authentication Setup](guides/authentication-guide.md) → [API Reference](reference/api/rest-api.md) |
+| **Developer** | [Development Setup](development/) → [API Guides](guides/) → [Architecture Overview](architecture/) |
+| **Administrator** | [Security Guidelines](security/) → [RBAC Setup](guides/rbac-setup.md) → [Production Deployment](deployment/) |
+| **Contributor** | [Contributing Guide](development/CONTRIBUTING.md) → [Development Standards](development/documentation-standards.md) |
+
+### 📋 Documentation Categories Explained
+
+#### 🚀 **Getting Started**
+First-time user experience, installation, and basic setup guidance.
+
+#### 📖 **Tutorials** 
+Task-oriented learning with specific outcomes - step-by-step instructions for common tasks.
+
+#### 🛠️ **How-To Guides**
+Problem-solving documentation - solutions to specific issues and configuration scenarios.
+
+#### 📚 **Reference**
+Authoritative technical information including complete API documentation, configuration options, and technical specifications.
+
+#### 🏗️ **Architecture**
+System design and internals - deep technical understanding of JDBX components and design decisions.
+
+#### 🔧 **Development**
+Resources for contributors including build instructions, coding standards, and development workflows.
+
+#### 🚀 **Deployment**
+Production operations including deployment strategies, monitoring, and maintenance.
+
+#### 🔐 **Security**
+Security model, RBAC configuration, and security best practices.
 
 **API Integration**: [Authentication](guides/authentication.md) → [REST API](api/rest-api.md) → [Basic Operations](examples/basic-operations.md)
 
