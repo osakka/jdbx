@@ -33,6 +33,7 @@
  */
 
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "api/session_api.h"
 #include "api/library_api.h"
 #include "api/library_metrics_api.h"
@@ -149,6 +150,7 @@ api_route_t routes[] = {
   {"/api/metrics/export", HTTP_POST, health_api_handle_metrics_export, 1},
   {"/api/metrics/history", HTTP_GET, api_handle_metrics_history, 1},
   {"/api/metrics/aggregate", HTTP_GET, api_handle_metrics_aggregate, 1},
+  {"/api/metrics/adaptive-indexing", HTTP_GET, api_handle_adaptive_indexing_metrics, 1},
   
   /* System info routes */
   {"/api/system/info", HTTP_GET, api_handle_system_info, 1},
@@ -1017,7 +1019,7 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
           json_object_set(count_query, "type", json_create_string(doc_type));
           json_object_set(count_query, "library", json_create_string(library_name));
         
-          json_value_t* count_result = db_query_documents(ctx->db, "documents", count_query);
+          json_value_t* count_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, count_query);
           
           size_t doc_count = 0;
           if (count_result) {
@@ -1226,7 +1228,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   }
   
   /* Insert collection metadata */
-  json_value_t* result = db_insert_document(ctx->db, DOCUMENTS_COLLECTION, coll_doc);
+  json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_doc);
   json_free(coll_doc);
   
   if (!result) {
@@ -1360,7 +1362,7 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
   }
   
   /* Query documents from unified collection */
-  json_value_t* documents = db_query_documents(ctx->db, DOCUMENTS_COLLECTION, query);
+  json_value_t* documents = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   if (query) {
     json_free(query);
   }
@@ -1432,7 +1434,7 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   }
   
   /* Insert document */
-  json_value_t* result = db_insert_document(ctx->db, DOCUMENTS_COLLECTION, doc);
+  json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
   json_free(doc);
   
   if (!result) {
@@ -1472,7 +1474,7 @@ static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http
   }
   
   /* Get document from unified documents collection */
-  json_value_t* document = db_get_document(ctx->db, "documents", doc_id);
+  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
   
   if (!document) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -1518,7 +1520,7 @@ static http_response_t* api_handle_unified_document_update(api_context_t* ctx, h
   }
   
   /* Update document in unified documents collection */
-  json_value_t* result = db_update_document(ctx->db, "documents", doc_id, update_doc);
+  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id, update_doc);
   json_free(update_doc);
   
   if (!result) {
@@ -1558,7 +1560,7 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
   }
   
   /* Check if document exists first */
-  json_value_t* existing = db_get_document(ctx->db, "documents", doc_id);
+  json_value_t* existing = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
   if (!existing) {
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found\"}", "application/json");
@@ -1566,7 +1568,7 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
   json_free(existing);
   
   /* Delete document from unified documents collection */
-  if (db_delete_document(ctx->db, "documents", doc_id) != 0) {
+  if (db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id) != 0) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to delete document\"}", "application/json");
   }
@@ -1705,7 +1707,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   LOG_DEBUG("api_handle_documents_query: querying unified documents with type='%s', library='%s'", doc_type, library_name);
   
   /* Query the unified documents collection - single source of truth */
-  documents = db_query_documents(ctx->db, "documents", unified_query);
+  documents = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, unified_query);
   json_free(unified_query);
   
   if (query) {
@@ -1821,7 +1823,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
             collection_path, doc_id_copy, field_path_copy);
   
   /* Get the document */
-  json_value_t* document = db_get_document(ctx->db, collection_path, doc_id_copy);
+  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id_copy);
   
   if (!document) {
     free(path_copy);
@@ -1934,7 +1936,7 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
             library, collection, doc_id, field_path, collection_path);
   
   /* Get the document */
-  json_value_t* document = db_get_document(ctx->db, collection_path, doc_id);
+  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
   
   if (!document) {
     free(path_copy);
@@ -2022,7 +2024,7 @@ http_response_t* api_handle_document_get(api_context_t* ctx, http_request_t* req
   const char* document_id = slash + 11;
   
   /* Get document */
-  json_value_t* document = db_get_document(ctx->db, collection_name, document_id);
+  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
   free(collection_name);
   
   if (!document) {
@@ -2142,11 +2144,11 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     const char* doc_id = id_field->value.string;
     
     /* Try to get existing document */
-    json_value_t* existing = db_get_document(ctx->db, collection_name, doc_id);
+    json_value_t* existing = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
     if (existing) {
       /* Document exists, update it */
       json_free(existing);
-      result = db_update_document(ctx->db, collection_name, doc_id, document);
+      result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id, document);
       
       if (!result) {
         free(collection_name);
@@ -2155,11 +2157,11 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
       }
     } else {
       /* Document doesn't exist, insert it */
-      result = db_insert_document(ctx->db, collection_name, document);
+      result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document);
     }
   } else {
     /* No uuid or _id field, just insert */
-    result = db_insert_document(ctx->db, collection_name, document);
+    result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document);
   }
   
   free(collection_name);
@@ -2291,7 +2293,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   }
   
   /* Update document */
-  json_value_t* result = db_update_document(ctx->db, collection_name, document_id, document);
+  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id, document);
   
   if (!result) {
     /* Check if collection exists */
@@ -2398,7 +2400,7 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
   }
   
   /* Delete document */
-  int result = db_delete_document(ctx->db, collection_name, document_id);
+  int result = db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
   free(collection_name);
   
   if (!result) {
@@ -4576,7 +4578,7 @@ static char* get_session_library(api_context_t* ctx, http_request_t* request) {
   jwt_free(jwt);
   
   /* Query the session from database */
-  json_value_t* session = db_get_document(ctx->db, "system/sessions", session_id);
+  json_value_t* session = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id);
   free(session_id);
   
   if (!session) {

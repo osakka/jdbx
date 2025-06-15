@@ -1,5 +1,6 @@
 #include "database/library_metadata.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json_helpers.h"
 #include <string.h>
@@ -27,7 +28,7 @@ int library_system_init(database_t* db) {
     }
     
     /* Check if system library already exists */
-    json_value_t* existing = db_get_document(db, "libraries", "system");
+    json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, "system");
     if (!existing) {
         /* Save system library */
         if (library_metadata_save(db, "system", system_lib) != 1) {
@@ -50,7 +51,7 @@ int library_system_init(database_t* db) {
     }
     
     /* Check if default library already exists */
-    existing = db_get_document(db, "libraries", "default");
+    existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, "default");
     if (!existing) {
         /* Save default library */
         if (library_metadata_save(db, "default", default_lib) != 1) {
@@ -179,7 +180,7 @@ library_metadata_t* library_metadata_load(database_t* db, const char* library_na
     if (!db || !library_name) return NULL;
     
     /* Load library document */
-    json_value_t* lib_doc = db_get_document(db, "libraries", library_name);
+    json_value_t* lib_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, library_name);
     if (!lib_doc) {
         LOG_DEBUG("Library %s not found", library_name);
         return NULL;
@@ -273,14 +274,14 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
     /* TODO: Add permissions and access rules */
     
     /* Insert or update the library document */
-    json_value_t* existing = db_get_document(db, "libraries", library_name);
+    json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, library_name);
     json_value_t* result;
     
     if (existing) {
         json_free(existing);
-        result = db_update_document(db, "libraries", library_name, lib_doc);
+        result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, library_name, lib_doc);
     } else {
-        result = db_insert_document(db, "libraries", lib_doc);
+        result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
     }
     
     json_free(lib_doc);

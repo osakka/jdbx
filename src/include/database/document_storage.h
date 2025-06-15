@@ -34,7 +34,44 @@ typedef enum {
 #define SYSTEM_USER_CACHE          "system-cache"
 #define SYSTEM_USER_AUDIT          "system-audit"
 
-/* Core collection name */
+/* Physical Storage Location for All Documents */
+#define STORAGE_LIBRARY             "default"
+#define STORAGE_COLLECTION          "documents"
+
+/* Document Type Names (used in 'type' field) */
+#define DOC_TYPE_NAME_USER          "user"
+#define DOC_TYPE_NAME_ROLE          "role" 
+#define DOC_TYPE_NAME_LIBRARY       "library"
+#define DOC_TYPE_NAME_COLLECTION    "collection"
+#define DOC_TYPE_NAME_SESSION       "session"
+#define DOC_TYPE_NAME_FUNCTION      "function"
+#define DOC_TYPE_NAME_VALIDATOR     "validator"
+#define DOC_TYPE_NAME_TRANSFORMER   "transformer"
+#define DOC_TYPE_NAME_METRIC        "metric"
+#define DOC_TYPE_NAME_CONFIG        "config"
+#define DOC_TYPE_NAME_INDEX         "index"
+#define DOC_TYPE_NAME_SCHEMA        "schema"
+#define DOC_TYPE_NAME_VERSION       "version"
+#define DOC_TYPE_NAME_AUDIT         "audit"
+
+/* Virtual Collection Names (used in 'collection' field) */
+#define VIRTUAL_COLLECTION_USERS       "users"
+#define VIRTUAL_COLLECTION_ROLES       "roles"
+#define VIRTUAL_COLLECTION_LIBRARIES   "libraries"
+#define VIRTUAL_COLLECTION_SESSIONS    "sessions"
+#define VIRTUAL_COLLECTION_FUNCTIONS   "functions"
+#define VIRTUAL_COLLECTION_VALIDATORS  "validators"
+#define VIRTUAL_COLLECTION_TRANSFORMERS "transformers"
+#define VIRTUAL_COLLECTION_METRICS    "metrics"
+#define VIRTUAL_COLLECTION_CONFIGS     "configs"
+#define VIRTUAL_COLLECTION_INDEXES     "indexes"
+#define VIRTUAL_COLLECTION_SCHEMAS     "schemas"
+
+/* Virtual Library Names (used in 'library' field) */
+#define VIRTUAL_LIBRARY_SYSTEM      "system"
+#define VIRTUAL_LIBRARY_DEFAULT     "default"
+
+/* Legacy define for compatibility */
 #define DOCUMENTS_COLLECTION       "documents"
 
 /* Document type strings */

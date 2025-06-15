@@ -1,5 +1,6 @@
 #include "utils/metrics.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include "utils/json_deep_copy.h"
@@ -85,7 +86,7 @@ int library_metrics_record(database_t* db, const char* library_name,
   json_object_set(document, "data", json_deep_copy(metric_data));
   
   /* Insert metric document */
-  json_value_t* result = db_insert_document(db, collection_name, document);
+  json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, collection_name, document);
   json_free(document);
   free(collection_name);
   
@@ -120,7 +121,7 @@ json_value_t* library_metrics_query(database_t* db, const char* library_name,
   }
   
   /* Query metrics - TODO: Add sorting and limit support to db_query_documents */
-  json_value_t* results = db_query_documents(db, collection_name, query);
+  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_name, query);
   json_free(query);
   
   /* Apply limit manually if results exist */
@@ -207,7 +208,7 @@ int library_metrics_cleanup(database_t* db, const char* library_name, int retent
   json_object_set(timestamp_filter, "$lt", json_create_string(cutoff_time));
   json_object_set(query, "timestamp", timestamp_filter);
   
-  json_value_t* results = db_query_documents(db, collection_name, query);
+  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_name, query);
   json_free(query);
   
   int deleted_count = 0;
@@ -219,7 +220,7 @@ int library_metrics_cleanup(database_t* db, const char* library_name, int retent
         json_value_t* doc = json_array_get(documents, i);
         json_value_t* id = json_object_get(doc, "uuid");
         if (id && id->type == JSON_STRING) {
-          if (db_delete_document(db, collection_name, id->value.string) == 0) {
+          if (db_delete_document(db, STORAGE_LIBRARY, collection_name, id->value.string) == 0) {
             deleted_count++;
           }
         }

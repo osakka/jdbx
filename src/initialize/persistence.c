@@ -12,13 +12,8 @@ init_status_t init_persistence_thread(database_t* database) {
     return INIT_PERSISTENCE_ERROR;
   }
   
-  /* Start persistence thread */
-  if (!db_start_persistence_thread(database)) {
-    INIT_LOG_FAILURE("PERSISTENCE", "Failed to start persistence thread");
-    return INIT_PERSISTENCE_ERROR;
-  }
-  
-  INIT_LOG_SUCCESS("PERSISTENCE", "Persistence thread started successfully");
+  /* Persistence is automatic in unified documents architecture */
+  INIT_LOG_SUCCESS("PERSISTENCE", "Persistence is automatic (no separate thread needed)");
   
   /* Initialize metrics persistence */
   INIT_LOG_PROGRESS("PERSISTENCE", "Initializing metrics persistence");

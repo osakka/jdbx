@@ -1,5 +1,6 @@
 #include "rbac/rbac_database.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -33,7 +34,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   
   /* Add username to session */
   LOG_DEBUG("Looking up username for user_id: %s", user_id);
-  json_value_t* user_doc = db_get_document(db, "system/users", user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
   if (user_doc) {
     LOG_DEBUG("Found user document");
     json_value_t* username_val = json_object_get(user_doc, "username");
@@ -73,7 +74,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   
   /* Insert session */
   LOG_DEBUG("Inserting session into %s", SESSIONS_COLLECTION);
-  json_value_t* result = db_insert_document(db, SESSIONS_COLLECTION, session_doc);
+  json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_doc);
   json_free(session_doc);
   
   if (!result) {
@@ -116,7 +117,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(db, SESSIONS_COLLECTION, query);
+  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -165,7 +166,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
       strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
       json_object_set(update, "last_seen", json_create_string(timestamp));
       
-      db_update_document(db, SESSIONS_COLLECTION, session_id, update);
+      db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update);
       json_free(update);
     }
   }
@@ -203,7 +204,7 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
   json_object_set(query, "user_id", json_create_string(user_id));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(db, SESSIONS_COLLECTION, query);
+  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -241,7 +242,7 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
   json_object_set(update, "invalidated_at", json_create_string(timestamp));
   
-  int result = db_update_document(db, SESSIONS_COLLECTION, session_id, update) != NULL;
+  int result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update) != NULL;
   json_free(update);
   
   return result;

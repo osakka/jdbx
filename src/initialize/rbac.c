@@ -66,19 +66,17 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
   init_register_rbac(rbac, rbac_ref);
   
   /* Create default admin role and user if needed */
-  /* Check if database needs bootstrap instead of accessing is_bootstrap_mode */
-  if (db_needs_bootstrap(database)) {
-    INIT_LOG_PROGRESS("RBAC", "Database needs bootstrap - deferring admin creation to avoid circular dependencies");
+  /* In unified documents architecture, bootstrap is automatic */
+  INIT_LOG_PROGRESS("RBAC", "Unified documents architecture - bootstrap handled automatically");
+  
+  /* Enable bootstrap mode but defer actual user creation until after server starts */
+  database->is_bootstrap_mode = 1;
+  INIT_LOG_PROGRESS("RBAC", "Bootstrap mode enabled - admin creation will be handled during first API request");
+  
+  /* Mark that we need to create admin on first opportunity */
+  setenv("JDBX_DEFERRED_BOOTSTRAP", "1", 1);
     
-    /* Enable bootstrap mode but defer actual user creation until after server starts */
-    database->is_bootstrap_mode = 1;
-    INIT_LOG_PROGRESS("RBAC", "Bootstrap mode enabled - admin creation will be handled during first API request");
-    
-    /* Mark that we need to create admin on first opportunity */
-    setenv("JDBX_DEFERRED_BOOTSTRAP", "1", 1);
-    
-    INIT_LOG_SUCCESS("RBAC", "Bootstrap mode configured - admin will be created automatically");
-  }
+  INIT_LOG_SUCCESS("RBAC", "Bootstrap mode configured - admin will be created automatically");
   
   /* 
    * Try to load the enhanced RBAC system in a background thread

@@ -2,13 +2,20 @@
 #define RBAC_DB_H
 
 #include "rbac/rbac.h"
+#include <time.h>
 
-/* System collection for storing configuration */
-#define RBAC_CONFIG_COLLECTION "system/config"
-
-/* RBAC-specific collections */
-#define RBAC_USERS_COLLECTION "system/users"
-#define RBAC_ROLES_COLLECTION "system/roles"
+/* RBAC system library and collection names - SINGLE SOURCE OF TRUTH */
+#define RBAC_SYSTEM_LIBRARY "system"
+#define RBAC_DEFAULT_LIBRARY "default"
+#define RBAC_CONFIG_COLLECTION_NAME "config"
+#define RBAC_USERS_COLLECTION_NAME "users"  
+#define RBAC_ROLES_COLLECTION_NAME "roles"
+#define RBAC_SESSIONS_COLLECTION_NAME "sessions"
+#define RBAC_PERMISSIONS_COLLECTION_NAME "permissions"
+#define RBAC_COLLECTIONS_COLLECTION_NAME "collections"
+#define RBAC_PERMISSION_CACHE_COLLECTION_NAME "permission_cache"
+#define RBAC_DOCUMENTS_COLLECTION_NAME "documents"
+#define RBAC_LIBRARIES_COLLECTION_NAME "libraries"
 
 /* Collection creation/upgrade status */
 typedef struct {
@@ -224,5 +231,16 @@ int rbac_db_authenticate_user(struct database* db, const char* username, const c
  * @return 1 on success, 0 on failure (always returns 0 now)
  */
 int rbac_db_migrate_from_file(struct database* db, rbac_system_t* rbac);
+
+/* Bootstrap functions for admin setup */
+int create_default_admin_role(struct database* db, char** admin_role_id_out);
+int create_default_admin_user(struct database* db, const char* admin_role_id);
+
+/* Session management functions */
+char* rbac_db_create_session(struct database* db, const char* user_id, const char* token,
+                             time_t expires_at, const char* ip_address, const char* user_agent);
+char* rbac_db_validate_session(struct database* db, const char* token);
+int rbac_db_revoke_session(struct database* db, const char* session_id);
+int rbac_db_invalidate_session(struct database* db, const char* session_id);
 
 #endif /* RBAC_DB_H */

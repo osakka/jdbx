@@ -1,4 +1,5 @@
 #include "database/batch_operations.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/json_helpers.h"
 #include "utils/logger.h"
@@ -116,7 +117,7 @@ static int batch_insert_jdbx(
             continue;
         }
         
-        json_value_t* insert_result = db_insert_document(db, collection_name, parsed_doc);
+        json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, collection_name, parsed_doc);
         int success = (insert_result != NULL);
         
         if (success) {

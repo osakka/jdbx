@@ -1,4 +1,5 @@
 #include "rbac/rbac_db.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/logger.h"
 #include <stdio.h>
@@ -38,8 +39,8 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   }
   
   /* Create _system collection if it doesn't exist */
-  if (!db_get_collection(db, RBAC_CONFIG_COLLECTION)) {
-    if (!db_create_collection(db, RBAC_CONFIG_COLLECTION)) {
+  if (!db_get_collection(db, RBAC_CONFIG_COLLECTION_NAME)) {
+    if (!db_create_collection(db, RBAC_CONFIG_COLLECTION_NAME)) {
       status.error_message = strdup("Failed to create _system collection");
       return status;
     }
@@ -47,21 +48,21 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   }
   
   /* Create _users collection if it doesn't exist */
-  if (!db_get_collection(db, RBAC_USERS_COLLECTION)) {
-    if (!db_create_collection(db, RBAC_USERS_COLLECTION)) {
+  if (!db_get_collection(db, RBAC_USERS_COLLECTION_NAME)) {
+    if (!db_create_collection(db, RBAC_USERS_COLLECTION_NAME)) {
       status.error_message = strdup("Failed to create _users collection");
       return status;
     }
     status.collections_created++;
     
     /* Create indexes for _users collection */
-    if (!db_create_index(db, RBAC_USERS_COLLECTION, "idx_user_id", "id", INDEX_TYPE_UNIQUE)) {
+    if (!db_create_index(db, STORAGE_COLLECTION, "idx_user_id", "id", INDEX_TYPE_UNIQUE)) {
       status.error_message = strdup("Failed to create user ID index");
       return status;
     }
     status.indexes_created++;
     
-    if (!db_create_index(db, RBAC_USERS_COLLECTION, "idx_username", "username", INDEX_TYPE_UNIQUE)) {
+    if (!db_create_index(db, STORAGE_COLLECTION, "idx_username", "username", INDEX_TYPE_UNIQUE)) {
       status.error_message = strdup("Failed to create username index");
       return status;
     }
@@ -69,21 +70,21 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   }
   
   /* Create _roles collection if it doesn't exist */
-  if (!db_get_collection(db, RBAC_ROLES_COLLECTION)) {
-    if (!db_create_collection(db, RBAC_ROLES_COLLECTION)) {
+  if (!db_get_collection(db, RBAC_ROLES_COLLECTION_NAME)) {
+    if (!db_create_collection(db, RBAC_ROLES_COLLECTION_NAME)) {
       status.error_message = strdup("Failed to create _roles collection");
       return status;
     }
     status.collections_created++;
     
     /* Create indexes for _roles collection */
-    if (!db_create_index(db, RBAC_ROLES_COLLECTION, "idx_role_id", "id", INDEX_TYPE_UNIQUE)) {
+    if (!db_create_index(db, STORAGE_COLLECTION, "idx_role_id", "id", INDEX_TYPE_UNIQUE)) {
       status.error_message = strdup("Failed to create role ID index");
       return status;
     }
     status.indexes_created++;
     
-    if (!db_create_index(db, RBAC_ROLES_COLLECTION, "idx_role_name", "name", INDEX_TYPE_UNIQUE)) {
+    if (!db_create_index(db, STORAGE_COLLECTION, "idx_role_name", "name", INDEX_TYPE_UNIQUE)) {
       status.error_message = strdup("Failed to create role name index");
       return status;
     }
@@ -101,15 +102,15 @@ int rbac_db_exists(database_t* db) {
   }
   
   /* Check if all required collections exist */
-  if (!db_get_collection(db, RBAC_CONFIG_COLLECTION) ||
-    !db_get_collection(db, RBAC_USERS_COLLECTION) ||
-    !db_get_collection(db, RBAC_ROLES_COLLECTION)) {
+  if (!db_get_collection(db, RBAC_CONFIG_COLLECTION_NAME) ||
+    !db_get_collection(db, RBAC_USERS_COLLECTION_NAME) ||
+    !db_get_collection(db, RBAC_ROLES_COLLECTION_NAME)) {
     return 0;
   }
   
   /* Check if users collection has at least one user */
   json_value_t* query = json_create_object();
-  json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -254,7 +255,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
   
   /* Load all users */
   json_value_t* all_users_query = json_create_object();
-  json_value_t* users_result = db_query_documents(db, RBAC_USERS_COLLECTION, all_users_query);
+  json_value_t* users_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, all_users_query);
   json_free(all_users_query);
   
   /* Extract documents array from response object */
@@ -287,7 +288,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
   
   /* Load all roles */
   json_value_t* all_roles_query = json_create_object();
-  json_value_t* roles_result = db_query_documents(db, RBAC_ROLES_COLLECTION, all_roles_query);
+  json_value_t* roles_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, all_roles_query);
   json_free(all_roles_query);
   
   /* Extract documents array from response object */
@@ -339,7 +340,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
   json_value_t* clear_query = json_create_object();
   
   /* Get all users */
-  json_value_t* existing_users = db_query_documents(db, RBAC_USERS_COLLECTION, clear_query);
+  json_value_t* existing_users = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, clear_query);
   if (existing_users && existing_users->type == JSON_ARRAY) {
     /* Delete each user */
     for (size_t i = 0; i < existing_users->value.array.size; i++) {
@@ -347,7 +348,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
       if (user->type == JSON_OBJECT) {
         json_value_t* id_val = json_object_get(user, "id");
         if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(db, RBAC_USERS_COLLECTION, id_val->value.string);
+          db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
         }
       }
     }
@@ -355,7 +356,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
   }
   
   /* Get all roles */
-  json_value_t* existing_roles = db_query_documents(db, RBAC_ROLES_COLLECTION, clear_query);
+  json_value_t* existing_roles = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, clear_query);
   if (existing_roles && existing_roles->type == JSON_ARRAY) {
     /* Delete each role */
     for (size_t i = 0; i < existing_roles->value.array.size; i++) {
@@ -363,7 +364,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
       if (role->type == JSON_OBJECT) {
         json_value_t* id_val = json_object_get(role, "id");
         if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(db, RBAC_ROLES_COLLECTION, id_val->value.string);
+          db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
         }
       }
     }
@@ -380,7 +381,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
     if (user->type == JSON_OBJECT) {
       /* Insert user into database */
       json_value_t* user_copy = json_clone(user);
-      json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, user_copy);
+      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_copy);
       
       if (!result) {
         LOG_ERROR("insert user %s into database", user_id);
@@ -399,7 +400,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
     if (role->type == JSON_OBJECT) {
       /* Insert role into database */
       json_value_t* role_copy = json_clone(role);
-      json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_copy);
+      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_copy);
       
       if (!result) {
         LOG_ERROR("insert role %s into database", role_id);
@@ -422,7 +423,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Check if username already exists */
   json_value_t* query = json_create_object();
   json_object_set(query, "username", json_create_string(username));
-  json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -463,7 +464,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   json_object_set(user_doc, "roles", json_create_array());
   
   /* Insert user document */
-  json_value_t* insert_result = db_insert_document(db, RBAC_USERS_COLLECTION, user_doc);
+  json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_doc);
   if (!insert_result) {
     LOG_ERROR("insert user document into database.");
     free(id);
@@ -497,7 +498,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
   }
   
   /* Get user document - first try as document ID */
-  json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
   char* actual_doc_id = NULL;
   
   /* If not found, try as UUID */
@@ -527,7 +528,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
         const char* role_id = role_id_val->value.string;
         
         /* Get role document */
-        json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+        json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
         if (role_doc && role_doc->type == JSON_OBJECT) {
           /* Get role users */
           json_value_t* users_val = json_object_get(role_doc, "users");
@@ -543,7 +544,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
             
             /* Update role document */
             json_object_set(role_doc, "users", updated_users);
-            json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
+            json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_doc);
             if (update_result) {
               json_free(update_result);
             }
@@ -563,7 +564,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     return 0;
   }
   
-  int result = db_delete_document(db, RBAC_USERS_COLLECTION, actual_doc_id);
+  int result = db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id);
   free(actual_doc_id);
   
   return result;
@@ -576,7 +577,7 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
   }
   
   /* First try as document ID */
-  json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
   
   /* If not found, try as UUID */
   if (!user_doc) {
@@ -607,7 +608,7 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   json_object_set(query, "username", json_create_string(username));
   
   /* Query user document */
-  json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -672,7 +673,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Check if role with same name already exists */
   json_value_t* query = json_create_object();
   json_object_set(query, "name", json_create_string(name));
-  json_value_t* result = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -705,7 +706,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   json_object_set(role_doc, "users", json_create_array());
   
   /* Insert role document */
-  json_value_t* insert_result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_doc);
+  json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_doc);
   if (!insert_result) {
     LOG_ERROR("insert role document into database.");
     free(id);
@@ -739,7 +740,7 @@ static json_value_t* find_role_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = json_create_object();
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = db_query_documents(db, RBAC_ROLES_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -770,7 +771,7 @@ static json_value_t* find_user_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = json_create_object();
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -798,7 +799,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
   }
   
   /* Get role document - first try as document ID */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   char* actual_doc_id = NULL;
   
   /* If not found, try as UUID */
@@ -828,7 +829,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
         const char* user_id = user_id_val->value.string;
         
         /* Get user document */
-        json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+        json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
         if (user_doc && user_doc->type == JSON_OBJECT) {
           /* Get user roles */
           json_value_t* roles_val = json_object_get(user_doc, "roles");
@@ -844,7 +845,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
             
             /* Update user document */
             json_object_set(user_doc, "roles", updated_roles);
-            json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_doc);
+            json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id, user_doc);
             if (update_result) {
               json_free(update_result);
             }
@@ -864,7 +865,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
     return 0;
   }
   
-  int result = db_delete_document(db, RBAC_ROLES_COLLECTION, actual_doc_id);
+  int result = db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id);
   free(actual_doc_id);
   
   return result;
@@ -877,7 +878,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
   }
   
   /* Get existing role document - first try as document ID */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   char* actual_doc_id = NULL;
   
   /* If not found, try as UUID */
@@ -914,7 +915,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
   }
   
   /* Update the document in database */
-  json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_doc_id, role_doc);
+  json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id, role_doc);
   
   json_free(role_doc);
   free(actual_doc_id);
@@ -935,7 +936,7 @@ rbac_role_t* rbac_db_get_role(database_t* db, const char* role_id) {
   }
   
   /* First try as document ID */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   
   /* If not found, try as UUID */
   if (!role_doc) {
@@ -980,7 +981,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   rbac_free_role(role);
   
   /* Get user document using actual ID */
-  json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, actual_user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
     free(actual_user_id);
@@ -989,7 +990,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   }
   
   /* Get role document using actual ID */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, actual_role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_role_id);
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
@@ -1041,7 +1042,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   /* Add role to user roles if needed */
   if (!user_has_role) {
     json_array_append(user_roles, json_create_string(actual_role_id));
-    json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, actual_user_id, user_doc);
+    json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id, user_doc);
     if (update_result) {
       json_free(update_result);
     } else {
@@ -1057,7 +1058,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   /* Add user to role users if needed */
   if (!role_has_user) {
     json_array_append(role_users, json_create_string(actual_user_id));
-    json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_role_id, role_doc);
+    json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_role_id, role_doc);
     if (update_result) {
       json_free(update_result);
     } else {
@@ -1106,7 +1107,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   rbac_free_role(role);
   
   /* Get user document using actual ID */
-  json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, actual_user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
     free(actual_user_id);
@@ -1115,7 +1116,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   }
   
   /* Get role document using actual ID */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, actual_role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_role_id);
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
@@ -1159,7 +1160,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   /* Update user document if role was found */
   if (user_role_found) {
     json_object_set(user_doc, "roles", updated_roles);
-    json_value_t* update_result = db_update_document(db, RBAC_USERS_COLLECTION, actual_user_id, user_doc);
+    json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id, user_doc);
     if (update_result) {
       json_free(update_result);
     } else {
@@ -1187,7 +1188,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   /* Update role document if user was found */
   if (role_user_found) {
     json_object_set(role_doc, "users", updated_users);
-    json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, actual_role_id, role_doc);
+    json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_role_id, role_doc);
     if (update_result) {
       json_free(update_result);
     } else {
@@ -1234,7 +1235,7 @@ int rbac_db_grant_permission(database_t* db, const char* role_id, rbac_resource_
   }
   
   /* Get role document */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   if (!role_doc) {
     LOG_ERROR("Role %s not found", role_id);
     return 0;
@@ -1268,7 +1269,7 @@ int rbac_db_grant_permission(database_t* db, const char* role_id, rbac_resource_
   json_object_set(permissions, key, json_create_number(current_permission));
   
   /* Update role document */
-  json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
+  json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_doc);
   if (!update_result) {
     LOG_ERROR("update role document.");
     free(key);
@@ -1291,7 +1292,7 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
   }
   
   /* Get role document */
-  json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   if (!role_doc) {
     LOG_ERROR("Role %s not found", role_id);
     return 0;
@@ -1334,7 +1335,7 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
   }
   
   /* Update role document */
-  json_value_t* update_result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_doc);
+  json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_doc);
   if (!update_result) {
     LOG_ERROR("update role document.");
     free(key);
@@ -1361,7 +1362,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
   }
   
   /* Get user document */
-  json_value_t* user_doc = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
   if (!user_doc) {
     LOG_ERROR("User %s not found", user_id);
     return 0;
@@ -1407,7 +1408,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     const char* role_id = role_id_val->value.string;
     
     /* Get role document */
-    json_value_t* role_doc = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+    json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
     if (!role_doc || role_doc->type != JSON_OBJECT) {
       TRACE_RBAC("RBAC_DB: Role %s not found or invalid", role_id);
       continue;

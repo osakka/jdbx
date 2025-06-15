@@ -3,12 +3,13 @@
  * Handles admin user authentication and JWT token generation
  */
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "core/server.h"
 #include "database/database.h"
 #include "database/document_storage.h"
 #include "rbac/rbac.h"
+#include "rbac/rbac_db.h"
 #include "rbac/jwt.h"
-#include "rbac/rbac_database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -111,7 +112,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(system_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert system library document */
-              json_value_t* system_lib_result = db_insert_document(ctx->db, "documents", system_lib_doc);
+              json_value_t* system_lib_result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, system_lib_doc);
               if (system_lib_result) {
                 json_value_t* system_lib_id_val = json_object_get(system_lib_result, "uuid");
                 if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
@@ -134,7 +135,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(default_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert default library document */
-              json_value_t* default_lib_result = db_insert_document(ctx->db, "documents", default_lib_doc);
+              json_value_t* default_lib_result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, default_lib_doc);
               if (default_lib_result) {
                 json_value_t* default_lib_id_val = json_object_get(default_lib_result, "uuid");
                 if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
@@ -187,8 +188,9 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* HIERARCHICAL: Query system/users collection */
-  json_value_t* query_results = db_query_documents(ctx->db, "system/users", query);
+  /* UNIFIED DOCUMENTS: Query system/users collection */
+  TRACE_AUTH("Querying for user '%s' in library='%s', collection='%s'", username, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME);
+  json_value_t* query_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   
   json_free(query);
     
@@ -270,7 +272,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         json_object_set(session_query, "active", json_create_boolean(1));
         
         /* Query system/sessions collection in JDBX architecture */
-        json_value_t* existing_sessions_response = db_query_documents(ctx->db, "system/sessions", session_query);
+        json_value_t* existing_sessions_response = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_query);
         json_free(session_query);
         
         if (existing_sessions_response) {

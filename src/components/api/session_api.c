@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "rbac/rbac_database.h"
 #include "utils/json.h"
@@ -17,7 +18,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   
   /* Query all sessions */
   json_value_t* query = json_create_object();
-  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -97,7 +98,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   json_value_t* query = json_create_object();
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -190,7 +191,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -278,7 +279,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -321,7 +322,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
   /* Update session in database */
-  json_value_t* update_result = db_update_document(ctx->db, "system/sessions", session_id, update_doc);
+  json_value_t* update_result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update_doc);
   json_free(update_doc);
   
   if (!update_result) {

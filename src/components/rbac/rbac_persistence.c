@@ -1,6 +1,7 @@
 #include "rbac/rbac.h"
 #include "rbac/rbac_db.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,7 +56,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     
     /* Check if user already exists */
     LOG_DEBUG("Checking if user %s exists", user_id);
-    json_value_t* existing = db_get_document(db, RBAC_USERS_COLLECTION, user_id);
+    json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
     
     if (existing) {
       /* Update existing user */
@@ -67,7 +68,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_update_document(db, RBAC_USERS_COLLECTION, user_id, user_copy);
+      json_value_t* result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id, user_copy);
       
       if (!result) {
         LOG_ERROR("update user %s in database", user_id);
@@ -87,7 +88,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, user_copy);
+      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_copy);
       
       if (!result) {
         LOG_ERROR("insert user %s into database", user_id);
@@ -117,7 +118,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     
     /* Check if role already exists */
     LOG_DEBUG("Checking if role %s exists", role_id);
-    json_value_t* existing = db_get_document(db, RBAC_ROLES_COLLECTION, role_id);
+    json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
     
     if (existing) {
       /* Update existing role */
@@ -129,7 +130,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_update_document(db, RBAC_ROLES_COLLECTION, role_id, role_copy);
+      json_value_t* result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_copy);
       
       if (!result) {
         LOG_ERROR("update role %s in database", role_id);
@@ -149,7 +150,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_insert_document(db, RBAC_ROLES_COLLECTION, role_copy);
+      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_copy);
       
       if (!result) {
         LOG_ERROR("insert role %s into database", role_id);
@@ -165,7 +166,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   
   /* Add special default admin user if none exists */
   json_value_t* query = json_create_object();
-  json_value_t* users_result = db_query_documents(db, RBAC_USERS_COLLECTION, query);
+  json_value_t* users_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -185,7 +186,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     json_object_set(admin_user, "roles", roles_array);
     
     /* Insert admin user */
-    json_value_t* result = db_insert_document(db, RBAC_USERS_COLLECTION, admin_user);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_user);
     if (!result) {
       LOG_ERROR("create default admin user.");
     } else {

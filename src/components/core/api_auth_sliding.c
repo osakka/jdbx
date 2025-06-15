@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
 #include "rbac/rbac_database.h"
@@ -33,7 +34,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(query, "active", json_create_boolean(1));
   
   if (g_logger) LOG_DEBUG("Querying sessions for token: %.30s...", token);
-  json_value_t* results = db_query_documents(ctx->db, "system/sessions", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -85,7 +86,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_object_set(full_session, "expires_at", json_create_string(expire_time));
   
   /* Update the session document with all fields */
-  json_value_t* update_result = db_update_document(ctx->db, "system/sessions", session_id, full_session);
+  json_value_t* update_result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, full_session);
   
   if (update_result) {
     if (g_logger) {
@@ -234,7 +235,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_object_set(session_query, "token", json_create_string(token));
   json_object_set(session_query, "active", json_create_boolean(1));
   
-  json_value_t* session_results = db_query_documents(ctx->db, "system/sessions", session_query);
+  json_value_t* session_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_query);
   json_free(session_query);
   
   int session_found = 0;

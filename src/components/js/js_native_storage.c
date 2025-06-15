@@ -1,6 +1,7 @@
 #include "js/js_native_storage.h"
 #include "js/js_function_resolver.h"
 #include "js/js_engine.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
 #include "database/system_schemas.h"
@@ -304,7 +305,7 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
     }
 
     /* Insert into database */
-    json_value_t *result = db_insert_document(db, collection_name, script_doc);
+    json_value_t *result = db_insert_document(db, STORAGE_LIBRARY, collection_name, script_doc);
     json_free(script_doc);
 
     if (!result) {
@@ -333,7 +334,7 @@ js_script_metadata_t* js_native_get_script(database_t *db, const char *script_id
     };
 
     for (size_t i = 0; i < sizeof(collections) / sizeof(collections[0]); i++) {
-        json_value_t *script_doc = db_get_document(db, collections[i], script_id);
+        json_value_t *script_doc = db_get_document(db, STORAGE_LIBRARY, collections[i], script_id);
         if (script_doc) {
             js_script_metadata_t *metadata = js_native_script_metadata_from_json(script_doc);
             json_free(script_doc);
@@ -505,7 +506,7 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
     }
 
     /* Insert metrics document */
-    json_value_t *result = db_insert_document(db, JS_EXECUTION_METRICS_COLLECTION, metrics_doc);
+    json_value_t *result = db_insert_document(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, metrics_doc);
     json_free(metrics_doc);
 
     if (!result) {
@@ -546,7 +547,7 @@ json_value_t* js_native_find_triggered_scripts(database_t *db, const char *colle
         json_object_set(query, "enabled", json_create_boolean(1));
         json_object_set(query, "collection_pattern", json_create_string(collection_name));
 
-        json_value_t *scripts = db_query_documents(db, collections[i], query);
+        json_value_t *scripts = db_query_documents(db, STORAGE_LIBRARY, collections[i], query);
         json_free(query);
 
         if (scripts && scripts->type == JSON_ARRAY) {
@@ -701,7 +702,7 @@ json_value_t* js_native_list_scripts(database_t *db, js_script_type_t type,
     }
 
     /* Execute query */
-    json_value_t *results = db_query_documents(db, collection, query);
+    json_value_t *results = db_query_documents(db, STORAGE_LIBRARY, collection, query);
     json_free(query);
 
     return results;
@@ -816,7 +817,7 @@ json_value_t* js_native_get_global_metrics(database_t *db, time_t from_time, tim
     }
 
     /* Get execution metrics */
-    json_value_t *metrics = db_query_documents(db, JS_EXECUTION_METRICS_COLLECTION, query);
+    json_value_t *metrics = db_query_documents(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, query);
     json_free(query);
 
     if (!metrics) {
@@ -1042,7 +1043,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
     }
 
     /* Update in database */
-    json_value_t *result = db_update_document(db, collection_name, script_id, script_doc);
+    json_value_t *result = db_update_document(db, STORAGE_LIBRARY, collection_name, script_id, script_doc);
     json_free(script_doc);
 
     if (!result) {
@@ -1090,7 +1091,7 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
     js_native_free_script_metadata(existing);
 
     /* Delete from database */
-    int result = db_delete_document(db, collection_name, script_id);
+    int result = db_delete_document(db, STORAGE_LIBRARY, collection_name, script_id);
     if (!result) {
         LOG_ERROR("Cannot delete JavaScript script from database.");
         return 0;
@@ -1125,7 +1126,7 @@ json_value_t* js_native_get_script_statistics(database_t *db, const char *script
     }
 
     /* Get execution metrics for this script */
-    json_value_t *metrics = db_query_documents(db, JS_EXECUTION_METRICS_COLLECTION, query);
+    json_value_t *metrics = db_query_documents(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, query);
     json_free(query);
 
     if (!metrics) {
@@ -1208,7 +1209,7 @@ json_value_t* js_native_execute_tagged_functions(js_engine_t *engine, database_t
     json_object_set(tag_filter, "$in", json_create_string(tag));
     json_object_set(query, "trigger_tags", tag_filter);
 
-    json_value_t *functions = db_query_documents(db, JS_FUNCTIONS_COLLECTION, query);
+    json_value_t *functions = db_query_documents(db, STORAGE_LIBRARY, JS_FUNCTIONS_COLLECTION, query);
     json_free(query);
 
     if (!functions || json_array_size(functions) == 0) {

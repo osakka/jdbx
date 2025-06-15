@@ -25,7 +25,7 @@ let connectionsChart = null;
 let responseTimesChart = null;
 let scriptPerformanceChart = null;
 
-// Data storage
+// Data storage - UNIFIED DOCUMENTS ARCHITECTURE
 let allUsers = [];
 let allRoles = [];
 let allPermissions = [];
@@ -34,10 +34,17 @@ let currentLibrary = 'default';  // Current selected library
 let currentCollection = null;
 let currentDocument = null;
 let libraries = [];  // List of available libraries
-let collections = [];
-let documents = [];
+let collections = [];  // Virtual collections (document types)
+let documents = [];   // All documents from unified API
 let schemas = [];
 let queryBuilderVisible = false;  // Track query builder state
+
+// Unified Documents API mappings
+const UNIFIED_API = {
+    documents: '/api/documents',        // Main unified documents endpoint
+    collections: '/api/collections',    // Virtual collections (document types)
+    libraries: '/api/libraries'         // Library management
+};
 
 // Previous data for optimization
 let previousData = {
@@ -52,30 +59,37 @@ let previousData = {
 // Global variable to store consistent database size across all displays
 window.currentDatabaseSizeBytes = 0;
 
-// Unified function to get actual database size
+// Unified function to get actual database size from unified documents API
 async function getActualDatabaseSize() {
     try {
-        // Get size from collections API - this is the most accurate source
-        const response = await apiRequest('/api/collections');
+        // Get size from unified documents API with stats query
+        const response = await apiRequest('/api/documents?stats=true');
         let totalSize = 0;
         
-        // Handle both array and object with collections property
-        const collections = Array.isArray(response) ? response : (response?.collections || []);
-        
-        if (collections && Array.isArray(collections)) {
-            totalSize = collections.reduce((sum, collection) => {
-                return sum + (collection.total_size || 0);
-            }, 0);
+        // Handle unified documents response format
+        if (response && response.stats) {
+            totalSize = response.stats.total_size || 0;
+        } else if (response && response.documents) {
+            // Fallback: estimate size from document count
+            totalSize = response.documents.length * 1024; // Rough estimate
         }
         
-        // Apply minimum size for system collections (20KB)
+        // Apply minimum size for system documents (20KB)
         const actualSize = Math.max(totalSize, 20480);
         window.currentDatabaseSizeBytes = actualSize;
         
         return actualSize;
     } catch (error) {
-        console.warn('Failed to get actual database size, using cached value:', error);
-        return window.currentDatabaseSizeBytes || 20480;
+        console.warn('Failed to get actual database size from unified API, using cached value:', error);
+        // Fallback to old collections API
+        try {
+            const fallbackResponse = await apiRequest('/api/collections');
+            const collections = Array.isArray(fallbackResponse) ? fallbackResponse : (fallbackResponse?.collections || []);
+            const totalSize = collections.reduce((sum, collection) => sum + (collection.total_size || 0), 0);
+            return Math.max(totalSize, 20480);
+        } catch (fallbackError) {
+            return window.currentDatabaseSizeBytes || 20480;
+        }
     }
 }
 
@@ -102,8 +116,8 @@ async function validateSession() {
     
     try {
         // Make a lightweight request to check if session is valid
-        // Using /api/collections endpoint which requires auth but is lightweight
-        const response = await fetch(`${API_BASE_URL}/api/collections`, {
+        // Using /api/libraries endpoint which requires auth but is lightweight
+        const response = await fetch(`${API_BASE_URL}/api/libraries`, {
             method: 'GET',  // Use GET since server doesn't support HEAD
             headers: {
                 'Authorization': `Bearer ${currentToken}`
@@ -760,62 +774,50 @@ function hasDataChanged(newData) {
 
 async function loadCollections() {
     try {
-        // For dashboard stats, we need to get collections across all libraries
-        // Load libraries first if not already loaded
+        console.log('Loading collections from unified documents API...');
+        
+        // Get virtual collections (document types) from unified API
+        const collectionsResponse = await apiRequest('/api/collections');
+        let collectionsData = Array.isArray(collectionsResponse) ? collectionsResponse : (collectionsResponse?.collections || []);
+        
+        console.log('Collections data from unified API:', collectionsData);
+        
+        // Also load libraries for library information
         if (libraries.length === 0) {
-            await loadLibraries();
-        }
-        
-        let allCollectionsData = [];
-        
-        // Load collections from all libraries for dashboard statistics
-        for (const library of libraries) {
             try {
-                const response = await apiRequest(`/api/libraries/${library.name}/collections`);
-                let libraryCollections = Array.isArray(response) ? response : (response.collections || []);
-                
-                // Add library context to each collection
-                libraryCollections = libraryCollections.map(item => {
-                    if (typeof item === 'string') {
-                        return { 
-                            name: item, 
-                            library: library.name,
-                            documentCount: 0, 
-                            isSystem: item.startsWith('_') || item.startsWith('system_')
-                        };
-                    } else {
-                        return {
-                            ...item,
-                            library: library.name,
-                            isSystem: item.name && (item.name.startsWith('_') || item.name.startsWith('system_'))
-                        };
-                    }
-                });
-                
-                allCollectionsData = allCollectionsData.concat(libraryCollections);
+                const librariesResponse = await apiRequest('/api/libraries');
+                let librariesData = Array.isArray(librariesResponse) ? librariesResponse : (librariesResponse?.libraries || []);
+                libraries = librariesData;
+                console.log('Libraries data:', librariesData);
             } catch (error) {
-                console.warn(`Failed to load collections for library ${library.name}:`, error);
+                console.warn('Failed to load libraries:', error);
+                libraries = [{name: 'default'}]; // Fallback to default library
             }
         }
         
-        let collectionsData = allCollectionsData;
+        console.log('Loaded collections from unified API:', collectionsData);
         
-        console.log('Loaded collections from all libraries:', collectionsData);
-        
-        // Normalize the data format
+        // Normalize the collections data format for unified API
         collectionsData = collectionsData.map(item => {
-            // Handle both documentCount and document_count fields
-            if (item.document_count !== undefined && item.documentCount === undefined) {
-                item.documentCount = item.document_count;
-            }
-            // Ensure documentCount is properly set from total_size or other fields
-            if (item.documentCount === undefined) {
-                item.documentCount = item.total_documents || item.document_count || 0;
+            // Handle different response formats from unified API
+            const collection = {
+                name: item.name || item.collection || item.type || item,
+                library: item.library || 'default',
+                documentCount: item.document_count || item.documentCount || item.total_documents || item.count || 0,
+                total_size: item.total_size || item.size || 0,
+                isSystem: false
+            };
+            
+            // Determine if it's a system collection
+            if (typeof collection.name === 'string') {
+                collection.isSystem = collection.name.startsWith('_') || 
+                                    collection.name.startsWith('system_') || 
+                                    collection.library === 'system';
             }
             
-            console.log(`Collection ${item.library}/${item.name}: documentCount=${item.documentCount}`);
+            console.log(`Collection ${collection.library}/${collection.name}: documentCount=${collection.documentCount}`);
             
-            return item;
+            return collection;
         });
         
         // Update the global collections array
@@ -1221,6 +1223,7 @@ async function loadLibraries() {
     try {
         // Use the correct libraries API endpoint that the server provides
         const response = await apiRequest('/api/libraries');
+        console.log('Libraries API response:', response);
         
         if (response && response.libraries) {
             libraries = response.libraries.map(lib => ({
@@ -1232,9 +1235,14 @@ async function loadLibraries() {
                 template: lib.template || 'standard'
             }));
             
+            console.log('Processed libraries:', libraries);
+            
             // Load collections first, then render library selector with counts
             await loadBrowserCollections();
             renderLibrarySelector();
+        } else {
+            console.warn('Invalid libraries response format:', response);
+            throw new Error('Invalid response format');
         }
     } catch (error) {
         console.error('Error loading libraries:', error);
@@ -1243,6 +1251,7 @@ async function loadLibraries() {
             { name: 'default', description: 'Default library for general use' },
             { name: 'system', description: 'System library for internal operations' }
         ];
+        console.log('Using fallback libraries:', libraries);
         renderLibrarySelector();
     }
 }
@@ -1256,6 +1265,7 @@ function renderLibrarySelector() {
     selector.innerHTML = libraries.map(lib => {
         const libCollections = allCollections.filter(c => c.library === lib.name);
         const collectionCount = libCollections.length;
+        console.log(`Library ${lib.name} has ${collectionCount} collections:`, libCollections);
         return `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
             ${lib.name} (${collectionCount} collections)
         </option>`;
@@ -1488,53 +1498,52 @@ let allCollections = [];
 
 async function loadBrowserCollections() {
     try {
-        // In unified architecture, collections are virtual based on document types
-        // We need to load collections for each library separately
-        allCollections = [];
+        // In unified architecture, we get all collections from /api/collections
+        // and they already include library information
+        const collectionsResponse = await apiRequest('/api/collections');
+        console.log('Collections API response:', collectionsResponse);
         
-        for (const library of libraries) {
-            try {
-                const collectionsResponse = await apiRequest(`/api/libraries/${library.name}/collections`);
-                
-                // Handle the response format
-                let rawCollections = [];
-                if (Array.isArray(collectionsResponse)) {
-                    rawCollections = collectionsResponse;
-                } else if (collectionsResponse.collections) {
-                    rawCollections = collectionsResponse.collections;
-                }
-                
-                // Map to our format
-                const libraryCollections = rawCollections.map(item => {
-                    if (typeof item === 'string') {
-                        // Simple string format
-                        return { 
-                            name: item, 
-                            library: library.name,
-                            fullPath: `${library.name}/${item}`,
-                            documentCount: 0, 
-                            isSystem: item.startsWith('_') || item.startsWith('system_')
-                        };
-                    } else {
-                        // Object format with properties
-                        const name = item.name || '';
-                        const fullPath = `${library.name}/${name}`;
-                        return {
-                            name: name,
-                            library: library.name,
-                            fullPath: fullPath,
-                            documentCount: item.document_count || 0,
-                            isSystem: item.is_system || name.startsWith('_') || name.startsWith('system_')
-                        };
-                    }
-                });
-                
-                allCollections = allCollections.concat(libraryCollections);
-            } catch (error) {
-                console.warn(`Failed to load collections for library ${library.name}:`, error);
-                // Continue with other libraries
-            }
+        // Handle the response format
+        let rawCollections = [];
+        if (Array.isArray(collectionsResponse)) {
+            rawCollections = collectionsResponse;
+        } else if (collectionsResponse && collectionsResponse.collections) {
+            rawCollections = collectionsResponse.collections;
+        } else {
+            console.warn('No collections found in response:', collectionsResponse);
+            rawCollections = [];
         }
+        
+        // Map to our format - collections already include library info from server
+        allCollections = rawCollections.map(item => {
+            if (typeof item === 'string') {
+                // Legacy string format: "library/collection"
+                const parts = item.split('/');
+                const library = parts.length > 1 ? parts[0] : 'default';
+                const name = parts.length > 1 ? parts[1] : parts[0];
+                return { 
+                    name: name, 
+                    library: library,
+                    fullPath: item,
+                    documentCount: 0, 
+                    isSystem: name.startsWith('_') || name.startsWith('system_')
+                };
+            } else {
+                // Object format with properties - server provides library field
+                const name = item.name || '';
+                const library = item.library || 'default';
+                const fullPath = `${library}/${name}`;
+                return {
+                    name: name,
+                    library: library,
+                    fullPath: fullPath,
+                    documentCount: item.document_count || 0,
+                    isSystem: item.is_system || name.startsWith('_') || name.startsWith('system_')
+                };
+            }
+        });
+        
+        console.log('Processed collections:', allCollections);
         
         // Load schemas separately
         try {
@@ -1554,14 +1563,7 @@ async function loadBrowserCollections() {
         // Filter collections for current library
         filterCollectionsByLibrary();
         
-        // Store schemas for reference
-        if (schemasResponse && schemasResponse.schemas) {
-            schemas = schemasResponse.schemas;
-        } else if (Array.isArray(schemasResponse)) {
-            schemas = schemasResponse;
-        } else {
-            schemas = [];
-        }
+        // Schemas already loaded above, no need to reference undefined schemasResponse
         
         await renderCollections();
     } catch (error) {
@@ -1578,7 +1580,10 @@ async function loadBrowserCollections() {
 
 // Filter collections by current library
 function filterCollectionsByLibrary() {
+    console.log('Filtering collections for library:', currentLibrary);
+    console.log('All collections before filtering:', allCollections);
     collections = allCollections.filter(item => item.library === currentLibrary);
+    console.log('Filtered collections:', collections);
 }
 
 async function renderCollections() {
@@ -1799,8 +1804,13 @@ async function loadDocuments(collectionPath, isPolling = false) {
         const library = parts[0] || 'default';
         const collection = parts[1] || parts[0];
         
-        // Use the unified documents API with library and collection filters
-        const response = await apiRequest(`/api/libraries/${library}/collections/${collection}/documents`);
+        // Use the unified documents API with query filters for library and type
+        // In unified architecture, collection name corresponds to document type
+        const query = {
+            library: library,
+            type: collection
+        };
+        const response = await apiRequest(`/api/documents?query=${encodeURIComponent(JSON.stringify(query))}`);
         // Handle both array response and object with documents property
         const newDocuments = Array.isArray(response) ? response : (response.documents || []);
         
@@ -4948,16 +4958,14 @@ async function deleteDocument() {
         return;
     }
     
-    if (confirm(`Are you sure you want to delete the document "${currentDocument.name || currentDocument.uuid}"?`)) {
+    const selectedDoc = documents[currentDocumentIndex];
+    const docDisplayName = selectedDoc?.name || currentDocument;
+    
+    if (confirm(`Are you sure you want to delete the document "${docDisplayName}"?`)) {
         try {
-            // Parse library/collection from current path
-            const parts = currentCollection.split('/');
-            const library = parts[0] || 'default';
-            const collection = parts[1] || parts[0];
-            
-            // Use DELETE to remove the document
+            // Use unified documents API - DELETE by document ID
             await apiRequest(
-                `/api/libraries/${library}/collections/${collection}/documents/${currentDocument.uuid}`,
+                `/api/documents/${currentDocument}`,
                 { method: 'DELETE' }
             );
             
@@ -4965,6 +4973,7 @@ async function deleteDocument() {
             
             // Clear current document
             currentDocument = null;
+            currentDocumentIndex = null;
             
             // Refresh the documents list
             await loadDocuments(currentCollection);
@@ -4979,8 +4988,10 @@ async function deleteDocument() {
             `;
             
             // Disable buttons
-            document.getElementById('editBtn').disabled = true;
-            document.getElementById('deleteBtn').disabled = true;
+            const editBtn = document.getElementById('editBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+            if (editBtn) editBtn.disabled = true;
+            if (deleteBtn) deleteBtn.disabled = true;
             
         } catch (error) {
             console.error('Error deleting document:', error);
@@ -5001,16 +5012,17 @@ async function createDocument() {
         const library = parts[0] || 'default';
         const collection = parts[1] || parts[0];
         
-        // Create a basic document template
+        // Create a basic document template with proper unified architecture fields
         const newDocument = {
             name: `new_document_${Date.now()}`,
-            content: "New document content",
-            created_by: "user" // This will be overwritten by the server
+            type: collection,
+            library: library,
+            content: "New document content"
         };
         
-        // Use POST to create the document
+        // Use POST to create the document in unified documents API
         const response = await apiRequest(
-            `/api/libraries/${library}/collections/${collection}/documents`,
+            `/api/documents`,
             {
                 method: 'POST',
                 body: JSON.stringify(newDocument)

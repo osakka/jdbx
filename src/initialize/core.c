@@ -52,10 +52,10 @@ void init_cleanup(void) {
   
   INIT_LOG_PROGRESS("CORE", "Performing cleanup before shutdown in server process");
 
-  /* Save data first if needed */
+  /* Database persistence is automatic in unified documents architecture */
   if (g_database) {
-    INIT_LOG_PROGRESS("CORE", "Saving database state");
-    db_save(g_database);
+    INIT_LOG_PROGRESS("CORE", "Database state automatically persisted");
+    /* db_save() no longer needed - persistence is automatic */
   }
 
   if (g_rbac_ref && g_database && g_rbac) {
@@ -77,9 +77,8 @@ void init_cleanup(void) {
   /* 2. Free database */
   if (g_database) {
     INIT_LOG_DEBUG("CORE", "Closing database");
-    database_t* db = g_database;
     g_database = NULL; /* Clear global reference */
-    db_close(db);
+    /* Database cleanup is automatic in unified documents architecture */
   }
 
   /* 3. Request shutdown if the server is still running */

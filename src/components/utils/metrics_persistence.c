@@ -1,4 +1,5 @@
 #include "utils/metrics.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/logger.h"
 #include "utils/json.h"
@@ -190,7 +191,7 @@ static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_n
   json_object_set(query, "name", json_create_string(metric_name));
   json_object_set(query, "library", json_create_string("system"));
   
-  json_value_t* result = db_query_documents(mp->db, METRICS_COLLECTION_NAME, query);
+  json_value_t* result = db_query_documents(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (result) {
@@ -239,7 +240,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   }
   
   /* Check if document exists */
-  json_value_t* existing = metric_id ? db_get_document(mp->db, METRICS_COLLECTION_NAME, metric_id) : NULL;
+  json_value_t* existing = metric_id ? db_get_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, metric_id) : NULL;
   json_value_t* document_to_save = NULL;
   
   if (existing) {
@@ -320,10 +321,10 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   json_value_t* result = NULL;
   if (existing && metric_id) {
     /* Update existing document */
-    result = db_update_document(mp->db, METRICS_COLLECTION_NAME, metric_id, document_to_save);
+    result = db_update_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, metric_id, document_to_save);
   } else {
     /* Insert new document */
-    result = db_insert_document(mp->db, METRICS_COLLECTION_NAME, document_to_save);
+    result = db_insert_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_to_save);
     if (result && !*metric_id_ptr) {
       /* Get and store the generated ID */
       json_value_t* id_val = json_object_get(result, "uuid");
@@ -484,7 +485,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
   LOG_DEBUG("Skipping old metrics collection cleanup - using pure documents architecture");
   
   /* Clean up old metrics collection entirely - DISABLED for pure documents */
-  /* json_value_t* result = db_query_documents(mp->db, OLD_METRICS_COLLECTION, json_create_object()); */
+  /* json_value_t* result = db_query_documents(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, json_create_object()); */
   json_value_t* result = NULL;
   
   if (result) {
@@ -497,7 +498,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
         
         if (id && id->type == JSON_STRING) {
           const char* id_str = json_get_string(id);
-          if (db_delete_document(mp->db, OLD_METRICS_COLLECTION, id_str)) {
+          if (db_delete_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_str)) {
             deleted_count++;
           }
         }
@@ -532,7 +533,7 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
   
   /* Query metrics */
   json_value_t* result = db_query_documents(g_metrics_persistence->db, 
-                       METRICS_COLLECTION_NAME, query);
+                       STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result) {

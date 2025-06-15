@@ -84,9 +84,7 @@ http_response_t* api_handle_export(api_context_t* ctx, http_request_t* request) 
   
   if (collection[0] != '\0') {
     /* Export a specific collection */
-    if (!db_get_collection(ctx->db, collection)) {
-      return http_response_error("Collection not found", HTTP_NOT_FOUND);
-    }
+    /* In unified documents architecture, collections are virtual and always exist */
     
     exported_data = json_export_collection(ctx->db, collection);
     if (!exported_data) {

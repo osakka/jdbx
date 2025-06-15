@@ -63,7 +63,7 @@ static int create_system_actor(database_t* db, const char* username, const char*
     json_object_set(query, "type", json_create_string("user"));
     json_object_set(query, "name", json_create_string(username));
     
-    json_value_t* results = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     if (results) {
@@ -112,7 +112,7 @@ static int create_system_actor(database_t* db, const char* username, const char*
     }
     
     /* Insert */
-    json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, actor);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actor);
     json_free(actor);
     
     if (result) {
@@ -134,7 +134,7 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     json_object_set(query, "name", json_create_string(collection_name));
     json_object_set(query, "library", json_create_string(library));
     
-    json_value_t* existing = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     if (existing && json_object_get(existing, "documents") &&
@@ -165,7 +165,7 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     }
     json_object_set(coll, "settings", settings);
     
-    json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, coll);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll);
     json_free(coll);
     
     if (result) {
@@ -198,7 +198,7 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     json_object_set(query, "type", json_create_string("library"));
     json_object_set(query, "name", json_create_string(name));
     
-    json_value_t* existing = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     if (existing && json_object_get(existing, "documents") &&
@@ -227,7 +227,7 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     /* Add timestamps */
     add_document_system_fields(lib, "library", "system", "libraries", owner);
     
-    json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, lib);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib);
     json_free(lib);
     
     if (result) {
@@ -504,21 +504,21 @@ int create_library_templates(database_t* db) {
     add_document_system_fields(cms_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
     
     /* Insert templates into database */
-    json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, ecommerce_template);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, ecommerce_template);
     if (result) {
         LOG_INFO("Created e-commerce library template");
         json_free(result);
     }
     json_free(ecommerce_template);
     
-    result = db_insert_document(db, DOCUMENTS_COLLECTION, wiki_template);
+    result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, wiki_template);
     if (result) {
         LOG_INFO("Created wiki library template");
         json_free(result);
     }
     json_free(wiki_template);
     
-    result = db_insert_document(db, DOCUMENTS_COLLECTION, cms_template);
+    result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, cms_template);
     if (result) {
         LOG_INFO("Created CMS library template");
         json_free(result);
@@ -550,21 +550,21 @@ int unified_documents_init(database_t* db) {
     LOG_INFO("Creating unified document indexes");
     
     /* Type index for fast filtering */
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_type", "type", INDEX_TYPE_NON_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_type", "type", INDEX_TYPE_NON_UNIQUE);
     
     /* Compound indexes for common queries */
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_type_name", "type,name", INDEX_TYPE_UNIQUE);
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_type_lib_coll", "type,library,collection", INDEX_TYPE_NON_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_type_name", "type,name", INDEX_TYPE_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_type_lib_coll", "type,library,collection", INDEX_TYPE_NON_UNIQUE);
     
     /* Library and collection indexes */
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_library", "library", INDEX_TYPE_NON_UNIQUE);
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_collection", "collection", INDEX_TYPE_NON_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_library", "library", INDEX_TYPE_NON_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_collection", "collection", INDEX_TYPE_NON_UNIQUE);
     
     /* Owner index for ownership queries */
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_owner", "owner", INDEX_TYPE_NON_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_owner", "owner", INDEX_TYPE_NON_UNIQUE);
     
     /* Username index for users */
-    db_create_index(db, DOCUMENTS_COLLECTION, "idx_username", "username", INDEX_TYPE_UNIQUE);
+    db_create_index(db, STORAGE_COLLECTION, "idx_username", "username", INDEX_TYPE_UNIQUE);
     
     /* Create system actors */
     create_system_actors(db);
@@ -576,7 +576,7 @@ int unified_documents_init(database_t* db) {
     json_value_t* query = json_create_object();
     json_object_set(query, "type", json_create_string("role"));
     json_object_set(query, "name", json_create_string("admin"));
-    json_value_t* existing = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     char* admin_role_id = NULL;
@@ -600,7 +600,7 @@ int unified_documents_init(database_t* db) {
         json_object_set(permissions, "*/*", all_perms);
         json_object_set(admin_role, "permissions", permissions);
         
-        json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, admin_role);
+        json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_role);
         if (result) {
             json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
@@ -618,7 +618,7 @@ int unified_documents_init(database_t* db) {
     json_object_set(query, "type", json_create_string("user"));
     json_object_set(query, "username", json_create_string("admin"));
     json_object_set(query, "library", json_create_string("system"));
-    existing = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     if (!existing || !json_object_get(existing, "documents") ||
@@ -652,7 +652,7 @@ int unified_documents_init(database_t* db) {
         /* Add system fields for unified documents */
         add_document_system_fields(admin_user, "user", "system", "users", SYSTEM_USER_ADMIN);
         
-        json_value_t* result = db_insert_document(db, DOCUMENTS_COLLECTION, admin_user);
+        json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_user);
         if (result) {
             LOG_INFO("Created admin user with password 'admin' in documents collection");
             json_free(result);
@@ -677,7 +677,7 @@ json_value_t* query_documents_by_type(database_t* db, const char* type,
     json_value_t* query = additional_query ? json_clone(additional_query) : json_create_object();
     json_object_set(query, "type", json_create_string(type));
     
-    json_value_t* results = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     return results;
@@ -700,7 +700,7 @@ json_value_t* query_documents_by_location(database_t* db, const char* type,
         json_object_set(query, "collection", json_create_string(collection));
     }
     
-    json_value_t* results = db_query_documents(db, DOCUMENTS_COLLECTION, query);
+    json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
     return results;
@@ -760,7 +760,7 @@ json_value_t* create_typed_document(database_t* db, const char* type,
     add_document_system_fields(doc, type, NULL, NULL, owner_id);
     
     /* Insert document */
-    return db_insert_document(db, DOCUMENTS_COLLECTION, doc);
+    return db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
 }
 
 /* Validate document has required fields */

@@ -7,6 +7,7 @@
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "database/document_storage.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -249,7 +250,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
   
   /* Query all users */
   json_value_t* query = json_create_object();
-  json_value_t* result = db_query_documents(ctx->db, RBAC_USERS_COLLECTION, query);
+  json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -363,7 +364,7 @@ http_response_t* api_handle_rbac_get_user(api_context_t* ctx, http_request_t* re
   }
   
   /* Get user document */
-  json_value_t* user_doc = db_get_document(ctx->db, RBAC_USERS_COLLECTION, user_id);
+  json_value_t* user_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
   free(user_id);
   
   if (!user_doc) {
@@ -533,7 +534,7 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   }
   
   /* Get the actual user document for updating */
-  json_value_t* user_doc = db_get_document(ctx->db, RBAC_USERS_COLLECTION, user->id);
+  json_value_t* user_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, user->id);
   if (!user_doc) {
     rbac_free_user(user);
     json_free(request_json);
@@ -576,7 +577,7 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   }
   
   /* Update user document using actual document ID */
-  json_value_t* result = db_update_document(ctx->db, RBAC_USERS_COLLECTION, actual_doc_id, user_doc);
+  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id, user_doc);
   if (!result) {
     json_free(user_doc);
     free(user_id);
@@ -696,7 +697,7 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
   
   /* Query all roles */
   json_value_t* query = json_create_object();
-  json_value_t* result = db_query_documents(ctx->db, RBAC_ROLES_COLLECTION, query);
+  json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -713,7 +714,7 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
   
   /* Query all users to compute role membership */
   json_value_t* users_query = json_create_object();
-  json_value_t* users_result = db_query_documents(ctx->db, RBAC_USERS_COLLECTION, users_query);
+  json_value_t* users_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, users_query);
   json_free(users_query);
   
   json_value_t* users_docs = NULL;
@@ -832,7 +833,7 @@ http_response_t* api_handle_rbac_get_role(api_context_t* ctx, http_request_t* re
   }
   
   /* Get role document */
-  json_value_t* role_doc = db_get_document(ctx->db, RBAC_ROLES_COLLECTION, role_id);
+  json_value_t* role_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
   free(role_id);
   
   if (!role_doc) {
@@ -1432,7 +1433,7 @@ http_response_t* api_handle_rbac_get_permissions(api_context_t* ctx, http_reques
   
   /* Get all roles */
   json_value_t* query = json_create_object();
-  json_value_t* roles_result = db_query_documents(ctx->db, RBAC_ROLES_COLLECTION, query);
+  json_value_t* roles_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!roles_result) {

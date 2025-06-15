@@ -1,5 +1,6 @@
 #include "api/api.h"
 #include "utils/metrics_persistence.h"
+#include "database/adaptive_indexer.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -225,6 +226,82 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to serialize response\"}", 
+                 "application/json");
+  }
+  
+  /* Create HTTP response */
+  http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
+  buffer_pool_free_safe(response_str);
+  
+  return http_response;
+}
+
+/**
+ * Handle adaptive indexing metrics request
+ * GET /api/metrics/adaptive-indexing
+ */
+http_response_t* api_handle_adaptive_indexing_metrics(api_context_t* ctx, http_request_t* request) {
+  (void)ctx; (void)request; /* Parameters not needed for this endpoint */
+  
+  /* Get adaptive indexing statistics */
+  json_value_t* stats = adaptive_indexer_get_stats();
+  
+  if (!stats) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Adaptive indexing not initialized or not available\"}", 
+                 "application/json");
+  }
+  
+  /* Add additional metadata */
+  json_object_set(stats, "timestamp", json_create_integer(time(NULL)));
+  json_object_set(stats, "status", json_create_string("active"));
+  
+  /* Calculate effectiveness summary */
+  json_value_t* indexes_array = json_object_get(stats, "adaptive_indexes");
+  if (indexes_array && indexes_array->type == JSON_ARRAY) {
+    int total_indexes = json_array_size(indexes_array);
+    int effective_indexes = 0;
+    double total_improvement = 0.0;
+    
+    for (size_t i = 0; i < json_array_size(indexes_array); i++) {
+      json_value_t* index = json_array_get(indexes_array, i);
+      json_value_t* is_effective = json_object_get(index, "is_effective");
+      json_value_t* time_before = json_object_get(index, "avg_time_before_ms");
+      json_value_t* time_after = json_object_get(index, "avg_time_after_ms");
+      
+      if (is_effective && is_effective->type == JSON_INTEGER && is_effective->value.integer) {
+        effective_indexes++;
+        
+        if (time_before && time_after && 
+            time_before->type == JSON_NUMBER && time_after->type == JSON_NUMBER &&
+            time_before->value.number > 0) {
+          double improvement = ((time_before->value.number - time_after->value.number) / time_before->value.number) * 100.0;
+          total_improvement += improvement;
+        }
+      }
+    }
+    
+    /* Add summary statistics */
+    json_value_t* summary = json_create_object();
+    json_object_set(summary, "total_indexes", json_create_integer(total_indexes));
+    json_object_set(summary, "effective_indexes", json_create_integer(effective_indexes));
+    json_object_set(summary, "effectiveness_rate", 
+                   json_create_number(total_indexes > 0 ? (double)effective_indexes / total_indexes * 100.0 : 0.0));
+    if (effective_indexes > 0) {
+      json_object_set(summary, "avg_performance_improvement_percent", 
+                     json_create_number(total_improvement / effective_indexes));
+    }
+    
+    json_object_set(stats, "summary", summary);
+  }
+  
+  /* Serialize response */
+  char* response_str = json_stringify(stats);
+  json_free(stats);
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize adaptive indexing metrics\"}", 
                  "application/json");
   }
   

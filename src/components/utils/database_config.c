@@ -7,6 +7,7 @@
 
 #include "utils/config_loader.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include <string.h>
@@ -64,7 +65,7 @@ json_value_t* config_load_from_database(database_t* db) {
     }
     
     /* Load configuration document */
-    json_value_t* config = db_get_document(db, CONFIG_COLLECTION, CONFIG_DOCUMENT_ID);
+    json_value_t* config = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID);
     if (!config) {
         LOG_DEBUG("Configuration document not found.");
         return NULL;
@@ -114,16 +115,16 @@ int config_save_to_database(database_t* db, json_value_t* config) {
     json_object_set(doc, "updated_at", json_create_integer(time(NULL)));
     
     /* Check if document exists */
-    json_value_t* existing = db_get_document(db, CONFIG_COLLECTION, CONFIG_DOCUMENT_ID);
+    json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID);
     json_value_t* result = NULL;
     
     if (existing) {
         /* Update existing */
         json_free(existing);
-        result = db_update_document(db, CONFIG_COLLECTION, CONFIG_DOCUMENT_ID, doc);
+        result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID, doc);
     } else {
         /* Insert new */
-        result = db_insert_document(db, CONFIG_COLLECTION, doc);
+        result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
     }
     
     json_free(doc);

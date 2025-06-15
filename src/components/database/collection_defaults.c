@@ -1,5 +1,6 @@
 #include "database/collection_metadata.h"
 #include "database/database.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 
@@ -8,7 +9,7 @@ static void create_users_metadata(database_t* db) {
     /* Don't create metadata during bootstrap - collections may not exist yet */
     if (db_collection_exists(db, "users")) {
         /* Check if metadata already exists */
-        json_value_t* existing = db_get_document(db, "users", COLLECTION_META_ID);
+        json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, "users", COLLECTION_META_ID);
         if (existing) {
             LOG_DEBUG("Users collection metadata already exists");
             json_free(existing);
@@ -81,7 +82,7 @@ static void create_roles_metadata(database_t* db) {
     /* Don't create metadata during bootstrap - collections may not exist yet */
     if (db_collection_exists(db, "roles")) {
         /* Check if metadata already exists */
-        json_value_t* existing = db_get_document(db, "roles", COLLECTION_META_ID);
+        json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, "roles", COLLECTION_META_ID);
         if (existing) {
             LOG_DEBUG("Roles collection metadata already exists");
             json_free(existing);

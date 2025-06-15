@@ -5,6 +5,7 @@
 
 #include "js/js_engine.h"
 #include "js/js_function_resolver.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
@@ -97,7 +98,7 @@ static json_value_t* load_function_from_collection(database_t* db, const char* f
     json_value_t* query = json_create_object();
     json_object_set(query, "name", json_create_string(function_name));
     
-    json_value_t* results = db_query_documents(db, collection_path, query);
+    json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_path, query);
     json_free(query);
     
     if (!results) {

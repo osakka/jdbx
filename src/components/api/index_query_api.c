@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
@@ -258,7 +259,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   json_free(body);
   
   /* Execute database query */
-  json_value_t* results = db_query_documents(ctx->db, collection, query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   
   /* Free resources */
   json_free(query);

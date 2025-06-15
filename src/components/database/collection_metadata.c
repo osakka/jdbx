@@ -1,4 +1,5 @@
 #include "database/collection_metadata.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/logger.h"
 #include "utils/json_helpers.h"
@@ -16,7 +17,7 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
     }
     
     /* Try to load _meta document */
-    json_value_t* meta_doc = db_get_document(db, collection_name, COLLECTION_META_ID);
+    json_value_t* meta_doc = db_get_document(db, STORAGE_LIBRARY, collection_name, COLLECTION_META_ID);
     if (!meta_doc) {
         /* No metadata exists, create default */
         LOG_DEBUG("No metadata found for collection %s, using defaults", collection_name);
@@ -305,7 +306,7 @@ int collection_metadata_save(database_t* db, const char* collection_name,
     }
     
     /* Insert the metadata document */
-    json_value_t* result = db_insert_document(db, collection_name, meta_doc);
+    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, collection_name, meta_doc);
     json_free(meta_doc);
     
     if (result) {

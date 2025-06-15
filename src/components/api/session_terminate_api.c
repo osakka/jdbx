@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "api/session_api.h"
 #include "database/database.h"
 #include "rbac/rbac_database.h"
@@ -69,7 +70,7 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
   int has_permission = 0;
   
   /* First check if it's the user's own session */
-  json_value_t* session_doc = db_get_document(ctx->db, "system/sessions", session_id);
+  json_value_t* session_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id);
   if (session_doc) {
     json_value_t* session_user_id = json_object_get(session_doc, "user_id");
     if (session_user_id && session_user_id->type == JSON_STRING) {

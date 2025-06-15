@@ -203,8 +203,8 @@ int json_import_collection(database_t* db, const char* collection, json_value_t*
     
     pthread_rwlock_unlock(&db->rwlock);
     
-    /* Save the database */
-    result = db_save(db);
+    /* Database persistence is automatic in unified documents architecture */
+    result = 1; /* Indicate success since persistence is automatic */
   } else {
     result = 0;
   }
@@ -293,6 +293,6 @@ int json_import_database(database_t* db, json_value_t* data, int replace_mode, i
   
   pthread_rwlock_unlock(&db->rwlock);
   
-  /* Save the database */
-  return db_save(db);
+  /* Database persistence is automatic in unified documents architecture */
+  return 1; /* Indicate success since persistence is automatic */
 }

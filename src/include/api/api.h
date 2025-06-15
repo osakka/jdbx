@@ -170,6 +170,7 @@ http_response_t* health_api_handle_metrics_export(api_context_t* ctx, http_reque
 /* Metrics history handlers */
 http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_adaptive_indexing_metrics(api_context_t* ctx, http_request_t* request);
 
 /* Health API initialization and endpoint registration */
 void health_api_init(void);

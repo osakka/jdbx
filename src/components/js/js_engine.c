@@ -1,4 +1,5 @@
 #include "js/js_engine.h"
+#include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/js_file_utils.h"
 
@@ -528,7 +529,7 @@ static JSValue js_db_get_collection(JSContext *ctx, JSValueConst this_val, int a
   }
   
   /* Get documents from collection */
-  json_value_t *documents = db_query_documents(engine->db, collection_name, NULL);
+  json_value_t *documents = db_query_documents(engine->db, STORAGE_LIBRARY, collection_name, NULL);
   
   /* Convert to JavaScript array */
   JSValue result = json_to_js(ctx, documents);
@@ -564,7 +565,7 @@ static JSValue js_db_query_documents(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *query = js_to_json(ctx, argv[1]);
   
   /* Query documents */
-  json_value_t *documents = db_query_documents(engine->db, collection_name, query);
+  json_value_t *documents = db_query_documents(engine->db, STORAGE_LIBRARY, collection_name, query);
   
   /* Free query */
   json_free(query);
@@ -606,7 +607,7 @@ static JSValue js_db_get_document(JSContext *ctx, JSValueConst this_val, int arg
   const char *document_id = JS_ToCString(ctx, argv[1]);
   
   /* Get document */
-  json_value_t *document = db_get_document(engine->db, collection_name, document_id);
+  json_value_t *document = db_get_document(engine->db, STORAGE_LIBRARY, collection_name, document_id);
   
   JS_FreeCString(ctx, collection_name);
   JS_FreeCString(ctx, document_id);
@@ -649,7 +650,7 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *document = js_to_json(ctx, argv[1]);
   
   /* Insert document */
-  json_value_t *result = db_insert_document(engine->db, collection_name, document);
+  json_value_t *result = db_insert_document(engine->db, STORAGE_LIBRARY, collection_name, document);
   
   /* Free resources */
   json_free(document);
@@ -694,7 +695,7 @@ static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *document = js_to_json(ctx, argv[2]);
   
   /* Update document */
-  json_value_t *result = db_update_document(engine->db, collection_name, document_id, document);
+  json_value_t *result = db_update_document(engine->db, STORAGE_LIBRARY, collection_name, document_id, document);
   
   /* Free resources */
   json_free(document);
@@ -737,7 +738,7 @@ static JSValue js_db_delete_document(JSContext *ctx, JSValueConst this_val, int 
   const char *document_id = JS_ToCString(ctx, argv[1]);
   
   /* Delete document */
-  int result = db_delete_document(engine->db, collection_name, document_id);
+  int result = db_delete_document(engine->db, STORAGE_LIBRARY, collection_name, document_id);
   
   /* Free resources */
   JS_FreeCString(ctx, collection_name);

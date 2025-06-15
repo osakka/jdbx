@@ -27,6 +27,7 @@
 #define DATABASE_H
 
 #include "utils/json.h"
+#include "utils/generic_cache.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -190,15 +191,21 @@ int db_collection_exists(database_t* db, const char* collection_name);
 int db_create_collection(database_t* db, const char* collection_name);
 
 /* Document operations */
-json_value_t* db_insert_document(database_t* db, const char* collection, json_value_t* document);
-json_value_t* db_get_document(database_t* db, const char* collection, const char* id);
-json_value_t* db_update_document(database_t* db, const char* collection, const char* id, json_value_t* document);
-int db_delete_document(database_t* db, const char* collection, const char* id);
-json_value_t* db_query_documents(database_t* db, const char* collection, json_value_t* query);
+/* Clean API with separate library and collection parameters */
+json_value_t* db_insert_document(database_t* db, const char* library, const char* collection, json_value_t* document);
+json_value_t* db_get_document(database_t* db, const char* library, const char* collection, const char* id);
+json_value_t* db_update_document(database_t* db, const char* library, const char* collection, const char* id, json_value_t* document);
+int db_delete_document(database_t* db, const char* library, const char* collection, const char* id);
+json_value_t* db_query_documents(database_t* db, const char* library, const char* collection, json_value_t* query);
 
-/* Advanced query operations */
-json_value_t* db_find(database_t* db, const char* collection_path, const char* query,
-                     const char* projection, int limit, int skip, const char* sort);
+/* REMOVED: Old hierarchical API completely eliminated for true unified documents architecture */
+
+/* Legacy compatibility functions for transition period */
+int db_save(database_t* db);
+void db_close(database_t* db);
+
+/* Cache access functions for metrics */
+void* get_global_database_caches(generic_cache_t** query_cache, generic_cache_t** doc_cache);
 
 /* Schema operations */
 schema_t* db_create_schema(const char* name, const char* description);

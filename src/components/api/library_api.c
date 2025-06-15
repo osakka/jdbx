@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "database/document_storage.h"
 #include "database/collection_defaults.h"
@@ -28,7 +29,7 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("library"));
   
-  json_value_t* results = db_query_documents(ctx->db, "documents", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -127,7 +128,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
     json_object_set(template_query, "type", json_create_string("library_template"));
     json_object_set(template_query, "name", json_create_string(template_name));
     
-    json_value_t* template_results = db_query_documents(ctx->db, "documents", template_query);
+    json_value_t* template_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, template_query);
     json_free(template_query);
     
     if (template_results) {
@@ -234,7 +235,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
     json_object_set(lib_doc, "owner", json_create_string("admin"));
     
     /* Save to documents collection */
-    json_value_t* result = db_insert_document(ctx->db, "documents", lib_doc);
+    json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
     if (result) {
       json_free(result);
     }
@@ -325,14 +326,14 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
     json_object_set(query, "type", json_create_string("library"));
     json_object_set(query, "name", json_create_string(library_name));
     
-    json_value_t* results = db_query_documents(ctx->db, "documents", query);
+    json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
       if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
         json_value_t* lib_doc = json_array_get(documents, 0);
         json_value_t* id_val = json_object_get(lib_doc, "uuid");
         if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(ctx->db, "documents", id_val->value.string);
+          db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
         }
       }
       json_free(results);
@@ -399,7 +400,7 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
     json_object_set(coll_query, "type", json_create_string("collection"));
     json_object_set(coll_query, "library", json_create_string(library_name));
     
-    json_value_t* coll_results = db_query_documents(ctx->db, "documents", coll_query);
+    json_value_t* coll_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_query);
     if (coll_results) {
       json_value_t* coll_docs = json_object_get(coll_results, "documents");
       if (coll_docs && coll_docs->type == JSON_ARRAY) {
@@ -418,7 +419,7 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
             snprintf(collection_path, sizeof(collection_path), "%s/%s", library_name, coll_name);
             
             json_value_t* empty_query = json_create_object();
-            json_value_t* results = db_query_documents(ctx->db, collection_path, empty_query);
+            json_value_t* results = db_query_documents(ctx->db, "default", collection_path, empty_query);
             if (results) {
               json_value_t* documents = json_object_get(results, "documents");
               if (documents && documents->type == JSON_ARRAY) {
@@ -455,7 +456,7 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
     json_object_set(query, "type", json_create_string("library"));
     json_object_set(query, "name", json_create_string(library_name));
     
-    json_value_t* results = db_query_documents(ctx->db, "documents", query);
+    json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
       if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
@@ -534,7 +535,7 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "type", json_create_string("library"));
   json_object_set(query, "name", json_create_string(library_name));
   
-  json_value_t* results = db_query_documents(ctx->db, "documents", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
@@ -590,7 +591,7 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
   /* Update in database */
-  json_value_t* update_result = db_update_document(ctx->db, "documents", 
+  json_value_t* update_result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, 
                                                   lib_id->value.string, update_doc);
   
   json_free(update_doc);
@@ -656,7 +657,7 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
     json_object_set(coll_query, "type", json_create_string("collection"));
     json_object_set(coll_query, "library", json_create_string(library_name));
     
-    json_value_t* coll_results = db_query_documents(ctx->db, "documents", coll_query);
+    json_value_t* coll_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_query);
     if (coll_results) {
       json_value_t* coll_docs = json_object_get(coll_results, "documents");
       if (coll_docs && coll_docs->type == JSON_ARRAY) {
@@ -672,7 +673,7 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
                     library_name, coll_name_val->value.string);
             
             json_value_t* empty_query = json_create_object();
-            json_value_t* results = db_query_documents(ctx->db, collection_path, empty_query);
+            json_value_t* results = db_query_documents(ctx->db, "default", collection_path, empty_query);
             if (results) {
               json_value_t* documents = json_object_get(results, "documents");
               if (documents && documents->type == JSON_ARRAY) {
@@ -800,7 +801,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
     json_object_set(query, "type", json_create_string("library"));
     json_object_set(query, "name", json_create_string(source_library));
     
-    json_value_t* results = db_query_documents(ctx->db, "documents", query);
+    json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
       if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
@@ -832,7 +833,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   
   /* Save library metadata */
   if (db_collection_exists(ctx->db, "documents")) {
-    json_value_t* result = db_insert_document(ctx->db, "documents", lib_doc);
+    json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
     if (result) {
       json_free(result);
     }
@@ -846,7 +847,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
     json_object_set(coll_query, "type", json_create_string("collection"));
     json_object_set(coll_query, "library", json_create_string(source_library));
     
-    json_value_t* coll_results = db_query_documents(ctx->db, "documents", coll_query);
+    json_value_t* coll_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_query);
     if (coll_results) {
       json_value_t* coll_docs = json_object_get(coll_results, "documents");
       if (coll_docs && coll_docs->type == JSON_ARRAY) {
@@ -872,7 +873,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
                         source_library, coll_name);
                 
                 json_value_t* empty_query = json_create_object();
-                json_value_t* results = db_query_documents(ctx->db, source_coll_path, empty_query);
+                json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, source_coll_path, empty_query);
                 if (results) {
                   json_value_t* documents = json_object_get(results, "documents");
                   if (documents && documents->type == JSON_ARRAY) {
@@ -882,7 +883,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
                       json_value_t* doc_copy = json_clone(doc);
                       /* Remove uuid to generate new one */
                       json_object_remove(doc_copy, "uuid");
-                      db_insert_document(ctx->db, target_coll_path, doc_copy);
+                      db_insert_document(ctx->db, STORAGE_LIBRARY, target_coll_path, doc_copy);
                       json_free(doc_copy);
                     }
                   }
@@ -927,7 +928,7 @@ http_response_t* api_handle_get_library_templates(api_context_t* ctx, http_reque
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("library_template"));
   
-  json_value_t* results = db_query_documents(ctx->db, "documents", query);
+  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
   if (!results) {
