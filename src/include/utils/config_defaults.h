@@ -29,41 +29,39 @@
 #define DEFAULT_VERBOSE_MODE 0
 
 /*==============================================================================
- * Path Defaults (relative to install directory unless absolute)
+ * Path Defaults (NO HARDCODED PATHS - Auto-detected from binary location)
  * 
- * These paths can be overridden using environment variables:
+ * All paths are dynamically determined based on:
+ * 1. Environment variables (highest priority)
+ * 2. Auto-detection from binary location 
+ * 3. These relative path defaults (lowest priority)
+ * 
+ * Environment Variable Override System:
  * - JDBX_BASE_PATH: Base installation directory (auto-detected by default)
- * - JDBX_DOC_PATH: Documentation directory
  * - JDBX_VAR_PATH: Variable data directory
- * - Individual path overrides (e.g., JDBX_DB_DIR, JDBX_LOG_FILE, etc.)
+ * - JDBX_WEB_ROOT: Web interface directory
+ * - Individual overrides: JDBX_DB_FILE, JDBX_LOG_FILE, JDBX_PID_FILE, etc.
  *============================================================================*/
 
-/** Default database file basename - JDBX auto-generates .jdbx and .wal */
-#define DEFAULT_DB_FILE "/opt/jdbx/build/var/jdbx"
+/** Relative path defaults (appended to auto-detected base path) */
+#define DEFAULT_VAR_DIR_RELATIVE "build/var"
+#define DEFAULT_WEB_DIR_RELATIVE "share/htdocs"
+#define DEFAULT_CONFIG_DIR_RELATIVE "share/config"
 
-/** Default RBAC config file path */
-#define DEFAULT_RBAC_PATH "/opt/jdbx/build/var/rbac.json"
+/** Default file basenames (combined with var directory) */
+#define DEFAULT_DB_FILE_BASENAME "jdbx"
+#define DEFAULT_RBAC_FILE_BASENAME "rbac.json"
+#define DEFAULT_PID_FILE_BASENAME "jdbxd.pid"
+#define DEFAULT_LOG_FILE_BASENAME "jdbxd.log"
 
-/** Default PID file path */
-#define DEFAULT_PID_FILE "/opt/jdbx/build/var/jdbxd.pid"
+/** Standard configuration file names for auto-discovery */
+#define DEFAULT_ENV_FILE_BASENAME "jdbx.env"
 
-/** Default log file path */
-#define DEFAULT_LOG_FILE "/opt/jdbx/build/var/jdbxd.log"
-
-/** Default admin web interface root directory */
-#define DEFAULT_WEB_ROOT "/opt/jdbx/share/htdocs"
-
-/** Admin files directory (maintained for compatibility) */
-#define DEFAULT_ADMIN_FILES_DIR DEFAULT_WEB_ROOT
-
-/** Default validators directory */
-#define DEFAULT_VALIDATORS_DIR "/opt/jdbx/build/var"
-
-/** Default transformers directory */
-#define DEFAULT_TRANSFORMS_DIR "/opt/jdbx/build/var"
-
-/** Default metrics directory */
-#define DEFAULT_METRICS_DIR "/opt/jdbx/build/var"
+/** Directory-specific defaults (relative to var directory) */
+#define DEFAULT_VALIDATORS_SUBDIR "validators"
+#define DEFAULT_TRANSFORMS_SUBDIR "transforms"
+#define DEFAULT_METRICS_SUBDIR "metrics"
+#define DEFAULT_BACKUP_SUBDIR "backups"
 
 /*==============================================================================
  * Security Defaults
@@ -95,8 +93,8 @@
  * Database Defaults
  *============================================================================*/
 
-/** Default database directory (deprecated - use DEFAULT_DB_FILE) */
-#define DEFAULT_DATABASE_DIR "/opt/jdbx/build/var"
+/** Legacy compatibility - will be dynamically constructed */
+#define DEFAULT_DATABASE_DIR_RELATIVE DEFAULT_VAR_DIR_RELATIVE
 
 /* JDBX is the ONLY storage backend - no selection needed */
 
@@ -173,8 +171,8 @@
  * Component-specific Defaults
  *============================================================================*/
 
-/* Backup API defaults */
-#define DEFAULT_BACKUP_DIR "/opt/jdbx/build/var"
+/* Backup API defaults - will be dynamically constructed from base path */
+#define DEFAULT_BACKUP_DIR_RELATIVE DEFAULT_BACKUP_SUBDIR
 #define DEFAULT_BACKUP_RETENTION 10
 #define DEFAULT_AUTO_BACKUP_INTERVAL_HOURS 24
 #define MAX_FILENAME_LEN 256

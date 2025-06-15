@@ -25,6 +25,31 @@ void config_init_binary_dir(void);
 const char* config_get_binary_dir(void);
 
 /**
+ * Get the auto-detected base path (parent of binary directory)
+ * @return Path to the installation base directory
+ */
+const char* config_get_base_path(void);
+
+/**
+ * Construct full path from base path and relative components
+ * @param relative_path Relative path components (e.g., "build/var/jdbx")
+ * @return Dynamically allocated full path (caller must free)
+ */
+char* config_construct_path(const char* relative_path);
+
+/**
+ * Get the var directory path (auto-detected or from environment)
+ * @return Dynamically allocated var directory path (caller must free)
+ */
+char* config_get_var_dir(void);
+
+/**
+ * Get the web root directory path (auto-detected or from environment)
+ * @return Dynamically allocated web root path (caller must free)
+ */
+char* config_get_web_root(void);
+
+/**
  * Load configuration from file (auto-detects format)
  * @param filepath Path to the configuration file
  * @param config Pointer to the configuration structure

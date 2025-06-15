@@ -214,6 +214,117 @@ const char* config_get_binary_dir(void) {
 }
 
 /**
+ * Get the auto-detected base path (parent of binary directory)
+ * @return Path to the installation base directory
+ */
+const char* config_get_base_path(void) {
+  static char base_path[PATH_MAX] = {0};
+  
+  /* Check if already calculated */
+  if (base_path[0] != '\0') {
+    return base_path;
+  }
+  
+  /* Check environment variable first (highest priority) */
+  const char* env_base = getenv("JDBX_BASE_PATH");
+  if (env_base) {
+    strncpy(base_path, env_base, PATH_MAX - 1);
+    base_path[PATH_MAX - 1] = '\0';
+    LOG_DEBUG("Using JDBX_BASE_PATH environment variable: %s", base_path);
+    return base_path;
+  }
+  
+  /* Auto-detect from binary directory */
+  const char* binary_dir = config_get_binary_dir();
+  if (binary_dir) {
+    /* Assume binary is in <base>/build/bin, so base is ../../ from binary */
+    char temp_path[PATH_MAX];
+    snprintf(temp_path, sizeof(temp_path), "%s/../..", binary_dir);
+    
+    /* Normalize the path */
+    if (realpath(temp_path, base_path) == NULL) {
+      /* Fallback to binary directory parent */
+      snprintf(temp_path, sizeof(temp_path), "%s/..", binary_dir);
+      if (realpath(temp_path, base_path) == NULL) {
+        /* Last resort - use binary directory itself */
+        strncpy(base_path, binary_dir, PATH_MAX - 1);
+        base_path[PATH_MAX - 1] = '\0';
+      }
+    }
+  } else {
+    /* Fallback to current directory */
+    if (getcwd(base_path, PATH_MAX - 1) == NULL) {
+      strcpy(base_path, ".");
+    }
+  }
+  
+  LOG_DEBUG("Auto-detected base path: %s", base_path);
+  return base_path;
+}
+
+/**
+ * Construct full path from base path and relative components
+ * @param relative_path Relative path components (e.g., "build/var/jdbx")
+ * @return Dynamically allocated full path (caller must free)
+ */
+char* config_construct_path(const char* relative_path) {
+  if (!relative_path) return NULL;
+  
+  const char* base = config_get_base_path();
+  size_t base_len = strlen(base);
+  size_t rel_len = strlen(relative_path);
+  
+  /* Allocate space for base + '/' + relative + null terminator */
+  char* full_path = malloc(base_len + 1 + rel_len + 1);
+  if (!full_path) return NULL;
+  
+  snprintf(full_path, base_len + 1 + rel_len + 1, "%s/%s", base, relative_path);
+  
+  LOG_DEBUG("Constructed path: %s + %s = %s", base, relative_path, full_path);
+  return full_path;
+}
+
+/**
+ * Get the var directory path (auto-detected or from environment)
+ * @return Dynamically allocated var directory path (caller must free)
+ */
+char* config_get_var_dir(void) {
+  /* Check environment variable first */
+  const char* env_var = getenv("JDBX_VAR_PATH");
+  if (env_var) {
+    char* result = malloc(strlen(env_var) + 1);
+    if (result) {
+      strcpy(result, env_var);
+      LOG_DEBUG("Using JDBX_VAR_PATH environment variable: %s", result);
+    }
+    return result;
+  }
+  
+  /* Construct from base path + default relative directory */
+  return config_construct_path(DEFAULT_VAR_DIR_RELATIVE);
+}
+
+/**
+ * Get the web root directory path (auto-detected or from environment)
+ * @return Dynamically allocated web root path (caller must free)
+ */
+char* config_get_web_root(void) {
+  /* Check environment variable first */
+  const char* env_web = getenv("JDBX_WEB_ROOT");
+  if (env_web) {
+    char* result = malloc(strlen(env_web) + 1);
+    if (result) {
+      strcpy(result, env_web);
+      LOG_DEBUG("Using JDBX_WEB_ROOT environment variable: %s", result);
+    }
+    return result;
+  }
+  
+  /* Construct from base path + default relative directory */
+  return config_construct_path(DEFAULT_WEB_DIR_RELATIVE);
+}
+
+/**
  * Resolve a path that might be relative to the binary directory
  * @param path Path to resolve (absolute or relative)
  * @return Resolved path (must be freed by caller)
@@ -629,7 +740,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             LOG_DEBUG("Config: Set db_file to '%s'", config->db_file);
             
             /* Special warning for default path in production */
-            if (strcmp(config->db_file, DEFAULT_DB_FILE) == 0) {
+            if (strstr(config->db_file, DEFAULT_DB_FILE_BASENAME) != NULL) {
               LOG_WARNING("Using default database path in configuration - "
                    "this may not be suitable for production use");
             }
@@ -642,16 +753,23 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_INFO("No database path specified, using default: %s", DEFAULT_DB_FILE);
-          
-          /* Resolve the default path */
-          char* resolved_path = resolve_path(DEFAULT_DB_FILE);
-          if (resolved_path) {
-            config->db_file = resolved_path;
-            LOG_DEBUG("Resolved default database path to: %s", config->db_file);
+          /* Construct default database path dynamically */
+          char* var_dir = config_get_var_dir();
+          if (var_dir) {
+            char* db_path = malloc(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
+            if (db_path) {
+              sprintf(db_path, "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
+              config->db_file = db_path;
+              LOG_INFO("No database path specified, using default: %s", config->db_file);
+              LOG_DEBUG("Constructed default database path: %s", config->db_file);
+            } else {
+              LOG_ERROR("Cannot allocate memory for default database path.");
+              config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+            }
+            free(var_dir);
           } else {
-            LOG_ERROR("Cannot resolve default database path.");
-            config->db_file = strdup(DEFAULT_DB_FILE);
+            LOG_ERROR("Cannot get var directory for default database path.");
+            config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
           }
         }
       }
@@ -665,14 +783,22 @@ int config_load_json(const char* filepath, server_config_t* config) {
     if (g_logger) {
       LOG_INFO("No 'database' section found in config, using defaults.");
       
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_DB_FILE);
-      if (resolved_path) {
-        config->db_file = resolved_path;
-        LOG_DEBUG("Resolved default database path to: %s", config->db_file);
+      /* Construct default database path dynamically */
+      char* var_dir = config_get_var_dir();
+      if (var_dir) {
+        char* db_path = malloc(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
+        if (db_path) {
+          sprintf(db_path, "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
+          config->db_file = db_path;
+          LOG_DEBUG("Constructed default database path: %s", config->db_file);
+        } else {
+          LOG_ERROR("Cannot allocate memory for default database path.");
+          config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+        }
+        free(var_dir);
       } else {
-        LOG_ERROR("Cannot resolve default database path.");
-        config->db_file = strdup(DEFAULT_DB_FILE);
+        LOG_ERROR("Cannot get var directory for default database path.");
+        config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
       }
     }
   }
@@ -1011,16 +1137,23 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_DEBUG("No log file specified, using default: %s", DEFAULT_LOG_FILE);
-          
-          /* Resolve the default path */
-          char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
-          if (resolved_path) {
-            config->log_file = resolved_path;
-            LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+          /* Construct default log file path dynamically */
+          char* var_dir = config_get_var_dir();
+          if (var_dir) {
+            char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+            if (log_path) {
+              sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
+              config->log_file = log_path;
+              LOG_DEBUG("No log file specified, using default: %s", config->log_file);
+              LOG_DEBUG("Constructed default log file path: %s", config->log_file);
+            } else {
+              LOG_ERROR("Cannot allocate memory for default log file path.");
+              config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+            }
+            free(var_dir);
           } else {
-            LOG_ERROR("Cannot resolve default log file path.");
-            config->log_file = strdup(DEFAULT_LOG_FILE);
+            LOG_ERROR("Cannot get var directory for default log file path.");
+            config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
           }
         }
       }
@@ -1031,18 +1164,28 @@ int config_load_json(const char* filepath, server_config_t* config) {
       }
       config->log_level = DEFAULT_LOG_LEVEL;
       
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
-      if (resolved_path) {
-        config->log_file = resolved_path;
-        if (g_logger) {
-          LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+      /* Construct default log file path dynamically */
+      char* var_dir = config_get_var_dir();
+      if (var_dir) {
+        char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+        if (log_path) {
+          sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
+          config->log_file = log_path;
+          if (g_logger) {
+            LOG_DEBUG("Constructed default log file path: %s", config->log_file);
+          }
+        } else {
+          if (g_logger) {
+            LOG_ERROR("Cannot allocate memory for default log file path.");
+          }
+          config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
         }
+        free(var_dir);
       } else {
         if (g_logger) {
-          LOG_ERROR("Cannot resolve default log file path.");
+          LOG_ERROR("Cannot get var directory for default log file path.");
         }
-        config->log_file = strdup(DEFAULT_LOG_FILE);
+        config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
       }
     }
   } else {
@@ -1050,14 +1193,22 @@ int config_load_json(const char* filepath, server_config_t* config) {
       LOG_INFO("No 'logging' section found in config, using defaults.");
       config->log_level = DEFAULT_LOG_LEVEL;
       
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_LOG_FILE);
-      if (resolved_path) {
-        config->log_file = resolved_path;
-        LOG_DEBUG("Resolved default log file path to: %s", config->log_file);
+      /* Construct default log file path dynamically */
+      char* var_dir = config_get_var_dir();
+      if (var_dir) {
+        char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+        if (log_path) {
+          sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
+          config->log_file = log_path;
+          LOG_DEBUG("Constructed default log file path: %s", config->log_file);
+        } else {
+          LOG_ERROR("Cannot allocate memory for default log file path.");
+          config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+        }
+        free(var_dir);
       } else {
-        LOG_ERROR("Cannot resolve default log file path.");
-        config->log_file = strdup(DEFAULT_LOG_FILE);
+        LOG_ERROR("Cannot get var directory for default log file path.");
+        config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
       }
     }
   }
@@ -1108,32 +1259,49 @@ int config_load_json(const char* filepath, server_config_t* config) {
               json_type_name(pid_file_val->type));
       }
       
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_PID_FILE);
-      if (resolved_path) {
-        config->pid_file = resolved_path;
-        if (g_logger) {
-          LOG_DEBUG("Resolved default PID file path to: %s", config->pid_file);
+      /* Construct default PID file path dynamically */
+      char* var_dir = config_get_var_dir();
+      if (var_dir) {
+        char* pid_path = malloc(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
+        if (pid_path) {
+          sprintf(pid_path, "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
+          config->pid_file = pid_path;
+          if (g_logger) {
+            LOG_DEBUG("Constructed default PID file path: %s", config->pid_file);
+          }
+        } else {
+          if (g_logger) {
+            LOG_ERROR("Cannot allocate memory for default PID file path.");
+          }
+          config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
         }
+        free(var_dir);
       } else {
         if (g_logger) {
-          LOG_ERROR("Cannot resolve default PID file path.");
+          LOG_ERROR("Cannot get var directory for default PID file path.");
         }
-        config->pid_file = strdup(DEFAULT_PID_FILE);
+        config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
       }
     }
   } else {
     if (g_logger) {
-      LOG_DEBUG("No PID file specified, using default: %s", DEFAULT_PID_FILE);
-      
-      /* Resolve the default path */
-      char* resolved_path = resolve_path(DEFAULT_PID_FILE);
-      if (resolved_path) {
-        config->pid_file = resolved_path;
-        LOG_DEBUG("Resolved default PID file path to: %s", config->pid_file);
+      /* Construct default PID file path dynamically */
+      char* var_dir = config_get_var_dir();
+      if (var_dir) {
+        char* pid_path = malloc(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
+        if (pid_path) {
+          sprintf(pid_path, "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
+          config->pid_file = pid_path;
+          LOG_DEBUG("No PID file specified, using default: %s", config->pid_file);
+          LOG_DEBUG("Constructed default PID file path: %s", config->pid_file);
+        } else {
+          LOG_ERROR("Cannot allocate memory for default PID file path.");
+          config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
+        }
+        free(var_dir);
       } else {
-        LOG_ERROR("Cannot resolve default PID file path.");
-        config->pid_file = strdup(DEFAULT_PID_FILE);
+        LOG_ERROR("Cannot get var directory for default PID file path.");
+        config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
       }
     }
   }
@@ -1750,12 +1918,29 @@ void config_init_defaults(server_config_t* config) {
   config->log_level = DEFAULT_LOG_LEVEL;
   config->js_enabled = DEFAULT_JS_ENABLED;
   
-  /* File paths (resolved relative to binary directory) */
-  config->db_file = resolve_path(DEFAULT_DB_FILE);
-  /* JDBX is the only storage backend - no need to set */
-  config->pid_file = resolve_path(DEFAULT_PID_FILE);
-  config->log_file = resolve_path(DEFAULT_LOG_FILE);
-  config->web_root = resolve_path(DEFAULT_WEB_ROOT);
+  /* File paths (dynamically constructed from auto-detected base path) */
+  char* var_dir = config_get_var_dir();
+  if (var_dir) {
+    /* Construct database file path */
+    char db_path[PATH_MAX];
+    snprintf(db_path, sizeof(db_path), "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
+    config->db_file = strdup(db_path);
+    
+    /* Construct PID file path */
+    char pid_path[PATH_MAX];
+    snprintf(pid_path, sizeof(pid_path), "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
+    config->pid_file = strdup(pid_path);
+    
+    /* Construct log file path */
+    char log_path[PATH_MAX];
+    snprintf(log_path, sizeof(log_path), "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
+    config->log_file = strdup(log_path);
+    
+    free(var_dir);
+  }
+  
+  /* Web root path */
+  config->web_root = config_get_web_root();
   
   /* Security settings */
   config->jwt_secret = strdup(DEFAULT_JWT_SECRET);

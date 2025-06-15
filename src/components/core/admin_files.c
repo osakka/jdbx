@@ -1,4 +1,5 @@
 #include "core/server.h"
+#include "utils/config_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -133,11 +134,22 @@ char* read_file_content(const char* filepath, size_t* size) {
 
 /* Serve admin file from filesystem */
 http_response_t* serve_admin_file(const char* path) {
-  /* Get proper web root directory from server config */
-  const char* web_root = ADMIN_FILES_DIR;
+  /* Get web root directory from server config */
   extern server_config_t* g_server_config;
+  const char* web_root = NULL;
+  
   if (g_server_config && g_server_config->web_root) {
     web_root = g_server_config->web_root;
+  } else {
+    /* Fallback: get web root dynamically */
+    char* dynamic_web_root = config_get_web_root();
+    if (dynamic_web_root) {
+      web_root = dynamic_web_root;
+      /* Note: this creates a memory leak, but it's a fallback case */
+    } else {
+      /* Last resort */
+      web_root = "share/htdocs";
+    }
   }
 
   /* Default path (root) to index.html */

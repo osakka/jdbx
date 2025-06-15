@@ -29,7 +29,7 @@ char* jdbx_generate_wal_path(const char* basename);
 #define DEFAULT_PORT 5000
 #define MAX_CONNECTIONS 100
 #define BUFFER_SIZE 4096
-#define ADMIN_FILES_DIR DEFAULT_ADMIN_FILES_DIR
+/* ADMIN_FILES_DIR is now dynamically determined from web_root config */
 
 /* Server status codes */
 typedef enum {

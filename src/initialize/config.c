@@ -126,31 +126,34 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   /* Copy to heap allocated config */
   memcpy(heap_config, &local_config, sizeof(server_config_t));
   
-  /* Define long options */
+  /* Define long options - short flags reserved for essential operations only */
   static struct option long_options[] = {
-    {"help",      no_argument,    0, 'h'},
-    {"daemon",     no_argument,    0, 'd'},
-    {"foreground",   no_argument,    0, 'f'},
-    {"terminate",   no_argument,    0, 't'},
-    {"log-level",   required_argument, 0, 'l'},
-    {"trace-categories", required_argument, 0, 'x'},
-    {"db-file",    required_argument, 0, 'b'},
-    {"rbac-file",   required_argument, 0, 'r'},
-    {"pid-file",    required_argument, 0, 'i'}, 
-    {"log-file",    required_argument, 0, 'o'},
-    {"web-root",    required_argument, 0, 'w'},
-    {"config",     required_argument, 0, 'c'},
-    {"version",    no_argument,    0, 'v'},
-    {"js-file",    required_argument, 0, 'j'},
-    {"port",      required_argument, 0, 'p'},
-    {"host",      required_argument, 0, 'H'},
-    {"validators-dir", required_argument, 0, 'Q'},
-    {"transforms-dir", required_argument, 0, 'T'},
-    {"metrics-dir",  required_argument, 0, 'M'},
-    {"ssl",      no_argument,    0, 'S'},
-    {"no-ssl",     no_argument,    0, 'N'},
-    {"ssl-cert",    required_argument, 0, 'C'},
-    {"ssl-key",    required_argument, 0, 'K'},
+    /* ESSENTIAL SHORT FLAGS ONLY */
+    {"help",         no_argument,       0, 'h'},
+    {"version",      no_argument,       0, 'v'},
+    {"daemon",       no_argument,       0, 'd'},
+    {"foreground",   no_argument,       0, 'f'},
+    {"config",       required_argument, 0, 'c'},
+    
+    /* ALL OTHER OPTIONS USE LONG FLAGS ONLY */
+    {"terminate",    no_argument,       0, 400},
+    {"log-level",    required_argument, 0, 401},
+    {"trace-categories", required_argument, 0, 402},
+    {"db-file",      required_argument, 0, 403},
+    {"rbac-file",    required_argument, 0, 404},
+    {"pid-file",     required_argument, 0, 405}, 
+    {"log-file",     required_argument, 0, 406},
+    {"web-root",     required_argument, 0, 407},
+    {"js-file",      required_argument, 0, 408},
+    {"port",         required_argument, 0, 409},
+    {"host",         required_argument, 0, 410},
+    {"validators-dir", required_argument, 0, 411},
+    {"transforms-dir", required_argument, 0, 412},
+    {"metrics-dir",  required_argument, 0, 413},
+    {"ssl",          no_argument,       0, 414},
+    {"no-ssl",       no_argument,       0, 415},
+    {"ssl-cert",     required_argument, 0, 416},
+    {"ssl-key",      required_argument, 0, 417},
     /* Thread pool options */
     {"thread-pool-min", required_argument, 0, 301},
     {"thread-pool-max", required_argument, 0, 302},
@@ -181,7 +184,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int option_index = 0;
   
   optind = 1; /* Reset getopt index */
-  while ((opt = getopt_long(argc, argv, "hdftl:x:b:r:i:o:w:c:vj:p:H:Q:T:M:SNC:K:", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hvdfc:", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
         show_help = 1;
@@ -192,52 +195,52 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
       case 'f':
         foreground_mode = 1;
         break;
-      case 't':
-        terminate_server = 1;
-        break;
-      case 'l':
-        log_level_str = optarg;
-        break;
-      case 'x':
-        trace_categories_str = optarg;
-        break;
-      case 'b':
-        db_file = optarg;
-        break;
-      case 'i': 
-        pid_file = optarg;
-        break;
-      case 'o':
-        log_file = optarg;
-        break;
-      case 'w':
-        web_root = optarg;
-        break;
       case 'c':
         config_file = optarg;
         break;
       case 'v':
         show_version = 1;
         break;
-      case 'j':
+      case 400: /* --terminate */
+        terminate_server = 1;
+        break;
+      case 401: /* --log-level */
+        log_level_str = optarg;
+        break;
+      case 402: /* --trace-categories */
+        trace_categories_str = optarg;
+        break;
+      case 403: /* --db-file */
+        db_file = optarg;
+        break;
+      case 405: /* --pid-file */
+        pid_file = optarg;
+        break;
+      case 406: /* --log-file */
+        log_file = optarg;
+        break;
+      case 407: /* --web-root */
+        web_root = optarg;
+        break;
+      case 408: /* --js-file */
         js_file = optarg;
         break;
-      case 'p':
+      case 409: /* --port */
         port_str = optarg;
         break;
-      case 'H':
+      case 410: /* --host */
         host_str = optarg;
         break;
-      case 'S':
+      case 414: /* --ssl */
         use_ssl = 1;
         break;
-      case 'N':
+      case 415: /* --no-ssl */
         use_ssl = 0;
         break;
-      case 'C':
+      case 416: /* --ssl-cert */
         ssl_cert = optarg;
         break;
-      case 'K':
+      case 417: /* --ssl-key */
         ssl_key = optarg;
         break;
       /* Thread pool options */
@@ -345,10 +348,33 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_SUCCESS("CONFIG", "Environment file loaded from '%s'", env_file);
   } else {
     /* Auto-discover environment files in priority order */
+    char* var_env_path = NULL;
+    char* config_env_path = NULL;
+    
+    /* Get dynamic paths */
+    char* var_dir = config_get_var_dir();
+    char* config_dir = config_construct_path(DEFAULT_CONFIG_DIR_RELATIVE);
+    
+    if (var_dir) {
+      var_env_path = malloc(strlen(var_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
+      if (var_env_path) {
+        sprintf(var_env_path, "%s/%s", var_dir, DEFAULT_ENV_FILE_BASENAME);
+      }
+      free(var_dir);
+    }
+    
+    if (config_dir) {
+      config_env_path = malloc(strlen(config_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
+      if (config_env_path) {
+        sprintf(config_env_path, "%s/%s", config_dir, DEFAULT_ENV_FILE_BASENAME);
+      }
+      free(config_dir);
+    }
+    
     const char* env_files[] = {
-      "jdbx.env",                                    /* Local directory override */
-      "/opt/jdbx/build/var/jdbx.env",             /* Running configuration */
-      "/opt/jdbx/share/config/jdbx.env",          /* Template defaults */
+      DEFAULT_ENV_FILE_BASENAME,                  /* Local directory override */
+      var_env_path,                               /* Running configuration */
+      config_env_path,                            /* Template defaults */
       NULL
     };
     
@@ -363,6 +389,10 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         }
       }
     }
+    
+    /* Clean up allocated paths */
+    if (var_env_path) free(var_env_path);
+    if (config_env_path) free(config_env_path);
   }
 
   /* Load configuration from environment variables (lowest priority) */

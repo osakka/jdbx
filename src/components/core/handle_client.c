@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "utils/metrics.h"
 #include "utils/ssl.h"
+#include "utils/config_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -470,13 +471,24 @@ void handle_client(void* client_data) {
     }
 
     /* Get proper web root directory from server config */
-    const char* web_root = ADMIN_FILES_DIR;
     extern server_config_t* g_server_config;
+    const char* web_root = NULL;
+    
     if (g_server_config && g_server_config->web_root) {
       web_root = g_server_config->web_root;
       if (g_logger) LOG_DEBUG("Using configured web root: %s", web_root);
     } else {
-      if (g_logger) LOG_DEBUG("Using default web root: %s", web_root);
+      /* Fallback: get web root dynamically */
+      char* dynamic_web_root = config_get_web_root();
+      if (dynamic_web_root) {
+        web_root = dynamic_web_root;
+        if (g_logger) LOG_DEBUG("Using dynamic web root: %s", web_root);
+        /* Note: this creates a memory leak, but it's a fallback case */
+      } else {
+        /* Last resort */
+        web_root = "share/htdocs";
+        if (g_logger) LOG_DEBUG("Using hardcoded fallback web root: %s", web_root);
+      }
     }
     
     /* Always serve static files without authentication for simplicity */

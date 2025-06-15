@@ -1,5 +1,6 @@
 #include "init.h"
 #include "utils/logger.h"
+#include "utils/config_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,19 +54,33 @@ init_status_t init_logger(server_config_t* config) {
     }
   } else {
     /* In daemon mode without specified log file, use default */
+    char* var_dir = config_get_var_dir();
+    char* default_log_path = NULL;
     
-    if (!logger_init(DEFAULT_LOG_FILE, config->log_level)) {
+    if (var_dir) {
+      default_log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+      if (default_log_path) {
+        sprintf(default_log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
+      }
+      free(var_dir);
+    }
+    
+    if (!default_log_path) {
+      default_log_path = strdup(DEFAULT_LOG_FILE_BASENAME);
+    }
+    
+    if (!logger_init(default_log_path, config->log_level)) {
       fprintf(stderr, "FAILURE: Failed to initialize default logger: %s\n",
-          DEFAULT_LOG_FILE);
+          default_log_path);
+      free(default_log_path);
       return INIT_LOGGER_ERROR;
     }
     
     if (g_logger) {
-      LOG_INFO("Default file logger initialized: %s", DEFAULT_LOG_FILE);
-    } else {
-      fprintf(stderr, "FAILURE: Logger global variable not set\n");
-      return INIT_LOGGER_ERROR;
+      LOG_INFO("Default file logger initialized: %s", default_log_path);
     }
+    
+    free(default_log_path);
   }
 
   /* Now we can use the standardized logging macros */
