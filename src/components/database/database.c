@@ -590,7 +590,7 @@ json_value_t* db_list_collections(database_t* db) {
  * 
  * Document Processing:
  * - Generates UUID if not present (format: "doc-timestamp-random")
- * - Adds _created_at and _modified_at timestamps
+ * - Adds created_at and modified_at timestamps
  * - Updates all field indexes for query performance
  * - Stores in both memory (skiplist) and persistent storage (JDBX)
  * 
@@ -626,8 +626,8 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
     }
     
     /* Add metadata */
-    json_object_set(document, "_created_at", json_create_integer(time(NULL)));
-    json_object_set(document, "_modified_at", json_create_integer(time(NULL)));
+    json_object_set(document, "created_at", json_create_integer(time(NULL)));
+    json_object_set(document, "modified_at", json_create_integer(time(NULL)));
     
     LOG_DEBUG("db_insert: Acquiring write lock for collection %s", collection_path);
     pthread_rwlock_wrlock(&coll->lock);
@@ -812,7 +812,7 @@ json_value_t* db_update(database_t* db, const char* collection_path, const char*
     }
     
     /* Update modified timestamp */
-    json_object_set(doc, "_modified_at", json_create_integer(time(NULL)));
+    json_object_set(doc, "modified_at", json_create_integer(time(NULL)));
     
     /* Skip index updates for update operations to prevent iterator race conditions */
     /* Index maintenance is handled by the adaptive indexer in the background */

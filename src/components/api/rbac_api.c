@@ -278,7 +278,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
       json_value_t* email = json_object_get(user, "email");
       json_value_t* active = json_object_get(user, "active");
       json_value_t* created_at = json_object_get(user, "created_at");
-      json_value_t* updated_at = json_object_get(user, "updated_at");
+      json_value_t* updated_at = json_object_get(user, "modified_at");
       json_value_t* roles = json_object_get(user, "roles");
       
       if (id && id->type == JSON_STRING) {
@@ -306,7 +306,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
       }
       
       if (updated_at && updated_at->type == JSON_STRING) {
-        json_object_set(sanitized, "updated_at", json_create_string(updated_at->value.string));
+        json_object_set(sanitized, "modified_at", json_create_string(updated_at->value.string));
       }
       
       if (roles && roles->type == JSON_ARRAY) {

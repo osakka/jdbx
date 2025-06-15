@@ -90,8 +90,8 @@ static json_value_t* bootstrap_insert_document(const char* collection_path, json
   
   /* Add timestamps */
   time_t now = time(NULL);
-  json_object_set(document, "_created_at", json_create_integer(now));
-  json_object_set(document, "_modified_at", json_create_integer(now));
+  json_object_set(document, "created_at", json_create_integer(now));
+  json_object_set(document, "modified_at", json_create_integer(now));
   
   /* Use external bootstrap function to actually store the document */
   json_value_t* result = db_insert_direct_bootstrap(collection_path, document);
@@ -192,7 +192,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   time_t now = time(NULL);
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
   json_object_set(admin_role, "created_at", json_create_string(timestamp));
-  json_object_set(admin_role, "updated_at", json_create_string(timestamp));
+  json_object_set(admin_role, "modified_at", json_create_string(timestamp));
   
   /* Insert role - use bootstrap method if in bootstrap mode */
   json_value_t* result = NULL;
