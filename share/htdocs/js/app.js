@@ -1157,9 +1157,14 @@ async function loadDashboardMetrics() {
 // ===== JAVASCRIPT SCRIPT INTEGRATION =====
 
 // ===== BROWSER FUNCTIONALITY =====
-function initializeBrowser() {
-    loadLibraries();  // Load libraries first
-    loadBrowserCollections();
+async function initializeBrowser() {
+    try {
+        await loadLibraries();  // Load libraries first
+        // Collections are loaded within loadLibraries, no need to call again
+    } catch (error) {
+        console.error('Error initializing browser:', error);
+        showNotification('Failed to initialize browser', 'error');
+    }
 }
 
 // Load libraries from unified documents
@@ -1197,6 +1202,8 @@ async function loadLibraries() {
                 });
             }
             
+            // Load collections first, then render library selector with counts
+            await loadBrowserCollections();
             renderLibrarySelector();
         }
     } catch (error) {
@@ -1215,12 +1222,14 @@ function renderLibrarySelector() {
     const selector = document.getElementById('globalLibrarySelector');
     if (!selector) return;
     
-    // Update the selector options
-    selector.innerHTML = libraries.map(lib => 
-        `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
-            ${lib.name}
-        </option>`
-    ).join('');
+    // Update the selector options with collection counts
+    selector.innerHTML = libraries.map(lib => {
+        const libCollections = allCollections.filter(c => c.library === lib.name);
+        const collectionCount = libCollections.length;
+        return `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
+            ${lib.name} (${collectionCount} collections)
+        </option>`;
+    }).join('');
     
     // Add onchange handler
     selector.onchange = function() {
@@ -1421,8 +1430,9 @@ async function switchLibrary(libraryName) {
             </div>
         `;
         
-        // Reload collections for the selected library
-        loadBrowserCollections();
+        // Filter and render collections for the selected library
+        filterCollectionsByLibrary();
+        renderCollections();
     }
     
     // Reload current view data with library context
@@ -1443,10 +1453,12 @@ async function switchLibrary(libraryName) {
     }
 }
 
+// Store all collections globally for library filtering
+let allCollections = [];
+
 async function loadBrowserCollections() {
     try {
-        // For now, fall back to traditional collection loading until unified docs API is ready
-        // TODO: Switch to unified documents query when API supports it
+        // Load all collections and schemas
         const [collectionsResponse, schemasResponse] = await Promise.all([
             apiRequest('/api/collections'),
             apiRequest('/api/schemas').catch(() => [])
@@ -1460,41 +1472,37 @@ async function loadBrowserCollections() {
             rawCollections = collectionsResponse.collections;
         }
         
-        // Filter collections by current library
-        // Collections are returned either as strings (library/collection) or objects with library field
-        collections = rawCollections
-            .filter(item => {
-                if (typeof item === 'string') {
-                    // Old format: library/collection string
-                    const name = item;
-                    return name.startsWith(`${currentLibrary}/`) || 
-                           (currentLibrary === 'default' && !name.includes('/'));
-                } else {
-                    // New format: object with library field from unified documents
-                    return item.library === currentLibrary;
-                }
-            })
-            .map(item => {
-                if (typeof item === 'string') {
-                    // Remove library prefix for display
-                    const name = item.replace(`${currentLibrary}/`, '');
-                    return { 
-                        name: name, 
-                        fullPath: item,
-                        documentCount: 0, 
-                        isSystem: name.startsWith('_') 
-                    };
-                }
-                // Handle object format from unified documents
+        // Store all collections globally first
+        allCollections = rawCollections.map(item => {
+            if (typeof item === 'string') {
+                // Old format: library/collection string
+                const parts = item.split('/');
+                const library = parts.length > 1 ? parts[0] : 'default';
+                const name = parts.length > 1 ? parts[1] : parts[0];
+                return { 
+                    name: name, 
+                    library: library,
+                    fullPath: item,
+                    documentCount: 0, 
+                    isSystem: name.startsWith('_') 
+                };
+            } else {
+                // New format: object with library field
                 const name = item.name || '';
-                const fullPath = item.library ? `${item.library}/${name}` : name;
+                const library = item.library || 'default';
+                const fullPath = item.path || `${library}/${name}`;
                 return {
                     name: name,
+                    library: library,
                     fullPath: fullPath,
-                    documentCount: item.documentCount || item.document_count || 0,
+                    documentCount: item.document_count || 0,
                     isSystem: item.is_system || name.startsWith('_')
                 };
-            });
+            }
+        });
+        
+        // Filter collections for current library
+        filterCollectionsByLibrary();
         
         // Store schemas for reference
         if (schemasResponse && schemasResponse.schemas) {
@@ -1512,9 +1520,15 @@ async function loadBrowserCollections() {
             <div class="text-center text-muted p-4">
                 <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
                 <p>Failed to load collections</p>
+                <small class="text-muted">${error.message}</small>
             </div>
         `;
     }
+}
+
+// Filter collections by current library
+function filterCollectionsByLibrary() {
+    collections = allCollections.filter(item => item.library === currentLibrary);
 }
 
 async function renderCollections() {
@@ -1536,7 +1550,10 @@ async function renderCollections() {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="bi bi-folder-x"></i>
-                <p>No collections found</p>
+                <p>No collections found in "${currentLibrary}" library</p>
+                <small class="text-muted">
+                    Try switching to another library or creating a new collection
+                </small>
             </div>
         `;
         return;
@@ -4805,6 +4822,7 @@ async function createNewCollection() {
             
             // Refresh collections to show the new one
             await loadBrowserCollections();
+            renderLibrarySelector(); // Update library selector with new counts
             
             // Auto-select the new collection
             setTimeout(() => selectCollection(collectionName), 100);

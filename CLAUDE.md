@@ -500,7 +500,41 @@ Regular code audits ensure quality:
    - PBKDF2 placeholder with SHA256 fallback (temporary)
    - All system actors comply with RBAC
 
-## Recent Updates (v4.5.0 - June 14, 2025)
+## Recent Updates (v4.6.0 - June 15, 2025)
+
+### 🔒 COMPREHENSIVE COLLECTION & DOCUMENT OWNERSHIP SECURITY
+1. **Collection Operations Protection**: Comprehensive access control for collection creation and deletion
+   - **System Library Protection**: Only administrators can create/delete collections in `system/` library
+   - **User Namespace Enforcement**: Users restricted to `default` library or their own `username` library
+   - **System Collection Names**: Protection against `system_*` and `_system*` collection names for non-admins
+   - **Authentication Required**: All collection operations require valid JWT token authentication
+
+2. **Document Operations Security**: Complete protection for document create, update, and delete operations
+   - **System Collections**: Admin-only write access to all `system/*` collections (users, roles, sessions, etc.)
+   - **User Namespace Isolation**: Document operations restricted to `default` library or user's own namespace
+   - **Cross-Library Access**: Explicit RBAC permissions required for accessing other libraries
+   - **Thread-Safe Implementation**: Safe JWT token parsing with proper error handling
+
+3. **Security Architecture Implementation**:
+   - **Three-Layer Protection**: Authentication → Authorization → Namespace Enforcement
+   - **RBAC Integration**: Full integration with `rbac_db_check_permission()` for fine-grained access control
+   - **Attack Prevention**: Prevents privilege escalation, data exfiltration, and system collection destruction
+   - **Enterprise-Grade Security**: Complete protection against unauthorized access to critical system data
+
+4. **Technical Implementation Details**:
+   - **File**: `src/components/core/api.c` - Added security functions to all collection and document handlers
+   - **Thread Safety**: Thread-safe user info extraction from JWT tokens using local buffers
+   - **Error Handling**: Graceful handling of invalid tokens without server crashes
+   - **Permission Model**: Admin access for system operations, namespace isolation for regular users
+
+### Attack Scenarios Prevented:
+- ❌ Regular users cannot destroy system collections (`system/users`, `system/roles`, etc.)
+- ❌ Regular users cannot escalate privileges by modifying admin accounts
+- ❌ Regular users cannot access other users' data across library boundaries
+- ❌ Unauthenticated requests are blocked with proper HTTP 401/403 responses
+- ❌ Invalid tokens are safely rejected without causing server instability
+
+## Previous Updates (v4.5.0 - June 14, 2025)
 
 ### 🔒 CRITICAL SECURITY HARDENING: JWT Validation and Input Security
 1. **JWT Token Security Enhancement**: Comprehensive input validation prevents crashes and security vulnerabilities

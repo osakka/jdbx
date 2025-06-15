@@ -42,7 +42,7 @@
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
-#include "rbac/rbac_database.h"
+#include "rbac/rbac_db.h"
 #include "js/js_function_resolver.h"
 #include "utils/metrics.h"
 #include "utils/logger.h"
@@ -1011,10 +1011,80 @@ http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t*
 }
 
 /* Create collection */
+/* Helper function to extract user info from request - safe version using existing auth system */
+static int get_request_user_info(http_request_t* request, char* user_id_out, char* username_out, size_t buffer_size) {
+  if (!request || !user_id_out || !username_out || buffer_size < 1) {
+    return 0;
+  }
+  
+  /* Initialize output buffers */
+  user_id_out[0] = '\0';
+  username_out[0] = '\0';
+  
+  /* Check if authorization header exists */
+  if (!request->authorization) {
+    return 0;
+  }
+  
+  /* Extract token from Authorization header */
+  const char* auth = request->authorization;
+  const char* token_str = NULL;
+  
+  /* Check for "Bearer " prefix */
+  if (strncmp(auth, "Bearer ", 7) == 0) {
+    token_str = auth + 7;
+  } else {
+    token_str = auth;
+  }
+  
+  /* Validate token string */
+  if (!token_str || strlen(token_str) < 10) {
+    return 0; /* Token too short to be valid */
+  }
+  
+  /* Safely decode the JWT with error handling */
+  jwt_token_t* token = jwt_decode(token_str);
+  
+  if (!token) {
+    return 0;
+  }
+  
+  /* Get the subject (user_id) from the token */
+  if (!token->payload || !token->payload->sub) {
+    jwt_free(token);
+    return 0;
+  }
+  
+  /* Copy the user_id */
+  strncpy(user_id_out, token->payload->sub, buffer_size - 1);
+  user_id_out[buffer_size - 1] = '\0';
+  
+  /* Get the username from the token claims */
+  if (token->payload->claims) {
+    json_value_t* username_val = json_object_get(token->payload->claims, "username");
+    if (username_val && username_val->type == JSON_STRING) {
+      strncpy(username_out, username_val->value.string, buffer_size - 1);
+      username_out[buffer_size - 1] = '\0';
+    }
+  }
+  
+  jwt_free(token);
+  return 1; /* Success */
+}
+
 http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request || !request->body) {
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* SECURITY: Extract user info for permission checking */
+  char user_id[256];
+  char username[256];
+  
+  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Authentication required\"}", "application/json");
   }
   
   /* Parse request body */
@@ -1045,6 +1115,42 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   } else {
     session_library = get_session_library(ctx, request);
     library = session_library;
+  }
+  
+  /* SECURITY: Permission checking for collection creation */
+  
+  /* 1. Check if trying to create in system library - admin only */
+  if (library && strcmp(library, "system") == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      json_free(body);
+      if (session_library) free(session_library);
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system library\"}", "application/json");
+    }
+  }
+  
+  /* 2. User namespace enforcement - users can only create in their own namespace */
+  if (library && strcmp(library, "system") != 0) {
+    /* Users can create collections in default library or their username library */
+    if (strcmp(library, "default") != 0 && strcmp(library, username) != 0) {
+      /* Check if user has explicit permission for this library */
+      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library, RBAC_WRITE)) {
+        json_free(body);
+        if (session_library) free(session_library);
+        return create_http_response(HTTP_FORBIDDEN, 
+                     "{\"error\":\"Can only create collections in 'default' library or your username library\"}", "application/json");
+      }
+    }
+  }
+  
+  /* 3. Check collection name - prevent system collection names */
+  if (strncmp(name, "system_", 7) == 0 || strncmp(name, "_system", 7) == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      json_free(body);
+      if (session_library) free(session_library);
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system collection names\"}", "application/json");
+    }
   }
   
   /* Get user ID from token */
@@ -1115,6 +1221,15 @@ http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
+  /* SECURITY: Extract user info for permission checking */
+  char user_id[256];
+  char username[256];
+  
+  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Authentication required\"}", "application/json");
+  }
+  
   /* Extract collection name from path */
   const char* path = request->path;
   const char* name = path + strlen("/api/collections/");
@@ -1122,6 +1237,53 @@ http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* 
   /* Check if this is actually a document operation path */
   if (strstr(name, "/documents/") != NULL) {
     return api_handle_document_delete(ctx, request);
+  }
+  
+  /* SECURITY: Parse library/collection from path */
+  char library_name[256] = {0};
+  char collection_name[256] = {0};
+  const char* slash = strchr(name, '/');
+  if (slash) {
+    size_t lib_len = slash - name;
+    if (lib_len < sizeof(library_name)) {
+      strncpy(library_name, name, lib_len);
+      library_name[lib_len] = '\0';
+      strncpy(collection_name, slash + 1, sizeof(collection_name) - 1);
+    }
+  } else {
+    /* If no slash, assume it's in default library */
+    strcpy(library_name, "default");
+    strncpy(collection_name, name, sizeof(collection_name) - 1);
+  }
+  
+  /* SECURITY: Protection checks */
+  
+  /* 1. Absolute protection for system collections - admin only */
+  if (strcmp(library_name, "system") == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required to delete system collections\"}", "application/json");
+    }
+  }
+  
+  /* 2. User namespace enforcement for non-system collections */
+  if (strcmp(library_name, "system") != 0) {
+    /* Users can only delete from default library or their username library */
+    if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
+      /* Check explicit permission */
+      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_DELETE)) {
+        return create_http_response(HTTP_FORBIDDEN, 
+                     "{\"error\":\"Can only delete collections in 'default' library or your username library\"}", "application/json");
+      }
+    }
+  }
+  
+  /* 3. Additional protection for special collection names */
+  if (strncmp(collection_name, "system_", 7) == 0 || strncmp(collection_name, "_system", 7) == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system collection names\"}", "application/json");
+    }
   }
   
   /* Drop collection */
@@ -1886,6 +2048,15 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
+  /* SECURITY: Extract user info for permission checking */
+  char user_id[256];
+  char username[256];
+  
+  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Authentication required\"}", "application/json");
+  }
+  
   /* Extract collection name from path */
   const char* path = request->path;
   if (strncmp(path, "/api/collections/", 17) != 0) {
@@ -1907,6 +2078,47 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   char* collection_name = strndup(path, path_len);
   
   LOG_DEBUG("api_handle_document_create: collection_name='%s'", collection_name);
+  
+  /* SECURITY: Parse library/collection from path for permission checking */
+  char library_name[256] = {0};
+  char coll_name_only[256] = {0};
+  const char* slash = strchr(collection_name, '/');
+  if (slash) {
+    size_t lib_len = slash - collection_name;
+    if (lib_len < sizeof(library_name)) {
+      strncpy(library_name, collection_name, lib_len);
+      library_name[lib_len] = '\0';
+      strncpy(coll_name_only, slash + 1, sizeof(coll_name_only) - 1);
+    }
+  } else {
+    /* If no slash, assume it's in default library */
+    strcpy(library_name, "default");
+    strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+  }
+  
+  /* SECURITY: Protection checks for document creation */
+  
+  /* 1. System collections - admin only for write access */
+  if (strcmp(library_name, "system") == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      free(collection_name);
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system collections\"}", "application/json");
+    }
+  }
+  
+  /* 2. User namespace enforcement for non-system collections */
+  if (strcmp(library_name, "system") != 0) {
+    /* Users can write to default library or their username library */
+    if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
+      /* Check explicit permission */
+      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_WRITE)) {
+        free(collection_name);
+        return create_http_response(HTTP_FORBIDDEN, 
+                     "{\"error\":\"Can only create documents in 'default' library or your username library\"}", "application/json");
+      }
+    }
+  }
   
   /* Parse document */
   json_value_t* document = json_parse(request->body);
@@ -1975,6 +2187,15 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid request: Missing context or request\"}", "application/json");
   }
   
+  /* SECURITY: Extract user info for permission checking */
+  char user_id[256];
+  char username[256];
+  
+  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Authentication required\"}", "application/json");
+  }
+  
   if (!request->body) {
     LOG_ERROR("Document update request has no body. Path: %s", request->path);
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -2002,6 +2223,47 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   
   char* collection_name = strndup(path, slash - path);
   const char* document_id = slash + 11;
+  
+  /* SECURITY: Parse library/collection from path for permission checking */
+  char library_name[256] = {0};
+  char coll_name_only[256] = {0};
+  const char* coll_slash = strchr(collection_name, '/');
+  if (coll_slash) {
+    size_t lib_len = coll_slash - collection_name;
+    if (lib_len < sizeof(library_name)) {
+      strncpy(library_name, collection_name, lib_len);
+      library_name[lib_len] = '\0';
+      strncpy(coll_name_only, coll_slash + 1, sizeof(coll_name_only) - 1);
+    }
+  } else {
+    /* If no slash, assume it's in default library */
+    strcpy(library_name, "default");
+    strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+  }
+  
+  /* SECURITY: Protection checks for document update */
+  
+  /* 1. System collections - admin only for write access */
+  if (strcmp(library_name, "system") == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      free(collection_name);
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system collections\"}", "application/json");
+    }
+  }
+  
+  /* 2. User namespace enforcement for non-system collections */
+  if (strcmp(library_name, "system") != 0) {
+    /* Users can write to default library or their username library */
+    if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
+      /* Check explicit permission */
+      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_WRITE)) {
+        free(collection_name);
+        return create_http_response(HTTP_FORBIDDEN, 
+                     "{\"error\":\"Can only update documents in 'default' library or your username library\"}", "application/json");
+      }
+    }
+  }
   
   /* Check if updating system collection */
   if (collection_name[0] == '_') {
@@ -2063,6 +2325,15 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid request\"}", "application/json");
   }
   
+  /* SECURITY: Extract user info for permission checking */
+  char user_id[256];
+  char username[256];
+  
+  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
+    return create_http_response(HTTP_UNAUTHORIZED, 
+                 "{\"error\":\"Authentication required\"}", "application/json");
+  }
+  
   LOG_DEBUG("Handling DELETE request for path: %s", request->path);
   
   /* Extract collection name and document ID from path */
@@ -2087,7 +2358,48 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
   char* collection_name = strndup(path, slash - path);
   const char* document_id = slash + 11;
   
-  LOG_DEBUG("Collection: %s, Document ID: %s", document_id);
+  LOG_DEBUG("Collection: %s, Document ID: %s", collection_name, document_id);
+  
+  /* SECURITY: Parse library/collection from path for permission checking */
+  char library_name[256] = {0};
+  char coll_name_only[256] = {0};
+  const char* coll_slash = strchr(collection_name, '/');
+  if (coll_slash) {
+    size_t lib_len = coll_slash - collection_name;
+    if (lib_len < sizeof(library_name)) {
+      strncpy(library_name, collection_name, lib_len);
+      library_name[lib_len] = '\0';
+      strncpy(coll_name_only, coll_slash + 1, sizeof(coll_name_only) - 1);
+    }
+  } else {
+    /* If no slash, assume it's in default library */
+    strcpy(library_name, "default");
+    strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+  }
+  
+  /* SECURITY: Protection checks for document deletion */
+  
+  /* 1. System collections - admin only for delete access */
+  if (strcmp(library_name, "system") == 0) {
+    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
+      free(collection_name);
+      return create_http_response(HTTP_FORBIDDEN, 
+                   "{\"error\":\"Admin permission required for system collections\"}", "application/json");
+    }
+  }
+  
+  /* 2. User namespace enforcement for non-system collections */
+  if (strcmp(library_name, "system") != 0) {
+    /* Users can delete from default library or their username library */
+    if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
+      /* Check explicit permission */
+      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_DELETE)) {
+        free(collection_name);
+        return create_http_response(HTTP_FORBIDDEN, 
+                     "{\"error\":\"Can only delete documents in 'default' library or your username library\"}", "application/json");
+      }
+    }
+  }
   
   /* Delete document */
   int result = db_delete_document(ctx->db, collection_name, document_id);

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JDBX UI Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        .info { background-color: #d1ecf1; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>JDBX UI Status Test</h1>
+    
+    <div id="testResults"></div>
+    
+    <script>
+        const results = document.getElementById('testResults');
+        
+        async function runTests() {
+            // Test 1: Check server connectivity
+            try {
+                const response = await fetch('/api/collections');
+                if (response.status === 401) {
+                    addResult('Server Connectivity', 'Server is running but requires authentication', 'info');
+                } else if (response.ok) {
+                    addResult('Server Connectivity', 'Server is running and accessible', 'success');
+                } else {
+                    addResult('Server Connectivity', `Server responded with status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult('Server Connectivity', `Cannot connect to server: ${error.message}`, 'error');
+                return; // Stop tests if server is not accessible
+            }
+            
+            // Test 2: Try to get auth token
+            try {
+                const authResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+                });
+                
+                if (authResponse.ok) {
+                    const authData = await authResponse.json();
+                    window.authToken = authData.token;
+                    addResult('Authentication', `Login successful. Token: ${authData.token.substring(0, 20)}...`, 'success');
+                    
+                    // Test 3: Check collections with auth
+                    const collectionsResponse = await fetch('/api/collections', {
+                        headers: { 'Authorization': `Bearer ${authData.token}` }
+                    });
+                    
+                    if (collectionsResponse.ok) {
+                        const collectionsData = await collectionsResponse.json();
+                        addResult('Collections API', `Found ${collectionsData.collections?.length || 0} collections`, 'success');
+                        addResult('Collections Data', `<pre>${JSON.stringify(collectionsData, null, 2)}</pre>`, 'info');
+                        
+                        // Group collections by library
+                        const byLibrary = {};
+                        (collectionsData.collections || []).forEach(col => {
+                            if (!byLibrary[col.library]) byLibrary[col.library] = [];
+                            byLibrary[col.library].push(col.name);
+                        });
+                        
+                        addResult('Library Structure', `<pre>${JSON.stringify(byLibrary, null, 2)}</pre>`, 'info');
+                    } else {
+                        addResult('Collections API', `Failed to fetch collections: ${collectionsResponse.status}`, 'error');
+                    }
+                    
+                } else {
+                    addResult('Authentication', `Login failed: ${authResponse.status}`, 'error');
+                }
+            } catch (error) {
+                addResult('Authentication', `Auth error: ${error.message}`, 'error');
+            }
+        }
+        
+        function addResult(test, message, type) {
+            const div = document.createElement('div');
+            div.className = `test-section ${type}`;
+            div.innerHTML = `<strong>${test}:</strong> ${message}`;
+            results.appendChild(div);
+        }
+        
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>
