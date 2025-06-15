@@ -5,7 +5,7 @@
 #include "api/api.h"
 #include "core/server.h"
 #include "database/database.h"
-#include "database/unified_documents.h"
+#include "database/document_storage.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/rbac_database.h"

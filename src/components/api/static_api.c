@@ -99,7 +99,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
   }
 
   /* User authenticated, generate token */
-  char* token = generate_admin_auth_token(username);
+  char* token = generate_static_auth_token(username);
   if (!token) {
     json_free(body);
     printf("Failed to generate token\n");

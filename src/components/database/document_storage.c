@@ -1,4 +1,4 @@
-#include "database/unified_documents.h"
+#include "database/document_storage.h"
 #include "database/database.h"
 #include "rbac/rbac.h"
 #include "utils/logger.h"

@@ -262,12 +262,12 @@ const char* get_content_type_from_extension(const char* extension);
 char* read_file_content(const char* filepath, size_t* size);
 
 /* Admin authentication settings */
-#define ADMIN_AUTH_COOKIE_NAME "jdbx_admin_auth"
+#define ADMIN_AUTH_COOKIE_NAME "jdbx_static_auth"
 #define ADMIN_AUTH_COOKIE_TTL 3600  /* 1 hour in seconds */
 
 /* Admin authentication functions */
-int check_admin_auth(http_request_t* request);
-char* generate_admin_auth_token(const char* username);
+int check_static_auth(http_request_t* request);
+char* generate_static_auth_token(const char* username);
 http_response_t* create_auth_response(http_response_t* response, const char* token);
 void parse_cookies(http_request_t* request);
 char* get_cookie_value(http_request_t* request, const char* name);

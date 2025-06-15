@@ -173,7 +173,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
         request->authorization ? "present" : "absent");
   }
   
-  /* Special handling for admin tokens from admin_api.c */
+  /* Special handling for admin tokens from static_api.c */
   /* Admin tokens are hex encoded strings starting with the hex representation of 'admin' */
   size_t token_len = token ? strlen(token) : 0;
   if (token && token_len > 16) {

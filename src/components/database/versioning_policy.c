@@ -10,7 +10,7 @@
 #define _GNU_SOURCE /* for strptime */
 #include "database/versioning_policy.h"
 #include "database/database.h"
-#include "database/unified_documents.h"
+#include "database/document_storage.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"

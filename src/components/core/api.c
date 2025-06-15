@@ -38,7 +38,7 @@
 #include "api/library_metrics_api.h"
 #include "core/server.h"
 #include "database/database.h"
-#include "database/unified_documents.h"
+#include "database/document_storage.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
@@ -458,7 +458,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
   
   if (g_logger) LOG_DEBUG("Authenticating token: %.20s...", token);
   
-  /* Special handling for admin tokens from admin_api.c */
+  /* Special handling for admin tokens from static_api.c */
   /* Admin tokens are hex encoded strings starting with the hex representation of 'admin' */
   size_t token_len = token ? strlen(token) : 0;
   if (token && token_len > 16) {

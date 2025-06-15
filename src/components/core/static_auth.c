@@ -5,7 +5,7 @@
 #include <time.h>
 
 /* Generate a token for admin authentication */
-char* generate_admin_auth_token(const char* username) {
+char* generate_static_auth_token(const char* username) {
   if (!username) {
     return NULL;
   }
@@ -31,7 +31,7 @@ char* generate_admin_auth_token(const char* username) {
 }
 
 /* Check if request has valid admin authentication */
-int check_admin_auth(http_request_t* request) {
+int check_static_auth(http_request_t* request) {
   if (!request) {
     return 0;
   }
