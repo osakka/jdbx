@@ -172,6 +172,7 @@ static int parse_collection_path(const char* path, char* library, char* collecti
 }
 
 /* JSON helper functions */
+static void json_object_set_string(json_value_t* obj, const char* key, const char* value) __attribute__((unused));
 static void json_object_set_string(json_value_t* obj, const char* key, const char* value) {
     if (!obj || obj->type != JSON_OBJECT || !key) return;
     json_value_t* str_val = json_create_string(value);
@@ -645,7 +646,7 @@ json_value_t* db_insert(database_t* db, const char* collection_path, json_value_
     
     /* Also store in JDBX for persistence */
     if (g_db.page_manager) {
-        char doc_key[512];
+        char doc_key[1024];  /* Increased buffer size to prevent truncation */
         snprintf(doc_key, sizeof(doc_key), "doc:%s:%s:%s", library, collection, doc_id);
         
         char* doc_json = json_stringify(doc_copy);
@@ -702,7 +703,7 @@ json_value_t* db_find_by_id(database_t* db, const char* collection_path, const c
     if (doc_ptr) {
         /* Load pointer atomically - volatile ensures we read the current value */
         volatile json_value_t** volatile_ptr = (volatile json_value_t**)doc_ptr;
-        doc = *volatile_ptr;
+        doc = (json_value_t*)*volatile_ptr;
         __sync_synchronize(); /* Memory barrier */
         
         /* Safely perform deep copy with null check */
@@ -962,7 +963,7 @@ json_value_t* db_find(database_t* db, const char* collection_path, const char* q
         
         /* Load pointer atomically - volatile ensures we read the current value */
         volatile json_value_t** volatile_ptr = (volatile json_value_t**)value;
-        json_value_t* doc = *volatile_ptr;
+        json_value_t* doc = (json_value_t*)*volatile_ptr;
         __sync_synchronize(); /* Memory barrier */
         
         /* Safety check for null document */

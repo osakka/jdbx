@@ -942,10 +942,12 @@ static json_value_t* parse_value(const char** json) {
   return parse_value_with_depth(json, 0);
 }
 
+static json_value_t* parse_object(const char** json) __attribute__((unused));
 static json_value_t* parse_object(const char** json) {
   return parse_object_with_depth(json, 0);
 }
 
+static json_value_t* parse_array(const char** json) __attribute__((unused));
 static json_value_t* parse_array(const char** json) {
   return parse_array_with_depth(json, 0);
 }
