@@ -90,8 +90,8 @@ typedef struct buffer_pool {
 /* Global instance - SINGLE SOURCE OF TRUTH */
 static buffer_pool_t g_pool = {0};
 
-/* Thread-local storage for caching */
-static __thread thread_cache_t* tls_cache = NULL;
+/* Thread-local storage for caching - unused in current implementation */
+/* static __thread thread_cache_t* tls_cache = NULL; */
 
 /* Size class boundaries */
 static const size_t size_classes[] = {
@@ -108,6 +108,8 @@ static void untrack_allocation(alloc_header_t* header);
 
 /* Initialize buffer pool */
 int buffer_pool_init(size_t initial_size, int debug_mode) {
+    (void)initial_size;  /* Unused parameter */
+    
     if (g_pool.initialized) {
         return 0;  /* Already initialized */
     }
