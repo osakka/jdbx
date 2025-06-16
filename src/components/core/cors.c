@@ -250,31 +250,83 @@ http_response_t* apply_cors_headers(http_response_t* response,
 
   /* Set Access-Control-Allow-Methods header */
   if (cors->allowed_methods_count > 0) {
-    char methods[512] = "Access-Control-Allow-Methods: ";
+    /* Calculate required size */
+    size_t header_size = strlen("Access-Control-Allow-Methods: ") + 1;
     for (int i = 0; i < cors->allowed_methods_count; i++) {
-      strcat(methods, cors->allowed_methods[i]);
+      header_size += strlen(cors->allowed_methods[i]);
       if (i < cors->allowed_methods_count - 1) {
-        strcat(methods, ", ");
+        header_size += 2; /* ", " */
       }
     }
+    
+    /* Allocate buffer */
+    char* methods = (char*)BUFFER_ALLOC(header_size);
+    if (!methods) {
+      LOG_ERROR("Failed to allocate memory for CORS methods header");
+      return response;
+    }
+    
+    /* Build header */
+    strcpy(methods, "Access-Control-Allow-Methods: ");
+    size_t offset = strlen(methods);
+    
+    for (int i = 0; i < cors->allowed_methods_count; i++) {
+      size_t method_len = strlen(cors->allowed_methods[i]);
+      memcpy(methods + offset, cors->allowed_methods[i], method_len);
+      offset += method_len;
+      
+      if (i < cors->allowed_methods_count - 1) {
+        memcpy(methods + offset, ", ", 2);
+        offset += 2;
+      }
+    }
+    methods[offset] = '\0';
+    
     add_response_header(response, methods);
+    BUFFER_FREE(methods);
   }
 
   /* Set Access-Control-Allow-Headers header */
   if (cors->allowed_headers_count > 0) {
-    char headers[512] = "Access-Control-Allow-Headers: ";
+    /* Calculate required size */
+    size_t header_size = strlen("Access-Control-Allow-Headers: ") + 1;
     for (int i = 0; i < cors->allowed_headers_count; i++) {
-      strcat(headers, cors->allowed_headers[i]);
+      header_size += strlen(cors->allowed_headers[i]);
       if (i < cors->allowed_headers_count - 1) {
-        strcat(headers, ", ");
+        header_size += 2; /* ", " */
       }
     }
+    
+    /* Allocate buffer */
+    char* headers = (char*)BUFFER_ALLOC(header_size);
+    if (!headers) {
+      LOG_ERROR("Failed to allocate memory for CORS headers header");
+      return response;
+    }
+    
+    /* Build header */
+    strcpy(headers, "Access-Control-Allow-Headers: ");
+    size_t offset = strlen(headers);
+    
+    for (int i = 0; i < cors->allowed_headers_count; i++) {
+      size_t header_len = strlen(cors->allowed_headers[i]);
+      memcpy(headers + offset, cors->allowed_headers[i], header_len);
+      offset += header_len;
+      
+      if (i < cors->allowed_headers_count - 1) {
+        memcpy(headers + offset, ", ", 2);
+        offset += 2;
+      }
+    }
+    headers[offset] = '\0';
+    
     add_response_header(response, headers);
+    BUFFER_FREE(headers);
   }
 
   /* Set Access-Control-Max-Age header */
   char max_age[64];
-  sprintf(max_age, "Access-Control-Max-Age: %d", cors->max_age);
+  snprintf(max_age, sizeof(max_age), "Access-Control-Max-Age: %d", cors->max_age);
   add_response_header(response, max_age);
 
   return response;

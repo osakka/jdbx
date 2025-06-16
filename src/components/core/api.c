@@ -660,7 +660,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   
   /* Create memory checkpoint for this request */
   /* LOG_DEBUG("About to create memory checkpoint for request"); */
-  memory_checkpoint_t* request_checkpoint = memory_checkpoint_create();
+  memory_checkpoint_t* request_checkpoint = NULL; /* DISABLED - causing memory corruption with CORS headers */
   /* if (request_checkpoint) {
     LOG_DEBUG("Created memory checkpoint %p for API request: %s %s", 
               request_checkpoint,
