@@ -126,7 +126,7 @@ API requests are rate limited to prevent abuse:
 ## Base URL and Versioning
 
 - **Base URL**: `http://localhost:5000` (default)
-- **API Version**: 2.0.8
+- **API Version**: 6.2.0
 - **API Prefix**: All API endpoints start with `/api/`
 - **Health Check**: `/health` (no authentication required)
 
@@ -185,5 +185,5 @@ LOG_LEVEL=DEBUG build/jdbx_runtime.sh start
 ---
 
 **Last Updated**: May 31, 2025  
-**API Version**: 2.0.8  
+**API Version**: 6.2.0  
 **Documentation Version**: Latest

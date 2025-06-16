@@ -6,7 +6,7 @@
 
 ## Overview
 
-JDBX implements a unified documents architecture with mixed routing between physical and virtual collections. The system provides both unified document storage and traditional hierarchical collection access patterns.
+JDBX implements a TRUE unified documents architecture with zero mixed routing. All documents are stored in a single physical collection with virtual organization via document fields, providing unprecedented architectural simplicity.
 
 ## Core Principles
 
@@ -20,25 +20,27 @@ All entities in JDBX are now stored as documents in a single 'documents' collect
 - **Collections**: `{"type": "collection", "name": "products", "library": "library1", ...}`
 - **Regular Data**: `{"type": "data", "collection": "products", "library": "library1", ...}`
 
-### Mixed Routing Architecture
+### Unified Storage Architecture
 
-The system implements mixed routing between two storage patterns:
+The system implements true unified storage with no mixed routing:
 
-1. **Physical Storage**: Special handling for the `PHYSICAL_STORAGE_LIBRARY/PHYSICAL_STORAGE_COLLECTION` path that stores all unified documents
-2. **Virtual Collections**: Traditional library/collection hierarchical paths that map to the unified storage for metadata queries
-3. **Fallback Logic**: When creating virtual collections, the system falls back to unified collection storage for system entities
+1. **Single Physical Storage**: All documents stored in `default/documents` collection (PHYSICAL_STORAGE_LIBRARY/PHYSICAL_STORAGE_COLLECTION)
+2. **Virtual Organization**: Library/collection organization via document fields (`type`, `library`, `collection`) 
+3. **Zero Fallback Logic**: All operations use unified storage - no hierarchical storage patterns
 
 ### Implementation Pattern
 
 ```c
-// Mixed routing logic in database.c:246-301
-if (strcmp(library_name, PHYSICAL_STORAGE_LIBRARY) == 0 && 
-    strcmp(collection_name, PHYSICAL_STORAGE_COLLECTION) == 0) {
-    // Handle physical unified collection
-    return create_physical_collection(db, library_name, collection_name);
-} else {
-    // Handle virtual collection with fallback to unified storage
-    return create_virtual_collection_with_unified_fallback(db, library_name, collection_name);
+// Unified storage implementation in database.c
+json_value_t* db_query_documents(database_t* db, const char* library, 
+                                const char* collection, json_value_t* query) {
+    // All queries go to unified default/documents collection
+    collection_t* coll = get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    
+    // Filter by document fields, not physical collections
+    if (strcmp(json_get_string(doc_library), library) != 0) {
+        continue; // Document-level filtering only
+    }
 }
 
 ### Type-Based Discrimination

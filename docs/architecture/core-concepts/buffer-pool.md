@@ -84,14 +84,14 @@ BUFFER_FREE(doc_ptr);
 - **Thread Safety**: Maintains skiplist thread safety with memory correctness
 
 ### Performance
-- **Buffer Pool Efficiency**: High-performance memory allocation with size classes
-- **Minimal Overhead**: Single pointer indirection for JSON access
+- **Simple Wrapper**: Direct malloc/free calls with debugging statistics
+- **Minimal Overhead**: Basic allocation tracking without performance optimization
 - **Concurrent Operations**: Supports 50+ concurrent operations without issues
 
 ### Maintainability
-- **Single Source of Truth**: Unified buffer pool allocation across all storage
+- **Single Source of Truth**: Unified malloc/free wrapper across all storage
 - **Clear Patterns**: Consistent allocation/cleanup patterns throughout codebase
-- **Industry Best Practice**: Enterprise-grade memory management
+- **Debugging Support**: File, line, and function tracking for memory debugging
 
 ## Test Results
 
@@ -133,8 +133,8 @@ BUFFER_FREE(doc_ptr);
 ## Monitoring
 
 ### Key Metrics
-- Buffer pool hit/miss rates
-- Memory allocation/deallocation patterns
+- Memory allocation/deallocation counters
+- Allocation success/failure rates
 - Skiplist operation performance
 - Concurrent operation success rates
 
@@ -146,13 +146,13 @@ BUFFER_FREE(doc_ptr);
 ## Future Enhancements
 
 ### Potential Optimizations
-- Buffer pool size tuning based on workload patterns
+- Implement actual buffer pool with size classes for performance
 - Memory pool pre-allocation for high-traffic scenarios
 - Advanced memory debugging tools integration
 
 ### Scalability Considerations
-- Multi-tier buffer pool architecture for very large datasets
-- NUMA-aware buffer pool allocation
+- Replace malloc/free wrapper with true buffer pool architecture
+- NUMA-aware memory allocation strategies
 - Memory pressure handling and graceful degradation
 
 ---
