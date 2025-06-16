@@ -167,9 +167,6 @@ void jwt_cache_shutdown(void) {
 
 /* Get cached JWT payload */
 jwt_payload_t* jwt_cache_get(const char* token) {
-    /* BAR RAISING: Temporarily disable cache to test buffer pool document storage */
-    (void)token;
-    return NULL;
     
     if (!g_jwt_cache || !token) return NULL;
     

@@ -230,13 +230,23 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   json_value_t* data_point = json_deep_copy(current_data);
   json_object_set(data_point, "timestamp", json_create_integer(timestamp));
   
-  /* Find or get metric ID */
+  /* Find or get metric ID - ALWAYS check for existing document */
   char* metric_id = *metric_id_ptr;
-  if (!metric_id) {
-    /* Try to find existing document by name */
-    metric_id = find_metric_by_name(mp, metric_name);
-    if (metric_id) {
-      *metric_id_ptr = metric_id;
+  
+  /* Always try to find existing document by name to prevent duplicates */
+  char* found_id = find_metric_by_name(mp, metric_name);
+  if (found_id) {
+    if (!metric_id) {
+      *metric_id_ptr = found_id;
+      metric_id = found_id;
+    } else if (strcmp(metric_id, found_id) != 0) {
+      /* ID mismatch - use the found one and update global */
+      BUFFER_FREE(metric_id);
+      *metric_id_ptr = found_id;
+      metric_id = found_id;
+    } else {
+      /* IDs match, free the duplicate */
+      BUFFER_FREE(found_id);
     }
   }
   
