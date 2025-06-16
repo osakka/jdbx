@@ -435,7 +435,7 @@ Authorization: Bearer <token>
 **Response:**
 ```json
 {
-  "version": "3.3.0",
+  "version": "6.3.0",
   "architecture": "JDBX Lock-Free",
   "uptime": 3600,
   "memory_usage": "45.2MB",
