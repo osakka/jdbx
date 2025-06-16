@@ -274,8 +274,17 @@ void ssl_connection_free(ssl_connection_t *conn) {
   }
   
   if (conn->ssl) {
-    SSL_shutdown(conn->ssl);
+    /* Check if SSL object is still valid before shutdown */
+    if (conn->connected) {
+      /* Attempt graceful shutdown, but don't block */
+      SSL_set_shutdown(conn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
+      SSL_shutdown(conn->ssl);
+      conn->connected = 0;
+    }
+    
+    /* Free the SSL object */
     SSL_free(conn->ssl);
+    conn->ssl = NULL;  /* Prevent double-free */
   }
   
   BUFFER_FREE(conn);
