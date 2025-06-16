@@ -121,6 +121,13 @@ api_route_t routes[] = {
   
   /* Document routes - Authentication enabled */
   /* NOTE: The order matters - the first matching route wins */
+  /* Library-scoped document routes */
+  {"/api/libraries/", HTTP_GET, api_handle_documents_query, 1}, /* Library-scoped query */
+  {"/api/libraries/", HTTP_POST, api_handle_document_create, 1}, /* Library-scoped create */
+  {"/api/libraries/", HTTP_PUT, api_handle_document_update, 1}, /* Library-scoped update */
+  {"/api/libraries/", HTTP_DELETE, api_handle_document_delete, 1}, /* Library-scoped delete */
+  
+  /* Collection-scoped document routes (legacy) */
   {"/api/collections/", HTTP_GET, api_handle_documents_query, 1}, /* General query handler - checks for /documents suffix */
   {"/api/collections/", HTTP_GET, api_handle_document_field_access, 1}, /* Field access - checks for field path */
   {"/api/collections/", HTTP_GET, api_handle_document_get, 1}, /* Specific document GET */
@@ -1473,40 +1480,59 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   const char* path = request->path;
   LOG_DEBUG("api_handle_documents_query: request path='%s'", path);
   
-  if (strncmp(path, "/api/collections/", 17) != 0) {
+  /* Support both formats:
+   * - /api/collections/:collection/documents
+   * - /api/libraries/:library/collections/:collection/documents
+   */
+  char* library_name = NULL;
+  char* collection_name = NULL;
+  
+  if (strncmp(path, "/api/libraries/", 15) == 0) {
+    /* Library-scoped format */
+    path += 15;
+    
+    /* Extract library name */
+    const char* slash = strchr(path, '/');
+    if (!slash) {
+      return create_http_response(HTTP_BAD_REQUEST, "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    library_name = strndup(path, slash - path);
+    path = slash + 1;
+    
+    /* Verify "collections/" follows */
+    if (strncmp(path, "collections/", 12) != 0) {
+      BUFFER_FREE(library_name);
+      return create_http_response(HTTP_BAD_REQUEST, "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    path += 12;
+    
+  } else if (strncmp(path, "/api/collections/", 17) == 0) {
+    /* Legacy format - library will be determined later */
+    path += 17;
+  } else {
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
-  
-  path += 17;
   
   /* Check if this ends with /documents */
   const char* documents_suffix = strstr(path, "/documents");
   if (!documents_suffix || strcmp(documents_suffix, "/documents") != 0) {
     /* Not a documents query - pass to next handler */
     LOG_DEBUG("api_handle_documents_query: Not a documents query, passing to next handler");
+    if (library_name) BUFFER_FREE(library_name);
     return api_handle_document_field_access(ctx, request);
   }
   
-  /* Extract collection path (library/collection format) */
-  size_t path_len = documents_suffix ? (size_t)(documents_suffix - path) : strlen(path);
-  char* collection_path = strndup(path, path_len);
+  /* Extract collection name if not already done */
+  if (!collection_name) {
+    size_t path_len = documents_suffix ? (size_t)(documents_suffix - path) : strlen(path);
+    collection_name = strndup(path, path_len);
+  }
   
-  LOG_DEBUG("api_handle_documents_query: path='%s', collection_path='%s'", path, collection_path);
-  
-  /* Split library and collection name */
-  char* library_name = NULL;
-  char* collection_name = NULL;
-  char* lib_slash = strchr(collection_path, '/');
-  
-  if (lib_slash) {
-    /* Format: library/collection */
-    library_name = strndup(collection_path, lib_slash - collection_path);
-    collection_name = BUFFER_STRDUP(lib_slash + 1);
-  } else {
-    /* No library specified, use session library */
+  /* If library not specified, use session library */
+  if (!library_name) {
     library_name = get_session_library(ctx, request);
-    collection_name = BUFFER_STRDUP(collection_path);
   }
   
   LOG_DEBUG("api_handle_documents_query: library='%s', collection='%s'", library_name, collection_name);
@@ -1588,7 +1614,6 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   BUFFER_FREE(collection_name);
   
   if (!documents) {
-    BUFFER_FREE(collection_path);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query documents\"}", "application/json");
   }
@@ -1596,7 +1621,6 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   /* db_query_documents returns a complete response object, use it directly */
   char* response_str = json_stringify(documents);
   json_free(documents);
-  BUFFER_FREE(collection_path);
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1927,12 +1951,39 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   
   /* Extract collection name from path */
   const char* path = request->path;
-  if (strncmp(path, "/api/collections/", 17) != 0) {
+  
+  /* Support both formats:
+   * - /api/collections/:collection/documents
+   * - /api/libraries/:library/collections/:collection/documents
+   */
+  char* extracted_library = NULL;
+  
+  if (strncmp(path, "/api/libraries/", 15) == 0) {
+    /* Library-scoped format */
+    path += 15;
+    
+    /* Extract library name */
+    const char* slash = strchr(path, '/');
+    if (!slash) {
+      return create_http_response(HTTP_BAD_REQUEST, "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    
+    extracted_library = strndup(path, slash - path);
+    path = slash + 1;
+    
+    /* Verify "collections/" follows */
+    if (strncmp(path, "collections/", 12) != 0) {
+      BUFFER_FREE(extracted_library);
+      return create_http_response(HTTP_BAD_REQUEST, "{\"error\":\"Invalid path\"}", "application/json");
+    }
+    path += 12;
+    
+  } else if (strncmp(path, "/api/collections/", 17) == 0) {
+    path += 17;
+  } else {
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
-  
-  path += 17;
   
   /* Check if this ends with /documents */
   const char* documents_suffix = strstr(path, "/documents");
@@ -1950,18 +2001,27 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   /* SECURITY: Parse library/collection from path for permission checking */
   char library_name[256] = {0};
   char coll_name_only[256] = {0};
-  const char* slash = strchr(collection_name, '/');
-  if (slash) {
-    size_t lib_len = slash - collection_name;
-    if (lib_len < sizeof(library_name)) {
-      strncpy(library_name, collection_name, lib_len);
-      library_name[lib_len] = '\0';
-      strncpy(coll_name_only, slash + 1, sizeof(coll_name_only) - 1);
-    }
-  } else {
-    /* If no slash, assume it's in default library */
-    strcpy(library_name, "default");
+  
+  if (extracted_library) {
+    /* Library was explicitly specified in path */
+    strncpy(library_name, extracted_library, sizeof(library_name) - 1);
     strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+    BUFFER_FREE(extracted_library);
+  } else {
+    /* Check if collection_name has library prefix */
+    const char* slash = strchr(collection_name, '/');
+    if (slash) {
+      size_t lib_len = slash - collection_name;
+      if (lib_len < sizeof(library_name)) {
+        strncpy(library_name, collection_name, lib_len);
+        library_name[lib_len] = '\0';
+        strncpy(coll_name_only, slash + 1, sizeof(coll_name_only) - 1);
+      }
+    } else {
+      /* If no slash, assume it's in default library */
+      strcpy(library_name, "default");
+      strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+    }
   }
   
   /* SECURITY: Protection checks for document creation */
@@ -2007,6 +2067,20 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   
   /* Add ownership - user documents owned by authenticated user */
   json_object_set(document, "owner", json_create_string(username));
+  
+  /* For unified storage: Add type, library, and collection fields */
+  /* Map collection name to document type */
+  const char* doc_type = coll_name_only;
+  if (strcmp(coll_name_only, "users") == 0) doc_type = "user";
+  else if (strcmp(coll_name_only, "roles") == 0) doc_type = "role";
+  else if (strcmp(coll_name_only, "permissions") == 0) doc_type = "permission";
+  else if (strcmp(coll_name_only, "sessions") == 0) doc_type = "session";
+  else if (strcmp(coll_name_only, "libraries") == 0) doc_type = "library";
+  else if (strcmp(coll_name_only, "metrics") == 0) doc_type = "metric";
+  
+  json_object_set(document, "type", json_create_string(doc_type));
+  json_object_set(document, "library", json_create_string(library_name));
+  json_object_set(document, "collection", json_create_string(coll_name_only));
   
   /* Check if document has uuid or _id field for update vs insert */
   json_value_t* id_field = json_object_get(document, "uuid");
