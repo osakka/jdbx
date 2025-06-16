@@ -67,6 +67,26 @@
  * Security Defaults
  *============================================================================*/
 
+/** CRITICAL SECURITY: Bootstrap Admin Credentials Configuration
+ * 
+ * SECURITY REQUIREMENT: Bootstrap admin credentials MUST be configured via
+ * environment variables. These defaults are ONLY used as fallback values
+ * and trigger critical security warnings.
+ * 
+ * Required Environment Variables:
+ * - JDBX_BOOTSTRAP_ADMIN_USER: Initial admin username
+ * - JDBX_BOOTSTRAP_ADMIN_PASS: Initial admin password (minimum 12 characters)
+ * - JDBX_DEFAULT_ADMIN_EMAIL: Admin email address
+ * 
+ * Configuration Priority:
+ * 1. Environment variables (required for production)
+ * 2. These insecure defaults (development only, triggers warnings)
+ */
+#define DEFAULT_BOOTSTRAP_ADMIN_USER_PLACEHOLDER "CHANGE_ME_ADMIN_USER"
+#define DEFAULT_BOOTSTRAP_ADMIN_PASS_PLACEHOLDER "CHANGE_ME_ADMIN_PASS"
+#define DEFAULT_BOOTSTRAP_ADMIN_EMAIL_PLACEHOLDER "admin@CHANGE_ME.localhost"
+#define MINIMUM_ADMIN_PASSWORD_LENGTH 12
+
 /** JWT SECRET CONFIGURATION - Three-Tier Priority System
  * 
  * SECURITY IMPLEMENTATION: JWT secrets follow three-tier configuration priority:

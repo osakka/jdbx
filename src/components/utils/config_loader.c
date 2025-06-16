@@ -104,6 +104,71 @@ static char* generate_jwt_secret(void) {
 }
 
 /**
+ * Load bootstrap admin credentials with security validation
+ * 
+ * CRITICAL SECURITY: Bootstrap admin credentials MUST be configured via
+ * environment variables for production deployments.
+ * 
+ * @param admin_user Output parameter for admin username (caller must free)
+ * @param admin_pass Output parameter for admin password (caller must free)
+ * @param admin_email Output parameter for admin email (caller must free)
+ * @return 0 on success with secure credentials, -1 on insecure fallback
+ */
+int config_load_bootstrap_admin_credentials(char** admin_user, char** admin_pass, char** admin_email) {
+    int using_secure_credentials = 1;
+    
+    /* Load admin username */
+    const char* env_user = getenv("JDBX_BOOTSTRAP_ADMIN_USER");
+    if (env_user && strlen(env_user) >= 3) {
+        *admin_user = BUFFER_STRDUP(env_user);
+        LOG_INFO("Bootstrap admin username loaded from environment variable");
+    } else {
+        *admin_user = BUFFER_STRDUP(DEFAULT_BOOTSTRAP_ADMIN_USER_PLACEHOLDER);
+        using_secure_credentials = 0;
+        LOG_ERROR("SECURITY CRITICAL: Using placeholder admin username! "
+                  "Set JDBX_BOOTSTRAP_ADMIN_USER environment variable.");
+    }
+    
+    /* Load admin password with security validation */
+    const char* env_pass = getenv("JDBX_BOOTSTRAP_ADMIN_PASS");
+    if (env_pass && strlen(env_pass) >= MINIMUM_ADMIN_PASSWORD_LENGTH) {
+        *admin_pass = BUFFER_STRDUP(env_pass);
+        LOG_INFO("Bootstrap admin password loaded from environment variable");
+    } else if (env_pass) {
+        *admin_pass = BUFFER_STRDUP(env_pass);
+        using_secure_credentials = 0;
+        LOG_ERROR("SECURITY WARNING: Admin password is shorter than %d characters", 
+                  MINIMUM_ADMIN_PASSWORD_LENGTH);
+    } else {
+        *admin_pass = BUFFER_STRDUP(DEFAULT_BOOTSTRAP_ADMIN_PASS_PLACEHOLDER);
+        using_secure_credentials = 0;
+        LOG_ERROR("SECURITY CRITICAL: Using placeholder admin password! "
+                  "Set JDBX_BOOTSTRAP_ADMIN_PASS environment variable (min %d chars).", 
+                  MINIMUM_ADMIN_PASSWORD_LENGTH);
+    }
+    
+    /* Load admin email */
+    const char* env_email = getenv("JDBX_DEFAULT_ADMIN_EMAIL");
+    if (env_email && strlen(env_email) >= 5 && strchr(env_email, '@')) {
+        *admin_email = BUFFER_STRDUP(env_email);
+        LOG_INFO("Bootstrap admin email loaded from environment variable");
+    } else {
+        *admin_email = BUFFER_STRDUP(DEFAULT_BOOTSTRAP_ADMIN_EMAIL_PLACEHOLDER);
+        using_secure_credentials = 0;
+        LOG_ERROR("SECURITY WARNING: Using placeholder admin email! "
+                  "Set JDBX_DEFAULT_ADMIN_EMAIL environment variable.");
+    }
+    
+    /* Overall security assessment */
+    if (!using_secure_credentials) {
+        LOG_ERROR("SECURITY CRITICAL: Bootstrap admin credentials are using insecure placeholders! "
+                  "This is a SEVERE SECURITY RISK in production. Configure all admin environment variables.");
+    }
+    
+    return using_secure_credentials ? 0 : -1;
+}
+
+/**
  * Load JWT secret with three-tier priority system
  * 
  * Priority order:

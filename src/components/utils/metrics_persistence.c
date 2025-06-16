@@ -13,9 +13,10 @@
 /* Clone a JSON value - temporary until json_deep_copy is added to json utils */
 /* json_deep_copy is now available from json_deep_copy.c */
 
-/* Metrics persistence configuration - PURE DOCUMENTS ARCHITECTURE */
-#define METRICS_COLLECTION_NAME "system/metrics" /* Metrics stored in system/metrics collection */
-#define OLD_METRICS_COLLECTION "metrics"      /* Old collection to clean up */
+/* Metrics persistence configuration - UNIFIED DOCUMENTS ARCHITECTURE */
+#define METRICS_DOCUMENT_TYPE DOC_TYPE_NAME_METRIC
+#define METRICS_LIBRARY VIRTUAL_LIBRARY_SYSTEM  
+#define METRICS_COLLECTION VIRTUAL_COLLECTION_METRICS
 #define METRICS_SNAPSHOT_INTERVAL 60 /* Save metrics every 60 seconds */
 #define METRICS_RETENTION_DAYS 7   /* Keep metrics for 7 days */
 #define METRICS_CLEANUP_INTERVAL 3600 /* Clean old metrics every hour */

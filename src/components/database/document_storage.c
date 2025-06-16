@@ -687,15 +687,32 @@ int unified_documents_init(database_t* db) {
         /* PURE DOCUMENTS: Add type and library fields */
         json_object_set(admin_user, "type", json_create_string("user"));
         json_object_set(admin_user, "library", json_create_string("system"));
-        json_object_set(admin_user, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
-        json_object_set(admin_user, "email", json_create_string("admin@localhost"));
+        /* Load secure admin credentials from environment */
+        char* admin_username = NULL;
+        char* admin_password = NULL;
+        char* admin_email = NULL;
+        extern int config_load_bootstrap_admin_credentials(char**, char**, char**);
+        int credentials_secure = config_load_bootstrap_admin_credentials(&admin_username, &admin_password, &admin_email);
+        
+        if (!credentials_secure) {
+            LOG_ERROR("SECURITY CRITICAL: Creating admin user with insecure placeholder credentials! "
+                      "Configure JDBX_BOOTSTRAP_ADMIN_USER, JDBX_BOOTSTRAP_ADMIN_PASS, and JDBX_DEFAULT_ADMIN_EMAIL.");
+        }
+        
+        json_object_set(admin_user, "username", json_create_string(admin_username ? admin_username : DEFAULT_ADMIN_USERNAME));
+        json_object_set(admin_user, "email", json_create_string(admin_email ? admin_email : "admin@localhost"));
         json_object_set(admin_user, "full_name", json_create_string("System Administrator"));
         
-        /* Hash password "admin" for compatibility with authentication_handler.c */
+        /* Hash the configured admin password */
         extern char* hash_password(const char* password);
-        char* password_hash = hash_password("admin");
+        char* password_hash = hash_password(admin_password ? admin_password : "admin");
         json_object_set(admin_user, "password_hash", json_create_string(password_hash));
         BUFFER_FREE(password_hash);
+        
+        /* Clean up credentials immediately for security */
+        BUFFER_FREE(admin_username);
+        BUFFER_FREE(admin_password);
+        BUFFER_FREE(admin_email);
         
         json_object_set(admin_user, "status", json_create_string("active"));
         json_object_set(admin_user, "is_admin", json_create_boolean(1));

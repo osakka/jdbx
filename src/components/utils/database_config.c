@@ -15,8 +15,11 @@
 #include <pthread.h>
 #include <time.h>
 
-#define CONFIG_COLLECTION "system/config"
+/* Unified Documents Configuration - All documents go to default/documents */
 #define CONFIG_DOCUMENT_ID "system_config"
+#define CONFIG_DOCUMENT_TYPE DOC_TYPE_NAME_CONFIG
+#define CONFIG_LIBRARY VIRTUAL_LIBRARY_SYSTEM
+#define CONFIG_COLLECTION VIRTUAL_COLLECTION_CONFIGS
 
 /* Configuration change callback */
 typedef struct config_callback {
@@ -59,13 +62,7 @@ json_value_t* config_load_from_database(database_t* db) {
         return NULL;
     }
     
-    /* Check if collection exists */
-    if (!db_collection_exists(db, CONFIG_COLLECTION)) {
-        LOG_DEBUG("Configuration collection does not exist.");
-        return NULL;
-    }
-    
-    /* Load configuration document */
+    /* Load configuration document from unified storage */
     json_value_t* config = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID);
     if (!config) {
         LOG_DEBUG("Configuration document not found.");
@@ -99,22 +96,17 @@ int config_save_to_database(database_t* db, json_value_t* config) {
         return -1;
     }
     
-    /* Create collection if needed */
-    if (!db_collection_exists(db, CONFIG_COLLECTION)) {
-        if (db_create_collection(db, CONFIG_COLLECTION) != 0) {
-            LOG_ERROR("Cannot create configuration collection.");
-            return -1;
-        }
-    }
-    
-    /* Create configuration document */
+    /* Create configuration document with unified documents fields */
     json_value_t* doc = json_create_object();
     json_object_set(doc, "uuid", json_create_string(CONFIG_DOCUMENT_ID));
-    json_object_set(doc, "type", json_create_string("configuration"));
+    json_object_set(doc, "type", json_create_string(CONFIG_DOCUMENT_TYPE));
+    json_object_set(doc, "library", json_create_string(CONFIG_LIBRARY));
+    json_object_set(doc, "collection", json_create_string(CONFIG_COLLECTION));
     json_object_set(doc, "owner", json_create_string(SYSTEM_USER_ADMIN));
     json_object_set(doc, "version", json_create_integer(1));
     json_object_set(doc, "settings", json_clone(config));
-    json_object_set(doc, "updated_at", json_create_integer(time(NULL)));
+    json_object_set(doc, "created_at", json_create_integer(time(NULL)));
+    json_object_set(doc, "modified_at", json_create_integer(time(NULL)));
     
     /* Check if document exists */
     json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID);

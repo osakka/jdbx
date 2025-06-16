@@ -50,6 +50,24 @@ char* config_get_var_dir(void);
 char* config_get_web_root(void);
 
 /**
+ * Load secure bootstrap admin credentials from environment variables
+ * 
+ * CRITICAL SECURITY: Bootstrap admin credentials MUST be configured via
+ * environment variables for production deployments.
+ * 
+ * Required Environment Variables:
+ * - JDBX_BOOTSTRAP_ADMIN_USER: Initial admin username
+ * - JDBX_BOOTSTRAP_ADMIN_PASS: Initial admin password (minimum 12 characters)
+ * - JDBX_DEFAULT_ADMIN_EMAIL: Admin email address
+ * 
+ * @param admin_user Output parameter for admin username (caller must free with BUFFER_FREE)
+ * @param admin_pass Output parameter for admin password (caller must free with BUFFER_FREE)
+ * @param admin_email Output parameter for admin email (caller must free with BUFFER_FREE)
+ * @return 0 on success with secure credentials, -1 on insecure fallback
+ */
+int config_load_bootstrap_admin_credentials(char** admin_user, char** admin_pass, char** admin_email);
+
+/**
  * Load configuration from file (auto-detects format)
  * @param filepath Path to the configuration file
  * @param config Pointer to the configuration structure

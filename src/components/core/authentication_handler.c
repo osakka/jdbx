@@ -159,8 +159,23 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               /* Mark bootstrap as completed */
               g_bootstrap_completed = 1;
               
-              /* If this request used admin credentials, return successful login immediately */
-              if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
+              /* Load secure admin credentials for comparison */
+              char* admin_user = NULL;
+              char* admin_pass = NULL; 
+              char* admin_email = NULL;
+              config_load_bootstrap_admin_credentials(&admin_user, &admin_pass, &admin_email);
+              
+              /* If this request used the configured admin credentials, return successful login */
+              int is_admin_login = (admin_user && admin_pass && 
+                                   strcmp(username, admin_user) == 0 && 
+                                   strcmp(password, admin_pass) == 0);
+              
+              /* Clean up credentials immediately for security */
+              BUFFER_FREE(admin_user);
+              BUFFER_FREE(admin_pass);
+              BUFFER_FREE(admin_email);
+              
+              if (is_admin_login) {
                 pthread_mutex_unlock(&g_bootstrap_mutex);
                 
                 /* Get the admin user ID that was just created */
