@@ -248,8 +248,10 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
-  /* Query all users */
+  /* Query all users - filter by type="user" in unified storage */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("user"));
+  json_object_set(query, "library", json_create_string("system"));
   json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
@@ -695,8 +697,10 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
-  /* Query all roles */
+  /* Query all roles - filter by type="role" in unified storage */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("role"));
+  json_object_set(query, "library", json_create_string("system"));
   json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
@@ -714,6 +718,8 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
   
   /* Query all users to compute role membership */
   json_value_t* users_query = json_create_object();
+  json_object_set(users_query, "type", json_create_string("user"));
+  json_object_set(users_query, "library", json_create_string("system"));
   json_value_t* users_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, users_query);
   json_free(users_query);
   
@@ -1433,6 +1439,8 @@ http_response_t* api_handle_rbac_get_permissions(api_context_t* ctx, http_reques
   
   /* Get all roles */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string("role"));
+  json_object_set(query, "library", json_create_string("system"));
   json_value_t* roles_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   json_free(query);
   
