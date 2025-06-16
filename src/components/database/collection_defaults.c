@@ -3,6 +3,7 @@
 #include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 
 /* Create default metadata for system collections */
 static void create_users_metadata(database_t* db) {
@@ -21,16 +22,16 @@ static void create_users_metadata(database_t* db) {
         
         /* Add unique constraints for username and email */
         metadata->index_count = 2;
-        metadata->indexes = calloc(2, sizeof(index_metadata_t));
+        metadata->indexes = BUFFER_ALLOC(sizeof(index_metadata_t));
         
         /* Username unique index */
-        metadata->indexes[0].field_name = strdup("username");
+        metadata->indexes[0].field_name = BUFFER_STRDUP("username");
         metadata->indexes[0].type = INDEX_META_TYPE_HASH;
         metadata->indexes[0].unique = true;
         metadata->indexes[0].case_insensitive = false;
         
         /* Email unique index */
-        metadata->indexes[1].field_name = strdup("email");
+        metadata->indexes[1].field_name = BUFFER_STRDUP("email");
         metadata->indexes[1].type = INDEX_META_TYPE_HASH;
         metadata->indexes[1].unique = true;
         metadata->indexes[1].case_insensitive = true;
@@ -94,9 +95,9 @@ static void create_roles_metadata(database_t* db) {
         
         /* Add unique constraint for role name */
         metadata->index_count = 1;
-        metadata->indexes = calloc(1, sizeof(index_metadata_t));
+        metadata->indexes = BUFFER_ALLOC(sizeof(index_metadata_t));
         
-        metadata->indexes[0].field_name = strdup("name");
+        metadata->indexes[0].field_name = BUFFER_STRDUP("name");
         metadata->indexes[0].type = INDEX_META_TYPE_HASH;
         metadata->indexes[0].unique = true;
         metadata->indexes[0].case_insensitive = false;

@@ -34,9 +34,17 @@ typedef enum {
 #define SYSTEM_USER_CACHE          "system-cache"
 #define SYSTEM_USER_AUDIT          "system-audit"
 
+/* Human users (bootstrap defaults) */
+#define DEFAULT_ADMIN_USERNAME      "admin"
+#define DEFAULT_ADMIN_ROLE          "admin"
+
 /* Physical Storage Location for All Documents */
-#define STORAGE_LIBRARY             "default"
-#define STORAGE_COLLECTION          "documents"
+#define PHYSICAL_STORAGE_LIBRARY    "default"
+#define PHYSICAL_STORAGE_COLLECTION "documents"
+
+/* Legacy aliases for backward compatibility */
+#define STORAGE_LIBRARY             PHYSICAL_STORAGE_LIBRARY
+#define STORAGE_COLLECTION          PHYSICAL_STORAGE_COLLECTION
 
 /* Document Type Names (used in 'type' field) */
 #define DOC_TYPE_NAME_USER          "user"

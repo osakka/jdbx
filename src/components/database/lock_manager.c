@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "transaction/transaction.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,18 +117,18 @@ static lock_key_t* create_lock_key(const char* collection, const char* document_
     return NULL;
   }
   
-  lock_key_t* key = (lock_key_t*)malloc(sizeof(lock_key_t));
+  lock_key_t* key = (lock_key_t*)BUFFER_ALLOC(sizeof(lock_key_t));
   if (!key) {
     return NULL;
   }
   
-  key->collection = strdup(collection);
-  key->document_id = document_id ? strdup(document_id) : NULL;
+  key->collection = BUFFER_STRDUP(collection);
+  key->document_id = document_id ? BUFFER_STRDUP(document_id) : NULL;
   
   if (!key->collection || (document_id && !key->document_id)) {
-    if (key->collection) free(key->collection);
-    if (key->document_id) free(key->document_id);
-    free(key);
+    if (key->collection) BUFFER_FREE(key->collection);
+    if (key->document_id) BUFFER_FREE(key->document_id);
+    BUFFER_FREE(key);
     return NULL;
   }
   
@@ -141,14 +142,14 @@ static void free_lock_key(lock_key_t* key) {
   }
   
   if (key->collection) {
-    free(key->collection);
+    BUFFER_FREE(key->collection);
   }
   
   if (key->document_id) {
-    free(key->document_id);
+    BUFFER_FREE(key->document_id);
   }
   
-  free(key);
+  BUFFER_FREE(key);
 }
 
 /* Create a new lock request */
@@ -157,7 +158,7 @@ static lock_request_t* create_lock_request(transaction_t* transaction, lock_type
     return NULL;
   }
   
-  lock_request_t* request = (lock_request_t*)malloc(sizeof(lock_request_t));
+  lock_request_t* request = (lock_request_t*)BUFFER_ALLOC(sizeof(lock_request_t));
   if (!request) {
     return NULL;
   }
@@ -173,7 +174,7 @@ static lock_request_t* create_lock_request(transaction_t* transaction, lock_type
 /* Free a lock request */
 static void free_lock_request(lock_request_t* request) {
   if (request) {
-    free(request);
+    BUFFER_FREE(request);
   }
 }
 
@@ -183,19 +184,19 @@ static lock_entry_t* create_lock_entry(const lock_key_t* key) {
     return NULL;
   }
   
-  lock_entry_t* entry = (lock_entry_t*)malloc(sizeof(lock_entry_t));
+  lock_entry_t* entry = (lock_entry_t*)BUFFER_ALLOC(sizeof(lock_entry_t));
   if (!entry) {
     return NULL;
   }
   
   /* Copy the key */
-  entry->key.collection = strdup(key->collection);
-  entry->key.document_id = key->document_id ? strdup(key->document_id) : NULL;
+  entry->key.collection = BUFFER_STRDUP(key->collection);
+  entry->key.document_id = key->document_id ? BUFFER_STRDUP(key->document_id) : NULL;
   
   if (!entry->key.collection || (key->document_id && !entry->key.document_id)) {
-    if (entry->key.collection) free(entry->key.collection);
-    if (entry->key.document_id) free(entry->key.document_id);
-    free(entry);
+    if (entry->key.collection) BUFFER_FREE(entry->key.collection);
+    if (entry->key.document_id) BUFFER_FREE(entry->key.document_id);
+    BUFFER_FREE(entry);
     return NULL;
   }
   
@@ -217,11 +218,11 @@ static void free_lock_entry(lock_entry_t* entry) {
   
   /* Free the key */
   if (entry->key.collection) {
-    free(entry->key.collection);
+    BUFFER_FREE(entry->key.collection);
   }
   
   if (entry->key.document_id) {
-    free(entry->key.document_id);
+    BUFFER_FREE(entry->key.document_id);
   }
   
   /* Free the request queues */
@@ -243,7 +244,7 @@ static void free_lock_entry(lock_entry_t* entry) {
   pthread_cond_destroy(&entry->cond);
   
   /* Free the entry */
-  free(entry);
+  BUFFER_FREE(entry);
 }
 
 /* Find a lock entry in the lock table */
@@ -277,7 +278,7 @@ static int add_lock_entry(lock_manager_t* manager, lock_entry_t* lock_entry) {
   unsigned int hash = hash_key(&lock_entry->key, g_lock_manager_impl.table_size);
   
   /* Create a table entry */
-  lock_table_entry_t* entry = (lock_table_entry_t*)malloc(sizeof(lock_table_entry_t));
+  lock_table_entry_t* entry = (lock_table_entry_t*)BUFFER_ALLOC(sizeof(lock_table_entry_t));
   if (!entry) {
     return 0;
   }
@@ -314,7 +315,7 @@ static int remove_lock_entry(lock_manager_t* manager, const lock_key_t* key) {
       free_lock_entry(entry->lock_entry);
       
       /* Free the table entry */
-      free(entry);
+      BUFFER_FREE(entry);
       
       return 1;
     }
@@ -482,7 +483,7 @@ static void process_waiting_requests(lock_entry_t* entry) {
 /* Create a lock manager */
 lock_manager_t* lock_manager_create(void) {
   /* Allocate the lock manager */
-  lock_manager_t* manager = (lock_manager_t*)malloc(sizeof(lock_manager_t));
+  lock_manager_t* manager = (lock_manager_t*)BUFFER_ALLOC(sizeof(lock_manager_t));
   if (!manager) {
     return NULL;
   }
@@ -498,7 +499,7 @@ lock_manager_t* lock_manager_create(void) {
   g_lock_manager_impl.lock_table = (lock_table_entry_t**)calloc(g_lock_manager_impl.table_size, sizeof(lock_table_entry_t*));
   if (!g_lock_manager_impl.lock_table) {
     pthread_mutex_destroy(&manager->lock);
-    free(manager);
+    BUFFER_FREE(manager);
     return NULL;
   }
   
@@ -520,13 +521,13 @@ void lock_manager_free(lock_manager_t* manager) {
     while (entry) {
       lock_table_entry_t* next = entry->next;
       free_lock_entry(entry->lock_entry);
-      free(entry);
+      BUFFER_FREE(entry);
       entry = next;
     }
   }
   
   /* Free the lock table */
-  free(g_lock_manager_impl.lock_table);
+  BUFFER_FREE(g_lock_manager_impl.lock_table);
   
   /* Release the lock */
   pthread_mutex_unlock(&manager->lock);
@@ -535,7 +536,7 @@ void lock_manager_free(lock_manager_t* manager) {
   pthread_mutex_destroy(&manager->lock);
   
   /* Free the manager */
-  free(manager);
+  BUFFER_FREE(manager);
 }
 
 /* Acquire a lock on a document */
@@ -1056,7 +1057,7 @@ static wait_for_node_t* build_wait_for_graph(lock_manager_t* manager, int* node_
   /* Map of transaction pointers to node indices */
   transaction_t** tx_to_node = (transaction_t**)calloc(max_transactions, sizeof(transaction_t*));
   if (!tx_to_node) {
-    free(nodes);
+    BUFFER_FREE(nodes);
     *node_count = 0;
     return NULL;
   }
@@ -1177,7 +1178,7 @@ static wait_for_node_t* build_wait_for_graph(lock_manager_t* manager, int* node_
   }
   
   /* Cleanup */
-  free(tx_to_node);
+  BUFFER_FREE(tx_to_node);
   
   *node_count = actual_count;
   return nodes;
@@ -1237,11 +1238,11 @@ static void free_wait_for_graph(wait_for_node_t* nodes, int node_count) {
   
   for (int i = 0; i < node_count; i++) {
     if (nodes[i].waiting_for) {
-      free(nodes[i].waiting_for);
+      BUFFER_FREE(nodes[i].waiting_for);
     }
   }
   
-  free(nodes);
+  BUFFER_FREE(nodes);
 }
 
 /* Select a victim transaction for deadlock resolution */

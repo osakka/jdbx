@@ -1,6 +1,7 @@
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,7 +70,7 @@ static int resize_index(index_t* index, size_t new_size) {
   new_size = next_prime(new_size);
 
   /* Allocate new buckets */
-  index_entry_t** new_buckets = (index_entry_t**)calloc(new_size, sizeof(index_entry_t*));
+  index_entry_t** new_buckets = (index_entry_t**)BUFFER_ALLOC(new_size * sizeof(index_entry_t*));
   if (!new_buckets) {
     return 0;
   }
@@ -95,7 +96,7 @@ static int resize_index(index_t* index, size_t new_size) {
   }
 
   /* Free old buckets array (not the entries) */
-  free(index->buckets);
+  BUFFER_FREE(index->buckets);
 
   /* Update index with new buckets */
   index->buckets = new_buckets;
@@ -137,7 +138,7 @@ static json_value_t* get_json_value_at_path(json_value_t* root, const char* path
   }
   
   /* Create a copy of the path for tokenization */
-  char* path_copy = strdup(path);
+  char* path_copy = BUFFER_STRDUP(path);
   if (!path_copy) {
     return NULL;
   }
@@ -165,7 +166,7 @@ static json_value_t* get_json_value_at_path(json_value_t* root, const char* path
     token = strtok(NULL, ".");
   }
   
-  free(path_copy);
+  BUFFER_FREE(path_copy);
   return current;
 }
 
@@ -179,27 +180,27 @@ static char* json_value_to_string(json_value_t* value) {
 
   switch (value->type) {
     case JSON_STRING:
-      return strdup(value->value.string);
+      return BUFFER_STRDUP(value->value.string);
 
     case JSON_NUMBER:
-      result = (char*)malloc(32);
+      result = (char*)BUFFER_ALLOC(32);
       if (result) {
         snprintf(result, 32, "%.16g", value->value.number);
       }
       return result;
 
     case JSON_INTEGER:
-      result = (char*)malloc(32);
+      result = (char*)BUFFER_ALLOC(32);
       if (result) {
         snprintf(result, 32, "%lld", (long long)value->value.integer);
       }
       return result;
 
     case JSON_BOOLEAN:
-      return strdup(value->value.boolean ? "true" : "false");
+      return BUFFER_STRDUP(value->value.boolean ? "true" : "false");
 
     case JSON_NULL:
-      return strdup("null");
+      return BUFFER_STRDUP("null");
 
     case JSON_OBJECT:
     case JSON_ARRAY:
@@ -207,7 +208,7 @@ static char* json_value_to_string(json_value_t* value) {
       return json_stringify(value);
 
     default:
-      return strdup("");
+      return BUFFER_STRDUP("");
   }
 }
 
@@ -247,7 +248,7 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
   
   /* Create new index */
   LOG_DEBUG("Allocating memory for new index.");
-  index_t* index = (index_t*)malloc(sizeof(index_t));
+  index_t* index = (index_t*)BUFFER_ALLOC(sizeof(index_t));
   if (!index) {
     LOG_ERROR("Out of memory.");
     pthread_mutex_unlock(&coll->lock);
@@ -256,8 +257,8 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
 
   /* Initialize index fields */
   LOG_DEBUG("Initializing index fields.");
-  index->name = strdup(name);
-  index->field_path = strdup(field_path);
+  index->name = BUFFER_STRDUP(name);
+  index->field_path = BUFFER_STRDUP(field_path);
   index->type = type;
   index->entries = 0;
   index->next = NULL;
@@ -266,13 +267,13 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
   index->num_buckets = next_prime(DEFAULT_INDEX_BUCKETS);
   LOG_DEBUG("Initializing hash buckets with prime number %zu", index->num_buckets);
 
-  index->buckets = (index_entry_t**)calloc(index->num_buckets, sizeof(index_entry_t*));
+  index->buckets = (index_entry_t**)BUFFER_ALLOC(index->num_buckets * sizeof(index_entry_t*));
 
   if (!index->buckets) {
     LOG_ERROR("Out of memory", index->num_buckets);
-    free(index->name);
-    free(index->field_path);
-    free(index);
+    BUFFER_FREE(index->name);
+    BUFFER_FREE(index->field_path);
+    BUFFER_FREE(index);
     pthread_mutex_unlock(&coll->lock);
     return NULL;
   }
@@ -331,7 +332,7 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
                     /* Duplicate value */
                     LOG_ERROR("Unique index violation: duplicate value '%s' for document ID '%s'",
                         value_str, doc_id);
-                    free(value_str);
+                    BUFFER_FREE(value_str);
                     pthread_rwlock_unlock(&index->lock);
 
                     /* Cleanup and return error */
@@ -350,9 +351,9 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
               
               /* Create new entry */
               TRACE_DB("Adding document %s with value '%s' to index", doc_id, value_str);
-              index_entry_t* new_entry = (index_entry_t*)malloc(sizeof(index_entry_t));
+              index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
               if (new_entry) {
-                new_entry->document_id = strdup(doc_id);
+                new_entry->document_id = BUFFER_STRDUP(doc_id);
                 new_entry->key_value = value_str;
                 new_entry->next = index->buckets[hash];
                 index->buckets[hash] = new_entry;
@@ -363,7 +364,7 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
                 check_and_resize_index(index);
               } else {
                 LOG_ERROR("Out of memory.");
-                free(value_str);
+                BUFFER_FREE(value_str);
               }
 
               /* Unlock index */
@@ -392,12 +393,12 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
 static void free_index_entry(index_entry_t* entry) {
   if (entry) {
     if (entry->document_id) {
-      free(entry->document_id);
+      BUFFER_FREE(entry->document_id);
     }
     if (entry->key_value) {
-      free(entry->key_value);
+      BUFFER_FREE(entry->key_value);
     }
-    free(entry);
+    BUFFER_FREE(entry);
   }
 }
 
@@ -456,7 +457,7 @@ int db_drop_index_old(database_t* db, const char* collection, const char* name) 
 
       /* Free buckets */
       LOG_DEBUG("Freed %zu index entries, now freeing buckets", freed_entries);
-      free(current->buckets);
+      BUFFER_FREE(current->buckets);
       
       /* Unlock index */
       pthread_rwlock_unlock(&current->lock);
@@ -467,9 +468,9 @@ int db_drop_index_old(database_t* db, const char* collection, const char* name) 
 
       /* Free index */
       LOG_DEBUG("Freeing index name and field path memory.");
-      free(current->name);
-      free(current->field_path);
-      free(current);
+      BUFFER_FREE(current->name);
+      BUFFER_FREE(current->field_path);
+      BUFFER_FREE(current);
 
       pthread_mutex_unlock(&coll->lock);
 
@@ -652,7 +653,7 @@ int db_rebuild_index(database_t* db, const char* collection, const char* name) {
                 while (entry) {
                   if (strcmp(entry->key_value, value_str) == 0) {
                     /* Duplicate value */
-                    free(value_str);
+                    BUFFER_FREE(value_str);
                     pthread_rwlock_unlock(&index->lock);
                     pthread_mutex_unlock(&coll->lock);
                     return 0;
@@ -666,9 +667,9 @@ int db_rebuild_index(database_t* db, const char* collection, const char* name) {
               unsigned long hash = hash_string(value_str) % index->num_buckets;
               
               /* Create new entry */
-              index_entry_t* new_entry = (index_entry_t*)malloc(sizeof(index_entry_t));
+              index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
               if (new_entry) {
-                new_entry->document_id = strdup(doc_id);
+                new_entry->document_id = BUFFER_STRDUP(doc_id);
                 new_entry->key_value = value_str;
                 new_entry->next = index->buckets[hash];
                 index->buckets[hash] = new_entry;
@@ -677,7 +678,7 @@ int db_rebuild_index(database_t* db, const char* collection, const char* name) {
                 /* Check if index needs resizing */
                 check_and_resize_index(index);
               } else {
-                free(value_str);
+                BUFFER_FREE(value_str);
               }
             }
           }
@@ -790,7 +791,7 @@ json_value_t* db_query_by_index(database_t* db, const char* collection, const ch
                 }
               }
               
-              free(value_str);
+              BUFFER_FREE(value_str);
             }
           }
         }
@@ -899,7 +900,7 @@ void db_update_indexes_for_document(database_t* db, const char* collection,
           while (entry) {
             if (strcmp(entry->key_value, value_str) == 0) {
               /* Duplicate value */
-              free(value_str);
+              BUFFER_FREE(value_str);
               pthread_rwlock_unlock(&index->lock);
               pthread_mutex_unlock(&coll->lock);
               return;
@@ -913,9 +914,9 @@ void db_update_indexes_for_document(database_t* db, const char* collection,
         unsigned long hash = hash_string(value_str) % index->num_buckets;
         
         /* Create new entry */
-        index_entry_t* new_entry = (index_entry_t*)malloc(sizeof(index_entry_t));
+        index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
         if (new_entry) {
-          new_entry->document_id = strdup(document_id);
+          new_entry->document_id = BUFFER_STRDUP(document_id);
           new_entry->key_value = value_str;
           new_entry->next = index->buckets[hash];
           index->buckets[hash] = new_entry;
@@ -924,7 +925,7 @@ void db_update_indexes_for_document(database_t* db, const char* collection,
           /* Check if index needs resizing */
           check_and_resize_index(index);
         } else {
-          free(value_str);
+          BUFFER_FREE(value_str);
         }
 
         /* Unlock index */

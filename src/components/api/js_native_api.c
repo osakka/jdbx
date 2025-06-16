@@ -4,6 +4,7 @@
 #include "rbac/rbac_db.h"
 #include "utils/logger.h"
 #include "utils/input_validation.h"
+#include "utils/buffer_pool.h"
 #include <string.h>
 
 /* External JavaScript engine reference */
@@ -144,7 +145,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
 
     val = json_object_get(body, "script_code");
     if (val && val->type == JSON_STRING) {
-        metadata->script_code = strdup(val->value.string);
+        metadata->script_code = BUFFER_STRDUP(val->value.string);
     }
 
     val = json_object_get(body, "rbac_permissions");
@@ -176,7 +177,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
                     "{\"error\":\"Script syntax error\", \"details\":\"%s\"}", 
                     syntax_error ? syntax_error : "Unknown syntax error");
             
-            if (syntax_error) free(syntax_error);
+            if (syntax_error) BUFFER_FREE(syntax_error);
             return create_http_response(HTTP_BAD_REQUEST, response, "application/json");
         }
     }
@@ -212,7 +213,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     json_free(body);
 
     http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -261,7 +262,7 @@ http_response_t* api_handle_js_native_get_script(api_context_t* ctx, http_reques
     json_free(script_json);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -294,14 +295,14 @@ http_response_t* api_handle_js_native_list_scripts(api_context_t* ctx, http_requ
             char *end = strchr(collection_param, '&');
             if (end) {
                 size_t len = end - collection_param;
-                char *collection_buf = malloc(len + 1);
+                char *collection_buf = BUFFER_ALLOC(len + 1);
                 if (collection_buf) {
                     strncpy(collection_buf, collection_param, len);
                     collection_buf[len] = '\0';
                     filter_collection = collection_buf;
                 }
             } else {
-                filter_collection = strdup(collection_param);
+                filter_collection = BUFFER_STRDUP(collection_param);
             }
         }
     }
@@ -311,7 +312,7 @@ http_response_t* api_handle_js_native_list_scripts(api_context_t* ctx, http_requ
     const char *collection_name = js_script_type_to_collection(filter_type);
     if (!collection_name || !check_js_permission(ctx->db, user_id, "READ", collection_name)) {
         if (filter_collection) {
-            free((char*)filter_collection);
+            BUFFER_FREE((char*)filter_collection);
         }
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to list scripts\"}", "application/json");
@@ -321,7 +322,7 @@ http_response_t* api_handle_js_native_list_scripts(api_context_t* ctx, http_requ
     json_value_t *scripts = js_native_list_scripts(ctx->db, filter_type, filter_collection, filter_user);
     
     if (filter_collection) {
-        free((char*)filter_collection);
+        BUFFER_FREE((char*)filter_collection);
     }
 
     if (!scripts) {
@@ -338,7 +339,7 @@ http_response_t* api_handle_js_native_list_scripts(api_context_t* ctx, http_requ
     json_free(response);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -407,7 +408,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
     json_free(response);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -452,7 +453,7 @@ http_response_t* api_handle_js_native_get_metrics(api_context_t* ctx, http_reque
     json_free(metrics);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -511,7 +512,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
                     "{\"error\":\"Script syntax error\", \"details\":\"%s\"}", 
                     syntax_error ? syntax_error : "Unknown syntax error");
             
-            if (syntax_error) free(syntax_error);
+            if (syntax_error) BUFFER_FREE(syntax_error);
             return create_http_response(HTTP_BAD_REQUEST, response, "application/json");
         }
     }
@@ -539,7 +540,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     json_free(body);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -577,7 +578,7 @@ http_response_t* api_handle_js_native_delete_script(api_context_t* ctx, http_req
     json_free(response);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -633,7 +634,7 @@ http_response_t* api_handle_js_native_get_script_stats(api_context_t* ctx, http_
     json_free(stats);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 
@@ -699,7 +700,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
     json_free(response);
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-    free(response_str);
+    BUFFER_FREE(response_str);
     return http_response;
 }
 

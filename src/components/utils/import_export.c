@@ -1,6 +1,7 @@
 #include "utils/import_export.h"
 #include "database/database.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@ static char* get_timestamp() {
   time_t now = time(NULL);
   struct tm* tm_info = localtime(&now);
   
-  char* timestamp = malloc(20);
+  char* timestamp = BUFFER_ALLOC(20);
   if (!timestamp) {
     return NULL;
   }
@@ -43,7 +44,7 @@ int export_database(database_t* db, const char* output_path) {
   }
   
   /* Create export directory if needed */
-  char* dir_path = strdup(output_path);
+  char* dir_path = BUFFER_STRDUP(output_path);
   if (!dir_path) {
     return EXPORT_ERROR_MEMORY;
   }
@@ -53,12 +54,12 @@ int export_database(database_t* db, const char* output_path) {
   if (last_slash) {
     *last_slash = '\0';
     if (!ensure_directory(dir_path)) {
-      free(dir_path);
+      BUFFER_FREE(dir_path);
       return EXPORT_ERROR_DIRECTORY;
     }
   }
   
-  free(dir_path);
+  BUFFER_FREE(dir_path);
   
   /* Force database save to ensure latest data is included */
   if (!db_save(db)) {
@@ -102,7 +103,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
   }
   
   /* Create export directory if needed */
-  char* dir_path = strdup(output_path);
+  char* dir_path = BUFFER_STRDUP(output_path);
   if (!dir_path) {
     return EXPORT_ERROR_MEMORY;
   }
@@ -112,12 +113,12 @@ int export_collections(database_t* db, const char* output_path, const char** col
   if (last_slash) {
     *last_slash = '\0';
     if (!ensure_directory(dir_path)) {
-      free(dir_path);
+      BUFFER_FREE(dir_path);
       return EXPORT_ERROR_DIRECTORY;
     }
   }
   
-  free(dir_path);
+  BUFFER_FREE(dir_path);
   
   /* Create a new object with only the specified collections */
   json_value_t* export_obj = json_create_object();
@@ -139,7 +140,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
       char* coll_str = json_stringify(collection);
       if (coll_str) {
         json_value_t* coll_copy = json_parse(coll_str);
-        free(coll_str);
+        BUFFER_FREE(coll_str);
         
         if (coll_copy) {
           json_object_set(export_obj, coll_name, coll_copy);
@@ -160,7 +161,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
   
   FILE* file = fopen(output_path, "w");
   if (!file) {
-    free(json_str);
+    BUFFER_FREE(json_str);
     return EXPORT_ERROR_DESTINATION_FILE;
   }
   
@@ -170,7 +171,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
   }
   
   fclose(file);
-  free(json_str);
+  BUFFER_FREE(json_str);
   
   return result;
 }
@@ -209,7 +210,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   fseek(file, 0, SEEK_SET);
   
   /* Allocate buffer */
-  char* buffer = (char*)malloc(file_size + 1);
+  char* buffer = (char*)BUFFER_ALLOC(file_size + 1);
   if (!buffer) {
     fclose(file);
     return IMPORT_ERROR_MEMORY;
@@ -223,7 +224,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   
   /* Parse JSON */
   json_value_t* import_obj = json_parse(buffer);
-  free(buffer);
+  BUFFER_FREE(buffer);
   
   if (!import_obj || import_obj->type != JSON_OBJECT) {
     if (import_obj) {
@@ -256,7 +257,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
       char* coll_str = json_stringify(collection);
       if (coll_str) {
         json_value_t* coll_copy = json_parse(coll_str);
-        free(coll_str);
+        BUFFER_FREE(coll_str);
         
         if (coll_copy) {
           json_object_set(db->collections, coll_name, coll_copy);
@@ -303,7 +304,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
   fseek(file, 0, SEEK_SET);
   
   /* Allocate buffer */
-  char* buffer = (char*)malloc(file_size + 1);
+  char* buffer = (char*)BUFFER_ALLOC(file_size + 1);
   if (!buffer) {
     fclose(file);
     return IMPORT_ERROR_MEMORY;
@@ -317,7 +318,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
   
   /* Parse JSON */
   json_value_t* import_obj = json_parse(buffer);
-  free(buffer);
+  BUFFER_FREE(buffer);
   
   if (!import_obj || import_obj->type != JSON_OBJECT) {
     if (import_obj) {
@@ -345,7 +346,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
       char* coll_str = json_stringify(collection);
       if (coll_str) {
         json_value_t* coll_copy = json_parse(coll_str);
-        free(coll_str);
+        BUFFER_FREE(coll_str);
         
         if (coll_copy) {
           json_object_set(db->collections, coll_name, coll_copy);
@@ -398,19 +399,19 @@ char* backup_database(database_t* db, const char* backup_dir) {
   }
   
   /* Create backup path */
-  char* backup_path = (char*)malloc(strlen(backup_dir) + strlen(orig_filename) + strlen(timestamp) + 3);
+  char* backup_path = (char*)BUFFER_ALLOC(strlen(backup_dir) + strlen(orig_filename) + strlen(timestamp) + 3);
   if (!backup_path) {
-    free(timestamp);
+    BUFFER_FREE(timestamp);
     return NULL;
   }
   
   sprintf(backup_path, "%s/%s_%s", backup_dir, orig_filename, timestamp);
-  free(timestamp);
+  BUFFER_FREE(timestamp);
   
   /* Export database to backup path */
   int result = export_database(db, backup_path);
   if (result != EXPORT_SUCCESS) {
-    free(backup_path);
+    BUFFER_FREE(backup_path);
     return NULL;
   }
   

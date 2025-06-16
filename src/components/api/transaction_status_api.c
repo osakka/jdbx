@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "utils/json.h"
 #include "utils/json_helpers.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +34,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   /* Parse request body for isolation level */
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     if (body) json_free(body);
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
@@ -41,7 +42,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   /* Extract isolation level */
   const char* isolation_str = json_get_string_value(body, "isolation_level", 0);
   if (!isolation_str) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Isolation level required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
@@ -51,7 +52,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -59,7 +60,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
@@ -68,7 +69,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   int result = 1; /* TODO: Implement transaction_set_isolation_level function */
   /*int result = transaction_set_isolation_level(manager, transaction, isolation_level);*/
   if (!result) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Failed to set isolation level", "SET_ISOLATION_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -79,7 +80,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   json_object_set(response, "isolation_level", json_create_string(isolation_level_to_string(isolation_level)));
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   json_free(body);
   
   return http_response_success_with_data("Isolation level set successfully", response, HTTP_OK);
@@ -112,7 +113,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   /* Parse request body for timeout value */
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     if (body) json_free(body);
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
@@ -120,7 +121,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   /* Extract timeout value */
   int timeout = json_get_int_value(body, "timeout", 0);
   if (timeout <= 0) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Valid timeout value required (positive integer)", "INVALID_TIMEOUT", HTTP_BAD_REQUEST);
   }
@@ -128,7 +129,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -136,7 +137,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
@@ -144,7 +145,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   /* Set timeout */
   int result = transaction_set_timeout(transaction, timeout);
   if (!result) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Failed to set timeout", "SET_TIMEOUT_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -155,7 +156,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   json_object_set(response, "timeout", json_create_integer(timeout));
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   json_free(body);
   
   return http_response_success_with_data("Timeout set successfully", response, HTTP_OK);
@@ -188,7 +189,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   /* Parse request body for savepoint name */
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     if (body) json_free(body);
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
@@ -196,7 +197,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   /* Extract savepoint name */
   const char* savepoint_name = json_get_string_value(body, "name", 0);
   if (!savepoint_name) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Savepoint name required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
@@ -204,7 +205,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -212,7 +213,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
@@ -220,7 +221,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   /* Create savepoint */
   int result = transaction_create_savepoint(transaction, savepoint_name);
   if (!result) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Failed to create savepoint", "SAVEPOINT_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -232,7 +233,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   json_object_set(response, "created_at", json_create_integer(time(NULL)));
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   json_free(body);
   
   return http_response_success_with_data("Savepoint created", response, HTTP_CREATED);
@@ -265,7 +266,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   /* Parse request body for savepoint name */
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     if (body) json_free(body);
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
@@ -273,7 +274,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   /* Extract savepoint name */
   const char* savepoint_name = json_get_string_value(body, "name", 0);
   if (!savepoint_name) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Savepoint name required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
@@ -281,7 +282,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -289,7 +290,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
@@ -297,7 +298,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   /* Rollback to savepoint */
   int result = transaction_rollback_to_savepoint(manager, transaction, savepoint_name);
   if (!result) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     json_free(body);
     return http_response_error_detailed("Failed to rollback to savepoint", "ROLLBACK_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
@@ -309,7 +310,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   json_object_set(response, "rollback_time", json_create_integer(time(NULL)));
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   json_free(body);
   
   return http_response_success_with_data("Rolled back to savepoint successfully", response, HTTP_OK);
@@ -343,21 +344,21 @@ http_response_t* api_handle_transaction_release_savepoint(api_context_t* ctx, ht
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
   /* Release savepoint */
   int result = transaction_release_savepoint(transaction, savepoint_name);
   if (!result) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Failed to release savepoint", "RELEASE_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -368,7 +369,7 @@ http_response_t* api_handle_transaction_release_savepoint(api_context_t* ctx, ht
   json_object_set(response, "released_at", json_create_integer(time(NULL)));
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   
   return http_response_success_with_data("Savepoint released successfully", response, HTTP_OK);
 }
@@ -451,7 +452,7 @@ http_response_t* api_handle_transaction_status(api_context_t* ctx, http_request_
   if (slash && strcmp(slash, "/status") == 0) {
     transaction_id = strndup(path, slash - path);
   } else if (!slash) {
-    transaction_id = strdup(path);
+    transaction_id = BUFFER_STRDUP(path);
   } else {
     return http_response_error_detailed("Invalid path", "INVALID_PATH", HTTP_BAD_REQUEST);
   }
@@ -459,26 +460,26 @@ http_response_t* api_handle_transaction_status(api_context_t* ctx, http_request_
   /* Get the transaction manager from API context */
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
   /* Get the transaction */
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
   /* Get transaction status */
   json_value_t* status = transaction_to_json(transaction);
   if (!status) {
-    free(transaction_id);
+    BUFFER_FREE(transaction_id);
     return http_response_error_detailed("Failed to get transaction status", "STATUS_ERROR", HTTP_INTERNAL_SERVER_ERROR);
   }
   
   /* Clean up */
-  free(transaction_id);
+  BUFFER_FREE(transaction_id);
   
   return http_response_success_with_data("Transaction status", status, HTTP_OK);
 }

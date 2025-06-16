@@ -776,12 +776,6 @@ async function loadCollections() {
     try {
         console.log('Loading collections from unified documents API...');
         
-        // Get virtual collections (document types) from unified API
-        const collectionsResponse = await apiRequest('/api/collections');
-        let collectionsData = Array.isArray(collectionsResponse) ? collectionsResponse : (collectionsResponse?.collections || []);
-        
-        console.log('Collections data from unified API:', collectionsData);
-        
         // Also load libraries for library information
         if (libraries.length === 0) {
             try {
@@ -794,6 +788,22 @@ async function loadCollections() {
                 libraries = [{name: 'default'}]; // Fallback to default library
             }
         }
+        
+        // Get virtual collections (document types) from unified API for all libraries
+        let collectionsData = [];
+        for (const library of libraries) {
+            try {
+                const collectionsResponse = await apiRequest(`/api/collections?library=${library.name}`);
+                if (collectionsResponse && collectionsResponse.collections) {
+                    collectionsData = collectionsData.concat(collectionsResponse.collections);
+                }
+                console.log(`Collections data for ${library.name}:`, collectionsResponse);
+            } catch (error) {
+                console.warn(`Failed to load collections for library ${library.name}:`, error);
+            }
+        }
+        
+        console.log('All collections data from unified API:', collectionsData);
         
         console.log('Loaded collections from unified API:', collectionsData);
         
@@ -1170,7 +1180,7 @@ function formatDate(dateString) {
 async function loadDashboardMetrics() {
     try {
         // Fetch metrics data from _metrics collection
-        const metricsData = await apiRequest('/api/collections/_metrics/documents').catch(err => {
+        const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -1361,7 +1371,7 @@ async function createNewLibrary() {
             created_at: new Date().toISOString()
         };
         
-        const response = await apiRequest('/api/collections/documents/documents', {
+        const response = await apiRequest('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(libraryMetadata)
@@ -1444,14 +1454,30 @@ async function deleteSpecificLibrary(libraryName) {
 
 // Switch to a different library
 async function switchLibrary(libraryName) {
-    currentLibrary = libraryName;
-    currentCollection = null;
-    currentDocument = null;
-    
-    // Update global selector
-    const globalSelector = document.getElementById('globalLibrarySelector');
-    if (globalSelector && globalSelector.value !== libraryName) {
-        globalSelector.value = libraryName;
+    try {
+        // First, make API call to switch library on server side
+        await apiRequest('/api/session/library', {
+            method: 'POST',
+            body: JSON.stringify({ library: libraryName })
+        });
+        
+        // Update local state only after successful server switch
+        currentLibrary = libraryName;
+        currentCollection = null;
+        currentDocument = null;
+        
+        // Update global selector
+        const globalSelector = document.getElementById('globalLibrarySelector');
+        if (globalSelector && globalSelector.value !== libraryName) {
+            globalSelector.value = libraryName;
+        }
+        
+        showNotification(`Switched to library: ${libraryName}`, 'success');
+        
+    } catch (error) {
+        console.error('Error switching library:', error);
+        showNotification(`Failed to switch library: ${error.message}`, 'error');
+        return; // Don't update UI if server switch failed
     }
     
     // Clear panels if in browser view
@@ -1498,21 +1524,39 @@ let allCollections = [];
 
 async function loadBrowserCollections() {
     try {
-        // In unified architecture, we get all collections from /api/collections
-        // and they already include library information
-        const collectionsResponse = await apiRequest('/api/collections');
-        console.log('Collections API response:', collectionsResponse);
+        // In unified architecture, we need to load collections from all libraries
+        // First, get all libraries, then load collections for each library
+        const librariesResponse = await apiRequest('/api/libraries');
+        let availableLibraries = [];
         
-        // Handle the response format
-        let rawCollections = [];
-        if (Array.isArray(collectionsResponse)) {
-            rawCollections = collectionsResponse;
-        } else if (collectionsResponse && collectionsResponse.collections) {
-            rawCollections = collectionsResponse.collections;
+        if (librariesResponse && librariesResponse.libraries) {
+            availableLibraries = librariesResponse.libraries.map(lib => lib.name);
         } else {
-            console.warn('No collections found in response:', collectionsResponse);
-            rawCollections = [];
+            // Fallback to known libraries if API fails
+            availableLibraries = ['system', 'default'];
         }
+        
+        console.log('Loading collections for libraries:', availableLibraries);
+        
+        // Load collections from all libraries
+        let allRawCollections = [];
+        for (const library of availableLibraries) {
+            try {
+                const collectionsResponse = await apiRequest(`/api/collections?library=${library}`);
+                console.log(`Collections API response for ${library}:`, collectionsResponse);
+                
+                if (collectionsResponse && collectionsResponse.collections) {
+                    allRawCollections = allRawCollections.concat(collectionsResponse.collections);
+                }
+            } catch (error) {
+                console.warn(`Failed to load collections for library ${library}:`, error);
+            }
+        }
+        
+        console.log('All collections loaded:', allRawCollections);
+        
+        // Use the collections we loaded from all libraries
+        let rawCollections = allRawCollections;
         
         // Map to our format - collections already include library info from server
         allCollections = rawCollections.map(item => {
@@ -1704,7 +1748,7 @@ async function updateCollectionCounts() {
             // Use the full path which includes library prefix
             const collectionPath = collection.fullPath || `${currentLibrary}/${collectionName}`;
             console.log(`Requesting count for collection: ${collectionPath} (${i+1}/${collections.length})`);
-            const response = await apiRequest(`/api/collections/${collectionPath}/documents`);
+            const response = await apiRequest(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
             console.log(`Received response for ${collectionPath}:`, response ? 'success' : 'null');
             const count = response && response.documents ? response.documents.length : 0;
             
@@ -2141,7 +2185,7 @@ async function executeQuery() {
     
     try {
         // Use the query endpoint with the query parameter
-        const response = await apiRequest(`/api/collections/${currentCollection}/query`, {
+        const response = await apiRequest(`/api/documents`, {
             method: 'POST',
             body: JSON.stringify({ query: query })
         });
@@ -2297,7 +2341,7 @@ async function getCollectionValidators(collection) {
     try {
         // Use the current library for validators collection
         const validatorsPath = `${currentLibrary}/_validators`;
-        const response = await apiRequest(`/api/collections/${validatorsPath}/documents`);
+        const response = await apiRequest(`/api/documents?type=validator&library=${currentLibrary}`);
         if (response && response.documents) {
             // Filter validators for this collection or global validators
             return response.documents.filter(script => {
@@ -3068,7 +3112,7 @@ async function createScriptVersion(scriptDocument, changeType = 'patch', changeD
         };
         
         // Store version in _script_versions collection
-        const response = await apiRequest('/api/collections/_script_versions', {
+        const response = await apiRequest('/api/documents', {
             method: 'POST',
             body: JSON.stringify(versionDocument)
         });
@@ -3120,7 +3164,7 @@ async function loadScriptVersions(scriptId) {
         }
         
         // Query _script_versions collection
-        const response = await apiRequest(`/api/collections/_script_versions?script_id=${scriptId}`);
+        const response = await apiRequest(`/api/documents?type=script_version&script_id=${scriptId}`);
         
         if (response.success && response.documents) {
             // Sort by version number (latest first)
@@ -3160,7 +3204,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
         // Get current script document
         const scriptType = targetVersionDoc.script_type;
         const collectionName = getCollectionNameForScriptType(scriptType);
-        const currentScript = await apiRequest(`/api/collections/${collectionName}/${scriptId}`);
+        const currentScript = await apiRequest(`/api/documents/${scriptId}`);
         
         if (!currentScript.success) {
             throw new Error('Failed to load current script');
@@ -3189,7 +3233,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
         };
         
         // Save the rolled back script
-        const updateResponse = await apiRequest(`/api/collections/${collectionName}/${scriptId}`, {
+        const updateResponse = await apiRequest(`/api/documents/${scriptId}`, {
             method: 'PUT',
             body: JSON.stringify(rolledBackScript)
         });
@@ -3806,7 +3850,7 @@ async function createVersionFromModal() {
         // Add tags if provided
         if (tags.length > 0) {
             versionDoc.tags = [...(versionDoc.tags || []), ...tags];
-            await apiRequest(`/api/collections/_script_versions/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
+            await apiRequest(`/api/documents/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
         }
         
         showMessage(`Version ${versionDoc.version} created successfully!`, 'success');
@@ -4028,7 +4072,7 @@ async function batchEnableScripts() {
             const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = true;
-                await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
+                await apiRequest(`/api/documents/${scriptId}`, 'PUT', doc);
                 return { success: true, scriptId };
             }
             return { success: false, scriptId, error: 'Document not found' };
@@ -4052,7 +4096,7 @@ async function batchDisableScripts() {
             const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = false;
-                await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'PUT', doc);
+                await apiRequest(`/api/documents/${scriptId}`, 'PUT', doc);
                 return { success: true, scriptId };
             }
             return { success: false, scriptId, error: 'Document not found' };
@@ -4073,7 +4117,7 @@ async function batchDeleteScripts() {
     
     try {
         const results = await processBatchOperation(selectedScripts, async (scriptId) => {
-            await apiRequest(`/api/collections/${currentCollection}/${scriptId}`, 'DELETE');
+            await apiRequest(`/api/documents/${scriptId}`, 'DELETE');
             return { success: true, scriptId };
         });
         
@@ -4280,7 +4324,7 @@ async function executeImportScripts() {
             
             try {
                 // Check if script already exists
-                const existingDocs = await apiRequest(`/api/collections/${currentCollection}`);
+                const existingDocs = await apiRequest(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
                 const existing = existingDocs.find(d => d.name === doc.name || d.uuid === doc.uuid || d._id === doc._id);
                 
                 if (existing && !overwriteExisting) {
@@ -4299,13 +4343,13 @@ async function executeImportScripts() {
                     const updateData = { ...doc };
                     delete updateData._id; // Remove _id to avoid conflicts
                     delete updateData.uuid; // Remove uuid to avoid conflicts
-                    importedDoc = await apiRequest(`/api/collections/${currentCollection}/${existing.uuid || existing._id}`, 'PUT', updateData);
+                    importedDoc = await apiRequest(`/api/documents/${existing.uuid || existing._id}`, 'PUT', updateData);
                 } else {
                     // Create new document
                     const createData = { ...doc };
                     delete createData._id; // Let server assign new ID
                     delete createData.uuid; // Let server assign new UUID
-                    importedDoc = await apiRequest(`/api/collections/${currentCollection}`, 'POST', createData);
+                    importedDoc = await apiRequest(`/api/documents`, 'POST', createData);
                 }
                 
                 // Import version history if requested
@@ -4317,7 +4361,7 @@ async function executeImportScripts() {
                             delete versionData._id; // Let server assign new ID
                             delete versionData.uuid; // Let server assign new UUID
                             
-                            await apiRequest('/api/collections/_script_versions', 'POST', versionData);
+                            await apiRequest('/api/documents', 'POST', versionData);
                         } catch (versionError) {
                             console.warn(`Failed to import version ${version.version}:`, versionError);
                         }
@@ -4520,7 +4564,7 @@ async function loadTransformersForPreview() {
     try {
         // Use the current library for transformers collection
         const transformersPath = `${currentLibrary}/_transformers`;
-        const response = await apiRequest(`/api/collections/${transformersPath}/documents`);
+        const response = await apiRequest(`/api/documents?type=transformer&library=${currentLibrary}`);
         if (response && response.documents) {
             // Filter transformers for this collection or global transformers
             currentTransformers = response.documents.filter(script => {
@@ -4853,7 +4897,7 @@ async function createNewCollection() {
         };
         
         // Create collection metadata document
-        const metaResponse = await apiRequest('/api/collections/documents/documents', {
+        const metaResponse = await apiRequest('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(collectionMetadata)
@@ -4876,7 +4920,7 @@ async function createNewCollection() {
             }
         };
         
-        const response = await apiRequest(`/api/collections/${collectionPath}/documents`, {
+        const response = await apiRequest(`/api/documents`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(initialDocument)
@@ -5657,17 +5701,39 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // Get current metrics and historical data in parallel
         console.log('Fetching metrics data...');
-        const [health, collections, cacheStats] = await Promise.all([
+        
+        // Load collections from all libraries for metrics dashboard
+        let allCollections = { collections: [] };
+        try {
+            const librariesResponse = await apiRequest('/api/libraries');
+            if (librariesResponse && librariesResponse.libraries) {
+                for (const library of librariesResponse.libraries) {
+                    try {
+                        const libCollections = await apiRequest(`/api/collections?library=${library.name}`);
+                        if (libCollections && libCollections.collections) {
+                            allCollections.collections = allCollections.collections.concat(libCollections.collections);
+                        }
+                    } catch (err) {
+                        console.warn(`Failed to load collections for library ${library.name}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load libraries for collections:', err);
+        }
+        
+        const [health, cacheStats] = await Promise.all([
             apiRequest('/api/health').catch(err => { console.error('Health API error:', err); return null; }),
-            apiRequest('/api/collections').catch(err => { console.error('Collections API error:', err); return { collections: [] }; }),
             apiRequest('/api/cache/stats').catch(err => { console.error('Cache stats API error:', err); return null; })
         ]);
+        
+        const collections = allCollections;
         
         console.log('API responses:', { health, collections, cacheStats });
         
         // Fetch metrics data from _metrics collection
         console.log('Fetching metrics from _metrics collection...');
-        const metricsData = await apiRequest('/api/collections/_metrics/documents').catch(err => {
+        const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
             console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -6871,7 +6937,7 @@ async function loadRBACData(isPolling = false) {
 
 async function loadUsers() {
     try {
-        const response = await apiRequest('/api/rbac/users');
+        const response = await apiRequest('/api/documents?type=user&library=system&collection=users');
         allUsers = Array.isArray(response) ? response : (response.users || []);
         renderUsers();
     } catch (error) {
@@ -6974,11 +7040,11 @@ async function loadRoles() {
     console.log('Auth token exists:', !!localStorage.getItem('jdbx_auth_token'));
     
     try {
-        const response = await apiRequest('/api/rbac/roles');
+        const response = await apiRequest('/api/documents?type=role&library=system&collection=roles');
         console.log('Roles API response:', response);
         
         // Handle both direct array and object with roles property
-        allRoles = Array.isArray(response) ? response : (response.roles || []);
+        allRoles = Array.isArray(response) ? response : (response.documents || []);
         console.log('Processed roles:', allRoles);
         
         renderRoles();
@@ -7132,13 +7198,14 @@ function renderRoleDetails() {
 
 async function loadPermissionMatrix() {
     try {
-        const response = await apiRequest('/api/rbac/permissions');
+        // Use unified documents API to get roles and extract permissions
+        const response = await apiRequest('/api/documents?type=role&library=system&collection=roles');
         
-        // Extract permissions from roles
+        // Extract permissions from role documents
         const permissionsByResource = {};
-        const roles = response.roles || [];
-        const resourceTypes = response.resource_types || {};
-        const permissionTypes = response.permission_types || {};
+        const roles = Array.isArray(response) ? response : (response.documents || []);
+        const resourceTypes = {}; // Will be built from role permissions
+        const permissionTypes = {};
         
         // Process each role's permissions
         roles.forEach(role => {
@@ -7239,7 +7306,7 @@ function loadAuditLog() {
 // Sessions management functions
 async function loadSessions() {
     try {
-        const response = await apiRequest('/api/collections/_sessions');
+        const response = await apiRequest('/api/documents?type=session&library=system&collection=sessions');
         const sessions = response.documents || [];
         window.lastSessionsData = sessions; // Store for tab switching
         renderSessions(sessions);
@@ -7397,12 +7464,12 @@ async function clearAllSessions() {
     
     try {
         // Get all sessions
-        const response = await apiRequest('/api/collections/_sessions');
+        const response = await apiRequest('/api/documents?type=session&library=system&collection=sessions');
         const sessions = response.documents || [];
         
         // Delete each session
         await Promise.all(sessions.map(session => 
-            apiRequest(`/api/collections/_sessions/documents/${session.uuid || session._id}`, {
+            apiRequest(`/api/documents/${session.uuid || session._id}`, {
                 method: 'DELETE'
             })
         ));
@@ -8058,12 +8125,29 @@ function renderSchemaList() {
 // Load collections for schema dropdown
 async function loadCollectionsForSchema() {
     try {
-        const response = await apiRequest('/api/collections');
-        const collectionList = Array.isArray(response) ? response : (response.collections || []);
+        // Load collections from all libraries for schema dropdown
+        let allCollectionsList = [];
+        const librariesResponse = await apiRequest('/api/libraries');
+        
+        if (librariesResponse && librariesResponse.libraries) {
+            for (const library of librariesResponse.libraries) {
+                try {
+                    const response = await apiRequest(`/api/collections?library=${library.name}`);
+                    if (response && response.collections) {
+                        // Add library prefix to collection names for clarity
+                        response.collections.forEach(col => {
+                            allCollectionsList.push(`${library.name}/${col.name}`);
+                        });
+                    }
+                } catch (err) {
+                    console.warn(`Failed to load collections for library ${library.name}:`, err);
+                }
+            }
+        }
         
         const select = document.getElementById('schemaCollection');
         select.innerHTML = '<option value="">Select a collection...</option>' +
-            collectionList.map(col => `<option value="${col}">${col}</option>`).join('');
+            allCollectionsList.map(col => `<option value="${col}">${col}</option>`).join('');
     } catch (error) {
         console.error('Error loading collections:', error);
     }
@@ -8210,7 +8294,7 @@ async function loadWelcomePanel() {
     
     try {
         // Check if _system_config collection exists first
-        const systemConfigResponse = await apiRequest('/api/collections/_system_config/documents', 'GET', null, true);
+        const systemConfigResponse = await apiRequest('/api/documents?type=config&library=system', 'GET', null, true);
         
         if (systemConfigResponse && systemConfigResponse.documents) {
             // Look for welcome message in system config
@@ -8243,7 +8327,7 @@ async function loadWelcomePanel() {
         }
         
         // Fall back to checking _config collection for legacy support
-        const configResponse = await apiRequest('/api/collections/_config/documents', 'GET', null, true);
+        const configResponse = await apiRequest('/api/documents?type=config&library=default', 'GET', null, true);
         
         if (configResponse && configResponse.documents) {
             const welcomeConfig = configResponse.documents.find(doc => 
@@ -8560,7 +8644,7 @@ async function saveDocument() {
         const requestBody = JSON.stringify(parsedDoc);
         console.log('Sending request body:', requestBody);
         
-        const response = await apiRequest(`/api/collections/${currentCollection}/documents/${currentDocument}`, {
+        const response = await apiRequest(`/api/documents/${currentDocument}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: requestBody

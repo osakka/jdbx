@@ -54,7 +54,7 @@ void memory_debug_cleanup(void) {
         memory_track_t* current = g_memory_list;
         while (current) {
             memory_track_t* next = current->next;
-            free(current);
+            BUFFER_FREE(current);
             current = next;
         }
         g_memory_list = NULL;
@@ -72,7 +72,7 @@ void memory_debug_track_alloc(void* ptr, size_t size, const char* file, int line
     pthread_mutex_lock(&g_memory_mutex);
     
     /* Create tracking entry */
-    memory_track_t* track = malloc(sizeof(memory_track_t));
+    memory_track_t* track = BUFFER_ALLOC(sizeof(memory_track_t));
     if (!track) {
         LOG_ERROR("Cannot allocate memory tracking entry.");
         pthread_mutex_unlock(&g_memory_mutex);
@@ -162,7 +162,7 @@ void memory_debug_track_free(void* ptr, const char* file, int line,
             } else {
                 g_memory_list = current->next;
             }
-            free(current);
+            BUFFER_FREE(current);
             
             pthread_mutex_unlock(&g_memory_mutex);
             return;

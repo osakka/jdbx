@@ -4,6 +4,7 @@
 #include "utils/json_helpers.h"
 #include "core/server.h"
 #include "rbac/jwt.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,7 @@ static const char* http_request_get_param(http_request_t* request, const char* p
     return NULL;
   }
   
-  char* query = strdup(request->query);
+  char* query = BUFFER_STRDUP(request->query);
   if (!query) {
     return NULL;
   }
@@ -37,13 +38,13 @@ static const char* http_request_get_param(http_request_t* request, const char* p
     if (eq) {
       *eq = '\0';
       if (strcmp(token, param_name) == 0) {
-        value = strdup(eq + 1);
+        value = BUFFER_STRDUP(eq + 1);
         break;
       }
     }
   }
   
-  free(query);
+  BUFFER_FREE(query);
   return value;
 }
 
@@ -57,7 +58,7 @@ static const char* http_request_get_path_param(http_request_t* request, const ch
   
   /* For now, just extract transaction_id from paths like /api/transactions/{transaction_id}/ */
   if (strcmp(param_name, "transaction_id") == 0) {
-    char* path = strdup(request->path);
+    char* path = BUFFER_STRDUP(request->path);
     if (!path) {
       return NULL;
     }
@@ -71,18 +72,18 @@ static const char* http_request_get_path_param(http_request_t* request, const ch
     while ((token = strtok_r(rest, "/", &rest))) {
       segment++;
       if (segment == 3) { /* Third segment should be the transaction ID */
-        id = strdup(token);
+        id = BUFFER_STRDUP(token);
         break;
       }
     }
     
-    free(path);
+    BUFFER_FREE(path);
     return id;
   }
   
   /* Extract collection from paths like /api/transactions/{transaction_id}/{collection}/ */
   if (strcmp(param_name, "collection") == 0) {
-    char* path = strdup(request->path);
+    char* path = BUFFER_STRDUP(request->path);
     if (!path) {
       return NULL;
     }
@@ -96,18 +97,18 @@ static const char* http_request_get_path_param(http_request_t* request, const ch
     while ((token = strtok_r(rest, "/", &rest))) {
       segment++;
       if (segment == 4) { /* Fourth segment should be the collection name */
-        collection = strdup(token);
+        collection = BUFFER_STRDUP(token);
         break;
       }
     }
     
-    free(path);
+    BUFFER_FREE(path);
     return collection;
   }
   
   /* Extract document ID from paths like /api/transactions/{transaction_id}/{collection}/{id} */
   if (strcmp(param_name, "id") == 0) {
-    char* path = strdup(request->path);
+    char* path = BUFFER_STRDUP(request->path);
     if (!path) {
       return NULL;
     }
@@ -121,12 +122,12 @@ static const char* http_request_get_path_param(http_request_t* request, const ch
     while ((token = strtok_r(rest, "/", &rest))) {
       segment++;
       if (segment == 5) { /* Fifth segment should be the document ID */
-        doc_id = strdup(token);
+        doc_id = BUFFER_STRDUP(token);
         break;
       }
     }
     
-    free(path);
+    BUFFER_FREE(path);
     return doc_id;
   }
   
@@ -173,7 +174,7 @@ http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t
     /* Decode the JWT token to get user information */
     jwt_token_t* decoded = jwt_decode(token);
     if (decoded && decoded->payload && decoded->payload->sub) {
-      extracted_user_id = strdup(decoded->payload->sub);
+      extracted_user_id = BUFFER_STRDUP(decoded->payload->sub);
       if (extracted_user_id) {
         user_id = extracted_user_id;
       }
@@ -181,14 +182,14 @@ http_response_t* api_handle_transaction_begin(api_context_t* ctx, http_request_t
     if (decoded) {
       jwt_free(decoded);
     }
-    free(token);
+    BUFFER_FREE(token);
   }
   
   transaction_t* transaction = transaction_begin(manager, isolation, user_id);
   
   /* Clean up extracted user ID */
   if (extracted_user_id) {
-    free(extracted_user_id);
+    BUFFER_FREE(extracted_user_id);
   }
   if (!transaction) {
     return http_response_error("Failed to start transaction", 500);

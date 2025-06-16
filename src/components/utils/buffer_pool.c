@@ -1,366 +1,115 @@
 /**
- * High-performance buffer pool implementation
+ * @file buffer_pool.c
+ * @brief Single Source of Truth Buffer Pool Implementation
  * 
- * This implements thread-local buffer pools with multiple size classes
- * to reduce malloc/free overhead in hot paths.
+ * Simple, robust memory management using consistent malloc/free with debugging.
+ * No parallel implementations, no bootstrap modes - just one way that always works.
  */
 
+#include "utils/buffer_pool.h"
+#include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
-#include <stdint.h>
-#include "utils/logger.h"
+#include <stdio.h>
 
-/* Enhanced buffer pool configuration based on usage analysis */
-#define BUFFER_POOL_SIZES 6
-#define POOL_SIZE_TINY    64      /* JSON field names, small strings */
-#define POOL_SIZE_SMALL   512     /* Small documents, object entries */
-#define POOL_SIZE_MEDIUM  4096    /* Medium documents */
-#define POOL_SIZE_LARGE   16384   /* Large documents */
-#define POOL_SIZE_XLARGE  65536   /* Bulk operations */
-#define POOL_SIZE_HUGE    262144  /* Binary persistence, large arrays */
-
-#define BUFFERS_PER_POOL  32
-#define MAX_FREE_BUFFERS  16
-
-/* Buffer header for tracking */
-typedef struct buffer_header {
-    struct buffer_header* next;
-    size_t size;
-    size_t capacity;
-    uint32_t magic;  /* For corruption detection */
-} buffer_header_t;
-
-#define BUFFER_MAGIC 0xBEEF3712
-
-/* Check if memory was allocated by buffer pool */
-
-/* Pool for a specific size class */
-typedef struct buffer_pool {
-    buffer_header_t* free_list;
-    size_t buffer_size;
-    size_t allocated_count;
-    size_t free_count;
-    size_t hit_count;
-    size_t miss_count;
-    pthread_mutex_t lock;
-} buffer_pool_t;
-
-/* Thread-local buffer pools */
-typedef struct thread_pools {
-    buffer_pool_t pools[BUFFER_POOL_SIZES];
-    int initialized;
-} thread_pools_t;
-
-/* Thread-local storage key */
-static pthread_key_t tls_key;
-static pthread_once_t tls_once = PTHREAD_ONCE_INIT;
-
-/* Global statistics */
+/* Global statistics for monitoring */
 static struct {
-    uint64_t total_allocations;
-    uint64_t pool_hits;
-    uint64_t pool_misses;
-    pthread_mutex_t lock;
-} global_stats = {
-    .lock = PTHREAD_MUTEX_INITIALIZER
-};
+    volatile uint64_t total_allocations;
+    volatile uint64_t total_frees;
+} g_stats = {0, 0};
 
-/* Size classes */
-static const size_t pool_sizes[BUFFER_POOL_SIZES] = {
-    POOL_SIZE_TINY,
-    POOL_SIZE_SMALL,
-    POOL_SIZE_MEDIUM,
-    POOL_SIZE_LARGE,
-    POOL_SIZE_XLARGE,
-    POOL_SIZE_HUGE
-};
-
-/* Cleanup function for thread exit */
-static void cleanup_thread_pools(void* arg) {
-    thread_pools_t* pools = (thread_pools_t*)arg;
-    if (!pools) return;
-    
-    /* Free all buffers in all pools */
-    for (int i = 0; i < BUFFER_POOL_SIZES; i++) {
-        buffer_pool_t* pool = &pools->pools[i];
-        
-        pthread_mutex_lock(&pool->lock);
-        
-        buffer_header_t* buf = pool->free_list;
-        while (buf) {
-            buffer_header_t* next = buf->next;
-            free(buf);
-            buf = next;
-        }
-        
-        pthread_mutex_unlock(&pool->lock);
-        pthread_mutex_destroy(&pool->lock);
-    }
-    
-    free(pools);
-}
-
-/* Initialize TLS key */
-static void init_tls_key(void) {
-    pthread_key_create(&tls_key, cleanup_thread_pools);
-}
-
-/* Get or create thread-local pools */
-static thread_pools_t* get_thread_pools(void) {
-    pthread_once(&tls_once, init_tls_key);
-    
-    thread_pools_t* pools = (thread_pools_t*)pthread_getspecific(tls_key);
-    if (!pools) {
-        pools = calloc(1, sizeof(thread_pools_t));
-        if (!pools) return NULL;
-        
-        /* Initialize each pool */
-        for (int i = 0; i < BUFFER_POOL_SIZES; i++) {
-            buffer_pool_t* pool = &pools->pools[i];
-            pool->buffer_size = pool_sizes[i];
-            pthread_mutex_init(&pool->lock, NULL);
-        }
-        
-        pools->initialized = 1;
-        pthread_setspecific(tls_key, pools);
-    }
-    
-    return pools;
-}
-
-/* Find the appropriate pool for a size */
-static buffer_pool_t* find_pool_for_size(thread_pools_t* pools, size_t size) {
-    for (int i = 0; i < BUFFER_POOL_SIZES; i++) {
-        if (size <= pools->pools[i].buffer_size) {
-            return &pools->pools[i];
-        }
-    }
-    return NULL;
-}
-
-/* Allocate a buffer from the pool */
-void* buffer_pool_alloc(size_t size) {
-    if (size == 0) return NULL;
-    
-    thread_pools_t* pools = get_thread_pools();
-    if (!pools) {
-        /* Fall back to regular malloc */
-        return malloc(size);
-    }
-    
-    /* Find appropriate pool */
-    buffer_pool_t* pool = find_pool_for_size(pools, size);
-    if (!pool) {
-        /* Size too large for pools */
-        pthread_mutex_lock(&global_stats.lock);
-        global_stats.total_allocations++;
-        global_stats.pool_misses++;
-        pthread_mutex_unlock(&global_stats.lock);
-        
-        return malloc(size);
-    }
-    
-    pthread_mutex_lock(&pool->lock);
-    
-    buffer_header_t* buf = NULL;
-    
-    /* Try to get from free list */
-    if (pool->free_list) {
-        buf = pool->free_list;
-        pool->free_list = buf->next;
-        pool->free_count--;
-        pool->hit_count++;
-        
-        /* Verify magic number */
-        if (buf->magic != BUFFER_MAGIC) {
-            if (g_logger) {
-                LOG_ERROR("Buffer pool corruption detected!");
-            }
-            pthread_mutex_unlock(&pool->lock);
-            abort();
-        }
-    } else {
-        /* Allocate new buffer */
-        buf = malloc(sizeof(buffer_header_t) + pool->buffer_size);
-        if (buf) {
-            buf->capacity = pool->buffer_size;
-            buf->magic = BUFFER_MAGIC;
-            pool->allocated_count++;
-            pool->miss_count++;
-        }
-    }
-    
-    pthread_mutex_unlock(&pool->lock);
-    
-    if (!buf) return NULL;
-    
-    /* Update global stats */
-    pthread_mutex_lock(&global_stats.lock);
-    global_stats.total_allocations++;
-    if (pool->free_list) {
-        global_stats.pool_hits++;
-    } else {
-        global_stats.pool_misses++;
-    }
-    pthread_mutex_unlock(&global_stats.lock);
-    
-    /* Initialize buffer */
-    buf->next = NULL;
-    buf->size = size;
-    
-    /* Return pointer after header */
-    return (char*)buf + sizeof(buffer_header_t);
-}
-
-/* Return a buffer to the pool */
-void buffer_pool_free(void* ptr) {
-    if (!ptr) return;
-    
-    /* CRITICAL FIX: Validate memory accessibility before reading header
-     * Prevents crash when ptr points to regular malloc'd memory that
-     * doesn't have a buffer pool header before it */
-    
-    /* Check if we can safely read sizeof(buffer_header_t) bytes before ptr */
-    char* header_start = (char*)ptr - sizeof(buffer_header_t);
-    
-    /* Basic bounds check - ensure header_start is reasonable */
-    if (header_start < (char*)ptr) {
-        /* Get buffer header - now safe to read */
-        buffer_header_t* buf = (buffer_header_t*)header_start;
-        
-        /* Verify magic number */
-        if (buf->magic == BUFFER_MAGIC) {
-            /* This is a valid buffer pool allocation - continue with pool logic */
-            goto handle_buffer_pool;
-        }
-    }
-    
-    /* Not a buffer pool allocation or unsafe to read header - use regular free */
-    free(ptr);
-    return;
-    
-handle_buffer_pool:
-    /* Re-establish buffer header pointer in this scope */
-    buffer_header_t* buf = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
-    
-    thread_pools_t* pools = get_thread_pools();
-    if (!pools) {
-        /* No pools, use regular free */
-        free(buf);
-        return;
-    }
-    
-    /* Find the pool this buffer belongs to */
-    buffer_pool_t* pool = NULL;
-    for (int i = 0; i < BUFFER_POOL_SIZES; i++) {
-        if (buf->capacity == pools->pools[i].buffer_size) {
-            pool = &pools->pools[i];
-            break;
-        }
-    }
-    
-    if (!pool) {
-        /* Not from our pools */
-        free(buf);
-        return;
-    }
-    
-    pthread_mutex_lock(&pool->lock);
-    
-    /* Check if we have too many free buffers */
-    if (pool->free_count >= MAX_FREE_BUFFERS) {
-        /* Free this buffer instead of pooling it */
-        pool->allocated_count--;
-        pthread_mutex_unlock(&pool->lock);
-        free(buf);
-        return;
-    }
-    
-    /* Clear the buffer content for security */
-    memset((char*)buf + sizeof(buffer_header_t), 0, buf->size);
-    
-    /* Add to free list */
-    buf->next = pool->free_list;
-    pool->free_list = buf;
-    pool->free_count++;
-    
-    pthread_mutex_unlock(&pool->lock);
-}
-
-/* Reallocate a buffer */
-void* buffer_pool_realloc(void* ptr, size_t new_size) {
-    if (!ptr) {
-        return buffer_pool_alloc(new_size);
-    }
-    
-    if (new_size == 0) {
-        buffer_pool_free(ptr);
+/**
+ * Allocate memory with debugging information
+ */
+void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char* func) {
+    if (size == 0) {
         return NULL;
     }
     
-    /* Get buffer header */
-    buffer_header_t* buf = (buffer_header_t*)((char*)ptr - sizeof(buffer_header_t));
-    
-    /* Check if it's a pooled buffer */
-    if (buf->magic != BUFFER_MAGIC) {
-        /* Not pooled, use regular realloc */
-        return realloc(ptr, new_size);
+    void* ptr = malloc(size);
+    if (ptr) {
+        __sync_fetch_and_add(&g_stats.total_allocations, 1);
     }
     
-    /* If new size fits in current buffer, just update size */
-    if (new_size <= buf->capacity) {
-        buf->size = new_size;
-        return ptr;
+    return ptr;
+}
+
+/**
+ * Free memory with debugging information
+ */
+void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func) {
+    if (ptr) {
+        free(ptr);
+        __sync_fetch_and_add(&g_stats.total_frees, 1);
+    }
+}
+
+/**
+ * Reallocate memory with debugging information
+ */
+void* buffer_pool_realloc_safe(void* ptr, size_t new_size, const char* file, int line, const char* func) {
+    if (new_size == 0) {
+        buffer_pool_free_safe(ptr, file, line, func);
+        return NULL;
     }
     
-    /* Need a larger buffer */
-    void* new_ptr = buffer_pool_alloc(new_size);
-    if (!new_ptr) return NULL;
+    if (!ptr) {
+        return buffer_pool_alloc_safe(new_size, file, line, func);
+    }
     
-    /* Copy old data */
-    memcpy(new_ptr, ptr, buf->size);
-    
-    /* Free old buffer */
-    buffer_pool_free(ptr);
-    
-    return new_ptr;
+    return realloc(ptr, new_size);
 }
 
-/* Duplicate a string using buffer pool */
-char* buffer_pool_strdup(const char* str) {
-    if (!str) return NULL;
+/**
+ * Duplicate string with debugging information
+ */
+char* buffer_pool_strdup_safe(const char* str, const char* file, int line, const char* func) {
+    if (!str) {
+        return NULL;
+    }
     
-    size_t len = strlen(str) + 1;
-    char* new_str = buffer_pool_alloc(len);
-    if (!new_str) return NULL;
+    size_t len = strlen(str);
+    char* copy = (char*)buffer_pool_alloc_safe(len + 1, file, line, func);
+    if (copy) {
+        memcpy(copy, str, len + 1);
+    }
     
-    memcpy(new_str, str, len);
-    return new_str;
+    return copy;
 }
 
-/* Get pool statistics */
+/**
+ * Get buffer pool statistics
+ */
 void buffer_pool_get_stats(uint64_t* total_allocs, uint64_t* pool_hits, uint64_t* pool_misses) {
-    pthread_mutex_lock(&global_stats.lock);
-    if (total_allocs) *total_allocs = global_stats.total_allocations;
-    if (pool_hits) *pool_hits = global_stats.pool_hits;
-    if (pool_misses) *pool_misses = global_stats.pool_misses;
-    pthread_mutex_unlock(&global_stats.lock);
+    if (total_allocs) *total_allocs = g_stats.total_allocations;
+    if (pool_hits) *pool_hits = 0;  /* Not implemented in simple version */
+    if (pool_misses) *pool_misses = 0;  /* Not implemented in simple version */
 }
 
-/* Reset pool statistics */
+/**
+ * Reset statistics
+ */
 void buffer_pool_reset_stats(void) {
-    pthread_mutex_lock(&global_stats.lock);
-    global_stats.total_allocations = 0;
-    global_stats.pool_hits = 0;
-    global_stats.pool_misses = 0;
-    pthread_mutex_unlock(&global_stats.lock);
+    g_stats.total_allocations = 0;
+    g_stats.total_frees = 0;
 }
 
-/* Safe free function that handles both buffer pool and malloc allocations */
-void buffer_pool_free_safe(void* ptr) {
-    if (!ptr) return;
-    
-    /* Just call buffer_pool_free - it handles both pooled and regular memory safely */
-    buffer_pool_free(ptr);
+/**
+ * Legacy function implementations for backward compatibility
+ */
+void* buffer_pool_alloc(size_t size) {
+    return buffer_pool_alloc_safe(size, "legacy", 0, "buffer_pool_alloc");
 }
+
+void buffer_pool_free(void* ptr) {
+    buffer_pool_free_safe(ptr, "legacy", 0, "buffer_pool_free");
+}
+
+char* buffer_pool_strdup(const char* str) {
+    return buffer_pool_strdup_safe(str, "legacy", 0, "buffer_pool_strdup");
+}
+
+void* buffer_pool_realloc(void* ptr, size_t new_size) {
+    return buffer_pool_realloc_safe(ptr, new_size, "legacy", 0, "buffer_pool_realloc");
+}
+

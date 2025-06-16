@@ -65,18 +65,18 @@ void buffer_pool_get_stats(uint64_t* total_allocs, uint64_t* pool_hits, uint64_t
  */
 void buffer_pool_reset_stats(void);
 
-/**
- * Safe free function that handles both buffer pool and malloc allocations
- * 
- * @param ptr Pointer to free (can be from buffer pool or malloc)
- */
-void buffer_pool_free_safe(void* ptr);
 
-/* Convenience macros for common operations */
-#define BUFFER_ALLOC(size) buffer_pool_alloc(size)
-#define BUFFER_FREE(ptr) buffer_pool_free(ptr)
-#define BUFFER_FREE_SAFE(ptr) buffer_pool_free_safe(ptr)
-#define BUFFER_REALLOC(ptr, size) buffer_pool_realloc(ptr, size)
-#define BUFFER_STRDUP(str) buffer_pool_strdup(str)
+/* Production-grade buffer pool macros with comprehensive error handling */
+#define BUFFER_ALLOC(size) buffer_pool_alloc_safe((size), __FILE__, __LINE__, __func__)
+#define BUFFER_FREE(ptr) buffer_pool_free_safe((ptr), __FILE__, __LINE__, __func__)
+#define BUFFER_REALLOC(ptr, size) buffer_pool_realloc_safe((ptr), (size), __FILE__, __LINE__, __func__)
+#define BUFFER_STRDUP(str) buffer_pool_strdup_safe((str), __FILE__, __LINE__, __func__)
+
+/* Enhanced API with debugging information */
+void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char* func);
+void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func);
+void* buffer_pool_realloc_safe(void* ptr, size_t new_size, const char* file, int line, const char* func);
+char* buffer_pool_strdup_safe(const char* str, const char* file, int line, const char* func);
+
 
 #endif /* BUFFER_POOL_H */

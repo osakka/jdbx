@@ -13,7 +13,7 @@ static char* parse_collection_query(http_request_t* request) {
     return NULL;
   }
   
-  char* query = strdup(request->query);
+  char* query = BUFFER_STRDUP(request->query);
   if (!query) {
     return NULL;
   }
@@ -23,13 +23,13 @@ static char* parse_collection_query(http_request_t* request) {
   
   while (token) {
     if (strncmp(token, "collection=", 11) == 0) {
-      collection = strdup(token + 11);
+      collection = BUFFER_STRDUP(token + 11);
       break;
     }
     token = strtok(NULL, "&");
   }
   
-  free(query);
+  BUFFER_FREE(query);
   return collection;
 }
 
@@ -143,7 +143,7 @@ static json_value_t* get_field_distribution(database_t* db, const char* collecti
     total_docs++;
     
     /* Split field path */
-    char* field_copy = strdup(field);
+    char* field_copy = BUFFER_STRDUP(field);
     char* token = strtok(field_copy, ".");
     json_value_t* current = doc;
     
@@ -153,7 +153,7 @@ static json_value_t* get_field_distribution(database_t* db, const char* collecti
       token = strtok(NULL, ".");
     }
     
-    free(field_copy);
+    BUFFER_FREE(field_copy);
     
     /* Count field value */
     if (current) {
@@ -297,7 +297,7 @@ http_response_t* api_handle_visualization_collection_stats(api_context_t* ctx, h
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  buffer_pool_free_safe(result_str);
+  BUFFER_FREE(result_str);
   
   return response;
 }
@@ -319,7 +319,7 @@ http_response_t* api_handle_visualization_document_types(api_context_t* ctx, htt
   /* Get collection */
   db_collection_t* coll = db_get_collection(ctx->db, collection);
   if (!coll) {
-    free(collection);
+    BUFFER_FREE(collection);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
@@ -356,13 +356,13 @@ http_response_t* api_handle_visualization_document_types(api_context_t* ctx, htt
   
   /* Free resources */
   json_free(result);
-  free(collection);
+  BUFFER_FREE(collection);
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  buffer_pool_free_safe(result_str);
+  BUFFER_FREE(result_str);
   
   return response;
 }
@@ -375,7 +375,7 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   }
   
   /* Parse query parameters */
-  char* query = strdup(request->query);
+  char* query = BUFFER_STRDUP(request->query);
   if (!query) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -387,19 +387,19 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   char* token = strtok(query, "&");
   while (token) {
     if (strncmp(token, "collection=", 11) == 0) {
-      collection = strdup(token + 11);
+      collection = BUFFER_STRDUP(token + 11);
     } else if (strncmp(token, "field=", 6) == 0) {
-      field = strdup(token + 6);
+      field = BUFFER_STRDUP(token + 6);
     }
     token = strtok(NULL, "&");
   }
   
-  free(query);
+  BUFFER_FREE(query);
   
   /* Check required parameters */
   if (!collection || !field) {
-    if (collection) free(collection);
-    if (field) free(field);
+    if (collection) BUFFER_FREE(collection);
+    if (field) BUFFER_FREE(field);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Collection and field parameters required\"}", "application/json");
   }
@@ -407,8 +407,8 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   /* Get field distribution */
   json_value_t* distribution = get_field_distribution(ctx->db, collection, field);
   if (!distribution) {
-    free(collection);
-    free(field);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(field);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to analyze field distribution\"}", "application/json");
   }
@@ -425,14 +425,14 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   
   /* Free resources */
   json_free(result);
-  free(collection);
-  free(field);
+  BUFFER_FREE(collection);
+  BUFFER_FREE(field);
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  buffer_pool_free_safe(result_str);
+  BUFFER_FREE(result_str);
   
   return response;
 }

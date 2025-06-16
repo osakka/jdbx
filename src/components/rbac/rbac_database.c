@@ -5,6 +5,7 @@
 #include "utils/logger.h"
 #include "utils/json.h"
 #include "utils/skiplist.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,20 +54,21 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   if (!db) return NULL;
   
   /* Create wrapper structure */
-  rbac_system_t* rbac = calloc(1, sizeof(rbac_system_t));
+  rbac_system_t* rbac = BUFFER_ALLOC(sizeof(rbac_system_t));
+  if (rbac) memset(rbac, 0, sizeof(rbac_system_t));
   if (!rbac) return NULL;
   
   /* Set up fields */
   rbac->users = json_create_object();
   rbac->roles = json_create_object();
   rbac->db = db;
-  rbac->jwt_secret = jwt_secret ? strdup(jwt_secret) : strdup("change-this-secret-in-production");
+  rbac->jwt_secret = jwt_secret ? BUFFER_STRDUP(jwt_secret) : BUFFER_STRDUP("change-this-secret-in-production");
   
   if (!rbac->users || !rbac->roles || !rbac->jwt_secret) {
     if (rbac->users) json_free(rbac->users);
     if (rbac->roles) json_free(rbac->roles);
-    if (rbac->jwt_secret) free(rbac->jwt_secret);
-    free(rbac);
+    if (rbac->jwt_secret) BUFFER_FREE(rbac->jwt_secret);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -85,11 +87,14 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   
   /* Skip duplicate checking during bootstrap mode */
   if (!db->is_bootstrap_mode) {
-    /* Also check if any role with name "admin" exists to prevent duplicates */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "name", json_create_string("admin"));
-    json_value_t* results = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, query);
-    json_free(query);
+    /* Check if any role with name "admin" exists using unified documents approach */
+    json_value_t* unified_query = json_create_object();
+    json_object_set(unified_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
+    json_object_set(unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+    json_object_set(unified_query, "collection", json_create_string(RBAC_ROLES_COLLECTION_NAME));
+    json_object_set(unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
+    json_value_t* results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, unified_query);
+    json_free(unified_query);
     
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
@@ -103,7 +108,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
         }
         
         if (role_uuid && role_uuid->type == JSON_STRING && admin_role_id_out) {
-          *admin_role_id_out = strdup(role_uuid->value.string);
+          *admin_role_id_out = BUFFER_STRDUP(role_uuid->value.string);
           TRACE_RBAC("Using existing admin role ID: %s", role_uuid->value.string);
           json_free(results);
           return 1; /* Success - role already exists */
@@ -119,10 +124,17 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
     TRACE_RBAC("Bootstrap mode - skipping duplicate role check");
   }
   
-  /* Create admin role document - let database generate UUID */
+  /* Create admin role document using unified documents architecture */
   json_value_t* admin_role = json_create_object();
-  /* Don't set _id - let db_insert_document generate it */
-  json_object_set(admin_role, "name", json_create_string("admin"));
+  
+  /* UNIFIED DOCUMENTS: Add mandatory fields for proper storage */
+  json_object_set(admin_role, "type", json_create_string(DOC_TYPE_NAME_ROLE));
+  json_object_set(admin_role, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+  json_object_set(admin_role, "collection", json_create_string(RBAC_ROLES_COLLECTION_NAME));
+  json_object_set(admin_role, "owner", json_create_string("system-admin"));
+  
+  /* Role-specific fields */
+  json_object_set(admin_role, "name", json_create_string(DEFAULT_ADMIN_ROLE));
   json_object_set(admin_role, "cn", json_create_string("Administrator Role"));
   json_object_set(admin_role, "description", json_create_string("System administrator with full access"));
   
@@ -161,11 +173,10 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   json_object_set(admin_role, "created_at", json_create_string(timestamp));
   json_object_set(admin_role, "modified_at", json_create_string(timestamp));
   
-  /* Insert role - use bootstrap method if in bootstrap mode */
+  /* Insert role using UNIFIED DOCUMENTS ARCHITECTURE */
   json_value_t* result = NULL;
-  /* ALWAYS use unified documents API - no exceptions! */
-  TRACE_RBAC("Using unified documents API for admin role");
-  result = db_insert_document(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, admin_role);
+  TRACE_RBAC("Inserting admin role into unified documents storage (default/documents)");
+  result = storage_insert_document(db, admin_role);
   json_free(admin_role);
   
   if (!result) {
@@ -179,7 +190,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   if (id_val && id_val->type == JSON_STRING) {
     TRACE_RBAC("Admin role created with ID: %s", id_val->value.string);
     if (admin_role_id_out) {
-      *admin_role_id_out = strdup(id_val->value.string);
+      *admin_role_id_out = BUFFER_STRDUP(id_val->value.string);
     }
   } else {
     LOG_ERROR("Cannot get _id from insert result.");
@@ -248,7 +259,7 @@ int create_default_user_role(struct database* db) {
   json_object_set(user_role, "updated_at", json_create_string(timestamp));
   
   /* Insert role */
-  json_value_t* result = db_insert_document(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, user_role);
+  json_value_t* result = storage_insert_document(db, user_role);
   json_free(user_role);
   
   if (!result) {
@@ -280,11 +291,14 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   
   /* Skip duplicate checking during bootstrap mode */
   if (!db->is_bootstrap_mode) {
-    /* Check if any user with username "admin" exists to prevent duplicates */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "username", json_create_string("admin"));
-    json_value_t* results = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, query);
-    json_free(query);
+    /* Check if any user with username "admin" exists using unified documents approach */
+    json_value_t* unified_query = json_create_object();
+    json_object_set(unified_query, "type", json_create_string(DOC_TYPE_NAME_USER));
+    json_object_set(unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+    json_object_set(unified_query, "collection", json_create_string(RBAC_USERS_COLLECTION_NAME));
+    json_object_set(unified_query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
+    json_value_t* results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, unified_query);
+    json_free(unified_query);
     
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
@@ -306,7 +320,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
         /* Check if roles contain "admin" string instead of role ID */
         for (size_t i = 0; i < json_array_size(roles_val); i++) {
           json_value_t* role = json_array_get(roles_val, i);
-          if (role->type == JSON_STRING && strcmp(role->value.string, "admin") == 0) {
+          if (role->type == JSON_STRING && strcmp(role->value.string, DEFAULT_ADMIN_ROLE) == 0) {
             needs_update = 1;
             break;
           }
@@ -315,11 +329,14 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
         if (needs_update) {
           LOG_INFO("Fixing admin user roles - replacing 'admin' with role ID.");
           
-          /* Get admin role ID */
-          json_value_t* role_query = json_create_object();
-          json_object_set(role_query, "name", json_create_string("admin"));
-          json_value_t* role_results = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, role_query);
-          json_free(role_query);
+          /* Get admin role ID using unified documents approach */
+          json_value_t* role_unified_query = json_create_object();
+          json_object_set(role_unified_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
+          json_object_set(role_unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+          json_object_set(role_unified_query, "collection", json_create_string(RBAC_ROLES_COLLECTION_NAME));
+          json_object_set(role_unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
+          json_value_t* role_results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, role_unified_query);
+          json_free(role_unified_query);
           
           if (role_results) {
             json_value_t* role_docs = json_object_get(role_results, "documents");
@@ -336,8 +353,8 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
                 json_array_append(new_roles, json_create_string(admin_role_id));
                 json_object_set(updated_user, "roles", new_roles);
                 
-                /* Update the user document */
-                db_update_document(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, user_id, updated_user);
+                /* Update the user document in unified storage */
+                storage_update_document(db, user_id, updated_user);
                 json_free(updated_user);
                 
                 LOG_INFO("Admin user roles updated with role ID: %s", admin_role_id);
@@ -370,8 +387,10 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
     return 1;  /* Not an error - just no initial admin */
   }
   
-  /* Create admin user document - let database generate UUID */
+  /* Create admin user document with business fields only */
   json_value_t* admin_user = json_create_object();
+  
+  /* User-specific business fields */
   json_object_set(admin_user, "username", json_create_string(initial_admin_user));
   json_object_set(admin_user, "cn", json_create_string("System Administrator"));
   json_object_set(admin_user, "email", json_create_string(initial_admin_email ? initial_admin_email : "admin@localhost"));
@@ -385,7 +404,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   }
   
   json_object_set(admin_user, "password_hash", json_create_string(password_hash));
-  free(password_hash);
+  BUFFER_FREE(password_hash);
   
   /* Add admin role */
   json_value_t* user_roles = json_create_array();
@@ -401,11 +420,10 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   json_object_set(admin_user, "created_at", json_create_string(timestamp));
   json_object_set(admin_user, "updated_at", json_create_string(timestamp));
   
-  /* Insert user - use bootstrap method if in bootstrap mode */
-  json_value_t* user_result = NULL;
-  /* ALWAYS use unified documents API - no exceptions! */
-  TRACE_RBAC("Using unified documents API for admin user");
-  user_result = db_insert_document(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, admin_user);
+  /* Insert user using GENERIC VIRTUAL LAYER (proper architecture) */
+  TRACE_RBAC("Creating admin user via generic virtual layer");
+  json_value_t* user_result = virtual_insert(db, DOC_TYPE_NAME_USER, RBAC_SYSTEM_LIBRARY, 
+                                           RBAC_USERS_COLLECTION_NAME, admin_user, "system-admin");
   json_free(admin_user);
   
   if (!user_result) {
@@ -452,7 +470,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_value_t* user_doc = json_array_get(documents, 0);
   
   /* Create rbac_user_t structure */
-  rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("Cannot allocate memory for user.");
     json_free(result);
@@ -465,9 +483,9 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_value_t* password_hash_val = json_object_get(user_doc, "password_hash");
   json_value_t* roles_val = json_object_get(user_doc, "roles");
   
-  user->id = strdup(id_val ? json_get_string(id_val) : "");
-  user->username = strdup(username_val ? json_get_string(username_val) : username);
-  user->password_hash = strdup(password_hash_val ? json_get_string(password_hash_val) : "");
+  user->id = BUFFER_STRDUP(id_val ? json_get_string(id_val) : "");
+  user->username = BUFFER_STRDUP(username_val ? json_get_string(username_val) : username);
+  user->password_hash = BUFFER_STRDUP(password_hash_val ? json_get_string(password_hash_val) : "");
   
   /* Copy roles array */
   if (roles_val && roles_val->type == JSON_ARRAY) {
@@ -522,12 +540,12 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   json_object_set(user_doc, "updated_at", json_create_string(timestamp));
   
   /* Insert user */
-  json_value_t* insert_result = db_insert_document(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, user_doc);
+  json_value_t* insert_result = storage_insert_document(db, user_doc);
   json_free(user_doc);
   
   if (!insert_result) {
     LOG_ERROR("Cannot insert user.");
-    free(password_hash);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
@@ -536,21 +554,21 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   if (!actual_id) {
     LOG_ERROR("Cannot get user ID from insert result.");
     json_free(insert_result);
-    free(password_hash);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
   /* Create rbac_user_t structure */
-  rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("Cannot allocate memory for user.");
     json_free(insert_result);
-    free(password_hash);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
-  user->id = strdup(actual_id);
-  user->username = strdup(username);
+  user->id = BUFFER_STRDUP(actual_id);
+  user->username = BUFFER_STRDUP(username);
   user->password_hash = password_hash;
   user->roles = json_create_array();
   
@@ -600,7 +618,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   json_object_set(role_doc, "updated_at", json_create_string(timestamp));
   
   /* Insert role */
-  json_value_t* insert_result = db_insert_document(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, role_doc);
+  json_value_t* insert_result = storage_insert_document(db, role_doc);
   json_free(role_doc);
   
   if (!insert_result) {
@@ -617,15 +635,15 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   }
   
   /* Create rbac_role_t structure */
-  rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
+  rbac_role_t* role = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!role) {
     LOG_ERROR("Cannot allocate memory for role.");
     json_free(insert_result);
     return NULL;
   }
   
-  role->id = strdup(actual_id);
-  role->name = strdup(rolename);
+  role->id = BUFFER_STRDUP(actual_id);
+  role->name = BUFFER_STRDUP(rolename);
   role->permissions = json_create_object();
   
   json_free(insert_result);

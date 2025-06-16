@@ -44,10 +44,10 @@ static size_t json_value_size(json_value_t* value) {
 
 /* Create a new cache entry */
 static cache_entry_t* create_entry(const char* key, json_value_t* value, time_t ttl) {
-  cache_entry_t* entry = (cache_entry_t*)malloc(sizeof(cache_entry_t));
+  cache_entry_t* entry = (cache_entry_t*)BUFFER_ALLOC(sizeof(cache_entry_t));
   if (!entry) return NULL;
   
-  entry->key = strdup(key);
+  entry->key = BUFFER_STRDUP(key);
   entry->value = json_clone(value);
   entry->timestamp = time(NULL);
   entry->expires = (ttl > 0) ? (entry->timestamp + ttl) : 0;
@@ -65,9 +65,9 @@ static cache_entry_t* create_entry(const char* key, json_value_t* value, time_t 
 /* Free a cache entry */
 static void free_entry(cache_entry_t* entry) {
   if (entry) {
-    if (entry->key) free(entry->key);
+    if (entry->key) BUFFER_FREE(entry->key);
     if (entry->value) json_free(entry->value);
-    free(entry);
+    BUFFER_FREE(entry);
   }
 }
 
@@ -208,7 +208,7 @@ static void evict_entry(cache_t* cache) {
 cache_t* cache_create(cache_config_t* config) {
   LOG_DEBUG("Creating new cache instance.");
 
-  cache_t* cache = (cache_t*)malloc(sizeof(cache_t));
+  cache_t* cache = (cache_t*)BUFFER_ALLOC(sizeof(cache_t));
   if (!cache) {
     LOG_ERROR("Out of memory.");
     return NULL;
@@ -239,7 +239,7 @@ cache_t* cache_create(cache_config_t* config) {
   int mutex_result = pthread_mutex_init(&cache->lock, NULL);
   if (mutex_result != 0) {
     LOG_ERROR("initialize cache mutex: %s", strerror(mutex_result));
-    free(cache);
+    BUFFER_FREE(cache);
     return NULL;
   }
 
@@ -281,7 +281,7 @@ void cache_destroy(cache_t* cache) {
       stats.hits, stats.misses, stats.hit_ratio * 100.0);
 
   /* Free cache itself */
-  free(cache);
+  BUFFER_FREE(cache);
 }
 
 /* Set/update cache configuration */
@@ -728,7 +728,7 @@ size_t cache_get_keys(cache_t* cache, char*** keys) {
   pthread_mutex_lock(&cache->lock);
   
   /* Allocate keys array */
-  *keys = (char**)malloc(sizeof(char*) * cache->size);
+  *keys = (char**)BUFFER_ALLOC(sizeof(char*) * cache->size);
   if (!*keys) {
     pthread_mutex_unlock(&cache->lock);
     return 0;
@@ -742,7 +742,7 @@ size_t cache_get_keys(cache_t* cache, char*** keys) {
     /* Check if entry has expired */
     time_t now = time(NULL);
     if (!(entry->expires > 0 && entry->expires <= now)) {
-      (*keys)[count++] = strdup(entry->key);
+      (*keys)[count++] = BUFFER_STRDUP(entry->key);
     }
     entry = entry->next;
   }

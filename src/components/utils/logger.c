@@ -1,4 +1,5 @@
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <sys/stat.h>
 #include <errno.h>
 #include <libgen.h> /* For dirname() */
@@ -80,7 +81,7 @@ int logger_init(const char* log_file_path, log_level_t level) {
   /* Initialize mutex */
   if (pthread_mutex_init(&g_logger->lock, NULL) != 0) {
     fprintf(stderr, "Failed to initialize logger mutex\n");
-    free(g_logger);
+    BUFFER_FREE(g_logger);
     g_logger = NULL;
     return 0;
   }
@@ -115,7 +116,7 @@ int logger_init(const char* log_file_path, log_level_t level) {
     fprintf(stderr, "Error: Failed to create log directory for %s: %s\n", 
         log_file_path, strerror(errno));
     pthread_mutex_destroy(&g_logger->lock);
-    free(g_logger);
+    BUFFER_FREE(g_logger);
     g_logger = NULL;
     return 0;
   }
@@ -126,7 +127,7 @@ int logger_init(const char* log_file_path, log_level_t level) {
     fprintf(stderr, "Error: Failed to open log file %s: %s\n", 
         log_file_path, strerror(errno));
     pthread_mutex_destroy(&g_logger->lock);
-    free(g_logger);
+    BUFFER_FREE(g_logger);
     g_logger = NULL;
     return 0;
   }
@@ -203,7 +204,7 @@ trace_category_t logger_parse_trace(const char* trace_str) {
   if (!trace_str) return TRACE_NONE;
   
   trace_category_t mask = TRACE_NONE;
-  char* str_copy = strdup(trace_str);
+  char* str_copy = BUFFER_STRDUP(trace_str);
   char* token = strtok(str_copy, ",|");
   
   while (token) {
@@ -219,7 +220,7 @@ trace_category_t logger_parse_trace(const char* trace_str) {
     token = strtok(NULL, ",|");
   }
   
-  free(str_copy);
+  BUFFER_FREE(str_copy);
   return mask;
 }
 

@@ -66,7 +66,7 @@ char* jdbx_generate_db_path(const char* basename) {
   if (!basename) return NULL;
   
   size_t len = strlen(basename);
-  char* db_path = malloc(len + 6); /* .jdbx + null terminator */
+  char* db_path = BUFFER_ALLOC(len + 6); /* .jdbx + null terminator */
   if (!db_path) return NULL;
   
   strcpy(db_path, basename);
@@ -87,12 +87,12 @@ char* jdbx_generate_wal_path(const char* basename) {
   
   /* Remove .jdbx extension if present and add .wal */
   if (len >= 5 && strcmp(basename + len - 5, ".jdbx") == 0) {
-    wal_path = malloc(len + 1); /* replace .jdbx with .wal (same length) */
+    wal_path = BUFFER_ALLOC(len + 1); /* replace .jdbx with .wal (same length) */
     if (!wal_path) return NULL;
     strncpy(wal_path, basename, len - 5);
     strcpy(wal_path + len - 5, ".wal");
   } else {
-    wal_path = malloc(len + 5); /* .wal + null terminator */
+    wal_path = BUFFER_ALLOC(len + 5); /* .wal + null terminator */
     if (!wal_path) return NULL;
     strcpy(wal_path, basename);
     strcat(wal_path, ".wal");
@@ -275,7 +275,7 @@ char* config_construct_path(const char* relative_path) {
   size_t rel_len = strlen(relative_path);
   
   /* Allocate space for base + '/' + relative + null terminator */
-  char* full_path = malloc(base_len + 1 + rel_len + 1);
+  char* full_path = BUFFER_ALLOC(base_len + 1 + rel_len + 1);
   if (!full_path) return NULL;
   
   snprintf(full_path, base_len + 1 + rel_len + 1, "%s/%s", base, relative_path);
@@ -292,7 +292,7 @@ char* config_get_var_dir(void) {
   /* Check environment variable first */
   const char* env_var = getenv("JDBX_VAR_PATH");
   if (env_var) {
-    char* result = malloc(strlen(env_var) + 1);
+    char* result = BUFFER_ALLOC(strlen(env_var) + 1);
     if (result) {
       strcpy(result, env_var);
       LOG_DEBUG("Using JDBX_VAR_PATH environment variable: %s", result);
@@ -312,7 +312,7 @@ char* config_get_web_root(void) {
   /* Check environment variable first */
   const char* env_web = getenv("JDBX_WEB_ROOT");
   if (env_web) {
-    char* result = malloc(strlen(env_web) + 1);
+    char* result = BUFFER_ALLOC(strlen(env_web) + 1);
     if (result) {
       strcpy(result, env_web);
       LOG_DEBUG("Using JDBX_WEB_ROOT environment variable: %s", result);
@@ -385,7 +385,7 @@ static int parse_bool(const char* value) {
     return 0;
   }
   
-  char* trimmed = strdup(value);
+  char* trimmed = BUFFER_STRDUP(value);
   if (!trimmed) {
     if (g_logger) {
       LOG_ERROR("Cannot allocate memory in parse_bool().");
@@ -412,7 +412,7 @@ static int parse_bool(const char* value) {
     result = 0;
   }
   
-  free(trimmed);
+  BUFFER_FREE(trimmed);
   
   if (g_logger) {
     TRACE_API("Exiting parse_bool() - returning %d", result);
@@ -466,7 +466,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
   /* Read entire file into buffer */
   TRACE_API("Allocating memory for file contents (%ld bytes)", file_size + 1);
   
-  char* json_buffer = (char*)malloc(file_size + 1);
+  char* json_buffer = (char*)BUFFER_ALLOC(file_size + 1);
   if (!json_buffer) {
     LOG_ERROR("Cannot allocate memory for config file (%ld bytes)", file_size + 1);
     TRACE_API("Exiting config_load_json() - memory allocation failure.");
@@ -484,7 +484,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
     LOG_ERROR("Cannot read config file: %s (read %zu of %ld bytes)", 
          filepath, read_size, file_size);
     TRACE_API("Exiting config_load_json() - file read error.");
-    free(json_buffer);
+    BUFFER_FREE(json_buffer);
     return 0;
   }
   
@@ -497,7 +497,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
   
   TRACE_API("Freeing file buffer.");
   
-  free(json_buffer);
+  BUFFER_FREE(json_buffer);
   
   if (!json) {
     LOG_ERROR("Cannot parse JSON in config file: %s", filepath);
@@ -551,7 +551,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
       json_value_t* host_val = json_object_get(server_section, "host");
       if (host_val) {
         if (host_val->type == JSON_STRING) {
-          config->host = strdup(host_val->value.string);
+          config->host = BUFFER_STRDUP(host_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set host to '%s'", config->host);
           }
@@ -560,13 +560,13 @@ int config_load_json(const char* filepath, server_config_t* config) {
             LOG_WARNING("Invalid type for 'host' in config (expected string, got %s), using default: %s", 
                   json_type_name(host_val->type), DEFAULT_HOST);
           }
-          config->host = strdup(DEFAULT_HOST);
+          config->host = BUFFER_STRDUP(DEFAULT_HOST);
         }
       } else {
         if (g_logger) {
           LOG_DEBUG("No 'host' specified in config, using default: %s", DEFAULT_HOST);
         }
-        config->host = strdup(DEFAULT_HOST);
+        config->host = BUFFER_STRDUP(DEFAULT_HOST);
       }
       
       /* Process max_connections setting */
@@ -615,7 +615,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
               json_type_name(server_section->type));
       }
       config->port = DEFAULT_PORT;
-      config->host = strdup(DEFAULT_HOST);
+      config->host = BUFFER_STRDUP(DEFAULT_HOST);
       config->max_connections = DEFAULT_MAX_CONNECTIONS;
     }
   } else {
@@ -623,7 +623,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
       LOG_INFO("No 'server' section found in config, using defaults.");
     }
     config->port = DEFAULT_PORT;
-    config->host = strdup(DEFAULT_HOST);
+    config->host = BUFFER_STRDUP(DEFAULT_HOST);
     config->max_connections = DEFAULT_MAX_CONNECTIONS;
   }
   
@@ -653,10 +653,10 @@ int config_load_json(const char* filepath, server_config_t* config) {
             if (g_logger) {
               TRACE_API("Freeing existing db_file: '%s'", config->db_file);
             }
-            free(config->db_file);
+            BUFFER_FREE(config->db_file);
           }
           
-          config->db_file = buffer_pool_strdup(path_val->value.string);
+          config->db_file = BUFFER_STRDUP(path_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set db_file to '%s'", config->db_file);
             
@@ -677,7 +677,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
           /* Construct default database path dynamically */
           char* var_dir = config_get_var_dir();
           if (var_dir) {
-            char* db_path = malloc(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
+            char* db_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
             if (db_path) {
               sprintf(db_path, "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
               config->db_file = db_path;
@@ -685,12 +685,12 @@ int config_load_json(const char* filepath, server_config_t* config) {
               LOG_DEBUG("Constructed default database path: %s", config->db_file);
             } else {
               LOG_ERROR("Cannot allocate memory for default database path.");
-              config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+              config->db_file = BUFFER_STRDUP(DEFAULT_DB_FILE_BASENAME);
             }
-            free(var_dir);
+            BUFFER_FREE(var_dir);
           } else {
             LOG_ERROR("Cannot get var directory for default database path.");
-            config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+            config->db_file = BUFFER_STRDUP(DEFAULT_DB_FILE_BASENAME);
           }
         }
       }
@@ -707,19 +707,19 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Construct default database path dynamically */
       char* var_dir = config_get_var_dir();
       if (var_dir) {
-        char* db_path = malloc(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
+        char* db_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_DB_FILE_BASENAME) + 2);
         if (db_path) {
           sprintf(db_path, "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
           config->db_file = db_path;
           LOG_DEBUG("Constructed default database path: %s", config->db_file);
         } else {
           LOG_ERROR("Cannot allocate memory for default database path.");
-          config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+          config->db_file = BUFFER_STRDUP(DEFAULT_DB_FILE_BASENAME);
         }
-        free(var_dir);
+        BUFFER_FREE(var_dir);
       } else {
         LOG_ERROR("Cannot get var directory for default database path.");
-        config->db_file = strdup(DEFAULT_DB_FILE_BASENAME);
+        config->db_file = BUFFER_STRDUP(DEFAULT_DB_FILE_BASENAME);
       }
     }
   }
@@ -753,10 +753,10 @@ int config_load_json(const char* filepath, server_config_t* config) {
             if (g_logger) {
               TRACE_API("Freeing existing JWT secret.");
             }
-            free(config->jwt_secret);
+            BUFFER_FREE(config->jwt_secret);
           }
           
-          config->jwt_secret = strdup(secret_val->value.string);
+          config->jwt_secret = BUFFER_STRDUP(secret_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set JWT secret.");
             
@@ -784,7 +784,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
           TRACE_API("Using default JWT secret: %s", DEFAULT_JWT_SECRET);
         }
         
-        config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+        config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
       }
     } else {
       if (g_logger) {
@@ -792,12 +792,12 @@ int config_load_json(const char* filepath, server_config_t* config) {
               json_type_name(jwt_section->type));
       }
       
-      config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+      config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
     }
   } else {
     if (g_logger) {
       LOG_WARNING("No 'jwt' section found in config, using default secret (INSECURE for production).");
-      config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+      config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
     }
   }
   
@@ -866,10 +866,10 @@ int config_load_json(const char* filepath, server_config_t* config) {
             if (g_logger) {
               TRACE_API("Freeing existing cert_path: '%s'", config->cert_path);
             }
-            free(config->cert_path);
+            BUFFER_FREE(config->cert_path);
           }
           
-          config->cert_path = strdup(cert_val->value.string);
+          config->cert_path = BUFFER_STRDUP(cert_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set SSL certificate file to '%s'", config->cert_path);
           }
@@ -898,10 +898,10 @@ int config_load_json(const char* filepath, server_config_t* config) {
             if (g_logger) {
               TRACE_API("Freeing existing key_path: '%s'", config->key_path);
             }
-            free(config->key_path);
+            BUFFER_FREE(config->key_path);
           }
           
-          config->key_path = strdup(key_val->value.string);
+          config->key_path = BUFFER_STRDUP(key_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set SSL private key file to '%s'", config->key_path);
           }
@@ -923,10 +923,10 @@ int config_load_json(const char* filepath, server_config_t* config) {
       }
       
       config->use_ssl = DEFAULT_SSL_ENABLED;
-      if (config->cert_path) free(config->cert_path);
-      config->cert_path = strdup(DEFAULT_SSL_CERT_PATH);
-      if (config->key_path) free(config->key_path);
-      config->key_path = strdup(DEFAULT_SSL_KEY_PATH);
+      if (config->cert_path) BUFFER_FREE(config->cert_path);
+      config->cert_path = BUFFER_STRDUP(DEFAULT_SSL_CERT_PATH);
+      if (config->key_path) BUFFER_FREE(config->key_path);
+      config->key_path = BUFFER_STRDUP(DEFAULT_SSL_KEY_PATH);
     }
   } else {
     if (g_logger) {
@@ -1024,11 +1024,11 @@ int config_load_json(const char* filepath, server_config_t* config) {
             if (g_logger) {
               TRACE_API("Freeing existing log_file: '%s'", config->log_file);
             }
-            free(config->log_file);
+            BUFFER_FREE(config->log_file);
           }
           
           /* Check if we need to create the directory */
-          char* log_path = strdup(file_val->value.string);
+          char* log_path = BUFFER_STRDUP(file_val->value.string);
           char* dir_end = strrchr(log_path, '/');
           if (dir_end) {
             *dir_end = '\0'; /* Temporarily terminate the string at the directory */
@@ -1044,9 +1044,9 @@ int config_load_json(const char* filepath, server_config_t* config) {
             /* Restore the path */
             *dir_end = '/';
           }
-          free(log_path);
+          BUFFER_FREE(log_path);
           
-          config->log_file = strdup(file_val->value.string);
+          config->log_file = BUFFER_STRDUP(file_val->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Set log_file to '%s'", config->log_file);
           }
@@ -1061,7 +1061,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
           /* Construct default log file path dynamically */
           char* var_dir = config_get_var_dir();
           if (var_dir) {
-            char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+            char* log_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
             if (log_path) {
               sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
               config->log_file = log_path;
@@ -1069,12 +1069,12 @@ int config_load_json(const char* filepath, server_config_t* config) {
               LOG_DEBUG("Constructed default log file path: %s", config->log_file);
             } else {
               LOG_ERROR("Cannot allocate memory for default log file path.");
-              config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+              config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
             }
-            free(var_dir);
+            BUFFER_FREE(var_dir);
           } else {
             LOG_ERROR("Cannot get var directory for default log file path.");
-            config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+            config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
           }
         }
       }
@@ -1088,7 +1088,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Construct default log file path dynamically */
       char* var_dir = config_get_var_dir();
       if (var_dir) {
-        char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+        char* log_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
         if (log_path) {
           sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
           config->log_file = log_path;
@@ -1099,14 +1099,14 @@ int config_load_json(const char* filepath, server_config_t* config) {
           if (g_logger) {
             LOG_ERROR("Cannot allocate memory for default log file path.");
           }
-          config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+          config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
         }
-        free(var_dir);
+        BUFFER_FREE(var_dir);
       } else {
         if (g_logger) {
           LOG_ERROR("Cannot get var directory for default log file path.");
         }
-        config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+        config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
       }
     }
   } else {
@@ -1117,19 +1117,19 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Construct default log file path dynamically */
       char* var_dir = config_get_var_dir();
       if (var_dir) {
-        char* log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+        char* log_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
         if (log_path) {
           sprintf(log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
           config->log_file = log_path;
           LOG_DEBUG("Constructed default log file path: %s", config->log_file);
         } else {
           LOG_ERROR("Cannot allocate memory for default log file path.");
-          config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+          config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
         }
-        free(var_dir);
+        BUFFER_FREE(var_dir);
       } else {
         LOG_ERROR("Cannot get var directory for default log file path.");
-        config->log_file = strdup(DEFAULT_LOG_FILE_BASENAME);
+        config->log_file = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
       }
     }
   }
@@ -1148,11 +1148,11 @@ int config_load_json(const char* filepath, server_config_t* config) {
         if (g_logger) {
           TRACE_API("Freeing existing pid_file: '%s'", config->pid_file);
         }
-        free(config->pid_file);
+        BUFFER_FREE(config->pid_file);
       }
       
       /* Check if we need to create the directory */
-      char* pid_path = strdup(pid_file_val->value.string);
+      char* pid_path = BUFFER_STRDUP(pid_file_val->value.string);
       char* dir_end = strrchr(pid_path, '/');
       if (dir_end) {
         *dir_end = '\0'; /* Temporarily terminate the string at the directory */
@@ -1168,9 +1168,9 @@ int config_load_json(const char* filepath, server_config_t* config) {
         /* Restore the path */
         *dir_end = '/';
       }
-      free(pid_path);
+      BUFFER_FREE(pid_path);
       
-      config->pid_file = strdup(pid_file_val->value.string);
+      config->pid_file = BUFFER_STRDUP(pid_file_val->value.string);
       if (g_logger) {
         LOG_DEBUG("Config: Set pid_file to '%s'", config->pid_file);
       }
@@ -1183,7 +1183,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Construct default PID file path dynamically */
       char* var_dir = config_get_var_dir();
       if (var_dir) {
-        char* pid_path = malloc(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
+        char* pid_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
         if (pid_path) {
           sprintf(pid_path, "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
           config->pid_file = pid_path;
@@ -1194,14 +1194,14 @@ int config_load_json(const char* filepath, server_config_t* config) {
           if (g_logger) {
             LOG_ERROR("Cannot allocate memory for default PID file path.");
           }
-          config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
+          config->pid_file = BUFFER_STRDUP(DEFAULT_PID_FILE_BASENAME);
         }
-        free(var_dir);
+        BUFFER_FREE(var_dir);
       } else {
         if (g_logger) {
           LOG_ERROR("Cannot get var directory for default PID file path.");
         }
-        config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
+        config->pid_file = BUFFER_STRDUP(DEFAULT_PID_FILE_BASENAME);
       }
     }
   } else {
@@ -1209,7 +1209,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Construct default PID file path dynamically */
       char* var_dir = config_get_var_dir();
       if (var_dir) {
-        char* pid_path = malloc(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
+        char* pid_path = BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_PID_FILE_BASENAME) + 2);
         if (pid_path) {
           sprintf(pid_path, "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
           config->pid_file = pid_path;
@@ -1217,12 +1217,12 @@ int config_load_json(const char* filepath, server_config_t* config) {
           LOG_DEBUG("Constructed default PID file path: %s", config->pid_file);
         } else {
           LOG_ERROR("Cannot allocate memory for default PID file path.");
-          config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
+          config->pid_file = BUFFER_STRDUP(DEFAULT_PID_FILE_BASENAME);
         }
-        free(var_dir);
+        BUFFER_FREE(var_dir);
       } else {
         LOG_ERROR("Cannot get var directory for default PID file path.");
-        config->pid_file = strdup(DEFAULT_PID_FILE_BASENAME);
+        config->pid_file = BUFFER_STRDUP(DEFAULT_PID_FILE_BASENAME);
       }
     }
   }
@@ -1388,9 +1388,9 @@ int config_load_json(const char* filepath, server_config_t* config) {
           }
           
           for (int i = 0; i < config->cors.allowed_origins_count; i++) {
-            free(config->cors.allowed_origins[i]);
+            BUFFER_FREE(config->cors.allowed_origins[i]);
           }
-          free(config->cors.allowed_origins);
+          BUFFER_FREE(config->cors.allowed_origins);
           config->cors.allowed_origins = NULL;
           config->cors.allowed_origins_count = 0;
         }
@@ -1410,7 +1410,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
           config->cors.allowed_origins_count = 0;
           
         } else {
-          config->cors.allowed_origins = (char**)malloc(count * sizeof(char*));
+          config->cors.allowed_origins = (char**)BUFFER_ALLOC(count * sizeof(char*));
           if (!config->cors.allowed_origins) {
             if (g_logger) {
               LOG_ERROR("Cannot allocate memory for CORS origins.");
@@ -1424,7 +1424,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
             for (size_t i = 0; i < count; i++) {
               json_value_t* origin = json_array_get(origins_val, i);
               if (origin && origin->type == JSON_STRING) {
-                config->cors.allowed_origins[i] = strdup(origin->value.string);
+                config->cors.allowed_origins[i] = BUFFER_STRDUP(origin->value.string);
                 
                 /* Check for wildcard origin */
                 if (strcmp(origin->value.string, "*") == 0) {
@@ -1448,7 +1448,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
                     LOG_WARNING("Invalid CORS origin at index %zu (NULL), using wildcard '*'", i);
                   }
                 }
-                config->cors.allowed_origins[i] = strdup("*");
+                config->cors.allowed_origins[i] = BUFFER_STRDUP("*");
                 wildcard_found = 1;
               }
             }
@@ -1476,23 +1476,23 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Free existing methods if any */
       if (config->cors.allowed_methods) {
         for (int i = 0; i < config->cors.allowed_methods_count; i++) {
-          free(config->cors.allowed_methods[i]);
+          BUFFER_FREE(config->cors.allowed_methods[i]);
         }
-        free(config->cors.allowed_methods);
+        BUFFER_FREE(config->cors.allowed_methods);
         config->cors.allowed_methods = NULL;
         config->cors.allowed_methods_count = 0;
       }
       
       /* Allocate new methods array */
       size_t count = json_array_size(methods_val);
-      config->cors.allowed_methods = (char**)malloc(count * sizeof(char*));
+      config->cors.allowed_methods = (char**)BUFFER_ALLOC(count * sizeof(char*));
       config->cors.allowed_methods_count = count;
       
       /* Copy methods */
       for (size_t i = 0; i < count; i++) {
         json_value_t* method = json_array_get(methods_val, i);
         if (method && method->type == JSON_STRING) {
-          config->cors.allowed_methods[i] = strdup(method->value.string);
+          config->cors.allowed_methods[i] = BUFFER_STRDUP(method->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Added CORS allowed method: '%s'", config->cors.allowed_methods[i]);
           }
@@ -1505,23 +1505,23 @@ int config_load_json(const char* filepath, server_config_t* config) {
       /* Free existing headers if any */
       if (config->cors.allowed_headers) {
         for (int i = 0; i < config->cors.allowed_headers_count; i++) {
-          free(config->cors.allowed_headers[i]);
+          BUFFER_FREE(config->cors.allowed_headers[i]);
         }
-        free(config->cors.allowed_headers);
+        BUFFER_FREE(config->cors.allowed_headers);
         config->cors.allowed_headers = NULL;
         config->cors.allowed_headers_count = 0;
       }
       
       /* Allocate new headers array */
       size_t count = json_array_size(headers_val);
-      config->cors.allowed_headers = (char**)malloc(count * sizeof(char*));
+      config->cors.allowed_headers = (char**)BUFFER_ALLOC(count * sizeof(char*));
       config->cors.allowed_headers_count = count;
       
       /* Copy headers */
       for (size_t i = 0; i < count; i++) {
         json_value_t* header = json_array_get(headers_val, i);
         if (header && header->type == JSON_STRING) {
-          config->cors.allowed_headers[i] = strdup(header->value.string);
+          config->cors.allowed_headers[i] = BUFFER_STRDUP(header->value.string);
           if (g_logger) {
             LOG_DEBUG("Config: Added CORS allowed header: '%s'", config->cors.allowed_headers[i]);
           }
@@ -1607,7 +1607,7 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
         LOG_DEBUG("Config: Set port to %d", config->port);
       }
     } else if (strcasecmp(key, "host") == 0) {
-      config->host = strdup(value);
+      config->host = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set host to '%s'", config->host);
       }
@@ -1617,22 +1617,22 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
         LOG_DEBUG("Config: Set max_connections to %d", config->max_connections);
       }
     } else if (strcasecmp(key, "db_path") == 0) {
-      config->db_file = strdup(value);
+      config->db_file = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set db_path to '%s'", config->db_file);
       }
     } else if (strcasecmp(key, "jwt_secret") == 0) {
-      config->jwt_secret = strdup(value);
+      config->jwt_secret = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set JWT secret.");
       }
     } else if (strcasecmp(key, "pid_file") == 0) {
-      config->pid_file = strdup(value);
+      config->pid_file = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set pid_file to '%s'", config->pid_file);
       }
     } else if (strcasecmp(key, "log_file") == 0) {
-      config->log_file = strdup(value);
+      config->log_file = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set log_file to '%s'", config->log_file);
       }
@@ -1669,14 +1669,14 @@ int config_load_keyvalue(const char* filepath, server_config_t* config) {
         LOG_DEBUG("Config: Set use_ssl to %d", config->use_ssl);
       }
     } else if (strcasecmp(key, "cert_path") == 0 || strcasecmp(key, "ssl_cert") == 0) {
-      if (config->cert_path) free(config->cert_path);
-      config->cert_path = strdup(value);
+      if (config->cert_path) BUFFER_FREE(config->cert_path);
+      config->cert_path = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set cert_path to '%s'", config->cert_path);
       }
     } else if (strcasecmp(key, "key_path") == 0 || strcasecmp(key, "ssl_key") == 0) {
-      if (config->key_path) free(config->key_path);
-      config->key_path = strdup(value);
+      if (config->key_path) BUFFER_FREE(config->key_path);
+      config->key_path = BUFFER_STRDUP(value);
       if (g_logger) {
         LOG_DEBUG("Config: Set key_path to '%s'", config->key_path);
       }
@@ -1759,17 +1759,17 @@ void config_free(server_config_t* config) {
   }
   
   /* Free string resources */
-  if (config->host) free(config->host);
-  if (config->db_file) free(config->db_file);
+  if (config->host) BUFFER_FREE(config->host);
+  if (config->db_file) BUFFER_FREE(config->db_file);
   /* JDBX is the only storage backend - no field to free */
-  if (config->jwt_secret) free(config->jwt_secret);
-  if (config->pid_file) free(config->pid_file);
-  if (config->log_file) free(config->log_file);
-  if (config->web_root) free(config->web_root);
+  if (config->jwt_secret) BUFFER_FREE(config->jwt_secret);
+  if (config->pid_file) BUFFER_FREE(config->pid_file);
+  if (config->log_file) BUFFER_FREE(config->log_file);
+  if (config->web_root) BUFFER_FREE(config->web_root);
   
   /* Free SSL resources */
-  if (config->cert_path) free(config->cert_path);
-  if (config->key_path) free(config->key_path);
+  if (config->cert_path) BUFFER_FREE(config->cert_path);
+  if (config->key_path) BUFFER_FREE(config->key_path);
   if (config->ssl_context) {
     ssl_context_free(config->ssl_context);
     config->ssl_context = NULL;
@@ -1778,23 +1778,23 @@ void config_free(server_config_t* config) {
   /* Free CORS configuration */
   if (config->cors.allowed_origins) {
     for (int i = 0; i < config->cors.allowed_origins_count; i++) {
-      free(config->cors.allowed_origins[i]);
+      BUFFER_FREE(config->cors.allowed_origins[i]);
     }
-    free(config->cors.allowed_origins);
+    BUFFER_FREE(config->cors.allowed_origins);
   }
   
   if (config->cors.allowed_methods) {
     for (int i = 0; i < config->cors.allowed_methods_count; i++) {
-      free(config->cors.allowed_methods[i]);
+      BUFFER_FREE(config->cors.allowed_methods[i]);
     }
-    free(config->cors.allowed_methods);
+    BUFFER_FREE(config->cors.allowed_methods);
   }
   
   if (config->cors.allowed_headers) {
     for (int i = 0; i < config->cors.allowed_headers_count; i++) {
-      free(config->cors.allowed_headers[i]);
+      BUFFER_FREE(config->cors.allowed_headers[i]);
     }
-    free(config->cors.allowed_headers);
+    BUFFER_FREE(config->cors.allowed_headers);
   }
   
   /* Reset configuration */
@@ -1831,7 +1831,7 @@ void config_init_defaults(server_config_t* config) {
   
   /* Server settings */
   config->port = DEFAULT_PORT;
-  config->host = strdup(DEFAULT_HOST);
+  config->host = BUFFER_STRDUP(DEFAULT_HOST);
   config->max_connections = DEFAULT_MAX_CONNECTIONS;
   
   /* Runtime settings */
@@ -1845,26 +1845,26 @@ void config_init_defaults(server_config_t* config) {
     /* Construct database file path */
     char db_path[PATH_MAX];
     snprintf(db_path, sizeof(db_path), "%s/%s", var_dir, DEFAULT_DB_FILE_BASENAME);
-    config->db_file = strdup(db_path);
+    config->db_file = BUFFER_STRDUP(db_path);
     
     /* Construct PID file path */
     char pid_path[PATH_MAX];
     snprintf(pid_path, sizeof(pid_path), "%s/%s", var_dir, DEFAULT_PID_FILE_BASENAME);
-    config->pid_file = strdup(pid_path);
+    config->pid_file = BUFFER_STRDUP(pid_path);
     
     /* Construct log file path */
     char log_path[PATH_MAX];
     snprintf(log_path, sizeof(log_path), "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
-    config->log_file = strdup(log_path);
+    config->log_file = BUFFER_STRDUP(log_path);
     
-    free(var_dir);
+    BUFFER_FREE(var_dir);
   }
   
   /* Web root path */
   config->web_root = config_get_web_root();
   
   /* Security settings */
-  config->jwt_secret = strdup(DEFAULT_JWT_SECRET);
+  config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
   
   /* Initialize CORS configuration */
   init_cors_config(&config->cors);
@@ -1877,8 +1877,8 @@ void config_init_defaults(server_config_t* config) {
 
   /* SSL settings - MATCH EXACT STRUCT FIELD ORDER */
   config->use_ssl = DEFAULT_SSL_ENABLED;
-  config->cert_path = strdup(DEFAULT_SSL_CERT_PATH);
-  config->key_path = strdup(DEFAULT_SSL_KEY_PATH);
+  config->cert_path = BUFFER_STRDUP(DEFAULT_SSL_CERT_PATH);
+  config->key_path = BUFFER_STRDUP(DEFAULT_SSL_KEY_PATH);
   config->ssl_context = NULL;
 
   /* Cache settings */

@@ -1,4 +1,5 @@
 #include "core/server.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,11 +57,11 @@ void free_cors_config(cors_config_t* cors) {
   if (cors->allowed_origins) {
     for (int i = 0; i < cors->allowed_origins_count; i++) {
       if (cors->allowed_origins[i]) {
-        free(cors->allowed_origins[i]);
+        BUFFER_FREE(cors->allowed_origins[i]);
         cors->allowed_origins[i] = NULL;
       }
     }
-    free(cors->allowed_origins);
+    BUFFER_FREE(cors->allowed_origins);
     cors->allowed_origins = NULL;
   }
   cors->allowed_origins_count = 0;
@@ -69,11 +70,11 @@ void free_cors_config(cors_config_t* cors) {
   if (cors->allowed_methods) {
     for (int i = 0; i < cors->allowed_methods_count; i++) {
       if (cors->allowed_methods[i]) {
-        free(cors->allowed_methods[i]);
+        BUFFER_FREE(cors->allowed_methods[i]);
         cors->allowed_methods[i] = NULL;
       }
     }
-    free(cors->allowed_methods);
+    BUFFER_FREE(cors->allowed_methods);
     cors->allowed_methods = NULL;
   }
   cors->allowed_methods_count = 0;
@@ -82,11 +83,11 @@ void free_cors_config(cors_config_t* cors) {
   if (cors->allowed_headers) {
     for (int i = 0; i < cors->allowed_headers_count; i++) {
       if (cors->allowed_headers[i]) {
-        free(cors->allowed_headers[i]);
+        BUFFER_FREE(cors->allowed_headers[i]);
         cors->allowed_headers[i] = NULL;
       }
     }
-    free(cors->allowed_headers);
+    BUFFER_FREE(cors->allowed_headers);
     cors->allowed_headers = NULL;
   }
   cors->allowed_headers_count = 0;
@@ -104,7 +105,7 @@ int add_cors_allowed_origin(cors_config_t* cors, const char* origin) {
   }
 
   /* Allocate or reallocate array */
-  char** new_origins = (char**)realloc(cors->allowed_origins,
+  char** new_origins = (char**)BUFFER_REALLOC(cors->allowed_origins,
                     (cors->allowed_origins_count + 1) * sizeof(char*));
   if (!new_origins) {
     return 0;
@@ -112,7 +113,7 @@ int add_cors_allowed_origin(cors_config_t* cors, const char* origin) {
 
   /* Add origin to array */
   cors->allowed_origins = new_origins;
-  cors->allowed_origins[cors->allowed_origins_count] = strdup(origin);
+  cors->allowed_origins[cors->allowed_origins_count] = BUFFER_STRDUP(origin);
   cors->allowed_origins_count++;
 
   return 1;
@@ -125,7 +126,7 @@ int add_cors_allowed_method(cors_config_t* cors, const char* method) {
   }
 
   /* Allocate or reallocate array */
-  char** new_methods = (char**)realloc(cors->allowed_methods,
+  char** new_methods = (char**)BUFFER_REALLOC(cors->allowed_methods,
                     (cors->allowed_methods_count + 1) * sizeof(char*));
   if (!new_methods) {
     return 0;
@@ -133,7 +134,7 @@ int add_cors_allowed_method(cors_config_t* cors, const char* method) {
 
   /* Add method to array */
   cors->allowed_methods = new_methods;
-  cors->allowed_methods[cors->allowed_methods_count] = strdup(method);
+  cors->allowed_methods[cors->allowed_methods_count] = BUFFER_STRDUP(method);
   cors->allowed_methods_count++;
 
   return 1;
@@ -146,7 +147,7 @@ int add_cors_allowed_header(cors_config_t* cors, const char* header) {
   }
 
   /* Allocate or reallocate array */
-  char** new_headers = (char**)realloc(cors->allowed_headers,
+  char** new_headers = (char**)BUFFER_REALLOC(cors->allowed_headers,
                     (cors->allowed_headers_count + 1) * sizeof(char*));
   if (!new_headers) {
     return 0;
@@ -154,7 +155,7 @@ int add_cors_allowed_header(cors_config_t* cors, const char* header) {
 
   /* Add header to array */
   cors->allowed_headers = new_headers;
-  cors->allowed_headers[cors->allowed_headers_count] = strdup(header);
+  cors->allowed_headers[cors->allowed_headers_count] = BUFFER_STRDUP(header);
   cors->allowed_headers_count++;
 
   return 1;

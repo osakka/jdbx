@@ -62,7 +62,7 @@ static void extract_field_paths_recursive(json_value_t* obj, const char* prefix,
             
             /* Build field path */
             size_t path_len = (prefix ? strlen(prefix) + 1 : 0) + strlen(entry->key) + 1;
-            char* field_path = (char*)malloc(path_len);
+            char* field_path = (char*)BUFFER_ALLOC(path_len);
             if (!field_path) continue;
             
             if (prefix) {
@@ -74,9 +74,9 @@ static void extract_field_paths_recursive(json_value_t* obj, const char* prefix,
             /* Add to paths array */
             if (*count >= *capacity) {
                 *capacity = (*capacity == 0) ? 16 : *capacity * 2;
-                *paths = (char**)realloc(*paths, *capacity * sizeof(char*));
+                *paths = (char**)BUFFER_REALLOC(*paths, *capacity * sizeof(char*));
                 if (!*paths) {
-                    free(field_path);
+                    BUFFER_FREE(field_path);
                     return;
                 }
             }
@@ -113,9 +113,9 @@ void free_field_paths(char** paths, size_t count) {
     if (!paths) return;
     
     for (size_t i = 0; i < count; i++) {
-        free(paths[i]);
+        BUFFER_FREE(paths[i]);
     }
-    free(paths);
+    BUFFER_FREE(paths);
 }
 
 /* === Query Tracker Core Functions === */
@@ -129,7 +129,7 @@ int query_tracker_init(void) {
         return 1;
     }
     
-    g_query_tracker = (query_tracker_t*)malloc(sizeof(query_tracker_t));
+    g_query_tracker = (query_tracker_t*)BUFFER_ALLOC(sizeof(query_tracker_t));
     if (!g_query_tracker) {
         LOG_ERROR("Cannot allocate query tracker.");
         return 0;
@@ -137,10 +137,9 @@ int query_tracker_init(void) {
     
     /* Initialize hash table */
     g_query_tracker->num_buckets = 1024; /* Start with 1024 buckets */
-    g_query_tracker->patterns = (query_pattern_t**)calloc(g_query_tracker->num_buckets, 
-                                                          sizeof(query_pattern_t*));
+    g_query_tracker->patterns = (query_pattern_t**)BUFFER_ALLOC(g_query_tracker->num_buckets * sizeof(query_pattern_t*));
     if (!g_query_tracker->patterns) {
-        free(g_query_tracker);
+        BUFFER_FREE(g_query_tracker);
         g_query_tracker = NULL;
         LOG_ERROR("Cannot allocate query tracker hash table.");
         return 0;
@@ -152,8 +151,8 @@ int query_tracker_init(void) {
     
     /* Initialize lock */
     if (pthread_rwlock_init(&g_query_tracker->lock, NULL) != 0) {
-        free(g_query_tracker->patterns);
-        free(g_query_tracker);
+        BUFFER_FREE(g_query_tracker->patterns);
+        BUFFER_FREE(g_query_tracker);
         g_query_tracker = NULL;
         LOG_ERROR("Cannot initialize query tracker lock.");
         return 0;
@@ -176,20 +175,20 @@ void query_tracker_cleanup(void) {
         query_pattern_t* pattern = g_query_tracker->patterns[i];
         while (pattern) {
             query_pattern_t* next = pattern->next;
-            free(pattern->collection_name);
-            free(pattern->field_path);
-            free(pattern);
+            BUFFER_FREE(pattern->collection_name);
+            BUFFER_FREE(pattern->field_path);
+            BUFFER_FREE(pattern);
             pattern = next;
         }
     }
     
     /* Free hash table */
-    free(g_query_tracker->patterns);
+    BUFFER_FREE(g_query_tracker->patterns);
     
     pthread_rwlock_unlock(&g_query_tracker->lock);
     pthread_rwlock_destroy(&g_query_tracker->lock);
     
-    free(g_query_tracker);
+    BUFFER_FREE(g_query_tracker);
     g_query_tracker = NULL;
     
     LOG_INFO("Query tracker cleaned up.");
@@ -215,12 +214,12 @@ static query_pattern_t* find_or_create_pattern(const char* collection_name, cons
     }
     
     /* Create new pattern */
-    pattern = (query_pattern_t*)malloc(sizeof(query_pattern_t));
+    pattern = (query_pattern_t*)BUFFER_ALLOC(sizeof(query_pattern_t));
     if (!pattern) return NULL;
     
     /* Initialize pattern */
-    pattern->collection_name = strdup(collection_name);
-    pattern->field_path = strdup(field_path);
+    pattern->collection_name = BUFFER_STRDUP(collection_name);
+    pattern->field_path = BUFFER_STRDUP(field_path);
     pattern->query_count = 0;
     pattern->total_time_ms = 0.0;
     pattern->avg_time_ms = 0.0;
@@ -231,9 +230,9 @@ static query_pattern_t* find_or_create_pattern(const char* collection_name, cons
     pattern->next = g_query_tracker->patterns[bucket];
     
     if (!pattern->collection_name || !pattern->field_path) {
-        free(pattern->collection_name);
-        free(pattern->field_path);
-        free(pattern);
+        BUFFER_FREE(pattern->collection_name);
+        BUFFER_FREE(pattern->field_path);
+        BUFFER_FREE(pattern);
         return NULL;
     }
     
@@ -252,7 +251,7 @@ static query_pattern_t* find_or_create_pattern(const char* collection_name, cons
 query_timing_t* query_tracker_start_timing(const char* collection_name, json_value_t* query_json) {
     if (!g_query_tracker || !collection_name) return NULL;
     
-    query_timing_t* timing = (query_timing_t*)malloc(sizeof(query_timing_t));
+    query_timing_t* timing = (query_timing_t*)BUFFER_ALLOC(sizeof(query_timing_t));
     if (!timing) return NULL;
     
     /* Record start time */
@@ -270,7 +269,7 @@ query_timing_t* query_tracker_start_timing(const char* collection_name, json_val
  */
 void query_tracker_end_timing(query_timing_t* timing) {
     if (!timing || !g_query_tracker) {
-        free(timing);
+        BUFFER_FREE(timing);
         return;
     }
     
@@ -312,7 +311,7 @@ void query_tracker_end_timing(query_timing_t* timing) {
     }
     
     /* Free timing context */
-    free(timing);
+    BUFFER_FREE(timing);
 }
 
 /**
@@ -360,7 +359,7 @@ query_pattern_t** query_tracker_get_index_candidates(size_t* count) {
                 /* Add to candidates array */
                 if (*count >= capacity) {
                     capacity = (capacity == 0) ? 16 : capacity * 2;
-                    candidates = (query_pattern_t**)realloc(candidates, capacity * sizeof(query_pattern_t*));
+                    candidates = (query_pattern_t**)BUFFER_REALLOC(candidates, capacity * sizeof(query_pattern_t*));
                     if (!candidates) break;
                 }
                 
@@ -486,9 +485,9 @@ void query_tracker_force_cleanup(void) {
             /* Remove old patterns with low query count */
             if (pattern->last_seen < cutoff && pattern->query_count < 10) {
                 *current = pattern->next;
-                free(pattern->collection_name);
-                free(pattern->field_path);
-                free(pattern);
+                BUFFER_FREE(pattern->collection_name);
+                BUFFER_FREE(pattern->field_path);
+                BUFFER_FREE(pattern);
                 removed++;
                 g_query_tracker->pattern_count--;
             } else {

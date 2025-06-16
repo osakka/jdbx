@@ -48,13 +48,13 @@ static void cleanup_node_pool(lockfree_queue_t* queue);
  * @return New queue or NULL on failure
  */
 lockfree_queue_t* lockfree_queue_create(size_t max_size, size_t node_pool_size) {
-    lockfree_queue_t* queue = buffer_pool_alloc(sizeof(lockfree_queue_t));
+    lockfree_queue_t* queue = BUFFER_ALLOC(sizeof(lockfree_queue_t));
     if (!queue) {
         return NULL;
     }
     
     /* Create sentinel node for lock-free operations */
-    queue_node_t* sentinel = buffer_pool_alloc(sizeof(queue_node_t));
+    queue_node_t* sentinel = BUFFER_ALLOC(sizeof(queue_node_t));
     if (!sentinel) {
         buffer_pool_free(queue);
         return NULL;
@@ -79,7 +79,7 @@ lockfree_queue_t* lockfree_queue_create(size_t max_size, size_t node_pool_size) 
     
     /* Pre-allocate node pool for performance */
     for (size_t i = 0; i < queue->node_pool_size; i++) {
-        queue_node_t* node = buffer_pool_alloc(sizeof(queue_node_t));
+        queue_node_t* node = BUFFER_ALLOC(sizeof(queue_node_t));
         if (node) {
             atomic_store(&node->next, atomic_load(&queue->free_nodes));
             atomic_store(&queue->free_nodes, node);
@@ -291,7 +291,7 @@ static queue_node_t* allocate_node(lockfree_queue_t* queue) {
     }
     
     /* Pool is empty, allocate new node */
-    node = buffer_pool_alloc(sizeof(queue_node_t));
+    node = BUFFER_ALLOC(sizeof(queue_node_t));
     if (node) {
         atomic_fetch_add(&queue->nodes_allocated, 1);
     }

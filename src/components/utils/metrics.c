@@ -1,4 +1,5 @@
 #include "utils/metrics.h"
+#include "utils/buffer_pool.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,7 @@ double metrics_elapsed_time(struct timespec start) {
 
 /* Create a new metrics registry */
 metrics_registry_t* metrics_registry_create() {
-  metrics_registry_t* registry = (metrics_registry_t*)malloc(sizeof(metrics_registry_t));
+  metrics_registry_t* registry = (metrics_registry_t*)BUFFER_ALLOC(sizeof(metrics_registry_t));
   if (!registry) {
     return NULL;
   }
@@ -64,27 +65,27 @@ void metrics_registry_free(metrics_registry_t* registry) {
     metric_t* next = current->next;
     
     /* Free metric name and description */
-    free(current->name);
-    free(current->description);
+    BUFFER_FREE(current->name);
+    BUFFER_FREE(current->description);
     
     /* Free histogram buckets if needed */
     if (current->type == METRIC_TYPE_HISTOGRAM) {
-      free(current->value.histogram.buckets);
-      free(current->value.histogram.bucket_bounds);
+      BUFFER_FREE(current->value.histogram.buckets);
+      BUFFER_FREE(current->value.histogram.bucket_bounds);
     }
     
     /* Destroy mutex */
     pthread_mutex_destroy(&current->mutex);
     
     /* Free metric */
-    free(current);
+    BUFFER_FREE(current);
     
     current = next;
   }
   
   /* Free export path if needed */
   if (registry->export_path) {
-    free(registry->export_path);
+    BUFFER_FREE(registry->export_path);
   }
   
   /* Unlock and destroy mutex */
@@ -92,7 +93,7 @@ void metrics_registry_free(metrics_registry_t* registry) {
   pthread_mutex_destroy(&registry->mutex);
   
   /* Free registry */
-  free(registry);
+  BUFFER_FREE(registry);
 }
 
 /* Auto-export thread function */
@@ -130,14 +131,14 @@ void metrics_registry_enable_auto_export(metrics_registry_t* registry, const cha
     pthread_join(registry->export_thread, NULL);
     
     if (registry->export_path) {
-      free(registry->export_path);
+      BUFFER_FREE(registry->export_path);
       registry->export_path = NULL;
     }
   }
   
   /* Set auto-export parameters */
   registry->auto_export = 1;
-  registry->export_path = strdup(export_path);
+  registry->export_path = BUFFER_STRDUP(export_path);
   registry->export_interval = interval;
   registry->export_thread_running = 1;
   
@@ -148,7 +149,7 @@ void metrics_registry_enable_auto_export(metrics_registry_t* registry, const cha
     registry->export_thread_running = 0;
     
     if (registry->export_path) {
-      free(registry->export_path);
+      BUFFER_FREE(registry->export_path);
       registry->export_path = NULL;
     }
   }
@@ -182,7 +183,7 @@ void metrics_registry_disable_auto_export(metrics_registry_t* registry) {
   registry->auto_export = 0;
   
   if (registry->export_path) {
-    free(registry->export_path);
+    BUFFER_FREE(registry->export_path);
     registry->export_path = NULL;
   }
   
@@ -198,7 +199,7 @@ char* metrics_get_json(metrics_registry_t* registry) {
   
   /* Initial buffer size */
   size_t buffer_size = 4096;
-  char* buffer = (char*)malloc(buffer_size);
+  char* buffer = (char*)BUFFER_ALLOC(buffer_size);
   if (!buffer) {
     return NULL;
   }
@@ -219,9 +220,9 @@ char* metrics_get_json(metrics_registry_t* registry) {
     /* Check if we need to resize the buffer */
     if (buffer_size - current_size < 1024) {
       buffer_size *= 2;
-      char* new_buffer = (char*)realloc(buffer, buffer_size);
+      char* new_buffer = (char*)BUFFER_REALLOC(buffer, buffer_size);
       if (!new_buffer) {
-        free(buffer);
+        BUFFER_FREE(buffer);
         pthread_mutex_unlock(&registry->mutex);
         return NULL;
       }
@@ -440,15 +441,15 @@ metric_t* metrics_create_counter(metrics_registry_t* registry, const char* name,
   }
   
   /* Create new counter */
-  metric_t* counter = (metric_t*)malloc(sizeof(metric_t));
+  metric_t* counter = (metric_t*)BUFFER_ALLOC(sizeof(metric_t));
   if (!counter) {
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
   
   /* Initialize counter */
-  counter->name = strdup(name);
-  counter->description = description ? strdup(description) : NULL;
+  counter->name = BUFFER_STRDUP(name);
+  counter->description = description ? BUFFER_STRDUP(description) : NULL;
   counter->type = METRIC_TYPE_COUNTER;
   counter->value.counter = 0;
   counter->next = NULL;
@@ -489,15 +490,15 @@ metric_t* metrics_create_gauge(metrics_registry_t* registry, const char* name, c
   }
   
   /* Create new gauge */
-  metric_t* gauge = (metric_t*)malloc(sizeof(metric_t));
+  metric_t* gauge = (metric_t*)BUFFER_ALLOC(sizeof(metric_t));
   if (!gauge) {
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
   
   /* Initialize gauge */
-  gauge->name = strdup(name);
-  gauge->description = description ? strdup(description) : NULL;
+  gauge->name = BUFFER_STRDUP(name);
+  gauge->description = description ? BUFFER_STRDUP(description) : NULL;
   gauge->type = METRIC_TYPE_GAUGE;
   gauge->value.gauge = 0.0;
   gauge->next = NULL;
@@ -538,15 +539,15 @@ metric_t* metrics_create_timer(metrics_registry_t* registry, const char* name, c
   }
   
   /* Create new timer */
-  metric_t* timer = (metric_t*)malloc(sizeof(metric_t));
+  metric_t* timer = (metric_t*)BUFFER_ALLOC(sizeof(metric_t));
   if (!timer) {
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
   
   /* Initialize timer */
-  timer->name = strdup(name);
-  timer->description = description ? strdup(description) : NULL;
+  timer->name = BUFFER_STRDUP(name);
+  timer->description = description ? BUFFER_STRDUP(description) : NULL;
   timer->type = METRIC_TYPE_TIMER;
   timer->value.timer.count = 0;
   timer->value.timer.min = INFINITY;
@@ -592,15 +593,15 @@ metric_t* metrics_create_histogram(metrics_registry_t* registry, const char* nam
   }
   
   /* Create new histogram */
-  metric_t* histogram = (metric_t*)malloc(sizeof(metric_t));
+  metric_t* histogram = (metric_t*)BUFFER_ALLOC(sizeof(metric_t));
   if (!histogram) {
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
   
   /* Initialize histogram */
-  histogram->name = strdup(name);
-  histogram->description = description ? strdup(description) : NULL;
+  histogram->name = BUFFER_STRDUP(name);
+  histogram->description = description ? BUFFER_STRDUP(description) : NULL;
   histogram->type = METRIC_TYPE_HISTOGRAM;
   histogram->value.histogram.count = 0;
   histogram->value.histogram.min = INFINITY;
@@ -609,22 +610,22 @@ metric_t* metrics_create_histogram(metrics_registry_t* registry, const char* nam
   histogram->value.histogram.num_buckets = num_buckets;
   
   /* Allocate buckets */
-  histogram->value.histogram.buckets = (uint64_t*)calloc(num_buckets, sizeof(uint64_t));
+  histogram->value.histogram.buckets = (uint64_t*)BUFFER_ALLOC(sizeof(uint64_t));
   if (!histogram->value.histogram.buckets) {
-    free(histogram->name);
-    if (histogram->description) free(histogram->description);
-    free(histogram);
+    BUFFER_FREE(histogram->name);
+    if (histogram->description) BUFFER_FREE(histogram->description);
+    BUFFER_FREE(histogram);
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
   
   /* Allocate bucket bounds */
-  histogram->value.histogram.bucket_bounds = (double*)malloc(num_buckets * sizeof(double));
+  histogram->value.histogram.bucket_bounds = (double*)BUFFER_ALLOC(num_buckets * sizeof(double));
   if (!histogram->value.histogram.bucket_bounds) {
-    free(histogram->value.histogram.buckets);
-    free(histogram->name);
-    if (histogram->description) free(histogram->description);
-    free(histogram);
+    BUFFER_FREE(histogram->value.histogram.buckets);
+    BUFFER_FREE(histogram->name);
+    if (histogram->description) BUFFER_FREE(histogram->description);
+    BUFFER_FREE(histogram);
     pthread_mutex_unlock(&registry->mutex);
     return NULL;
   }
@@ -705,7 +706,7 @@ timer_context_t* metrics_timer_start(metric_t* timer) {
     return NULL;
   }
   
-  timer_context_t* context = (timer_context_t*)malloc(sizeof(timer_context_t));
+  timer_context_t* context = (timer_context_t*)BUFFER_ALLOC(sizeof(timer_context_t));
   if (!context) {
     return NULL;
   }
@@ -757,7 +758,7 @@ void metrics_timer_stop(timer_context_t* context) {
   if (g_logger) {
     TRACE_METRICS("TIMER_STOP_FREE_START: context=%p", (void*)context);
   }
-  free(context);
+  BUFFER_FREE(context);
   if (g_logger) {
     TRACE_METRICS("TIMER_STOP_FREE_SUCCESS.");
   }
@@ -832,7 +833,7 @@ json_value_t* metrics_calculate_percentiles_js(double* values, size_t count) {
     json_value_t* result = json_create_object();
     if (count > 0 && values) {
         /* Sort values for percentile calculation */
-        double* sorted = malloc(count * sizeof(double));
+        double* sorted = BUFFER_ALLOC(count * sizeof(double));
         if (!sorted) {
             return result;
         }
@@ -859,7 +860,7 @@ json_value_t* metrics_calculate_percentiles_js(double* values, size_t count) {
         json_object_set(result, "min", json_create_number(sorted[0]));
         json_object_set(result, "max", json_create_number(sorted[count - 1]));
         
-        free(sorted);
+        BUFFER_FREE(sorted);
     }
     return result;
 }

@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/database.h"
 #include "utils/json.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,12 +38,12 @@ http_response_t* api_handle_schema_get(api_context_t* ctx, http_request_t* reque
     return create_http_response(HTTP_OK, response_str, "application/json");
   } else if (strncmp(path, "/api/schemas/", 13) == 0) {
     /* Get schema for specific collection */
-    collection_name = strdup(path + 13);
+    collection_name = BUFFER_STRDUP(path + 13);
     
     /* Get JSON schema for collection */
     json_value_t* schema = db_get_json_schema(ctx->db, collection_name);
     if (!schema) {
-      free(collection_name);
+      BUFFER_FREE(collection_name);
       return create_http_response(HTTP_NOT_FOUND, 
                    "{\"error\":\"Schema not found\"}", "application/json");
     }
@@ -57,7 +58,7 @@ http_response_t* api_handle_schema_get(api_context_t* ctx, http_request_t* reque
     
     /* Free resources */
     json_free(response);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   } else {
@@ -143,12 +144,12 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
   
-  char* collection_name = strdup(path + 13);
+  char* collection_name = BUFFER_STRDUP(path + 13);
   
   /* Check if collection exists */
   db_collection_t* collection = db_get_collection(ctx->db, collection_name);
   if (!collection) {
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
@@ -157,7 +158,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     if (body) json_free(body);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -166,7 +167,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   json_value_t* schema_val = json_object_get(body, "schema");
   if (!schema_val || schema_val->type != JSON_OBJECT) {
     json_free(body);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Schema definition is required\"}", "application/json");
   }
@@ -174,7 +175,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   /* Update JSON schema */
   if (!db_store_json_schema(ctx->db, collection_name, schema_val)) {
     json_free(body);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to update schema\"}", "application/json");
   }
@@ -190,7 +191,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   /* Free resources */
   json_free(response);
   json_free(body);
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -209,19 +210,19 @@ http_response_t* api_handle_schema_delete(api_context_t* ctx, http_request_t* re
                  "{\"error\":\"Invalid path\"}", "application/json");
   }
   
-  char* collection_name = strdup(path + 13);
+  char* collection_name = BUFFER_STRDUP(path + 13);
   
   /* Check if collection exists */
   db_collection_t* collection = db_get_collection(ctx->db, collection_name);
   if (!collection) {
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
   
   /* Delete JSON schema */
   if (!db_delete_json_schema(ctx->db, collection_name)) {
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to delete schema\"}", "application/json");
   }
@@ -236,7 +237,7 @@ http_response_t* api_handle_schema_delete(api_context_t* ctx, http_request_t* re
   
   /* Free resources */
   json_free(response);
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -302,7 +303,7 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   json_free(body);
   json_free(schema);
   
-  if (error_msg) free(error_msg);
+  if (error_msg) BUFFER_FREE(error_msg);
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }

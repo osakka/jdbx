@@ -74,7 +74,7 @@ http_response_t* api_handle_cache_stats(api_context_t* ctx, http_request_t* requ
   http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return response;
 }
@@ -193,7 +193,7 @@ http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* 
   http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return response;
 }
@@ -222,7 +222,7 @@ http_response_t* api_handle_cache_clear(api_context_t* ctx, http_request_t* requ
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -253,7 +253,7 @@ http_response_t* api_handle_cache_invalidate(api_context_t* ctx, http_request_t*
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }

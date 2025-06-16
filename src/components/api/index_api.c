@@ -33,10 +33,10 @@ static int extract_path_segments(const char* path, char** collection, char** ind
   if (slash) {
     /* Collection followed by index name */
     *collection = strndup(rest, slash - rest);
-    *index_name = strdup(slash + 1);
+    *index_name = BUFFER_STRDUP(slash + 1);
   } else {
     /* Only collection */
-    *collection = strdup(rest);
+    *collection = BUFFER_STRDUP(rest);
     *index_name = NULL;
   }
   
@@ -78,13 +78,13 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
   
   /* Free index_name as we don't need it for listing */
   if (index_name) {
-    free(index_name);
+    BUFFER_FREE(index_name);
   }
   
   /* Check if collection exists */
   db_collection_t* coll = db_get_collection(ctx->db, collection);
   if (!coll) {
-    free(collection);
+    BUFFER_FREE(collection);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
@@ -92,7 +92,7 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
   /* Get list of indexes */
   json_value_t* indexes = db_list_indexes(ctx->db, collection);
   
-  free(collection);
+  BUFFER_FREE(collection);
   
   if (!indexes) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -114,7 +114,7 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -137,14 +137,14 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   
   /* Free index_name as we'll get it from the request body */
   if (index_name) {
-    free(index_name);
+    BUFFER_FREE(index_name);
     index_name = NULL;
   }
   
   /* Check if collection exists */
   db_collection_t* coll = db_get_collection(ctx->db, collection);
   if (!coll) {
-    free(collection);
+    BUFFER_FREE(collection);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
@@ -152,7 +152,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    free(collection);
+    BUFFER_FREE(collection);
     if (body) json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -165,7 +165,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   
   if (!name_val || name_val->type != JSON_STRING || 
     !field_val || field_val->type != JSON_STRING) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Index name and field are required\"}", "application/json");
@@ -186,7 +186,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   json_free(body);
   
   if (!index) {
-    free(collection);
+    BUFFER_FREE(collection);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create index\"}", "application/json");
   }
@@ -201,7 +201,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   json_object_set(response, "type", json_create_string(type_str));
   
   /* Free collection name */
-  free(collection);
+  BUFFER_FREE(collection);
   
   /* Serialize response */
   char* response_str = json_stringify(response);
@@ -213,7 +213,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -230,8 +230,8 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   char* index_name = NULL;
   
   if (!extract_path_segments(request->path, &collection, &index_name) || !index_name) {
-    if (collection) free(collection);
-    if (index_name) free(index_name);
+    if (collection) BUFFER_FREE(collection);
+    if (index_name) BUFFER_FREE(index_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path format\"}", "application/json");
   }
@@ -239,8 +239,8 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   /* Get index */
   index_t* index = db_get_index(ctx->db, collection, index_name);
   if (!index) {
-    free(collection);
-    free(index_name);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(index_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Index not found\"}", "application/json");
   }
@@ -248,8 +248,8 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   /* Convert index to JSON */
   json_value_t* index_json = db_index_to_json(index);
   if (!index_json) {
-    free(collection);
-    free(index_name);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(index_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to get index details\"}", "application/json");
   }
@@ -262,14 +262,14 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   
   /* Free resources */
   json_free(index_json);
-  free(collection);
-  free(index_name);
+  BUFFER_FREE(collection);
+  BUFFER_FREE(index_name);
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -286,8 +286,8 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   char* index_name = NULL;
   
   if (!extract_path_segments(request->path, &collection, &index_name) || !index_name) {
-    if (collection) free(collection);
-    if (index_name) free(index_name);
+    if (collection) BUFFER_FREE(collection);
+    if (index_name) BUFFER_FREE(index_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path format\"}", "application/json");
   }
@@ -295,8 +295,8 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   /* Check if index exists */
   index_t* index = db_get_index(ctx->db, collection, index_name);
   if (!index) {
-    free(collection);
-    free(index_name);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(index_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Index not found\"}", "application/json");
   }
@@ -304,8 +304,8 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   /* Drop index */
   int result = db_drop_index(ctx->db, collection, index_name);
   if (!result) {
-    free(collection);
-    free(index_name);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(index_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to drop index\"}", "application/json");
   }
@@ -318,8 +318,8 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   json_object_set(response, "name", json_create_string(index_name));
   
   /* Free collection and index name */
-  free(collection);
-  free(index_name);
+  BUFFER_FREE(collection);
+  BUFFER_FREE(index_name);
   
   /* Serialize response */
   char* response_str = json_stringify(response);
@@ -331,7 +331,7 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -348,8 +348,8 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   char* index_name = NULL;
   
   if (!extract_path_segments(request->path, &collection, &index_name)) {
-    if (collection) free(collection);
-    if (index_name) free(index_name);
+    if (collection) BUFFER_FREE(collection);
+    if (index_name) BUFFER_FREE(index_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path format\"}", "application/json");
   }
@@ -362,8 +362,8 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
     /* Check if index exists */
     index_t* index = db_get_index(ctx->db, collection, index_name);
     if (!index) {
-      free(collection);
-      free(index_name);
+      BUFFER_FREE(collection);
+      BUFFER_FREE(index_name);
       return create_http_response(HTTP_NOT_FOUND, 
                    "{\"error\":\"Index not found\"}", "application/json");
     }
@@ -373,8 +373,8 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   }
   
   if (!result) {
-    free(collection);
-    if (index_name) free(index_name);
+    BUFFER_FREE(collection);
+    if (index_name) BUFFER_FREE(index_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to rebuild index\"}", "application/json");
   }
@@ -393,8 +393,8 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   }
   
   /* Free collection and index name */
-  free(collection);
-  if (index_name) free(index_name);
+  BUFFER_FREE(collection);
+  if (index_name) BUFFER_FREE(index_name);
   
   /* Serialize response */
   char* response_str = json_stringify(response);
@@ -406,7 +406,7 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -423,8 +423,8 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   char* index_name = NULL;
   
   if (!extract_path_segments(request->path, &collection, &index_name) || !index_name) {
-    if (collection) free(collection);
-    if (index_name) free(index_name);
+    if (collection) BUFFER_FREE(collection);
+    if (index_name) BUFFER_FREE(index_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path format\"}", "application/json");
   }
@@ -432,8 +432,8 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   /* Get index stats */
   json_value_t* stats = db_index_stats(ctx->db, collection, index_name);
   if (!stats) {
-    free(collection);
-    free(index_name);
+    BUFFER_FREE(collection);
+    BUFFER_FREE(index_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Index not found or statistics not available\"}", 
                  "application/json");
@@ -447,14 +447,14 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   
   /* Free resources */
   json_free(stats);
-  free(collection);
-  free(index_name);
+  BUFFER_FREE(collection);
+  BUFFER_FREE(index_name);
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }

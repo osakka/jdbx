@@ -23,6 +23,7 @@
 
 #include "core/thread_pool.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -99,14 +100,14 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
   /* Initialize synchronization primitives */
   if (pthread_mutex_init(&pool->lock, NULL) != 0) {
     POOL_LOG(ERROR, "Failed to initialize thread pool mutex");
-    free(pool);
+    BUFFER_FREE(pool);
     return NULL;
   }
   
   if (pthread_cond_init(&pool->work_cond, NULL) != 0) {
     POOL_LOG(ERROR, "Failed to initialize work condition variable");
     pthread_mutex_destroy(&pool->lock);
-    free(pool);
+    BUFFER_FREE(pool);
     return NULL;
   }
   
@@ -114,7 +115,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
     POOL_LOG(ERROR, "Failed to initialize idle condition variable");
     pthread_cond_destroy(&pool->work_cond);
     pthread_mutex_destroy(&pool->lock);
-    free(pool);
+    BUFFER_FREE(pool);
     return NULL;
   }
   
@@ -125,7 +126,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
     pthread_cond_destroy(&pool->idle_cond);
     pthread_cond_destroy(&pool->work_cond);
     pthread_mutex_destroy(&pool->lock);
-    free(pool);
+    BUFFER_FREE(pool);
     return NULL;
   }
   
@@ -141,11 +142,11 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
       }
       
       /* Clean up resources */
-      free(pool->threads);
+      BUFFER_FREE(pool->threads);
       pthread_cond_destroy(&pool->idle_cond);
       pthread_cond_destroy(&pool->work_cond);
       pthread_mutex_destroy(&pool->lock);
-      free(pool);
+      BUFFER_FREE(pool);
       return NULL;
     }
     
@@ -190,7 +191,7 @@ int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), void* arg
   /* Check if the pool is being shut down */
   if (pool->shutdown) {
     pthread_mutex_unlock(&pool->lock);
-    free(work);
+    BUFFER_FREE(work);
     POOL_LOG(WARNING, "Attempted to add work to a shutting down thread pool");
     return -1;
   }
@@ -217,14 +218,14 @@ int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), void* arg
       } else {
         /* Failed to create thread, reject the work */
         pthread_mutex_unlock(&pool->lock);
-        free(work);
+        BUFFER_FREE(work);
         POOL_LOG(ERROR, "Failed to create additional worker thread and queue is full");
         return -1;
       }
     } else {
       /* Queue is full and we're at max threads, reject the work */
       pthread_mutex_unlock(&pool->lock);
-      free(work);
+      BUFFER_FREE(work);
       POOL_LOG(ERROR, "Thread pool queue is full and at maximum thread count");
       return -1;
     }
@@ -319,7 +320,7 @@ void thread_pool_destroy(thread_pool_t* pool) {
   work_item_t* work = pool->work_head;
   while (work) {
     work_item_t* next = work->next;
-    free(work);
+    BUFFER_FREE(work);
     work = next;
   }
   
@@ -327,7 +328,7 @@ void thread_pool_destroy(thread_pool_t* pool) {
   pthread_cond_destroy(&pool->idle_cond);
   pthread_cond_destroy(&pool->work_cond);
   pthread_mutex_destroy(&pool->lock);
-  free(pool->threads);
+  BUFFER_FREE(pool->threads);
   
   /* Log statistics before destroying */
   POOL_LOG(INFO, "Thread pool statistics: processed=%llu, peak_queue=%llu, peak_threads=%llu",
@@ -335,7 +336,7 @@ void thread_pool_destroy(thread_pool_t* pool) {
        (unsigned long long)pool->peak_queue_size,
        (unsigned long long)pool->peak_threads);
   
-  free(pool);
+  BUFFER_FREE(pool);
   
   POOL_LOG(INFO, "Thread pool destroyed");
 }
@@ -489,7 +490,7 @@ static void* thread_worker(void* arg) {
       work->function(work->argument);
       
       /* Free the work item */
-      free(work);
+      BUFFER_FREE(work);
       
       /* Update task count and active thread count */
       pthread_mutex_lock(&pool->lock);

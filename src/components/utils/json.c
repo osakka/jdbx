@@ -78,7 +78,7 @@ int64_t json_get_integer(json_value_t* value) {
 
 /* Create JSON value types */
 json_value_t* json_create_null() {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_NULL;
   }
@@ -86,7 +86,7 @@ json_value_t* json_create_null() {
 }
 
 json_value_t* json_create_boolean(int boolean) {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_BOOLEAN;
     value->value.boolean = boolean ? 1 : 0;
@@ -95,7 +95,7 @@ json_value_t* json_create_boolean(int boolean) {
 }
 
 json_value_t* json_create_number(double number) {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_NUMBER;
     value->value.number = number;
@@ -104,7 +104,7 @@ json_value_t* json_create_number(double number) {
 }
 
 json_value_t* json_create_integer(int64_t integer) {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_INTEGER;
     value->value.integer = integer;
@@ -113,7 +113,7 @@ json_value_t* json_create_integer(int64_t integer) {
 }
 
 json_value_t* json_create_string(const char* string) {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_STRING;
     value->value.string = buffer_pool_strdup(string);
@@ -122,7 +122,7 @@ json_value_t* json_create_string(const char* string) {
 }
 
 json_value_t* json_create_array() {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_ARRAY;
     value->value.array.items = NULL;
@@ -133,7 +133,7 @@ json_value_t* json_create_array() {
 }
 
 json_value_t* json_create_object() {
-  json_value_t* value = (json_value_t*)buffer_pool_alloc(sizeof(json_value_t));
+  json_value_t* value = (json_value_t*)BUFFER_ALLOC(sizeof(json_value_t));
   if (value) {
     value->type = JSON_OBJECT;
     value->value.object.entries = NULL;
@@ -438,7 +438,7 @@ static char* parse_string(const char** json) {
       return NULL;
     }
     
-    result = (char*)buffer_pool_alloc(length + 1);
+    result = (char*)BUFFER_ALLOC(length + 1);
     if (result) {
       /* Copy string without the quotes */
       memcpy(result, start, length);
@@ -605,7 +605,7 @@ static json_value_t* parse_value_with_depth(const char** json, int depth) {
     }
     
     json_value_t* value = json_create_string(str);
-    buffer_pool_free_safe(str);
+    BUFFER_FREE(str);
     return value;
   } else if (**json == 't' && strncmp(*json, "true", 4) == 0) {
     *json += 4;
@@ -713,7 +713,7 @@ static char* escape_string(const char* str) {
   }
   
   /* Allocate memory for the escaped string */
-  char* result = (char*)buffer_pool_alloc(escaped_len + 1);
+  char* result = (char*)BUFFER_ALLOC(escaped_len + 1);
   if (!result) {
     return NULL;
   }
@@ -797,7 +797,7 @@ static char* stringify_object(json_value_t* object) {
   }
   
   /* Allocate result */
-  char* result = (char*)buffer_pool_alloc(size + 1); /* +1 for null terminator */
+  char* result = (char*)BUFFER_ALLOC(size + 1); /* +1 for null terminator */
   if (!result) {
     return NULL;
   }
@@ -872,7 +872,7 @@ static char* stringify_array(json_value_t* array) {
   }
   
   /* Allocate result */
-  char* result = (char*)buffer_pool_alloc(size + 1); /* +1 for null terminator */
+  char* result = (char*)BUFFER_ALLOC(size + 1); /* +1 for null terminator */
   if (!result) {
     return NULL;
   }
@@ -1019,7 +1019,7 @@ void json_free(json_value_t* value) {
   switch (value->type) {
     case JSON_STRING:
       if (value->value.string) {
-        buffer_pool_free_safe(value->value.string);
+        BUFFER_FREE(value->value.string);
       }
       break;
       
@@ -1030,7 +1030,7 @@ void json_free(json_value_t* value) {
             json_free(value->value.array.items[i]);
           }
         }
-        buffer_pool_free_safe(value->value.array.items);
+        BUFFER_FREE(value->value.array.items);
       }
       break;
       
@@ -1038,13 +1038,13 @@ void json_free(json_value_t* value) {
       if (value->value.object.entries) {
         for (size_t i = 0; i < value->value.object.size; i++) {
           if (value->value.object.entries[i].key) {
-            buffer_pool_free_safe(value->value.object.entries[i].key);
+            BUFFER_FREE(value->value.object.entries[i].key);
           }
           if (value->value.object.entries[i].value) {
             json_free(value->value.object.entries[i].value);
           }
         }
-        buffer_pool_free_safe(value->value.object.entries);
+        BUFFER_FREE(value->value.object.entries);
       }
       break;
       
@@ -1053,7 +1053,7 @@ void json_free(json_value_t* value) {
       break;
   }
   
-  buffer_pool_free_safe(value);
+  BUFFER_FREE(value);
 }
 
 /* Check if two JSON values are equal */

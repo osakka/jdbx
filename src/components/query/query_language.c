@@ -117,7 +117,7 @@ query_operator_t query_parse_operator(const char* op_name) {
 
 /* Create a query expression node */
 query_expr_t* query_create_expr(query_operator_t op) {
-  query_expr_t* expr = (query_expr_t*)malloc(sizeof(query_expr_t));
+  query_expr_t* expr = (query_expr_t*)BUFFER_ALLOC(sizeof(query_expr_t));
   if (!expr) {
     return NULL;
   }
@@ -139,7 +139,7 @@ query_expr_t* query_create_field_expr(const char* field_path, query_operator_t o
   }
   
   if (field_path) {
-    expr->field_path = strdup(field_path);
+    expr->field_path = BUFFER_STRDUP(field_path);
   }
   
   expr->value = value ? json_clone(value) : NULL;
@@ -155,9 +155,9 @@ query_expr_t* query_create_logical_expr(query_operator_t op, query_expr_t** chil
   }
   
   if (num_children > 0 && children) {
-    expr->children = (query_expr_t**)malloc(num_children * sizeof(query_expr_t*));
+    expr->children = (query_expr_t**)BUFFER_ALLOC(num_children * sizeof(query_expr_t*));
     if (!expr->children) {
-      free(expr);
+      BUFFER_FREE(expr);
       return NULL;
     }
     
@@ -177,7 +177,7 @@ void query_free_expr(query_expr_t* expr) {
   }
   
   if (expr->field_path) {
-    free(expr->field_path);
+    BUFFER_FREE(expr->field_path);
   }
   
   if (expr->value) {
@@ -188,10 +188,10 @@ void query_free_expr(query_expr_t* expr) {
     for (int i = 0; i < expr->num_children; i++) {
       query_free_expr(expr->children[i]);
     }
-    free(expr->children);
+    BUFFER_FREE(expr->children);
   }
   
-  free(expr);
+  BUFFER_FREE(expr);
 }
 
 /* Forward declarations for recursive parsing */
@@ -213,7 +213,7 @@ query_parse_result_t query_parse(json_value_t* query_json) {
 
   if (!query_json) {
     LOG_ERROR("Query JSON is NULL");
-    result.error = strdup("Query JSON is NULL");
+    result.error = BUFFER_STRDUP("Query JSON is NULL");
     return result;
   }
 
@@ -287,10 +287,10 @@ query_parse_result_t query_parse(json_value_t* query_json) {
       TRACE_DB("No logical operators found, creating implicit AND expression with %d fields", field_count);
 
       /* Create a default AND expression at root with all field expressions as children */
-      query_expr_t** children = (query_expr_t**)malloc(field_count * sizeof(query_expr_t*));
+      query_expr_t** children = (query_expr_t**)BUFFER_ALLOC(field_count * sizeof(query_expr_t*));
       if (!children) {
         LOG_ERROR("Memory allocation failed for query expression children.");
-        result.error = strdup("Out of memory");
+        result.error = BUFFER_STRDUP("Out of memory");
         return result;
       }
 
@@ -303,13 +303,13 @@ query_parse_result_t query_parse(json_value_t* query_json) {
       }
 
       result.expr = query_create_logical_expr(OP_AND, children, field_count);
-      free(children); /* Note: only free the array, not the child expressions */
+      BUFFER_FREE(children); /* Note: only free the array, not the child expressions */
       TRACE_DB("Created implicit AND expression with %d child expressions", field_count);
     }
   } else {
     /* Invalid query format */
     LOG_ERROR("Invalid query format: query must be a JSON object, but got type %d", query_json->type);
-    result.error = strdup("Query must be a JSON object");
+    result.error = BUFFER_STRDUP("Query must be a JSON object");
   }
 
   if (result.error) {
@@ -359,7 +359,7 @@ static query_expr_t* parse_field_expr(const char* field_path, json_value_t* valu
     return parse_comparison_expr(field_path, value);
   } else {
     /* This is a nested document match */
-    query_expr_t** children = (query_expr_t**)malloc(json_object_size(value) * sizeof(query_expr_t*));
+    query_expr_t** children = (query_expr_t**)BUFFER_ALLOC(json_object_size(value) * sizeof(query_expr_t*));
     if (!children) {
       return NULL;
     }
@@ -368,14 +368,14 @@ static query_expr_t* parse_field_expr(const char* field_path, json_value_t* valu
     const char* nest_key;
     json_value_t* nest_val;
     json_object_foreach(value, nest_key, nest_val) {
-      char* nested_path = (char*)malloc(strlen(field_path) + strlen(nest_key) + 2);
+      char* nested_path = (char*)BUFFER_ALLOC(strlen(field_path) + strlen(nest_key) + 2);
       sprintf(nested_path, "%s.%s", field_path, nest_key);
       children[i++] = parse_field_expr(nested_path, nest_val);
-      free(nested_path);
+      BUFFER_FREE(nested_path);
     }
     
     query_expr_t* expr = query_create_logical_expr(OP_AND, children, i);
-    free(children);
+    BUFFER_FREE(children);
     return expr;
   }
 }
@@ -408,7 +408,7 @@ static query_expr_t* parse_comparison_expr(const char* field_path, json_value_t*
     return query_create_field_expr(field_path, op, op_value);
   } else {
     /* Multiple operators - combine with AND */
-    query_expr_t** children = (query_expr_t**)malloc(op_count * sizeof(query_expr_t*));
+    query_expr_t** children = (query_expr_t**)BUFFER_ALLOC(op_count * sizeof(query_expr_t*));
     if (!children) {
       return NULL;
     }
@@ -422,7 +422,7 @@ static query_expr_t* parse_comparison_expr(const char* field_path, json_value_t*
     }
     
     query_expr_t* expr = query_create_logical_expr(OP_AND, children, i);
-    free(children);
+    BUFFER_FREE(children);
     return expr;
   }
 }
@@ -456,7 +456,7 @@ static query_expr_t* parse_logical_expr(const char* op_name, json_value_t* array
     return NULL;
   }
   
-  query_expr_t** children = (query_expr_t**)malloc(count * sizeof(query_expr_t*));
+  query_expr_t** children = (query_expr_t**)BUFFER_ALLOC(count * sizeof(query_expr_t*));
   if (!children) {
     return NULL;
   }
@@ -467,7 +467,7 @@ static query_expr_t* parse_logical_expr(const char* op_name, json_value_t* array
       for (int j = 0; j < i; j++) {
         query_free_expr(children[j]);
       }
-      free(children);
+      BUFFER_FREE(children);
       return NULL;
     }
     
@@ -496,7 +496,7 @@ static query_expr_t* parse_logical_expr(const char* op_name, json_value_t* array
       }
     } else {
       /* Multiple conditions - create an AND expression */
-      query_expr_t** sub_children = (query_expr_t**)malloc(json_object_size(filter) * sizeof(query_expr_t*));
+      query_expr_t** sub_children = (query_expr_t**)BUFFER_ALLOC(json_object_size(filter) * sizeof(query_expr_t*));
       int sub_index = 0;
       
       const char* sub_key;
@@ -506,20 +506,20 @@ static query_expr_t* parse_logical_expr(const char* op_name, json_value_t* array
       }
       
       children[i] = query_create_logical_expr(OP_AND, sub_children, sub_index);
-      free(sub_children);
+      BUFFER_FREE(sub_children);
     }
     
     if (!children[i]) {
       for (int j = 0; j < i; j++) {
         query_free_expr(children[j]);
       }
-      free(children);
+      BUFFER_FREE(children);
       return NULL;
     }
   }
   
   query_expr_t* expr = query_create_logical_expr(op, children, count);
-  free(children);
+  BUFFER_FREE(children);
   return expr;
 }
 
@@ -542,7 +542,7 @@ void query_free_parse_result(query_parse_result_t* result) {
   }
   
   if (result->error) {
-    free(result->error);
+    BUFFER_FREE(result->error);
   }
 }
 
@@ -562,7 +562,7 @@ json_value_t* query_extract_field(json_value_t* document, const char* field_path
   }
   
   /* Handle nested field access */
-  char* path_copy = strdup(field_path);
+  char* path_copy = BUFFER_STRDUP(field_path);
   char* token = strtok(path_copy, ".");
   json_value_t* current = document;
   
@@ -580,7 +580,7 @@ json_value_t* query_extract_field(json_value_t* document, const char* field_path
         /* Get the array first */
         if (token[0] != '\0') {
           if (current->type != JSON_OBJECT) {
-            free(path_copy);
+            BUFFER_FREE(path_copy);
             return NULL;
           }
           current = json_object_get(current, token);
@@ -590,31 +590,31 @@ json_value_t* query_extract_field(json_value_t* document, const char* field_path
         if (current && current->type == JSON_ARRAY && index >= 0 && (size_t)index < json_array_size(current)) {
           current = json_array_get(current, index);
         } else {
-          free(path_copy);
+          BUFFER_FREE(path_copy);
           return NULL;
         }
       } else {
-        free(path_copy);
+        BUFFER_FREE(path_copy);
         return NULL;
       }
     } else {
       /* Regular object field access */
       if (current->type != JSON_OBJECT) {
-        free(path_copy);
+        BUFFER_FREE(path_copy);
         return NULL;
       }
       current = json_object_get(current, token);
     }
     
     if (!current) {
-      free(path_copy);
+      BUFFER_FREE(path_copy);
       return NULL;
     }
     
     token = strtok(NULL, ".");
   }
   
-  free(path_copy);
+  BUFFER_FREE(path_copy);
   return current;
 }
 
@@ -1063,7 +1063,7 @@ void query_apply_sort(json_value_t* documents, json_value_t* sort) {
     return;
   }
   
-  sort_field_t* sort_fields = (sort_field_t*)malloc(sort_count * sizeof(sort_field_t));
+  sort_field_t* sort_fields = (sort_field_t*)BUFFER_ALLOC(sort_count * sizeof(sort_field_t));
   if (!sort_fields) {
     return;
   }
@@ -1072,7 +1072,7 @@ void query_apply_sort(json_value_t* documents, json_value_t* sort) {
   const char* sort_key;
   json_value_t* sort_value;
   json_object_foreach(sort, sort_key, sort_value) {
-    sort_fields[index].field = strdup(sort_key);
+    sort_fields[index].field = BUFFER_STRDUP(sort_key);
     
     if (sort_value->type == JSON_INTEGER) {
       sort_fields[index].ascending = sort_value->value.integer >= 0 ? 1 : 0;
@@ -1115,9 +1115,9 @@ void query_apply_sort(json_value_t* documents, json_value_t* sort) {
   
   /* Free sort fields */
   for (int i = 0; i < sort_count; i++) {
-    free(sort_fields[i].field);
+    BUFFER_FREE(sort_fields[i].field);
   }
-  free(sort_fields);
+  BUFFER_FREE(sort_fields);
 }
 
 /* Create pagination info from query options and results */
@@ -1126,7 +1126,7 @@ pagination_info_t* query_create_pagination_info(query_options_t* options, int to
     return NULL;
   }
   
-  pagination_info_t* pagination = (pagination_info_t*)malloc(sizeof(pagination_info_t));
+  pagination_info_t* pagination = (pagination_info_t*)BUFFER_ALLOC(sizeof(pagination_info_t));
   if (!pagination) {
     return NULL;
   }
@@ -1164,7 +1164,7 @@ pagination_info_t* query_create_pagination_info(query_options_t* options, int to
     
     /* Generate cursors if needed */
     pagination->next_cursor = NULL;
-    pagination->prev_cursor = options->cursor ? strdup(options->cursor) : NULL;
+    pagination->prev_cursor = options->cursor ? BUFFER_STRDUP(options->cursor) : NULL;
     
     if (pagination->has_next_page && documents && json_array_size(documents) > 0) {
       /* Generate cursor for the last document in current page */
@@ -1192,14 +1192,14 @@ void query_free_pagination_info(pagination_info_t* pagination) {
   }
   
   if (pagination->next_cursor) {
-    free(pagination->next_cursor);
+    BUFFER_FREE(pagination->next_cursor);
   }
   
   if (pagination->prev_cursor) {
-    free(pagination->prev_cursor);
+    BUFFER_FREE(pagination->prev_cursor);
   }
   
-  free(pagination);
+  BUFFER_FREE(pagination);
 }
 
 /* Convert pagination info to JSON */
@@ -1268,8 +1268,8 @@ char* query_generate_cursor(json_value_t* document, query_options_t* options) {
   
   /* Encode as base64 (simplified version, in production you'd use a proper base64 library) */
   /* For this example, we'll just use the JSON string directly */
-  char* cursor = strdup(json_str);
-  free(json_str);
+  char* cursor = BUFFER_STRDUP(json_str);
+  BUFFER_FREE(json_str);
   
   return cursor;
 }
@@ -1455,7 +1455,7 @@ query_options_t query_parse_options(json_value_t* options_json) {
   /* Parse cursor */
   json_value_t* cursor_val = json_object_get(options_json, "cursor");
   if (cursor_val && cursor_val->type == JSON_STRING) {
-    options.cursor = strdup(cursor_val->value.string);
+    options.cursor = BUFFER_STRDUP(cursor_val->value.string);
     options.pagination_type = PAGINATION_CURSOR;
     
     /* Parse cursor to set appropriate options */

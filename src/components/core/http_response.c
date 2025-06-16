@@ -48,7 +48,7 @@ const char* http_status_string(http_status_t status) {
 
 /* Create HTTP response */
 http_response_t* create_http_response(http_status_t status, const char* body, const char* content_type) {
-  http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
+  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
   if (!response) {
     return NULL;
   }
@@ -66,7 +66,7 @@ http_response_t* create_http_response(http_status_t status, const char* body, co
 
 /* Create HTTP response with binary data */
 http_response_t* create_http_response_binary(http_status_t status, const char* body, size_t body_size, const char* content_type) {
-  http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
+  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
   if (!response) {
     return NULL;
   }
@@ -75,12 +75,12 @@ http_response_t* create_http_response_binary(http_status_t status, const char* b
   
   /* For binary data, allocate and copy the exact bytes */
   if (body && body_size > 0) {
-    response->body = (char*)malloc(body_size);
+    response->body = (char*)BUFFER_ALLOC(body_size);
     if (response->body) {
       memcpy(response->body, body, body_size);
       response->content_length = body_size;
     } else {
-      free(response);
+      BUFFER_FREE(response);
       return NULL;
     }
   } else {
@@ -115,7 +115,7 @@ http_response_t* http_response_json(json_value_t* json, int status_code) {
   }
   
   http_response_t* response = create_http_response((http_status_t)status_code, json_str, "application/json");
-  buffer_pool_free_safe(json_str);
+  BUFFER_FREE(json_str);
   
   return response;
 }
@@ -139,7 +139,7 @@ char* serialize_http_response(http_response_t* response) {
   response_size += 1024;
 
   /* Allocate response string */
-  char* response_str = (char*)malloc(response_size);
+  char* response_str = (char*)BUFFER_ALLOC(response_size);
   if (!response_str) {
     return NULL;
   }
@@ -151,7 +151,7 @@ char* serialize_http_response(http_response_t* response) {
   /* Status line */
   int n = snprintf(response_str + written, remaining, "HTTP/1.1 %s\r\n", http_status_string(response->status));
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -160,7 +160,7 @@ char* serialize_http_response(http_response_t* response) {
   /* Headers */
   n = snprintf(response_str + written, remaining, "Content-Type: %s\r\n", response->content_type);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -168,7 +168,7 @@ char* serialize_http_response(http_response_t* response) {
 
   n = snprintf(response_str + written, remaining, "Content-Length: %zu\r\n", response->content_length);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -176,7 +176,7 @@ char* serialize_http_response(http_response_t* response) {
 
   n = snprintf(response_str + written, remaining, "Connection: close\r\n");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -187,7 +187,7 @@ char* serialize_http_response(http_response_t* response) {
     if (response->headers[i]) {
       n = snprintf(response_str + written, remaining, "%s\r\n", response->headers[i]);
       if (n < 0 || (size_t)n >= remaining) {
-        free(response_str);
+        BUFFER_FREE(response_str);
         return NULL;
       }
       written += n;
@@ -198,7 +198,7 @@ char* serialize_http_response(http_response_t* response) {
   /* End of headers */
   n = snprintf(response_str + written, remaining, "\r\n");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -207,7 +207,7 @@ char* serialize_http_response(http_response_t* response) {
   /* Body */
   if (response->body && response->content_length > 0) {
     if (response->content_length + 1 > remaining) { /* +1 for null terminator */
-      free(response_str);
+      BUFFER_FREE(response_str);
       return NULL;
     }
     memcpy(response_str + written, response->body, response->content_length);
@@ -218,7 +218,7 @@ char* serialize_http_response(http_response_t* response) {
   if (remaining > 0) {
     response_str[written] = '\0';
   } else {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   
@@ -244,7 +244,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   response_size += 1024;
 
   /* Allocate response string */
-  char* response_str = (char*)malloc(response_size);
+  char* response_str = (char*)BUFFER_ALLOC(response_size);
   if (!response_str) {
     return NULL;
   }
@@ -256,7 +256,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   /* Status line */
   int n = snprintf(response_str + written, remaining, "HTTP/1.1 %s\r\n", http_status_string(response->status));
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -265,7 +265,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   /* Headers */
   n = snprintf(response_str + written, remaining, "Content-Type: %s\r\n", response->content_type);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -273,7 +273,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
 
   n = snprintf(response_str + written, remaining, "Content-Length: %zu\r\n", response->content_length);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -281,7 +281,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
 
   n = snprintf(response_str + written, remaining, "Connection: close\r\n");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -292,7 +292,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
     if (response->headers[i]) {
       n = snprintf(response_str + written, remaining, "%s\r\n", response->headers[i]);
       if (n < 0 || (size_t)n >= remaining) {
-        free(response_str);
+        BUFFER_FREE(response_str);
         return NULL;
       }
       written += n;
@@ -303,7 +303,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   /* End of headers */
   n = snprintf(response_str + written, remaining, "\r\n");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -312,7 +312,7 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   /* Body */
   if (response->body && response->content_length > 0) {
     if (response->content_length > remaining) {
-      free(response_str);
+      BUFFER_FREE(response_str);
       return NULL;
     }
     memcpy(response_str + written, response->body, response->content_length);
@@ -332,7 +332,7 @@ int add_response_header(http_response_t* response, const char* header) {
   }
   
   /* Allocate or reallocate headers array */
-  char** new_headers = (char**)realloc(response->headers, 
+  char** new_headers = (char**)BUFFER_REALLOC(response->headers, 
                     (response->num_headers + 1) * sizeof(char*));
   if (!new_headers) {
     return 0;
@@ -348,21 +348,21 @@ int add_response_header(http_response_t* response, const char* header) {
 /* Free HTTP response */
 void free_http_response(http_response_t* response) {
   if (response) {
-    if (response->body) buffer_pool_free_safe(response->body);
-    if (response->content_type) buffer_pool_free_safe(response->content_type);
+    if (response->body) BUFFER_FREE(response->body);
+    if (response->content_type) BUFFER_FREE(response->content_type);
     
     /* Free headers */
     for (size_t i = 0; i < response->num_headers; i++) {
       if (response->headers[i]) {
-        buffer_pool_free_safe(response->headers[i]);
+        BUFFER_FREE(response->headers[i]);
       }
     }
     
     if (response->headers) {
-      free(response->headers);
+      BUFFER_FREE(response->headers);
     }
     
-    free(response);
+    BUFFER_FREE(response);
   }
 }
 
@@ -411,7 +411,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   response_size += 1024;
 
   /* Allocate response string */
-  char* response_str = (char*)malloc(response_size);
+  char* response_str = (char*)BUFFER_ALLOC(response_size);
   if (!response_str) {
     return NULL;
   }
@@ -423,7 +423,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   /* Status line */
   int n = snprintf(response_str + written, remaining, "HTTP/1.1 %s\r\n", http_status_string(response->status));
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -432,7 +432,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   /* Headers */
   n = snprintf(response_str + written, remaining, "Content-Type: %s\r\n", response->content_type);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -440,7 +440,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
 
   n = snprintf(response_str + written, remaining, "Content-Length: %zu\r\n", response->content_length);
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -450,7 +450,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   n = snprintf(response_str + written, remaining, "Connection: %s\r\n", 
                keep_alive ? "keep-alive" : "close");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -460,7 +460,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   if (keep_alive) {
     n = snprintf(response_str + written, remaining, "Keep-Alive: timeout=15, max=100\r\n");
     if (n < 0 || (size_t)n >= remaining) {
-      free(response_str);
+      BUFFER_FREE(response_str);
       return NULL;
     }
     written += n;
@@ -472,7 +472,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
     if (response->headers[i]) {
       n = snprintf(response_str + written, remaining, "%s\r\n", response->headers[i]);
       if (n < 0 || (size_t)n >= remaining) {
-        free(response_str);
+        BUFFER_FREE(response_str);
         return NULL;
       }
       written += n;
@@ -483,7 +483,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   /* End of headers */
   n = snprintf(response_str + written, remaining, "\r\n");
   if (n < 0 || (size_t)n >= remaining) {
-    free(response_str);
+    BUFFER_FREE(response_str);
     return NULL;
   }
   written += n;
@@ -492,7 +492,7 @@ char* serialize_http_response_keep_alive_with_length(http_response_t* response, 
   /* Body */
   if (response->body && response->content_length > 0) {
     if (response->content_length > remaining) {
-      free(response_str);
+      BUFFER_FREE(response_str);
       return NULL;
     }
     memcpy(response_str + written, response->body, response->content_length);

@@ -1,4 +1,5 @@
 #include "database/database.h"
+#include "utils/buffer_pool.h"
 #include "database/document_storage.h"
 #include "utils/json.h"
 #include "utils/logger.h"
@@ -55,7 +56,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
       json_value_t* old_doc = json_array_get(docs, 0);
     json_value_t* id_val = json_object_get(old_doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
-      db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
+      storage_delete_document(db, id_val->value.string);
     }
     }
   }
@@ -64,7 +65,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
   json_free(query);
   
   /* Insert new schema */
-  json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, schema_doc);
+  json_value_t* result = storage_insert_document(db, schema_doc);
   json_free(schema_doc);
   
   if (!result) {
@@ -142,7 +143,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
     json_value_t* doc = json_array_get(documents, i);
     json_value_t* id_val = json_object_get(doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
-      if (!db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string)) {
+      if (!storage_delete_document(db, id_val->value.string)) {
         success = 0;
       }
     }
@@ -190,7 +191,7 @@ json_value_t* db_list_json_schemas(database_t* db) {
 /* Validate a document against a JSON Schema */
 int db_validate_json_schema(json_value_t* schema, json_value_t* document, char** error_msg) {
   if (!schema || !document) {
-    if (error_msg) *error_msg = strdup("Invalid parameters");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Invalid parameters");
     return 0;
   }
   
@@ -200,7 +201,7 @@ int db_validate_json_schema(json_value_t* schema, json_value_t* document, char**
   /* Get type from schema */
   json_value_t* type_val = json_object_get(schema, "type");
   if (!type_val || type_val->type != JSON_STRING) {
-    if (error_msg) *error_msg = strdup("Schema missing 'type' field");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Schema missing 'type' field");
     return 0;
   }
   
@@ -208,19 +209,19 @@ int db_validate_json_schema(json_value_t* schema, json_value_t* document, char**
   
   /* Check document type matches */
   if (strcmp(expected_type, "object") == 0 && document->type != JSON_OBJECT) {
-    if (error_msg) *error_msg = strdup("Document must be an object");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Document must be an object");
     return 0;
   } else if (strcmp(expected_type, "array") == 0 && document->type != JSON_ARRAY) {
-    if (error_msg) *error_msg = strdup("Document must be an array");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Document must be an array");
     return 0;
   } else if (strcmp(expected_type, "string") == 0 && document->type != JSON_STRING) {
-    if (error_msg) *error_msg = strdup("Document must be a string");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Document must be a string");
     return 0;
   } else if (strcmp(expected_type, "number") == 0 && document->type != JSON_NUMBER) {
-    if (error_msg) *error_msg = strdup("Document must be a number");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Document must be a number");
     return 0;
   } else if (strcmp(expected_type, "boolean") == 0 && document->type != JSON_BOOLEAN) {
-    if (error_msg) *error_msg = strdup("Document must be a boolean");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Document must be a boolean");
     return 0;
   }
   
@@ -239,7 +240,7 @@ int db_validate_json_schema(json_value_t* schema, json_value_t* document, char**
               if (error_msg) {
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Missing required property: %s", prop_name);
-                *error_msg = strdup(msg);
+                *error_msg = BUFFER_STRDUP(msg);
               }
               return 0;
             }
@@ -261,9 +262,9 @@ int db_validate_json_schema(json_value_t* schema, json_value_t* document, char**
               char msg[512];
               snprintf(msg, sizeof(msg), "Property '%s': %s", key, 
                   prop_error ? prop_error : "validation failed");
-              *error_msg = strdup(msg);
+              *error_msg = BUFFER_STRDUP(msg);
             }
-            if (prop_error) free(prop_error);
+            if (prop_error) BUFFER_FREE(prop_error);
             return 0;
           }
         }

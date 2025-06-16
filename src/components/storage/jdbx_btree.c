@@ -9,6 +9,7 @@
 
 #include "storage/jdbx.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 
 /* B-tree constants */
 #define BTREE_MIN_KEYS 50
@@ -41,7 +42,7 @@ jdbx_btree_t* jdbx_btree_create(jdbx_page_manager_t* pm,
     tree->root_page = jdbx_alloc_page(pm, PAGE_TYPE_BTREE_LEAF);
     if (tree->root_page == 0) {
         jdbx_error("Failed to allocate root page");
-        free(tree);
+        BUFFER_FREE(tree);
         return NULL;
     }
     
@@ -49,7 +50,7 @@ jdbx_btree_t* jdbx_btree_create(jdbx_page_manager_t* pm,
     btree_node_t* root = (btree_node_t*)jdbx_get_page_for_write(pm, tree->root_page);
     if (!root) {
         jdbx_free_page(pm, tree->root_page);
-        free(tree);
+        BUFFER_FREE(tree);
         return NULL;
     }
     
@@ -93,14 +94,14 @@ jdbx_btree_t* jdbx_btree_open(jdbx_page_manager_t* pm, uint64_t root_page,
     if (!root) {
         jdbx_error("Failed to read root page %llu", 
                    (unsigned long long)root_page);
-        free(tree);
+        BUFFER_FREE(tree);
         return NULL;
     }
     
     if (root->header.type != PAGE_TYPE_BTREE_LEAF && 
         root->header.type != PAGE_TYPE_BTREE_INTERNAL) {
         jdbx_error("Invalid root page type: %d", root->header.type);
-        free(tree);
+        BUFFER_FREE(tree);
         return NULL;
     }
     
@@ -297,7 +298,7 @@ static void* read_overflow_value(jdbx_btree_t* tree, uint64_t overflow_page, siz
     while (current_page != 0 && copied < total_size) {
         page_header_t* page = jdbx_get_page(tree->pm, current_page);
         if (!page || page->type != PAGE_TYPE_OVERFLOW) {
-            free(value);
+            BUFFER_FREE(value);
             return NULL;
         }
         
@@ -317,7 +318,7 @@ static void* read_overflow_value(jdbx_btree_t* tree, uint64_t overflow_page, siz
     }
     
     if (copied != total_size) {
-        free(value);
+        BUFFER_FREE(value);
         return NULL;
     }
     
@@ -491,7 +492,7 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
         /* Splitting root - create new root */
         uint64_t new_root_page = jdbx_alloc_page(tree->pm, PAGE_TYPE_BTREE_INTERNAL);
         if (new_root_page == 0) {
-            free(mid_key);
+            BUFFER_FREE(mid_key);
             jdbx_free_page(tree->pm, sibling_page);
             return -1;
         }
@@ -499,7 +500,7 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
         btree_node_t* new_root = (btree_node_t*)jdbx_get_page_for_write(tree->pm, 
                                                                         new_root_page);
         if (!new_root) {
-            free(mid_key);
+            BUFFER_FREE(mid_key);
             jdbx_free_page(tree->pm, sibling_page);
             jdbx_free_page(tree->pm, new_root_page);
             return -1;
@@ -550,7 +551,7 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
         /* Insert middle key into existing parent */
         if (insert_into_parent(tree, parent_page, mid_key, mid_key_size,
                               full_page, sibling_page) != 0) {
-            free(mid_key);
+            BUFFER_FREE(mid_key);
             jdbx_free_page(tree->pm, sibling_page);
             return -1;
         }
@@ -560,7 +561,7 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
     full_node->header.checksum = jdbx_crc32(full_node, JDBX_PAGE_SIZE);
     sibling->header.checksum = jdbx_crc32(sibling, JDBX_PAGE_SIZE);
     
-    free(mid_key);
+    BUFFER_FREE(mid_key);
     tree->stats.num_pages++;
     
     return 0;

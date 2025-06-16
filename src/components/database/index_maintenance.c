@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "database/index_maintenance.h"
 #include "database/adaptive_indexer.h"
 #include "database/index_metrics.h"
@@ -187,7 +188,7 @@ int index_maintenance_handle_insert(const char* collection_name,
         }
         
         /* Free index list */
-        free(indexes);
+        BUFFER_FREE(indexes);
     }
     
     /* Call hooks */
@@ -257,7 +258,7 @@ int index_maintenance_handle_update(const char* collection_name,
         }
         
         /* Free index list */
-        free(indexes);
+        BUFFER_FREE(indexes);
     }
     
     /* Call hooks */
@@ -320,7 +321,7 @@ int index_maintenance_handle_delete(const char* collection_name,
         }
         
         /* Free index list */
-        free(indexes);
+        BUFFER_FREE(indexes);
     }
     
     /* Call hooks */
@@ -374,7 +375,7 @@ json_value_t* index_maintenance_extract_field_value(json_value_t* document,
     }
     
     /* Handle nested field paths with dot notation */
-    char* path_copy = strdup(field_path);
+    char* path_copy = BUFFER_STRDUP(field_path);
     if (!path_copy) return NULL;
     
     json_value_t* current = document;
@@ -385,7 +386,7 @@ json_value_t* index_maintenance_extract_field_value(json_value_t* document,
         token = strtok(NULL, ".");
     }
     
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return current;
 }
 

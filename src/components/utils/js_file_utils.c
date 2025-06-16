@@ -1,5 +1,6 @@
 #include "utils/js_file_utils.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 
 /* Ensure USE_QUICKJS is defined when JavaScript is enabled */
 #if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
@@ -97,7 +98,7 @@ static int cache_modified = 0;
 /* Add a path to the list of known search paths */
 static void add_search_path(const char *path) {
   if (num_search_paths < JS_FILE_MAX_SEARCH_PATHS) {
-    search_paths[num_search_paths] = strdup(path);
+    search_paths[num_search_paths] = BUFFER_STRDUP(path);
     num_search_paths++;
   }
 }

@@ -219,7 +219,7 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
   http_response_t *response = create_http_response(HTTP_OK, health_json, "application/json");
   
   /* Free resources */
-  buffer_pool_free_safe(health_json);
+  BUFFER_FREE(health_json);
   json_free(health);
   
   return response;
@@ -533,7 +533,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   /* Clean up JSON objects */
   json_free(response_obj);
   json_free(root);
-  buffer_pool_free_safe(metrics_json);
+  BUFFER_FREE(metrics_json);
   
   if (!response_json) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -544,7 +544,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   http_response_t* response = create_http_response(HTTP_OK, response_json, "application/json");
   
   /* Free response JSON */
-  buffer_pool_free_safe(response_json);
+  BUFFER_FREE(response_json);
   
   return response;
 #else

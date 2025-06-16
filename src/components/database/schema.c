@@ -14,14 +14,14 @@ schema_t* db_create_schema(const char* name, const char* description) {
     return NULL;
   }
 
-  schema_t* schema = (schema_t*)malloc(sizeof(schema_t));
+  schema_t* schema = (schema_t*)BUFFER_ALLOC(sizeof(schema_t));
   if (!schema) {
     LOG_ERROR("Cannot allocate memory for schema '%s'.", name);
     return NULL;
   }
 
-  schema->name = strdup(name);
-  schema->description = description ? strdup(description) : NULL;
+  schema->name = BUFFER_STRDUP(name);
+  schema->description = description ? BUFFER_STRDUP(description) : NULL;
   schema->rules = NULL;
 
   LOG_INFO("Schema '%s' created.", name);
@@ -57,17 +57,17 @@ void db_free_schema(schema_t* schema) {
   /* Free schema name and description */
   if (schema->name) {
     TRACE_DB("Freeing schema name: %s", schema->name);
-    free(schema->name);
+    BUFFER_FREE(schema->name);
   }
 
   if (schema->description) {
     TRACE_DB("Freeing schema description.");
-    free(schema->description);
+    BUFFER_FREE(schema->description);
   }
 
   /* Free schema structure */
   TRACE_DB("Freeing schema structure.");
-  free(schema);
+  BUFFER_FREE(schema);
 
   LOG_DEBUG("Schema freed successfully.");
 }
@@ -95,14 +95,14 @@ schema_rule_t* db_create_schema_rule(schema_rule_type_t type, const char* field_
     return NULL;
   }
 
-  schema_rule_t* rule = (schema_rule_t*)malloc(sizeof(schema_rule_t));
+  schema_rule_t* rule = (schema_rule_t*)BUFFER_ALLOC(sizeof(schema_rule_t));
   if (!rule) {
     LOG_ERROR("Out of memory", field_path);
     return NULL;
   }
 
   rule->type = type;
-  rule->field_path = strdup(field_path);
+  rule->field_path = BUFFER_STRDUP(field_path);
   rule->next = NULL;
   rule->regex_compiled = 0;
 
@@ -184,7 +184,7 @@ void db_free_schema_rule(schema_rule_t* rule) {
   /* Free field path */
   if (rule->field_path) {
     TRACE_DB("Freeing field path: %s", rule->field_path);
-    free(rule->field_path);
+    BUFFER_FREE(rule->field_path);
   }
 
   /* Free regex pattern if compiled */
@@ -198,7 +198,7 @@ void db_free_schema_rule(schema_rule_t* rule) {
     case SCHEMA_PATTERN:
       if (rule->params.pattern) {
         TRACE_DB("Freeing pattern: %s", rule->params.pattern);
-        free(rule->params.pattern);
+        BUFFER_FREE(rule->params.pattern);
       }
       break;
 
@@ -222,7 +222,7 @@ void db_free_schema_rule(schema_rule_t* rule) {
 
   /* Free rule structure */
   TRACE_DB("Freeing rule structure.");
-  free(rule);
+  BUFFER_FREE(rule);
 
   LOG_DEBUG("Schema rule freed successfully.");
 }
@@ -277,7 +277,7 @@ static json_value_t* get_json_value_at_path(json_value_t* root, const char* path
   }
 
   /* Create a copy of the path for tokenization */
-  char* path_copy = strdup(path);
+  char* path_copy = BUFFER_STRDUP(path);
   if (!path_copy) {
     LOG_ERROR("Cannot allocate memory for path copy.");
     return NULL;
@@ -313,7 +313,7 @@ static json_value_t* get_json_value_at_path(json_value_t* root, const char* path
     token = strtok(NULL, ".");
   }
 
-  free(path_copy);
+  BUFFER_FREE(path_copy);
 
   if (current) {
     const char* type_str = "unknown";
@@ -345,7 +345,7 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
     LOG_ERROR("Invalid schema or document: schema=%p, document=%p",
          (void*)schema, (void*)document);
     result.is_valid = 0;
-    result.error_message = strdup("Invalid schema or document");
+    result.error_message = BUFFER_STRDUP("Invalid schema or document");
     return result;
   }
 
@@ -388,8 +388,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
           LOG_INFO("Type mismatch for field '%s': expected=%d, actual=%d",
               rule->field_path, rule->params.type_value, (int)value->type);
           result.is_valid = 0;
-          result.error_field = strdup(rule->field_path);
-          result.error_message = strdup("Type mismatch");
+          result.error_field = BUFFER_STRDUP(rule->field_path);
+          result.error_message = BUFFER_STRDUP("Type mismatch");
           return result;
         }
         break;
@@ -398,8 +398,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
         if (rule->params.required && !value) {
           LOG_INFO("Required field '%s' is missing", rule->field_path);
           result.is_valid = 0;
-          result.error_field = strdup(rule->field_path);
-          result.error_message = strdup("Required field missing");
+          result.error_field = BUFFER_STRDUP(rule->field_path);
+          result.error_message = BUFFER_STRDUP("Required field missing");
           return result;
         }
         break;
@@ -411,8 +411,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
               rule->field_path, rule->params.min_length,
               strlen(value->value.string));
           result.is_valid = 0;
-          result.error_field = strdup(rule->field_path);
-          result.error_message = strdup("String too short");
+          result.error_field = BUFFER_STRDUP(rule->field_path);
+          result.error_message = BUFFER_STRDUP("String too short");
           return result;
         }
         break;
@@ -424,8 +424,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
               rule->field_path, rule->params.max_length,
               strlen(value->value.string));
           result.is_valid = 0;
-          result.error_field = strdup(rule->field_path);
-          result.error_message = strdup("String too long");
+          result.error_field = BUFFER_STRDUP(rule->field_path);
+          result.error_message = BUFFER_STRDUP("String too long");
           return result;
         }
         break;
@@ -436,15 +436,15 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
             LOG_INFO("Number too small for field '%s': min=%.2f, actual=%.2f",
                 rule->field_path, rule->params.min_value, value->value.number);
             result.is_valid = 0;
-            result.error_field = strdup(rule->field_path);
-            result.error_message = strdup("Value too small");
+            result.error_field = BUFFER_STRDUP(rule->field_path);
+            result.error_message = BUFFER_STRDUP("Value too small");
             return result;
           } else if (value->type == JSON_INTEGER && (double)value->value.integer < rule->params.min_value) {
             LOG_INFO("Integer too small for field '%s': min=%.2f, actual=%ld",
                 rule->field_path, rule->params.min_value, value->value.integer);
             result.is_valid = 0;
-            result.error_field = strdup(rule->field_path);
-            result.error_message = strdup("Value too small");
+            result.error_field = BUFFER_STRDUP(rule->field_path);
+            result.error_message = BUFFER_STRDUP("Value too small");
             return result;
           }
         }
@@ -456,15 +456,15 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
             LOG_INFO("Number too large for field '%s': max=%.2f, actual=%.2f",
                 rule->field_path, rule->params.max_value, value->value.number);
             result.is_valid = 0;
-            result.error_field = strdup(rule->field_path);
-            result.error_message = strdup("Value too large");
+            result.error_field = BUFFER_STRDUP(rule->field_path);
+            result.error_message = BUFFER_STRDUP("Value too large");
             return result;
           } else if (value->type == JSON_INTEGER && (double)value->value.integer > rule->params.max_value) {
             LOG_INFO("Integer too large for field '%s': max=%.2f, actual=%ld",
                 rule->field_path, rule->params.max_value, value->value.integer);
             result.is_valid = 0;
-            result.error_field = strdup(rule->field_path);
-            result.error_message = strdup("Value too large");
+            result.error_field = BUFFER_STRDUP(rule->field_path);
+            result.error_message = BUFFER_STRDUP("Value too large");
             return result;
           }
         }
@@ -477,8 +477,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
           if (regexec(&rule->regex, value->value.string, 0, NULL, 0) != 0) {
             LOG_INFO("Pattern match failed for field '%s'", rule->field_path);
             result.is_valid = 0;
-            result.error_field = strdup(rule->field_path);
-            result.error_message = strdup("Pattern match failed");
+            result.error_field = BUFFER_STRDUP(rule->field_path);
+            result.error_message = BUFFER_STRDUP("Pattern match failed");
             return result;
           }
         }
@@ -506,8 +506,8 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
             if (!found) {
               LOG_INFO("Value not in enum for field '%s'.", rule->field_path);
               result.is_valid = 0;
-              result.error_field = strdup(rule->field_path);
-              result.error_message = strdup("Value not in enum");
+              result.error_field = BUFFER_STRDUP(rule->field_path);
+              result.error_message = BUFFER_STRDUP("Value not in enum");
               return result;
             }
           }
@@ -525,16 +525,16 @@ schema_validation_result_t db_validate_document(schema_t* schema, json_value_t* 
             char* nested_field = NULL;
             if (nested_result.error_field) {
               size_t len = strlen(rule->field_path) + 1 + strlen(nested_result.error_field) + 1;
-              nested_field = (char*)malloc(len);
+              nested_field = (char*)BUFFER_ALLOC(len);
               if (nested_field) {
                 sprintf(nested_field, "%s.%s", rule->field_path, nested_result.error_field);
                 TRACE_DB("Full error path: %s", nested_field);
               }
-              free(nested_result.error_field);
+              BUFFER_FREE(nested_result.error_field);
             }
 
             result.is_valid = 0;
-            result.error_field = nested_field ? nested_field : strdup(rule->field_path);
+            result.error_field = nested_field ? nested_field : BUFFER_STRDUP(rule->field_path);
             result.error_message = nested_result.error_message;
             return result;
           }
@@ -1057,7 +1057,7 @@ schema_t* db_schema_from_json(json_value_t* json) {
 
         case SCHEMA_PATTERN:
           if (value_val->type == JSON_STRING) {
-            rule->params.pattern = strdup(value_val->value.string);
+            rule->params.pattern = BUFFER_STRDUP(value_val->value.string);
             TRACE_DB("Set pattern value to: %s", rule->params.pattern);
           }
           break;
@@ -1161,8 +1161,8 @@ int db_validate_collection(database_t* db, const char* collection) {
           valid = 0;
 
           /* Free validation result resources */
-          if (result.error_field) free(result.error_field);
-          if (result.error_message) free(result.error_message);
+          if (result.error_field) BUFFER_FREE(result.error_field);
+          if (result.error_message) BUFFER_FREE(result.error_message);
           break;
         } else {
           TRACE_DB("Document '%s' validated successfully", doc_id);

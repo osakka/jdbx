@@ -29,6 +29,7 @@
  */
 
 #include "utils/ssl.h"
+#include "utils/buffer_pool.h"
 #include "utils/logger.h"
 
 #include <openssl/ssl.h>
@@ -57,10 +58,10 @@ static int g_ssl_initialized = 0;
 static char *get_openssl_error(void) {
   unsigned long err = ERR_get_error();
   if (err == 0) {
-    return strdup("No OpenSSL error");
+    return BUFFER_STRDUP("No OpenSSL error");
   }
   
-  char *error_string = malloc(256);
+  char *error_string = BUFFER_ALLOC(256);
   if (!error_string) {
     return NULL;
   }
@@ -116,7 +117,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
   if (!ssl_ctx) {
     char *error = get_openssl_error();
     LOG_ERROR("create SSL context: %s", error ? error : "Unknown error");
-    free(error);
+    BUFFER_FREE(error);
     return SSL_ERROR_INIT;
   }
   
@@ -131,7 +132,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     if (SSL_CTX_use_certificate_file(ssl_ctx, config->cert_file, SSL_FILETYPE_PEM) <= 0) {
       char *error = get_openssl_error();
       LOG_ERROR("load certificate file: %s", error ? error : "Unknown error");
-      free(error);
+      BUFFER_FREE(error);
       SSL_CTX_free(ssl_ctx);
       return SSL_ERROR_CERTIFICATE;
     }
@@ -144,7 +145,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     if (SSL_CTX_use_PrivateKey_file(ssl_ctx, config->key_file, SSL_FILETYPE_PEM) <= 0) {
       char *error = get_openssl_error();
       LOG_ERROR("load private key file: %s", error ? error : "Unknown error");
-      free(error);
+      BUFFER_FREE(error);
       SSL_CTX_free(ssl_ctx);
       return SSL_ERROR_KEY;
     }
@@ -153,7 +154,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     if (SSL_CTX_check_private_key(ssl_ctx) <= 0) {
       char *error = get_openssl_error();
       LOG_ERROR("Private key does not match certificate: %s", error ? error : "Unknown error");
-      free(error);
+      BUFFER_FREE(error);
       SSL_CTX_free(ssl_ctx);
       return SSL_ERROR_KEY;
     }
@@ -166,7 +167,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     if (!SSL_CTX_load_verify_locations(ssl_ctx, config->ca_file, NULL)) {
       char *error = get_openssl_error();
       LOG_ERROR("load CA file: %s", error ? error : "Unknown error");
-      free(error);
+      BUFFER_FREE(error);
       SSL_CTX_free(ssl_ctx);
       return SSL_ERROR_CERTIFICATE;
     }
@@ -179,7 +180,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     if (!SSL_CTX_set_cipher_list(ssl_ctx, config->cipher_list)) {
       char *error = get_openssl_error();
       LOG_ERROR("set cipher list: %s", error ? error : "Unknown error");
-      free(error);
+      BUFFER_FREE(error);
       SSL_CTX_free(ssl_ctx);
       return SSL_ERROR_INIT;
     }
@@ -197,7 +198,7 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
   }
   
   /* Allocate our wrapper context */
-  ssl_context_t *new_ctx = malloc(sizeof(ssl_context_t));
+  ssl_context_t *new_ctx = BUFFER_ALLOC(sizeof(ssl_context_t));
   if (!new_ctx) {
     LOG_ERROR("allocate SSL context wrapper.");
     SSL_CTX_free(ssl_ctx);
@@ -221,7 +222,7 @@ void ssl_context_free(ssl_context_t *ctx) {
     SSL_CTX_free(ctx->ssl_ctx);
   }
   
-  free(ctx);
+  BUFFER_FREE(ctx);
 }
 
 /* Create a new SSL connection */
@@ -238,7 +239,7 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
   if (!ssl) {
     char *error = get_openssl_error();
     LOG_ERROR("create SSL connection: %s", error ? error : "Unknown error");
-    free(error);
+    BUFFER_FREE(error);
     return SSL_ERROR_INIT;
   }
   
@@ -246,13 +247,13 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
   if (!SSL_set_fd(ssl, fd)) {
     char *error = get_openssl_error();
     LOG_ERROR("set SSL file descriptor: %s", error ? error : "Unknown error");
-    free(error);
+    BUFFER_FREE(error);
     SSL_free(ssl);
     return SSL_ERROR_IO;
   }
   
   /* Allocate our wrapper connection */
-  ssl_connection_t *new_conn = malloc(sizeof(ssl_connection_t));
+  ssl_connection_t *new_conn = BUFFER_ALLOC(sizeof(ssl_connection_t));
   if (!new_conn) {
     LOG_ERROR("allocate SSL connection wrapper.");
     SSL_free(ssl);
@@ -277,7 +278,7 @@ void ssl_connection_free(ssl_connection_t *conn) {
     SSL_free(conn->ssl);
   }
   
-  free(conn);
+  BUFFER_FREE(conn);
 }
 
 /* Perform SSL handshake */
@@ -294,7 +295,7 @@ ssl_error_t ssl_handshake(ssl_connection_t *conn) {
     char *error_str = get_openssl_error();
     
     LOG_ERROR("SSL handshake failed: %s (code: %d)", error_str ? error_str : "Unknown error", error);
-    free(error_str);
+    BUFFER_FREE(error_str);
     
     /* Ensure connection is marked as failed */
     conn->connected = 0;
@@ -354,7 +355,7 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
     
     char *error_str = get_openssl_error();
     LOG_ERROR("SSL read failed: %s (code: %d)", error_str ? error_str : "Unknown error", error);
-    free(error_str);
+    BUFFER_FREE(error_str);
     
     return SSL_ERROR_IO;
   }
@@ -451,7 +452,7 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
           char *error_str = get_openssl_error();
           LOG_ERROR("SSL write failed: %s (SSL error: %d)", 
                    error_str ? error_str : "Unknown error", ssl_error);
-          free(error_str);
+          BUFFER_FREE(error_str);
           *bytes_written = total_written;
           return SSL_ERROR_IO;
         }

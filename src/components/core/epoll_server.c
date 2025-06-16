@@ -389,7 +389,7 @@ static int process_read_event(epoll_connection_t* conn) {
             
             /* Allocate write buffer */
             size_t response_len = strlen(response);
-            conn->write_buffer = buffer_pool_alloc(response_len + 1);
+            conn->write_buffer = BUFFER_ALLOC(response_len + 1);
             if (!conn->write_buffer) {
                 return -1;
             }
@@ -449,7 +449,7 @@ static int process_write_event(epoll_connection_t* conn) {
  * Create new connection structure
  */
 static epoll_connection_t* create_connection(int client_fd, struct sockaddr_in* client_addr) {
-    epoll_connection_t* conn = buffer_pool_alloc(sizeof(epoll_connection_t));
+    epoll_connection_t* conn = BUFFER_ALLOC(sizeof(epoll_connection_t));
     if (!conn) {
         return NULL;
     }
@@ -463,7 +463,7 @@ static epoll_connection_t* create_connection(int client_fd, struct sockaddr_in* 
     
     /* Allocate initial read buffer */
     conn->read_buffer_size = 4096;
-    conn->read_buffer = buffer_pool_alloc(conn->read_buffer_size);
+    conn->read_buffer = BUFFER_ALLOC(conn->read_buffer_size);
     if (!conn->read_buffer) {
         buffer_pool_free(conn);
         return NULL;

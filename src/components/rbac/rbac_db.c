@@ -2,6 +2,7 @@
 #include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@ static json_value_t* find_user_by_uuid(database_t* db, const char* uuid);
 
 /* Generate a simple UUID */
 static char* generate_uuid() {
-  char* uuid = (char*)malloc(37); /* 36 chars + null terminator */
+  char* uuid = (char*)BUFFER_ALLOC(37); /* 36 chars + null terminator */
   if (!uuid) return NULL;
   
   /* Format: 8-4-4-4-12 hexadecimal digits */
@@ -34,14 +35,14 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   rbac_db_status_t status = {0};
   
   if (!db) {
-    status.error_message = strdup("Database is NULL");
+    status.error_message = BUFFER_STRDUP("Database is NULL");
     return status;
   }
   
   /* Create _system collection if it doesn't exist */
   if (!db_get_collection(db, RBAC_CONFIG_COLLECTION_NAME)) {
     if (!db_create_collection(db, RBAC_CONFIG_COLLECTION_NAME)) {
-      status.error_message = strdup("Failed to create _system collection");
+      status.error_message = BUFFER_STRDUP("Failed to create _system collection");
       return status;
     }
     status.collections_created++;
@@ -50,20 +51,20 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   /* Create _users collection if it doesn't exist */
   if (!db_get_collection(db, RBAC_USERS_COLLECTION_NAME)) {
     if (!db_create_collection(db, RBAC_USERS_COLLECTION_NAME)) {
-      status.error_message = strdup("Failed to create _users collection");
+      status.error_message = BUFFER_STRDUP("Failed to create _users collection");
       return status;
     }
     status.collections_created++;
     
     /* Create indexes for _users collection */
     if (!db_create_index(db, STORAGE_COLLECTION, "idx_user_id", "id", INDEX_TYPE_UNIQUE)) {
-      status.error_message = strdup("Failed to create user ID index");
+      status.error_message = BUFFER_STRDUP("Failed to create user ID index");
       return status;
     }
     status.indexes_created++;
     
     if (!db_create_index(db, STORAGE_COLLECTION, "idx_username", "username", INDEX_TYPE_UNIQUE)) {
-      status.error_message = strdup("Failed to create username index");
+      status.error_message = BUFFER_STRDUP("Failed to create username index");
       return status;
     }
     status.indexes_created++;
@@ -72,20 +73,20 @@ rbac_db_status_t rbac_db_init_collections(database_t* db) {
   /* Create _roles collection if it doesn't exist */
   if (!db_get_collection(db, RBAC_ROLES_COLLECTION_NAME)) {
     if (!db_create_collection(db, RBAC_ROLES_COLLECTION_NAME)) {
-      status.error_message = strdup("Failed to create _roles collection");
+      status.error_message = BUFFER_STRDUP("Failed to create _roles collection");
       return status;
     }
     status.collections_created++;
     
     /* Create indexes for _roles collection */
     if (!db_create_index(db, STORAGE_COLLECTION, "idx_role_id", "id", INDEX_TYPE_UNIQUE)) {
-      status.error_message = strdup("Failed to create role ID index");
+      status.error_message = BUFFER_STRDUP("Failed to create role ID index");
       return status;
     }
     status.indexes_created++;
     
     if (!db_create_index(db, STORAGE_COLLECTION, "idx_role_name", "name", INDEX_TYPE_UNIQUE)) {
-      status.error_message = strdup("Failed to create role name index");
+      status.error_message = BUFFER_STRDUP("Failed to create role name index");
       return status;
     }
     status.indexes_created++;
@@ -110,7 +111,7 @@ int rbac_db_exists(database_t* db) {
   
   /* Check if users collection has at least one user */
   json_value_t* query = json_create_object();
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -158,9 +159,9 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
   }
   
   /* Set user fields */
-  user->id = strdup(id_val->value.string);
-  user->username = strdup(username_val->value.string);
-  user->password_hash = strdup(password_hash_val->value.string);
+  user->id = BUFFER_STRDUP(id_val->value.string);
+  user->username = BUFFER_STRDUP(username_val->value.string);
+  user->password_hash = BUFFER_STRDUP(password_hash_val->value.string);
   
   /* Copy roles array */
   user->roles = json_create_array();
@@ -202,21 +203,21 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
   
   /* Set role fields - use document ID as primary ID for database operations */
   if (doc_id_val && doc_id_val->type == JSON_STRING) {
-    role->id = strdup(doc_id_val->value.string);
+    role->id = BUFFER_STRDUP(doc_id_val->value.string);
   } else if (id_val && id_val->type == JSON_STRING) {
     /* Fallback to UUID if no document ID */
-    role->id = strdup(id_val->value.string);
+    role->id = BUFFER_STRDUP(id_val->value.string);
   } else {
-    free(role);
+    BUFFER_FREE(role);
     return NULL;
   }
   
-  role->name = strdup(name_val->value.string);
+  role->name = BUFFER_STRDUP(name_val->value.string);
   
   /* Deep copy permissions */
   char* permissions_str = json_stringify(permissions_val);
   role->permissions = json_parse(permissions_str);
-  free(permissions_str);
+  BUFFER_FREE(permissions_str);
   
   return role;
 }
@@ -249,13 +250,13 @@ rbac_system_t* rbac_db_load(database_t* db) {
   if (!rbac->users || !rbac->roles) {
     if (rbac->users) json_free(rbac->users);
     if (rbac->roles) json_free(rbac->roles);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
   /* Load all users */
   json_value_t* all_users_query = json_create_object();
-  json_value_t* users_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, all_users_query);
+  json_value_t* users_result = storage_query_documents(db, all_users_query);
   json_free(all_users_query);
   
   /* Extract documents array from response object */
@@ -275,7 +276,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
         /* Deep copy the user document */
         char* user_str = json_stringify(user_doc);
         json_value_t* user_copy = json_parse(user_str);
-        free(user_str);
+        BUFFER_FREE(user_str);
         
         if (user_copy) {
           json_object_set(rbac->users, id_val->value.string, user_copy);
@@ -288,7 +289,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
   
   /* Load all roles */
   json_value_t* all_roles_query = json_create_object();
-  json_value_t* roles_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, all_roles_query);
+  json_value_t* roles_result = storage_query_documents(db, all_roles_query);
   json_free(all_roles_query);
   
   /* Extract documents array from response object */
@@ -308,7 +309,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
         /* Deep copy the role document */
         char* role_str = json_stringify(role_doc);
         json_value_t* role_copy = json_parse(role_str);
-        free(role_str);
+        BUFFER_FREE(role_str);
         
         if (role_copy) {
           json_object_set(rbac->roles, id_val->value.string, role_copy);
@@ -332,7 +333,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
   rbac_db_status_t status = rbac_db_init_collections(db);
   if (!status.success) {
     LOG_ERROR("initialize RBAC collections: %s", status.error_message);
-    if (status.error_message) free(status.error_message);
+    if (status.error_message) BUFFER_FREE(status.error_message);
     return 0;
   }
   
@@ -340,7 +341,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
   json_value_t* clear_query = json_create_object();
   
   /* Get all users */
-  json_value_t* existing_users = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, clear_query);
+  json_value_t* existing_users = storage_query_documents(db, clear_query);
   if (existing_users && existing_users->type == JSON_ARRAY) {
     /* Delete each user */
     for (size_t i = 0; i < existing_users->value.array.size; i++) {
@@ -348,7 +349,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
       if (user->type == JSON_OBJECT) {
         json_value_t* id_val = json_object_get(user, "id");
         if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
+          storage_delete_document(db, id_val->value.string);
         }
       }
     }
@@ -356,7 +357,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
   }
   
   /* Get all roles */
-  json_value_t* existing_roles = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, clear_query);
+  json_value_t* existing_roles = storage_query_documents(db, clear_query);
   if (existing_roles && existing_roles->type == JSON_ARRAY) {
     /* Delete each role */
     for (size_t i = 0; i < existing_roles->value.array.size; i++) {
@@ -364,7 +365,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
       if (role->type == JSON_OBJECT) {
         json_value_t* id_val = json_object_get(role, "id");
         if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
+          storage_delete_document(db, id_val->value.string);
         }
       }
     }
@@ -381,7 +382,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
     if (user->type == JSON_OBJECT) {
       /* Insert user into database */
       json_value_t* user_copy = json_clone(user);
-      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_copy);
+      json_value_t* result = storage_insert_document(db, user_copy);
       
       if (!result) {
         LOG_ERROR("insert user %s into database", user_id);
@@ -400,7 +401,7 @@ int rbac_db_save(database_t* db, rbac_system_t* rbac) {
     if (role->type == JSON_OBJECT) {
       /* Insert role into database */
       json_value_t* role_copy = json_clone(role);
-      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_copy);
+      json_value_t* result = storage_insert_document(db, role_copy);
       
       if (!result) {
         LOG_ERROR("insert role %s into database", role_id);
@@ -423,7 +424,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Check if username already exists */
   json_value_t* query = json_create_object();
   json_object_set(query, "username", json_create_string(username));
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -445,15 +446,15 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Hash password */
   char* password_hash = hash_password(password);
   if (!password_hash) {
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
   /* Create user document */
   json_value_t* user_doc = json_create_object();
   if (!user_doc) {
-    free(id);
-    free(password_hash);
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
@@ -464,11 +465,11 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   json_object_set(user_doc, "roles", json_create_array());
   
   /* Insert user document */
-  json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_doc);
+  json_value_t* insert_result = storage_insert_document(db, user_doc);
   if (!insert_result) {
     LOG_ERROR("insert user document into database.");
-    free(id);
-    free(password_hash);
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
@@ -477,14 +478,14 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Create user structure */
   rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
   if (!user) {
-    free(id);
-    free(password_hash);
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
   /* Set user fields */
   user->id = id;
-  user->username = strdup(username);
+  user->username = BUFFER_STRDUP(username);
   user->password_hash = password_hash;
   user->roles = json_create_array();
   
@@ -498,7 +499,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
   }
   
   /* Get user document - first try as document ID */
-  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
+  json_value_t* user_doc = storage_get_document(db, user_id);
   char* actual_doc_id = NULL;
   
   /* If not found, try as UUID */
@@ -512,10 +513,10 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     /* Get the actual document ID */
     json_value_t* doc_id_val = json_object_get(user_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
-      actual_doc_id = strdup(doc_id_val->value.string);
+      actual_doc_id = BUFFER_STRDUP(doc_id_val->value.string);
     }
   } else {
-    actual_doc_id = strdup(user_id);
+    actual_doc_id = BUFFER_STRDUP(user_id);
   }
   
   /* Get user roles */
@@ -528,7 +529,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
         const char* role_id = role_id_val->value.string;
         
         /* Get role document */
-        json_value_t* role_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
+        json_value_t* role_doc = storage_get_document(db, role_id);
         if (role_doc && role_doc->type == JSON_OBJECT) {
           /* Get role users */
           json_value_t* users_val = json_object_get(role_doc, "users");
@@ -565,7 +566,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
   }
   
   int result = db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id);
-  free(actual_doc_id);
+  BUFFER_FREE(actual_doc_id);
   
   return result;
 }
@@ -577,7 +578,7 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
   }
   
   /* First try as document ID */
-  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
+  json_value_t* user_doc = storage_get_document(db, user_id);
   
   /* If not found, try as UUID */
   if (!user_doc) {
@@ -608,7 +609,7 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   json_object_set(query, "username", json_create_string(username));
   
   /* Query user document */
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -673,7 +674,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Check if role with same name already exists */
   json_value_t* query = json_create_object();
   json_object_set(query, "name", json_create_string(name));
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -695,7 +696,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Create role document */
   json_value_t* role_doc = json_create_object();
   if (!role_doc) {
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
@@ -706,10 +707,10 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   json_object_set(role_doc, "users", json_create_array());
   
   /* Insert role document */
-  json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_doc);
+  json_value_t* insert_result = storage_insert_document(db, role_doc);
   if (!insert_result) {
     LOG_ERROR("insert role document into database.");
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
@@ -718,13 +719,13 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Create role structure */
   rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
   if (!role) {
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
   /* Set role fields */
   role->id = id;
-  role->name = strdup(name);
+  role->name = BUFFER_STRDUP(name);
   role->permissions = json_create_object();
   
   return role;
@@ -740,7 +741,7 @@ static json_value_t* find_role_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = json_create_object();
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -771,7 +772,7 @@ static json_value_t* find_user_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = json_create_object();
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -813,10 +814,10 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
     /* Get the actual document ID */
     json_value_t* doc_id_val = json_object_get(role_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
-      actual_doc_id = strdup(doc_id_val->value.string);
+      actual_doc_id = BUFFER_STRDUP(doc_id_val->value.string);
     }
   } else {
-    actual_doc_id = strdup(role_id);
+    actual_doc_id = BUFFER_STRDUP(role_id);
   }
   
   /* Get role users */
@@ -829,7 +830,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
         const char* user_id = user_id_val->value.string;
         
         /* Get user document */
-        json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
+        json_value_t* user_doc = storage_get_document(db, user_id);
         if (user_doc && user_doc->type == JSON_OBJECT) {
           /* Get user roles */
           json_value_t* roles_val = json_object_get(user_doc, "roles");
@@ -866,7 +867,7 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
   }
   
   int result = db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id);
-  free(actual_doc_id);
+  BUFFER_FREE(actual_doc_id);
   
   return result;
 }
@@ -892,10 +893,10 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
     /* Get the actual document ID */
     json_value_t* doc_id_val = json_object_get(role_doc, "uuid");
     if (doc_id_val && doc_id_val->type == JSON_STRING) {
-      actual_doc_id = strdup(doc_id_val->value.string);
+      actual_doc_id = BUFFER_STRDUP(doc_id_val->value.string);
     }
   } else {
-    actual_doc_id = strdup(role_id);
+    actual_doc_id = BUFFER_STRDUP(role_id);
   }
   
   if (!actual_doc_id) {
@@ -918,7 +919,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
   json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id, role_doc);
   
   json_free(role_doc);
-  free(actual_doc_id);
+  BUFFER_FREE(actual_doc_id);
   
   if (!update_result) {
     LOG_ERROR("update role document in database.");
@@ -965,17 +966,17 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     LOG_ERROR("User %s not found", user_id);
     return 0;
   }
-  char* actual_user_id = strdup(user->id);
+  char* actual_user_id = BUFFER_STRDUP(user->id);
   
   /* Get role - supports both document ID and UUID */
   rbac_role_t* role = rbac_db_get_role(db, role_id);
   if (!role) {
     LOG_ERROR("Role %s not found", role_id);
-    free(actual_user_id);
+    BUFFER_FREE(actual_user_id);
     rbac_free_user(user);
     return 0;
   }
-  char* actual_role_id = strdup(role->id);
+  char* actual_role_id = BUFFER_STRDUP(role->id);
   
   rbac_free_user(user);
   rbac_free_role(role);
@@ -984,8 +985,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -994,8 +995,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1004,8 +1005,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   if (!user_roles || user_roles->type != JSON_ARRAY) {
     json_free(user_doc);
     json_free(role_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1014,8 +1015,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   if (!role_users || role_users->type != JSON_ARRAY) {
     json_free(user_doc);
     json_free(role_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1049,8 +1050,8 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
       LOG_ERROR("update user document.");
       json_free(user_doc);
       json_free(role_doc);
-      free(actual_user_id);
-      free(actual_role_id);
+      BUFFER_FREE(actual_user_id);
+      BUFFER_FREE(actual_role_id);
       return 0;
     }
   }
@@ -1065,16 +1066,16 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
       LOG_ERROR("update role document.");
       json_free(user_doc);
       json_free(role_doc);
-      free(actual_user_id);
-      free(actual_role_id);
+      BUFFER_FREE(actual_user_id);
+      BUFFER_FREE(actual_role_id);
       return 0;
     }
   }
   
   json_free(user_doc);
   json_free(role_doc);
-  free(actual_user_id);
-  free(actual_role_id);
+  BUFFER_FREE(actual_user_id);
+  BUFFER_FREE(actual_role_id);
   
   return 1;
 }
@@ -1091,17 +1092,17 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
     LOG_ERROR("User %s not found", user_id);
     return 0;
   }
-  char* actual_user_id = strdup(user->id);
+  char* actual_user_id = BUFFER_STRDUP(user->id);
   
   /* Get role - supports both document ID and UUID */
   rbac_role_t* role = rbac_db_get_role(db, role_id);
   if (!role) {
     LOG_ERROR("Role %s not found", role_id);
-    free(actual_user_id);
+    BUFFER_FREE(actual_user_id);
     rbac_free_user(user);
     return 0;
   }
-  char* actual_role_id = strdup(role->id);
+  char* actual_role_id = BUFFER_STRDUP(role->id);
   
   rbac_free_user(user);
   rbac_free_role(role);
@@ -1110,8 +1111,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1120,8 +1121,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1130,8 +1131,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   if (!user_roles || user_roles->type != JSON_ARRAY) {
     json_free(user_doc);
     json_free(role_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1140,8 +1141,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   if (!role_users || role_users->type != JSON_ARRAY) {
     json_free(user_doc);
     json_free(role_doc);
-    free(actual_user_id);
-    free(actual_role_id);
+    BUFFER_FREE(actual_user_id);
+    BUFFER_FREE(actual_role_id);
     return 0;
   }
   
@@ -1203,8 +1204,8 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   
   json_free(user_doc);
   json_free(role_doc);
-  free(actual_user_id);
-  free(actual_role_id);
+  BUFFER_FREE(actual_user_id);
+  BUFFER_FREE(actual_role_id);
   
   return user_role_found || role_user_found;
 }
@@ -1272,13 +1273,13 @@ int rbac_db_grant_permission(database_t* db, const char* role_id, rbac_resource_
   json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_doc);
   if (!update_result) {
     LOG_ERROR("update role document.");
-    free(key);
+    BUFFER_FREE(key);
     json_free(role_doc);
     return 0;
   }
   
   json_free(update_result);
-  free(key);
+  BUFFER_FREE(key);
   json_free(role_doc);
   
   return 1;
@@ -1319,7 +1320,7 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
     current_permission = (int)current->value.number;
   } else {
     /* No permission set, nothing to revoke */
-    free(key);
+    BUFFER_FREE(key);
     json_free(role_doc);
     return 1;
   }
@@ -1338,13 +1339,13 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
   json_value_t* update_result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id, role_doc);
   if (!update_result) {
     LOG_ERROR("update role document.");
-    free(key);
+    BUFFER_FREE(key);
     json_free(role_doc);
     return 0;
   }
   
   json_free(update_result);
-  free(key);
+  BUFFER_FREE(key);
   json_free(role_doc);
   
   return 1;
@@ -1362,7 +1363,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
   }
   
   /* Get user document */
-  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
+  json_value_t* user_doc = storage_get_document(db, user_id);
   if (!user_doc) {
     LOG_ERROR("User %s not found", user_id);
     return 0;
@@ -1390,7 +1391,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
   /* Create wildcard resource permission key */
   char* wildcard_key = get_resource_permission_key(resource_type, "*");
   if (!wildcard_key) {
-    free(key);
+    BUFFER_FREE(key);
     json_free(user_doc);
     return 0;
   }
@@ -1477,8 +1478,8 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     json_free(role_doc);
   }
   
-  free(key);
-  free(wildcard_key);
+  BUFFER_FREE(key);
+  BUFFER_FREE(wildcard_key);
   json_free(user_doc);
   
   return has_permission;

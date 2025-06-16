@@ -26,7 +26,7 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
   /* Extract query string from path */
   const char* query_start = strchr(request->path, '?');
   if (query_start) {
-    char* query_copy = strdup(query_start + 1);
+    char* query_copy = BUFFER_STRDUP(query_start + 1);
     char* saveptr;
     char* param = strtok_r(query_copy, "&", &saveptr);
     
@@ -41,12 +41,12 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
         } else if (strcmp(param, "end") == 0) {
           end_time = (time_t)atol(value);
         } else if (strcmp(param, "metric") == 0) {
-          metric_name = strdup(value);
+          metric_name = BUFFER_STRDUP(value);
         }
       }
       param = strtok_r(NULL, "&", &saveptr);
     }
-    free(query_copy);
+    BUFFER_FREE(query_copy);
   }
   
   /* Default to last hour if no start time */
@@ -93,7 +93,7 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -117,7 +117,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
   /* Extract query string from path */
   const char* query_start = strchr(request->path, '?');
   if (query_start) {
-    char* query_copy = strdup(query_start + 1);
+    char* query_copy = BUFFER_STRDUP(query_start + 1);
     char* saveptr;
     char* param = strtok_r(query_copy, "&", &saveptr);
     
@@ -132,7 +132,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
         } else if (strcmp(param, "end") == 0) {
           end_time = (time_t)atol(value);
         } else if (strcmp(param, "metric") == 0) {
-          metric_name = strdup(value);
+          metric_name = BUFFER_STRDUP(value);
         } else if (strcmp(param, "interval") == 0) {
           interval = atoi(value);
           if (interval < 60) interval = 60; /* Minimum 1 minute */
@@ -140,7 +140,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
       }
       param = strtok_r(NULL, "&", &saveptr);
     }
-    free(query_copy);
+    BUFFER_FREE(query_copy);
   }
   
   /* Validate metric name */
@@ -231,7 +231,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -307,7 +307,7 @@ http_response_t* api_handle_adaptive_indexing_metrics(api_context_t* ctx, http_r
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }

@@ -37,6 +37,7 @@
 #include "api/session_api.h"
 #include "api/library_api.h"
 #include "api/library_metrics_api.h"
+#include "api/virtual_collections_api.h"
 #include "core/server.h"
 #include "database/database.h"
 #include "database/document_storage.h"
@@ -47,6 +48,7 @@
 #include "js/js_function_resolver.h"
 #include "utils/metrics.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -106,9 +108,9 @@ api_route_t routes[] = {
   {"/api/libraries/", HTTP_PUT, api_handle_update_library, 1},
   {"/api/libraries/", HTTP_POST, api_handle_copy_library, 1},
   
-  /* Collection routes */
-  {"/api/collections", HTTP_GET, api_handle_collections_list, 1},
-  {"/api/collections", HTTP_POST, api_handle_collection_create, 1},
+  /* Virtual Collection routes */
+  {"/api/collections", HTTP_GET, api_handle_virtual_collections_list, 1},
+  {"/api/collections", HTTP_POST, api_handle_virtual_collection_create, 1},
   
   /* Unified documents routes */
   {"/api/documents", HTTP_GET, api_handle_unified_documents_query, 1},
@@ -126,8 +128,8 @@ api_route_t routes[] = {
   {"/api/collections/", HTTP_PUT, api_handle_document_update, 1},
   {"/api/collections/", HTTP_DELETE, api_handle_document_delete, 1},
   
-  /* Collection drop must come after document routes to avoid matching document paths */
-  {"/api/collections/", HTTP_DELETE, api_handle_collection_drop, 1},
+  /* Virtual collection drop must come after document routes to avoid matching document paths */
+  {"/api/collections/", HTTP_DELETE, api_handle_virtual_collection_drop, 1},
   
   /* RBAC routes */
   {"/api/users", HTTP_GET, api_handle_users_list, 1},
@@ -302,9 +304,9 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
   /* Initialize basic fields */
   ctx->db = db;
   ctx->rbac = rbac;
-  ctx->jwt_secret = strdup(jwt_secret);
+  ctx->jwt_secret = BUFFER_STRDUP(jwt_secret);
   if (!ctx->jwt_secret) {
-    free(ctx);
+    BUFFER_FREE(ctx);
     if (g_logger) {
       LOG_ERROR("API context creation failed: JWT secret copy failed.");
     }
@@ -314,8 +316,8 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
   /* Initialize transaction manager with capacity for 100 concurrent transactions */
   ctx->transaction_manager = transaction_manager_create(db, 100);
   if (!ctx->transaction_manager) {
-    free((void*)ctx->jwt_secret);
-    free(ctx);
+    BUFFER_FREE((void*)ctx->jwt_secret);
+    BUFFER_FREE(ctx);
     if (g_logger) {
       LOG_ERROR("API context creation failed: Transaction manager creation failed.");
     }
@@ -333,8 +335,8 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
   ctx->routes = (api_route_t*)malloc(ctx->max_routes * sizeof(api_route_t));
   if (!ctx->routes) {
     transaction_manager_free(ctx->transaction_manager);
-    free((void*)ctx->jwt_secret);
-    free(ctx);
+    BUFFER_FREE((void*)ctx->jwt_secret);
+    BUFFER_FREE(ctx);
     if (g_logger) {
       LOG_ERROR("API context creation failed: Routes array allocation failed.");
     }
@@ -363,12 +365,12 @@ void api_free_context(api_context_t* ctx) {
       transaction_manager_free(ctx->transaction_manager);
     }
     if (ctx->jwt_secret) {
-      free((void*)ctx->jwt_secret);
+      BUFFER_FREE((void*)ctx->jwt_secret);
     }
     if (ctx->routes) {
-      free(ctx->routes);
+      BUFFER_FREE(ctx->routes);
     }
-    free(ctx);
+    BUFFER_FREE(ctx);
   }
 }
 
@@ -384,7 +386,7 @@ char* api_extract_token(http_request_t* request) {
   }
   
   /* Skip "Bearer " prefix */
-  return strdup(request->authorization + 7);
+  return BUFFER_STRDUP(request->authorization + 7);
 }
 
 /* Parse URL query parameters into JSON object */
@@ -399,7 +401,7 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
   }
   
   /* Create a copy of the query string to work with */
-  char* query_copy = strdup(query_string);
+  char* query_copy = BUFFER_STRDUP(query_string);
   if (!query_copy) {
     json_free(obj);
     return NULL;
@@ -440,7 +442,7 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
     pair = strtok(NULL, "&");
   }
   
-  free(query_copy);
+  BUFFER_FREE(query_copy);
   return obj;
 }
 
@@ -475,7 +477,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     
     if (is_hex) {
       if (g_logger) LOG_DEBUG("Allowing admin token authentication for hex token.");
-      free(token);
+      BUFFER_FREE(token);
       return 1;
     }
   }
@@ -492,14 +494,14 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
       }
     }
     if (g_logger) LOG_DEBUG("JWT cache hit - token valid for user: %s", username);
-    free(token);
+    BUFFER_FREE(token);
     return 1;
   }
   
   /* Cache miss - verify JWT secret is set */
   if (!ctx->jwt_secret) {
     if (g_logger) LOG_ERROR("Authentication failed: JWT secret not set in API context.");
-    free(token);
+    BUFFER_FREE(token);
     return 0;
   }
   
@@ -567,7 +569,7 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
     }
   }
   
-  free(token);
+  BUFFER_FREE(token);
   
   return result;
 }
@@ -813,7 +815,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   /* Get user */
   rbac_user_t* user = rbac_get_user(ctx->rbac, user_id);
   if (!user) {
-    free(user_id);
+    BUFFER_FREE(user_id);
     json_free(body);
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"User not found\"}", "application/json");
@@ -828,7 +830,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   char* response_str = jwt_create_token_pair(ctx->jwt_secret, user->id, user->username, &response);
   
   /* Free user ID since we no longer need it */
-  free(user_id);
+  BUFFER_FREE(user_id);
   
   if (!response_str || !response) {
     if (g_logger) {
@@ -844,7 +846,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   }
   
   /* Free resources */
-  free(response_str); /* We'll stringify again below */
+  BUFFER_FREE(response_str); /* We'll stringify again below */
   json_free(body);
   
   /* Generate the final response string */
@@ -941,117 +943,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
 
 /* Collection handlers */
 
-/* List collections */
-http_response_t* api_handle_collections_list(api_context_t* ctx, http_request_t* request) {
-  if (!ctx || !request) {
-    return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid request\"}", "application/json");
-  }
-  
-  /* Use JDBX native db_list_collections function */
-  json_value_t* collections_array = db_list_collections(ctx->db);
-  
-  if (!collections_array) {
-    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to query collections\"}", "application/json");
-  }
-  
-  json_value_t* response = json_create_object();
-  json_value_t* enhanced_collections = json_create_array();
-  
-  if (collections_array->type == JSON_ARRAY) {
-    /* Enhance each collection with document count and metadata */
-    for (size_t i = 0; i < json_array_size(collections_array); i++) {
-      json_value_t* coll_path_val = json_array_get(collections_array, i);
-      if (coll_path_val && coll_path_val->type == JSON_STRING) {
-        const char* coll_path = coll_path_val->value.string;
-        
-        /* Create enhanced collection object */
-        json_value_t* enhanced_coll = json_create_object();
-        json_object_set(enhanced_coll, "path", json_create_string(coll_path));
-        
-        /* Parse library/collection from path */
-        const char* slash = strchr(coll_path, '/');
-        if (slash) {
-          size_t lib_len = slash - coll_path;
-          char library[256], collection[256];
-          strncpy(library, coll_path, lib_len);
-          library[lib_len] = '\0';
-          strcpy(collection, slash + 1);
-          
-          json_object_set(enhanced_coll, "library", json_create_string(library));
-          json_object_set(enhanced_coll, "name", json_create_string(collection));
-        } else {
-          /* Default library */
-          json_object_set(enhanced_coll, "library", json_create_string("default"));
-          json_object_set(enhanced_coll, "name", json_create_string(coll_path));
-        }
-        
-        /* Query document count using unified documents approach */
-        json_value_t* count_query = json_create_object();
-        
-        /* Get collection and library names from the enhanced collection object */
-        json_value_t* coll_name_val = json_object_get(enhanced_coll, "name");
-        json_value_t* lib_name_val = json_object_get(enhanced_coll, "library");
-        
-        if (coll_name_val && lib_name_val && 
-            coll_name_val->type == JSON_STRING && lib_name_val->type == JSON_STRING) {
-          
-          const char* collection_name = coll_name_val->value.string;
-          const char* library_name = lib_name_val->value.string;
-          
-          /* Map collection name to document type (same logic as document query) */
-          const char* doc_type = collection_name;
-          if (strcmp(collection_name, "users") == 0) doc_type = "user";
-          else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
-          else if (strcmp(collection_name, "permissions") == 0) doc_type = "permission";
-          else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
-          else if (strcmp(collection_name, "libraries") == 0) doc_type = "library";
-          else if (strcmp(collection_name, "collections") == 0) doc_type = "collection";
-          else if (strcmp(collection_name, "functions") == 0) doc_type = "function";
-          else if (strcmp(collection_name, "validators") == 0) doc_type = "validator";
-          else if (strcmp(collection_name, "transformers") == 0) doc_type = "transformer";
-          else if (strcmp(collection_name, "schemas") == 0) doc_type = "schema";
-          else if (strcmp(collection_name, "indexes") == 0) doc_type = "index";
-          else if (strcmp(collection_name, "metrics") == 0) doc_type = "metric";
-          else if (strcmp(collection_name, "audit") == 0) doc_type = "audit";
-          
-          json_object_set(count_query, "type", json_create_string(doc_type));
-          json_object_set(count_query, "library", json_create_string(library_name));
-        
-          json_value_t* count_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, count_query);
-          
-          size_t doc_count = 0;
-          if (count_result) {
-            json_value_t* docs_array = json_object_get(count_result, "documents");
-            if (docs_array && docs_array->type == JSON_ARRAY) {
-              doc_count = json_array_size(docs_array);
-            }
-            json_free(count_result);
-          }
-          
-          /* Add document count to collection object */
-          json_object_set(enhanced_coll, "document_count", json_create_number(doc_count));
-        } else {
-          /* Fallback if collection/library names not available */
-          json_object_set(enhanced_coll, "document_count", json_create_number(0));
-        }
-        
-        json_free(count_query);
-        
-        json_array_append(enhanced_collections, enhanced_coll);
-      }
-    }
-  }
-  
-  json_object_set(response, "collections", enhanced_collections);
-  json_free(collections_array);
-  
-  char* response_str = json_stringify(response);
-  json_free(response);
-  
-  return create_http_response(HTTP_OK, response_str, "application/json");
-}
+/* REMOVED: Old collections handler moved to virtual_collections_api.c */
 
 /* Create collection */
 /* Helper function to extract user info from request - safe version using existing auth system */
@@ -1166,7 +1058,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   if (library && strcmp(library, "system") == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
       json_free(body);
-      if (session_library) free(session_library);
+      if (session_library) BUFFER_FREE(session_library);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system library\"}", "application/json");
     }
@@ -1179,7 +1071,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
       /* Check if user has explicit permission for this library */
       if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library, RBAC_WRITE)) {
         json_free(body);
-        if (session_library) free(session_library);
+        if (session_library) BUFFER_FREE(session_library);
         return create_http_response(HTTP_FORBIDDEN, 
                      "{\"error\":\"Can only create collections in 'default' library or your username library\"}", "application/json");
       }
@@ -1190,31 +1082,34 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   if (strncmp(name, "system_", 7) == 0 || strncmp(name, "_system", 7) == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
       json_free(body);
-      if (session_library) free(session_library);
+      if (session_library) BUFFER_FREE(session_library);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system collection names\"}", "application/json");
     }
   }
   
-  /* Get user ID from token */
-  char owner_id_buffer[256];
-  strcpy(owner_id_buffer, SYSTEM_USER_ADMIN);
-  const char* owner_id = owner_id_buffer;
+  /* Get username from token for ownership */
+  char owner_username_buffer[256];
+  strcpy(owner_username_buffer, SYSTEM_USER_ADMIN);
+  const char* owner_username = owner_username_buffer;
   
   char* token = api_extract_token(request);
   if (token) {
     jwt_token_t* jwt = jwt_decode(token);
-    if (jwt && jwt->payload && jwt->payload->sub) {
-      strncpy(owner_id_buffer, jwt->payload->sub, sizeof(owner_id_buffer) - 1);
-      owner_id_buffer[sizeof(owner_id_buffer) - 1] = '\0';
+    if (jwt && jwt->payload && jwt->payload->claims) {
+      json_value_t* username_claim = json_object_get(jwt->payload->claims, "username");
+      if (username_claim && username_claim->type == JSON_STRING) {
+        strncpy(owner_username_buffer, username_claim->value.string, sizeof(owner_username_buffer) - 1);
+        owner_username_buffer[sizeof(owner_username_buffer) - 1] = '\0';
+      }
     }
     if (jwt) jwt_free(jwt);
-    free(token);
+    BUFFER_FREE(token);
   }
   
   /* Create collection metadata in unified documents */
   json_value_t* coll_doc = json_create_object();
-  add_document_system_fields(coll_doc, "collection", library, "collections", owner_id);
+  add_document_system_fields(coll_doc, "collection", library, "collections", owner_username);
   json_object_set(coll_doc, "name", json_create_string(name));
   json_object_set(coll_doc, "library", json_create_string(library));
   json_object_set(coll_doc, "is_system", json_create_boolean(0));
@@ -1228,7 +1123,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   }
   
   /* Insert collection metadata */
-  json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_doc);
+  json_value_t* result = storage_insert_document(ctx->db, coll_doc);
   json_free(coll_doc);
   
   if (!result) {
@@ -1251,92 +1146,14 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   
   /* Free session library if allocated */
   if (session_library) {
-    free(session_library);
+    BUFFER_FREE(session_library);
   }
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
 
 /* Drop collection */
-http_response_t* api_handle_collection_drop(api_context_t* ctx, http_request_t* request) {
-  if (!ctx || !request) {
-    return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Invalid request\"}", "application/json");
-  }
-  
-  /* SECURITY: Extract user info for permission checking */
-  char user_id[256];
-  char username[256];
-  
-  if (!get_request_user_info(request, user_id, username, sizeof(user_id))) {
-    return create_http_response(HTTP_UNAUTHORIZED, 
-                 "{\"error\":\"Authentication required\"}", "application/json");
-  }
-  
-  /* Extract collection name from path */
-  const char* path = request->path;
-  const char* name = path + strlen("/api/collections/");
-  
-  /* Check if this is actually a document operation path */
-  if (strstr(name, "/documents/") != NULL) {
-    return api_handle_document_delete(ctx, request);
-  }
-  
-  /* SECURITY: Parse library/collection from path */
-  char library_name[256] = {0};
-  char collection_name[256] = {0};
-  const char* slash = strchr(name, '/');
-  if (slash) {
-    size_t lib_len = slash - name;
-    if (lib_len < sizeof(library_name)) {
-      strncpy(library_name, name, lib_len);
-      library_name[lib_len] = '\0';
-      strncpy(collection_name, slash + 1, sizeof(collection_name) - 1);
-    }
-  } else {
-    /* If no slash, assume it's in default library */
-    strcpy(library_name, "default");
-    strncpy(collection_name, name, sizeof(collection_name) - 1);
-  }
-  
-  /* SECURITY: Protection checks */
-  
-  /* 1. Absolute protection for system collections - admin only */
-  if (strcmp(library_name, "system") == 0) {
-    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      return create_http_response(HTTP_FORBIDDEN, 
-                   "{\"error\":\"Admin permission required to delete system collections\"}", "application/json");
-    }
-  }
-  
-  /* 2. User namespace enforcement for non-system collections */
-  if (strcmp(library_name, "system") != 0) {
-    /* Users can only delete from default library or their username library */
-    if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
-      /* Check explicit permission */
-      if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_DELETE)) {
-        return create_http_response(HTTP_FORBIDDEN, 
-                     "{\"error\":\"Can only delete collections in 'default' library or your username library\"}", "application/json");
-      }
-    }
-  }
-  
-  /* 3. Additional protection for special collection names */
-  if (strncmp(collection_name, "system_", 7) == 0 || strncmp(collection_name, "_system", 7) == 0) {
-    if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      return create_http_response(HTTP_FORBIDDEN, 
-                   "{\"error\":\"Admin permission required for system collection names\"}", "application/json");
-    }
-  }
-  
-  /* Drop collection */
-  if (db_drop_collection(ctx->db, name) != 0) {
-    return create_http_response(HTTP_NOT_FOUND, 
-                 "{\"error\":\"Collection not found\"}", "application/json");
-  }
-  
-  return create_http_response(HTTP_NO_CONTENT, NULL, "application/json");
-}
+/* REMOVED: Old collection drop handler moved to virtual_collections_api.c */
 
 /* Unified documents handlers */
 
@@ -1361,8 +1178,8 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
     query = parse_url_query_to_json(request->query);
   }
   
-  /* Query documents from unified collection */
-  json_value_t* documents = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  /* Query documents from unified collection using STORAGE LAYER */
+  json_value_t* documents = storage_query_documents(ctx->db, query);
   if (query) {
     json_free(query);
   }
@@ -1520,7 +1337,7 @@ static http_response_t* api_handle_unified_document_update(api_context_t* ctx, h
   }
   
   /* Update document in unified documents collection */
-  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id, update_doc);
+  json_value_t* result = storage_update_document(ctx->db, doc_id, update_doc);
   json_free(update_doc);
   
   if (!result) {
@@ -1568,7 +1385,7 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
   json_free(existing);
   
   /* Delete document from unified documents collection */
-  if (db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id) != 0) {
+  if (storage_delete_document(ctx->db, doc_id) != 0) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to delete document\"}", "application/json");
   }
@@ -1632,11 +1449,11 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   if (lib_slash) {
     /* Format: library/collection */
     library_name = strndup(collection_path, lib_slash - collection_path);
-    collection_name = strdup(lib_slash + 1);
+    collection_name = BUFFER_STRDUP(lib_slash + 1);
   } else {
     /* No library specified, use session library */
     library_name = get_session_library(ctx, request);
-    collection_name = strdup(collection_path);
+    collection_name = BUFFER_STRDUP(collection_path);
   }
   
   LOG_DEBUG("api_handle_documents_query: library='%s', collection='%s'", library_name, collection_name);
@@ -1714,11 +1531,11 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
     json_free(query);
   }
   
-  free(library_name);
-  free(collection_name);
+  BUFFER_FREE(library_name);
+  BUFFER_FREE(collection_name);
   
   if (!documents) {
-    free(collection_path);
+    BUFFER_FREE(collection_path);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query documents\"}", "application/json");
   }
@@ -1726,7 +1543,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   /* db_query_documents returns a complete response object, use it directly */
   char* response_str = json_stringify(documents);
   json_free(documents);
-  free(collection_path);
+  BUFFER_FREE(collection_path);
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1770,7 +1587,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
    * 1. {collection}/documents/{id}/{field}
    * 2. {library}/{collection}/documents/{id}/{field}
    */
-  char* path_copy = strdup(path);
+  char* path_copy = BUFFER_STRDUP(path);
   char collection_path[256];
   char* doc_id = NULL;
   char* field_path = NULL;
@@ -1778,7 +1595,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   /* Find the /documents/ part */
   char* documents_pos = strstr(path_copy, "/documents/");
   if (!documents_pos) {
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return api_handle_document_get(ctx, request);
   }
   
@@ -1793,7 +1610,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   
   if (!slash_pos) {
     /* No field specified, not a field access request */
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return api_handle_document_get(ctx, request);
   }
   
@@ -1805,7 +1622,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   field_path = slash_pos + 1;
   
   if (!doc_id || !field_path || strlen(doc_id) == 0 || strlen(field_path) == 0) {
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid path format. Expected: /api/collections/{collection}/documents/{id}/{field}\"}", 
                  "application/json");
@@ -1826,7 +1643,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id_copy);
   
   if (!document) {
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found\"}", "application/json");
   }
@@ -1834,11 +1651,11 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   LOG_DEBUG("Field access: got document, navigating to field '%s'", field_path_copy);
   
   /* Free path_copy early since we have copies of what we need */
-  free(path_copy);
+  BUFFER_FREE(path_copy);
   
   /* Navigate to the requested field */
   json_value_t* field_value = document;
-  char* field_copy = strdup(field_path_copy);
+  char* field_copy = BUFFER_STRDUP(field_path_copy);
   char* field_part = strtok(field_copy, "/.");
   
   while (field_part && field_value) {
@@ -1860,7 +1677,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
     field_part = strtok(NULL, "/.");
   }
   
-  free(field_copy);
+  BUFFER_FREE(field_copy);
   
   if (!field_value) {
     json_free(document);
@@ -1913,7 +1730,7 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   }
   
   /* Parse library/collections/coll/documents/id/field */
-  char* path_copy = strdup(path);
+  char* path_copy = BUFFER_STRDUP(path);
   char* library = strtok(path_copy, "/");
   char* collections_part = strtok(NULL, "/");
   char* collection = strtok(NULL, "/");
@@ -1924,7 +1741,7 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   /* Validate we have all required components */
   if (!library || !collections_part || !collection || !documents_part || !doc_id || !field_path ||
       strcmp(collections_part, "collections") != 0 || strcmp(documents_part, "documents") != 0) {
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return api_handle_get_library(ctx, request);
   }
   
@@ -1939,14 +1756,14 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
   
   if (!document) {
-    free(path_copy);
+    BUFFER_FREE(path_copy);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found\"}", "application/json");
   }
   
   /* Navigate to the requested field */
   json_value_t* field_value = document;
-  char* field_copy = strdup(field_path);
+  char* field_copy = BUFFER_STRDUP(field_path);
   char* field_part = strtok(field_copy, "/.");
   
   while (field_part && field_value) {
@@ -1968,8 +1785,8 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
     field_part = strtok(NULL, "/.");
   }
   
-  free(field_copy);
-  free(path_copy);
+  BUFFER_FREE(field_copy);
+  BUFFER_FREE(path_copy);
   
   if (!field_value) {
     json_free(document);
@@ -1992,7 +1809,7 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   }
   
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
-  free(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -2025,7 +1842,7 @@ http_response_t* api_handle_document_get(api_context_t* ctx, http_request_t* req
   
   /* Get document */
   json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   if (!document) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -2099,7 +1916,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   /* 1. System collections - admin only for write access */
   if (strcmp(library_name, "system") == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      free(collection_name);
+      BUFFER_FREE(collection_name);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system collections\"}", "application/json");
     }
@@ -2111,7 +1928,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
       /* Check explicit permission */
       if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_WRITE)) {
-        free(collection_name);
+        BUFFER_FREE(collection_name);
         return create_http_response(HTTP_FORBIDDEN, 
                      "{\"error\":\"Can only create documents in 'default' library or your username library\"}", "application/json");
       }
@@ -2122,7 +1939,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   json_value_t* document = json_parse(request->body);
   if (!document || document->type != JSON_OBJECT) {
     if (document) json_free(document);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document\"}", "application/json");
   }
@@ -2134,6 +1951,9 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     document = resolved_document;
     LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
+  
+  /* Add ownership - user documents owned by authenticated user */
+  json_object_set(document, "owner", json_create_string(username));
   
   /* Check if document has uuid or _id field for update vs insert */
   json_value_t* id_field = json_object_get(document, "uuid");
@@ -2148,23 +1968,23 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     if (existing) {
       /* Document exists, update it */
       json_free(existing);
-      result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id, document);
+      result = storage_update_document(ctx->db, doc_id, document);
       
       if (!result) {
-        free(collection_name);
+        BUFFER_FREE(collection_name);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                      "{\"error\":\"Failed to update document\"}", "application/json");
       }
     } else {
       /* Document doesn't exist, insert it */
-      result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document);
+      result = storage_insert_document(ctx->db, document);
     }
   } else {
     /* No uuid or _id field, just insert */
     result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document);
   }
   
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -2244,7 +2064,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   /* 1. System collections - admin only for write access */
   if (strcmp(library_name, "system") == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      free(collection_name);
+      BUFFER_FREE(collection_name);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system collections\"}", "application/json");
     }
@@ -2256,7 +2076,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
     if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
       /* Check explicit permission */
       if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_WRITE)) {
-        free(collection_name);
+        BUFFER_FREE(collection_name);
         return create_http_response(HTTP_FORBIDDEN, 
                      "{\"error\":\"Can only update documents in 'default' library or your username library\"}", "application/json");
       }
@@ -2273,13 +2093,13 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   json_value_t* document = json_parse(request->body);
   if (!document) {
     LOG_ERROR("Cannot parse JSON for collection %s. Body: %.200s", collection_name, request->body);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid JSON: Failed to parse request body\"}", "application/json");
   }
   if (document->type != JSON_OBJECT) {
     json_free(document);
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document: Expected JSON object, got array or primitive value\"}", "application/json");
   }
@@ -2293,21 +2113,21 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   }
   
   /* Update document */
-  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id, document);
+  json_value_t* result = storage_update_document(ctx->db, document_id, document);
   
   if (!result) {
     /* Check if collection exists */
     if (!db_collection_exists(ctx->db, collection_name)) {
-      free(collection_name);
+      BUFFER_FREE(collection_name);
       return create_http_response(HTTP_NOT_FOUND, 
                    "{\"error\":\"Collection not found\"}", "application/json");
     }
-    free(collection_name);
+    BUFFER_FREE(collection_name);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found or update failed\"}", "application/json");
   }
   
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   /* Create response */
   char* response_str = json_stringify(result);
@@ -2380,7 +2200,7 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
   /* 1. System collections - admin only for delete access */
   if (strcmp(library_name, "system") == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      free(collection_name);
+      BUFFER_FREE(collection_name);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system collections\"}", "application/json");
     }
@@ -2392,7 +2212,7 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
     if (strcmp(library_name, "default") != 0 && strcmp(library_name, username) != 0) {
       /* Check explicit permission */
       if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library_name, RBAC_DELETE)) {
-        free(collection_name);
+        BUFFER_FREE(collection_name);
         return create_http_response(HTTP_FORBIDDEN, 
                      "{\"error\":\"Can only delete documents in 'default' library or your username library\"}", "application/json");
       }
@@ -2400,8 +2220,8 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
   }
   
   /* Delete document */
-  int result = db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
-  free(collection_name);
+  int result = storage_delete_document(ctx->db, document_id);
+  BUFFER_FREE(collection_name);
   
   if (!result) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -2436,7 +2256,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -2544,7 +2364,7 @@ http_response_t* api_handle_user_get(api_context_t* ctx, http_request_t* request
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -2655,7 +2475,7 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -2800,7 +2620,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -2917,7 +2737,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     json_object_set(user_obj, "password_hash", json_create_string(password_hash));
     
     /* Free password hash */
-    free(password_hash);
+    BUFFER_FREE(password_hash);
   }
   
   /* Update roles if provided - requires admin permissions */
@@ -3080,7 +2900,7 @@ http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3145,7 +2965,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3271,7 +3091,7 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3395,7 +3215,7 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3604,7 +3424,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3919,7 +3739,7 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   
   /* Decode token */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->sub) {
     if (jwt) jwt_free(jwt);
@@ -3997,26 +3817,26 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   char* name_filter = NULL;
   
   if (request->query) {
-    char* query = strdup(request->query);
+    char* query = BUFFER_STRDUP(request->query);
     if (query) {
       char* token = strtok(query, "&");
       while (token) {
         if (strncmp(token, "type=", 5) == 0) {
-          type_filter = strdup(token + 5);
+          type_filter = BUFFER_STRDUP(token + 5);
         } else if (strncmp(token, "name=", 5) == 0) {
-          name_filter = strdup(token + 5);
+          name_filter = BUFFER_STRDUP(token + 5);
         }
         token = strtok(NULL, "&");
       }
-      free(query);
+      BUFFER_FREE(query);
     }
   }
   
   /* Get all metrics as JSON */
   char* metrics_json = metrics_get_json(g_metrics_registry);
   if (!metrics_json) {
-    if (type_filter) free(type_filter);
-    if (name_filter) free(name_filter);
+    if (type_filter) BUFFER_FREE(type_filter);
+    if (name_filter) BUFFER_FREE(name_filter);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Failed to get metrics\"}", "application/json");
   }
@@ -4027,7 +3847,7 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
     http_response_t* response = create_http_response(HTTP_OK, metrics_json, "application/json");
     
     /* Free metrics JSON */
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     
     return response;
   }
@@ -4035,9 +3855,9 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   /* Parse the metrics JSON to filter based on the criteria */
   json_value_t* root = json_parse(metrics_json);
   if (!root) {
-    if (type_filter) free(type_filter);
-    if (name_filter) free(name_filter);
-    free(metrics_json);
+    if (type_filter) BUFFER_FREE(type_filter);
+    if (name_filter) BUFFER_FREE(name_filter);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
   }
@@ -4045,10 +3865,10 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   /* Create a new metrics array for the filtered metrics */
   json_value_t* filtered_metrics = json_create_array();
   if (!filtered_metrics) {
-    if (type_filter) free(type_filter);
-    if (name_filter) free(name_filter);
+    if (type_filter) BUFFER_FREE(type_filter);
+    if (name_filter) BUFFER_FREE(name_filter);
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -4123,11 +3943,11 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   /* Create a new JSON object with the filtered metrics */
   json_value_t* filtered_obj = json_create_object();
   if (!filtered_obj) {
-    if (type_filter) free(type_filter);
-    if (name_filter) free(name_filter);
+    if (type_filter) BUFFER_FREE(type_filter);
+    if (name_filter) BUFFER_FREE(name_filter);
     json_free(filtered_metrics);
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -4138,11 +3958,11 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   char* filtered_json = json_stringify(filtered_obj);
   
   /* Clean up */
-  if (type_filter) free(type_filter);
-  if (name_filter) free(name_filter);
+  if (type_filter) BUFFER_FREE(type_filter);
+  if (name_filter) BUFFER_FREE(name_filter);
   json_free(filtered_obj); /* This will also free filtered_metrics */
   json_free(root);
-  free(metrics_json);
+  BUFFER_FREE(metrics_json);
   
   if (!filtered_json) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -4153,7 +3973,7 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   http_response_t* response = create_http_response(HTTP_OK, filtered_json, "application/json");
   
   /* Free filtered JSON */
-  free(filtered_json);
+  BUFFER_FREE(filtered_json);
   
   return response;
 #else
@@ -4185,7 +4005,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   /* Convert JSON to Prometheus format (simplified) */
   json_value_t* root = json_parse(metrics_json);
   if (!root) {
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
   }
@@ -4195,7 +4015,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   char* prom_buffer = (char*)malloc(buffer_size);
   if (!prom_buffer) {
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -4327,9 +4147,9 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
         buffer_size *= 2;
         char* new_buffer = (char*)realloc(prom_buffer, buffer_size);
         if (!new_buffer) {
-          free(prom_buffer);
+          BUFFER_FREE(prom_buffer);
           json_free(root);
-          free(metrics_json);
+          BUFFER_FREE(metrics_json);
           return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                        "{\"error\":\"Memory allocation failure\"}", "application/json");
         }
@@ -4342,9 +4162,9 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   http_response_t* response = create_http_response(HTTP_OK, prom_buffer, "text/plain");
   
   /* Clean up */
-  free(prom_buffer);
+  BUFFER_FREE(prom_buffer);
   json_free(root);
-  free(metrics_json);
+  BUFFER_FREE(metrics_json);
   
   return response;
 #else
@@ -4439,7 +4259,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   /* Parse the JSON to extract just the names and types */
   json_value_t* root = json_parse(metrics_json);
   if (!root) {
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
   }
@@ -4448,7 +4268,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   json_value_t* response_obj = json_create_object();
   if (!response_obj) {
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -4466,7 +4286,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
     if (histograms_array) json_free(histograms_array);
     json_free(response_obj);
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -4530,7 +4350,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   /* Clean up JSON objects */
   json_free(response_obj);
   json_free(root);
-  free(metrics_json);
+  BUFFER_FREE(metrics_json);
   
   if (!response_json) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -4541,7 +4361,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   http_response_t* response = create_http_response(HTTP_OK, response_json, "application/json");
   
   /* Free response JSON */
-  free(response_json);
+  BUFFER_FREE(response_json);
   
   return response;
 #else
@@ -4555,34 +4375,34 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
 /* Helper function to get session library from authenticated request */
 static char* get_session_library(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
-    return strdup("default");
+    return BUFFER_STRDUP("default");
   }
   
   /* Extract token from request */
   char* token = api_extract_token(request);
   if (!token) {
-    return strdup("default");
+    return BUFFER_STRDUP("default");
   }
   
   /* Decode JWT to get session ID */
   jwt_token_t* jwt = jwt_decode(token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!jwt || !jwt->payload || !jwt->payload->jti) {
     if (jwt) jwt_free(jwt);
-    return strdup("default");
+    return BUFFER_STRDUP("default");
   }
   
   /* Query session to get library */
-  char* session_id = strdup(jwt->payload->jti);
+  char* session_id = BUFFER_STRDUP(jwt->payload->jti);
   jwt_free(jwt);
   
   /* Query the session from database */
   json_value_t* session = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id);
-  free(session_id);
+  BUFFER_FREE(session_id);
   
   if (!session) {
-    return strdup("default");
+    return BUFFER_STRDUP("default");
   }
   
   /* Extract library from session */
@@ -4590,9 +4410,9 @@ static char* get_session_library(api_context_t* ctx, http_request_t* request) {
   char* library = NULL;
   
   if (library_val && library_val->type == JSON_STRING) {
-    library = strdup(library_val->value.string);
+    library = BUFFER_STRDUP(library_val->value.string);
   } else {
-    library = strdup("default");
+    library = BUFFER_STRDUP("default");
   }
   
   json_free(session);

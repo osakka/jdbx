@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "database/library_metadata.h"
 #include "database/database.h"
 #include "database/document_storage.h"
@@ -101,18 +102,18 @@ int library_system_init(database_t* db) {
 
 /* Create system library metadata */
 library_metadata_t* library_metadata_create_system(void) {
-    library_metadata_t* metadata = calloc(1, sizeof(library_metadata_t));
+    library_metadata_t* metadata = BUFFER_ALLOC(sizeof(library_metadata_t));
     if (!metadata) return NULL;
     
-    metadata->library_name = strdup("system");
+    metadata->library_name = BUFFER_STRDUP("system");
     metadata->type = LIBRARY_TYPE_SYSTEM;
-    metadata->description = strdup("Core system collections and functionality");
+    metadata->description = BUFFER_STRDUP("Core system collections and functionality");
     
     /* System library permissions - only admin can modify */
     metadata->permissions.owner_perms = RBAC_READ | RBAC_WRITE | RBAC_DELETE | RBAC_EXECUTE | RBAC_ADMIN;
     metadata->permissions.world_perms = RBAC_READ; /* World can read system config */
-    metadata->permissions.owner_ids = calloc(1, sizeof(char*));
-    metadata->permissions.owner_ids[0] = strdup("system");
+    metadata->permissions.owner_ids = BUFFER_ALLOC(sizeof(char*));
+    metadata->permissions.owner_ids[0] = BUFFER_STRDUP("system");
     metadata->permissions.owner_count = 1;
     
     /* System library configuration */
@@ -128,9 +129,9 @@ library_metadata_t* library_metadata_create_system(void) {
     };
     
     metadata->collection_count = sizeof(collections) / sizeof(collections[0]);
-    metadata->collections = calloc(metadata->collection_count, sizeof(char*));
+    metadata->collections = BUFFER_ALLOC(sizeof(char*));
     for (size_t i = 0; i < metadata->collection_count; i++) {
-        metadata->collections[i] = strdup(collections[i]);
+        metadata->collections[i] = BUFFER_STRDUP(collections[i]);
     }
     
     /* No cross-library restrictions for system */
@@ -144,12 +145,12 @@ library_metadata_t* library_metadata_create_system(void) {
 
 /* Create default library metadata */
 library_metadata_t* library_metadata_create_default(void) {
-    library_metadata_t* metadata = calloc(1, sizeof(library_metadata_t));
+    library_metadata_t* metadata = BUFFER_ALLOC(sizeof(library_metadata_t));
     if (!metadata) return NULL;
     
-    metadata->library_name = strdup("default");
+    metadata->library_name = BUFFER_STRDUP("default");
     metadata->type = LIBRARY_TYPE_DEFAULT;
-    metadata->description = strdup("Default library for user collections");
+    metadata->description = BUFFER_STRDUP("Default library for user collections");
     
     /* Default library permissions - users can create collections */
     metadata->permissions.owner_perms = RBAC_READ | RBAC_WRITE | RBAC_DELETE | RBAC_EXECUTE | RBAC_ADMIN;
@@ -160,7 +161,7 @@ library_metadata_t* library_metadata_create_default(void) {
     /* Default library configuration */
     metadata->config.allow_collection_creation = true;
     metadata->config.allow_collection_deletion = true;
-    metadata->config.default_collection_template = strdup("basic_collection");
+    metadata->config.default_collection_template = BUFFER_STRDUP("basic_collection");
     
     /* Start with no collections */
     metadata->collection_count = 0;
@@ -186,13 +187,13 @@ library_metadata_t* library_metadata_load(database_t* db, const char* library_na
         return NULL;
     }
     
-    library_metadata_t* metadata = calloc(1, sizeof(library_metadata_t));
+    library_metadata_t* metadata = BUFFER_ALLOC(sizeof(library_metadata_t));
     if (!metadata) {
         json_free(lib_doc);
         return NULL;
     }
     
-    metadata->library_name = strdup(library_name);
+    metadata->library_name = BUFFER_STRDUP(library_name);
     
     /* Parse type */
     json_value_t* type_val = json_object_get(lib_doc, "type");
@@ -209,18 +210,18 @@ library_metadata_t* library_metadata_load(database_t* db, const char* library_na
     /* Parse description */
     json_value_t* desc_val = json_object_get(lib_doc, "description");
     if (desc_val && desc_val->type == JSON_STRING) {
-        metadata->description = strdup(desc_val->value.string);
+        metadata->description = BUFFER_STRDUP(desc_val->value.string);
     }
     
     /* Parse collections */
     json_value_t* colls = json_object_get(lib_doc, "collections");
     if (colls && colls->type == JSON_ARRAY) {
         metadata->collection_count = colls->value.array.size;
-        metadata->collections = calloc(metadata->collection_count, sizeof(char*));
+        metadata->collections = BUFFER_ALLOC(sizeof(char*));
         for (size_t i = 0; i < metadata->collection_count; i++) {
             json_value_t* coll = json_array_get(colls, i);
             if (coll && coll->type == JSON_STRING) {
-                metadata->collections[i] = strdup(coll->value.string);
+                metadata->collections[i] = BUFFER_STRDUP(coll->value.string);
             }
         }
     }
@@ -279,9 +280,9 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
     
     if (existing) {
         json_free(existing);
-        result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, library_name, lib_doc);
+        result = storage_update_document(db, library_name, lib_doc);
     } else {
-        result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
+        result = storage_insert_document(db, lib_doc);
     }
     
     json_free(lib_doc);
@@ -298,36 +299,36 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
 void library_metadata_free(library_metadata_t* metadata) {
     if (!metadata) return;
     
-    free(metadata->library_name);
-    free(metadata->description);
+    BUFFER_FREE(metadata->library_name);
+    BUFFER_FREE(metadata->description);
     
     /* Free collections */
     for (size_t i = 0; i < metadata->collection_count; i++) {
-        free(metadata->collections[i]);
+        BUFFER_FREE(metadata->collections[i]);
     }
-    free(metadata->collections);
+    BUFFER_FREE(metadata->collections);
     
     /* Free permissions */
     for (size_t i = 0; i < metadata->permissions.owner_count; i++) {
-        free(metadata->permissions.owner_ids[i]);
+        BUFFER_FREE(metadata->permissions.owner_ids[i]);
     }
-    free(metadata->permissions.owner_ids);
+    BUFFER_FREE(metadata->permissions.owner_ids);
     
     /* Free config */
-    free(metadata->config.default_collection_template);
+    BUFFER_FREE(metadata->config.default_collection_template);
     
     /* Free access rules */
     for (size_t i = 0; i < metadata->access.allowed_count; i++) {
-        free(metadata->access.allowed_libraries[i]);
+        BUFFER_FREE(metadata->access.allowed_libraries[i]);
     }
-    free(metadata->access.allowed_libraries);
+    BUFFER_FREE(metadata->access.allowed_libraries);
     
     for (size_t i = 0; i < metadata->access.denied_count; i++) {
-        free(metadata->access.denied_libraries[i]);
+        BUFFER_FREE(metadata->access.denied_libraries[i]);
     }
-    free(metadata->access.denied_libraries);
+    BUFFER_FREE(metadata->access.denied_libraries);
     
-    free(metadata);
+    BUFFER_FREE(metadata);
 }
 
 /* Add collection to library */
@@ -343,12 +344,12 @@ int library_add_collection(library_metadata_t* metadata, const char* collection_
     }
     
     /* Add to array */
-    char** new_collections = realloc(metadata->collections, 
+    char** new_collections = BUFFER_REALLOC(metadata->collections, 
                                    (metadata->collection_count + 1) * sizeof(char*));
     if (!new_collections) return -1;
     
     metadata->collections = new_collections;
-    metadata->collections[metadata->collection_count] = strdup(collection_name);
+    metadata->collections[metadata->collection_count] = BUFFER_STRDUP(collection_name);
     metadata->collection_count++;
     
     return 0;
@@ -362,7 +363,7 @@ int library_remove_collection(library_metadata_t* metadata, const char* collecti
     for (size_t i = 0; i < metadata->collection_count; i++) {
         if (metadata->collections[i] && 
             strcmp(metadata->collections[i], collection_name) == 0) {
-            free(metadata->collections[i]);
+            BUFFER_FREE(metadata->collections[i]);
             
             /* Shift remaining */
             for (size_t j = i; j < metadata->collection_count - 1; j++) {

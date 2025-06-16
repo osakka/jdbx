@@ -103,7 +103,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(system_lib_doc, "type", json_create_string("library"));
               json_object_set(system_lib_doc, "name", json_create_string("system"));
               json_object_set(system_lib_doc, "template", json_create_string("system"));
-              json_object_set(system_lib_doc, "owner", json_create_string("admin"));
+              json_object_set(system_lib_doc, "owner", json_create_string("system-admin"));
               json_object_set(system_lib_doc, "description", json_create_string("System library for internal operations"));
               
               /* Add timestamps - use Unix timestamp integers for consistency */
@@ -129,7 +129,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(default_lib_doc, "type", json_create_string("library"));
               json_object_set(default_lib_doc, "name", json_create_string("default"));
               json_object_set(default_lib_doc, "template", json_create_string("standard"));
-              json_object_set(default_lib_doc, "owner", json_create_string("admin"));
+              json_object_set(default_lib_doc, "owner", json_create_string("system-admin"));
               json_object_set(default_lib_doc, "description", json_create_string("Default library for general use"));
               json_object_set(default_lib_doc, "created_at", json_create_integer(now));
               json_object_set(default_lib_doc, "updated_at", json_create_integer(now));
@@ -147,16 +147,64 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               }
               json_free(default_lib_doc);
               
-              LOG_INFO("Deferred bootstrap completed successfully with library documents");
+              /* Create system actors (system-admin, system-metrics, etc.) */
+              extern int create_system_actors(database_t* db);
+              create_system_actors(ctx->db);
+              
+              LOG_INFO("Deferred bootstrap completed successfully with library documents and system actors");
               /* Disable bootstrap mode */
               ctx->db->is_bootstrap_mode = 0;
               unsetenv("JDBX_DEFERRED_BOOTSTRAP");
               
               /* Mark bootstrap as completed */
               g_bootstrap_completed = 1;
+              
+              /* If this request used admin credentials, return successful login immediately */
+              if (strcmp(username, "admin") == 0 && strcmp(password, "admin") == 0) {
+                pthread_mutex_unlock(&g_bootstrap_mutex);
+                
+                /* Get the admin user ID that was just created */
+                json_value_t* bootstrap_query = json_create_object();
+                json_object_set(bootstrap_query, "type", json_create_string(DOC_TYPE_NAME_USER));
+                json_object_set(bootstrap_query, "library", json_create_string("system"));
+                json_object_set(bootstrap_query, "collection", json_create_string("users"));
+                json_object_set(bootstrap_query, "username", json_create_string("admin"));
+                
+                json_value_t* bootstrap_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, bootstrap_query);
+                json_free(bootstrap_query);
+                
+                if (bootstrap_results) {
+                  json_value_t* documents = json_object_get(bootstrap_results, "documents");
+                  if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
+                    json_value_t* admin_user = json_array_get(documents, 0);
+                    json_value_t* user_id_val = json_object_get(admin_user, "uuid");
+                    
+                    if (user_id_val && user_id_val->type == JSON_STRING) {
+                      const char* admin_user_id = user_id_val->value.string;
+                      
+                      /* Create JWT token pair for bootstrap admin login */
+                      json_value_t* bootstrap_response_obj = NULL;
+                      char* bootstrap_response_str = jwt_create_token_pair(ctx->jwt_secret, admin_user_id, "admin", &bootstrap_response_obj);
+                      
+                      if (bootstrap_response_str) {
+                        json_free(bootstrap_results);
+                        json_free(body);
+                        
+                        http_response_t* response = create_http_response(HTTP_OK, bootstrap_response_str, "application/json");
+                        BUFFER_FREE(bootstrap_response_str);
+                        json_free(bootstrap_response_obj);
+                        
+                        LOG_INFO("Bootstrap admin login successful - returning immediate response");
+                        return response;
+                      }
+                    }
+                  }
+                  json_free(bootstrap_results);
+                }
+              }
             }
           }
-          free(admin_role_id);
+          BUFFER_FREE(admin_role_id);
         }
         
         /* Release bootstrap mutex */
@@ -172,27 +220,24 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   LOG_DEBUG("Attempting login for user: %s in library: %s", username, library);
   
-  /* HIERARCHICAL ARCHITECTURE: Query system/users collection for user */
-  json_value_t* query = json_create_object();
-  json_object_set(query, "username", json_create_string(username));
+  /* VIRTUAL OPERATION: Query for user using clear virtual function */
+  json_value_t* username_filter = json_create_object();
+  json_object_set(username_filter, "username", json_create_string(username));
   
-  char* query_str = json_stringify(query);
-  LOG_DEBUG("Querying for user in system/users with: %s", query_str);
-  buffer_pool_free_safe(query_str);
+  LOG_DEBUG("Virtual query for user '%s' in library='%s'", username, RBAC_SYSTEM_LIBRARY);
   
   if (!ctx->db) {
     LOG_ERROR("Database context is NULL!");
-    json_free(query);
+    json_free(username_filter);
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* UNIFIED DOCUMENTS: Query system/users collection */
-  TRACE_AUTH("Querying for user '%s' in library='%s', collection='%s'", username, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME);
-  json_value_t* query_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  /* Use clear virtual function for user query */
+  json_value_t* query_results = virtual_query_users(ctx->db, RBAC_SYSTEM_LIBRARY, username_filter);
   
-  json_free(query);
+  json_free(username_filter);
     
   if (!query_results) {
     json_free(body);
@@ -268,6 +313,9 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         /* First, invalidate any existing active sessions for this user */
         LOG_DEBUG("Checking for existing sessions for user: %s", user_id);
         json_value_t* session_query = json_create_object();
+        json_object_set(session_query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+        json_object_set(session_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+        json_object_set(session_query, "collection", json_create_string(RBAC_SESSIONS_COLLECTION_NAME));
         json_object_set(session_query, "user_id", json_create_string(user_id));
         json_object_set(session_query, "active", json_create_boolean(1));
         
@@ -315,7 +363,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     }
     
     /* Re-serialize response with library added */
-    buffer_pool_free_safe(response_str);
+    BUFFER_FREE(response_str);
     response_str = json_stringify(response_obj);
     
     /* Clean up and return response */
@@ -326,7 +374,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     LOG_DEBUG("Returning successful login response with library context: %s", user_lib);
     
     /* Clean up response string */
-    buffer_pool_free_safe(response_str);
+    BUFFER_FREE(response_str);
     json_free(response_obj);
     
     return response;

@@ -82,11 +82,12 @@ int library_metrics_record(database_t* db, const char* library_name,
   json_object_set(document, "type", json_create_string("metric"));
   json_object_set(document, "metric_type", json_create_string(metric_type));
   json_object_set(document, "library", json_create_string(library_name ? library_name : "default"));
+  json_object_set(document, "owner", json_create_string(SYSTEM_USER_METRICS));
   json_object_set(document, "timestamp", json_create_string(iso_time));
   json_object_set(document, "data", json_deep_copy(metric_data));
   
   /* Insert metric document */
-  json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, collection_name, document);
+  json_value_t* result = storage_insert_document(db, document);
   json_free(document);
   free(collection_name);
   

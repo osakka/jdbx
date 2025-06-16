@@ -1,4 +1,5 @@
 #include "core/server.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,7 @@ void parse_cookies(http_request_t* request) {
     return;
   }
   
-  char* cookie_str = strdup(request->cookie_header);
+  char* cookie_str = BUFFER_STRDUP(request->cookie_header);
   if (!cookie_str) {
     return;
   }
@@ -33,8 +34,8 @@ void parse_cookies(http_request_t* request) {
       if (cookie) {
         /* Get name and value */
         *equals = '\0';
-        cookie->name = strdup(cookie_pair);
-        cookie->value = strdup(equals + 1);
+        cookie->name = BUFFER_STRDUP(cookie_pair);
+        cookie->value = BUFFER_STRDUP(equals + 1);
         cookie->next = NULL;
         
         /* Add to cookies list */
@@ -53,7 +54,7 @@ void parse_cookies(http_request_t* request) {
     cookie_pair = strtok_r(NULL, ";", &saveptr);
   }
   
-  free(cookie_str);
+  BUFFER_FREE(cookie_str);
 }
 
 /* Get cookie value by name */
@@ -108,7 +109,7 @@ http_request_t* parse_http_request(const char* request_str) {
   request->keep_alive = 0;  /* Default to close connection */
   
   /* Parse request line and headers */
-  char* request_copy = strdup(request_str);
+  char* request_copy = BUFFER_STRDUP(request_str);
   char* line = strtok(request_copy, "\r\n");
   
   if (line) {
@@ -131,11 +132,11 @@ http_request_t* parse_http_request(const char* request_str) {
       /* Split path and query */
       *query_start = '\0';
       query_start++;
-      request->path = strdup(url);
-      request->query = strdup(query_start);
+      request->path = BUFFER_STRDUP(url);
+      request->query = BUFFER_STRDUP(query_start);
     } else {
       /* No query part */
-      request->path = strdup(url);
+      request->path = BUFFER_STRDUP(url);
       request->query = NULL;
     }
     
@@ -150,7 +151,7 @@ http_request_t* parse_http_request(const char* request_str) {
     while (line && *line) {
       /* Content-Type header */
       if (strncasecmp(line, "Content-Type:", 13) == 0) {
-        request->content_type = strdup(line + 14);
+        request->content_type = BUFFER_STRDUP(line + 14);
         /* Trim leading/trailing whitespace */
         while (*request->content_type == ' ') {
           request->content_type++;
@@ -167,7 +168,7 @@ http_request_t* parse_http_request(const char* request_str) {
       
       /* Authorization header */
       else if (strncasecmp(line, "Authorization:", 14) == 0) {
-        request->authorization = strdup(line + 15);
+        request->authorization = BUFFER_STRDUP(line + 15);
         /* Trim leading/trailing whitespace */
         while (*request->authorization == ' ') {
           request->authorization++;
@@ -176,7 +177,7 @@ http_request_t* parse_http_request(const char* request_str) {
       
       /* Cookie header */
       else if (strncasecmp(line, "Cookie:", 7) == 0) {
-        request->cookie_header = strdup(line + 8);
+        request->cookie_header = BUFFER_STRDUP(line + 8);
         /* Trim leading/trailing whitespace */
         while (*request->cookie_header == ' ') {
           request->cookie_header++;
@@ -185,7 +186,7 @@ http_request_t* parse_http_request(const char* request_str) {
       
       /* Origin header */
       else if (strncasecmp(line, "Origin:", 7) == 0) {
-        request->origin = strdup(line + 8);
+        request->origin = BUFFER_STRDUP(line + 8);
         /* Trim leading/trailing whitespace */
         while (*request->origin == ' ') {
           request->origin++;
@@ -194,7 +195,7 @@ http_request_t* parse_http_request(const char* request_str) {
       
       /* User-Agent header */
       else if (strncasecmp(line, "User-Agent:", 11) == 0) {
-        request->user_agent = strdup(line + 12);
+        request->user_agent = BUFFER_STRDUP(line + 12);
         /* Trim leading/trailing whitespace */
         while (*request->user_agent == ' ') {
           request->user_agent++;
@@ -226,7 +227,7 @@ http_request_t* parse_http_request(const char* request_str) {
       const char* body_start = strstr(request_str, "\r\n\r\n");
       if (body_start) {
         body_start += 4; /* Skip the double CRLF */
-        request->body = strdup(body_start);
+        request->body = BUFFER_STRDUP(body_start);
         if (g_logger) {
           TRACE_NET("HTTP_PARSE: Body found, length=%zu, content=%.100s", 
               strlen(request->body), request->body);
@@ -244,33 +245,33 @@ http_request_t* parse_http_request(const char* request_str) {
     }
   }
   
-  free(request_copy);
+  BUFFER_FREE(request_copy);
   return request;
 }
 
 /* Free HTTP request */
 void free_http_request(http_request_t* request) {
   if (request) {
-    if (request->path) free(request->path);
-    if (request->query) free(request->query);
-    if (request->body) free(request->body);
-    if (request->content_type) free(request->content_type);
-    if (request->authorization) free(request->authorization);
-    if (request->cookie_header) free(request->cookie_header);
-    if (request->origin) free(request->origin);
-    if (request->user_agent) free(request->user_agent);
-    if (request->remote_addr) free(request->remote_addr);
+    if (request->path) BUFFER_FREE(request->path);
+    if (request->query) BUFFER_FREE(request->query);
+    if (request->body) BUFFER_FREE(request->body);
+    if (request->content_type) BUFFER_FREE(request->content_type);
+    if (request->authorization) BUFFER_FREE(request->authorization);
+    if (request->cookie_header) BUFFER_FREE(request->cookie_header);
+    if (request->origin) BUFFER_FREE(request->origin);
+    if (request->user_agent) BUFFER_FREE(request->user_agent);
+    if (request->remote_addr) BUFFER_FREE(request->remote_addr);
     
     /* Free cookies */
     cookie_t* cookie = request->cookies;
     while (cookie) {
       cookie_t* next = cookie->next;
-      if (cookie->name) free(cookie->name);
-      if (cookie->value) free(cookie->value);
-      free(cookie);
+      if (cookie->name) BUFFER_FREE(cookie->name);
+      if (cookie->value) BUFFER_FREE(cookie->value);
+      BUFFER_FREE(cookie);
       cookie = next;
     }
     
-    free(request);
+    BUFFER_FREE(request);
   }
 }

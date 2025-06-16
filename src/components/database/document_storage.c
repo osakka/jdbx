@@ -3,6 +3,7 @@
 #include "rbac/rbac.h"
 #include "utils/logger.h"
 #include "utils/json_helpers.h"
+#include "utils/buffer_pool.h"
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -111,8 +112,8 @@ static int create_system_actor(database_t* db, const char* username, const char*
         }
     }
     
-    /* Insert */
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, actor);
+    /* Insert using virtual layer for consistency */
+    json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, actor, username);
     json_free(actor);
     
     if (result) {
@@ -165,7 +166,7 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     }
     json_object_set(coll, "settings", settings);
     
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll);
+    json_value_t* result = storage_insert_document(db, coll);
     json_free(coll);
     
     if (result) {
@@ -227,7 +228,7 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     /* Add timestamps */
     add_document_system_fields(lib, "library", "system", "libraries", owner);
     
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib);
+    json_value_t* result = storage_insert_document(db, lib);
     json_free(lib);
     
     if (result) {
@@ -243,9 +244,66 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     return 0;
 }
 
+/* Create system roles */
+static int create_system_roles(database_t* db) {
+    LOG_INFO("Creating system roles");
+    
+    /* System admin role */
+    json_value_t* admin_role = json_create_object();
+    add_document_system_fields(admin_role, "role", "system", "roles", SYSTEM_USER_ADMIN);
+    json_object_set(admin_role, "name", json_create_string("system-admin-role"));
+    json_object_set(admin_role, "display_name", json_create_string("System Administrator Role"));
+    json_object_set(admin_role, "description", json_create_string("Full system access for administrative operations"));
+    
+    json_value_t* admin_perms = json_create_object();
+    json_value_t* all_perms = json_create_array();
+    json_array_append(all_perms, json_create_string("read"));
+    json_array_append(all_perms, json_create_string("write"));
+    json_array_append(all_perms, json_create_string("delete"));
+    json_array_append(all_perms, json_create_string("execute"));
+    json_array_append(all_perms, json_create_string("admin"));
+    json_object_set(admin_perms, "*/*", all_perms);
+    json_object_set(admin_role, "permissions", admin_perms);
+    
+    json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, admin_role, SYSTEM_USER_ADMIN);
+    if (result) {
+        LOG_INFO("Created system-admin-role");
+        json_free(result);
+    }
+    json_free(admin_role);
+    
+    /* Metrics role */
+    json_value_t* metrics_role = json_create_object();
+    add_document_system_fields(metrics_role, "role", "system", "roles", SYSTEM_USER_ADMIN);
+    json_object_set(metrics_role, "name", json_create_string("system-metrics-role"));
+    json_object_set(metrics_role, "display_name", json_create_string("Metrics Collector Role"));
+    json_object_set(metrics_role, "description", json_create_string("Can collect and store system metrics"));
+    
+    json_value_t* metrics_perms = json_create_object();
+    json_value_t* metrics_write = json_create_array();
+    json_array_append(metrics_write, json_create_string("write"));
+    json_object_set(metrics_perms, "system/metrics", metrics_write);
+    json_value_t* docs_read = json_create_array();
+    json_array_append(docs_read, json_create_string("read"));
+    json_object_set(metrics_perms, "documents", docs_read);
+    json_object_set(metrics_role, "permissions", metrics_perms);
+    
+    result = virtual_insert(db, DOC_TYPE_NAME_ROLE, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, metrics_role, SYSTEM_USER_ADMIN);
+    if (result) {
+        LOG_INFO("Created system-metrics-role");
+        json_free(result);
+    }
+    json_free(metrics_role);
+    
+    return 1;
+}
+
 /* Create all system actors */
 int create_system_actors(database_t* db) {
     LOG_INFO("Creating system actors");
+    
+    /* Create system roles first */
+    create_system_roles(db);
     
     /* System admin - owns system library and collections */
     create_system_actor(db, SYSTEM_USER_ADMIN, "System Administrator",
@@ -504,21 +562,21 @@ int create_library_templates(database_t* db) {
     add_document_system_fields(cms_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
     
     /* Insert templates into database */
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, ecommerce_template);
+    json_value_t* result = storage_insert_document(db, ecommerce_template);
     if (result) {
         LOG_INFO("Created e-commerce library template");
         json_free(result);
     }
     json_free(ecommerce_template);
     
-    result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, wiki_template);
+    result = storage_insert_document(db, wiki_template);
     if (result) {
         LOG_INFO("Created wiki library template");
         json_free(result);
     }
     json_free(wiki_template);
     
-    result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, cms_template);
+    result = storage_insert_document(db, cms_template);
     if (result) {
         LOG_INFO("Created CMS library template");
         json_free(result);
@@ -575,7 +633,7 @@ int unified_documents_init(database_t* db) {
     /* Create admin role */
     json_value_t* query = json_create_object();
     json_object_set(query, "type", json_create_string("role"));
-    json_object_set(query, "name", json_create_string("admin"));
+    json_object_set(query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
     json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
     
@@ -585,7 +643,7 @@ int unified_documents_init(database_t* db) {
         /* Create admin role */
         json_value_t* admin_role = json_create_object();
         add_document_system_fields(admin_role, "role", "system", "roles", SYSTEM_USER_ADMIN);
-        json_object_set(admin_role, "name", json_create_string("admin"));
+        json_object_set(admin_role, "name", json_create_string(DEFAULT_ADMIN_ROLE));
         json_object_set(admin_role, "display_name", json_create_string("Administrator"));
         json_object_set(admin_role, "description", json_create_string("Full system access"));
         
@@ -600,11 +658,11 @@ int unified_documents_init(database_t* db) {
         json_object_set(permissions, "*/*", all_perms);
         json_object_set(admin_role, "permissions", permissions);
         
-        json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_role);
+        json_value_t* result = storage_insert_document(db, admin_role);
         if (result) {
             json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
-                admin_role_id = strdup(id_val->value.string);
+                admin_role_id = BUFFER_STRDUP(id_val->value.string);
             }
             json_free(result);
         }
@@ -616,7 +674,7 @@ int unified_documents_init(database_t* db) {
     /* PURE DOCUMENTS: Create admin user in documents collection */
     query = json_create_object();
     json_object_set(query, "type", json_create_string("user"));
-    json_object_set(query, "username", json_create_string("admin"));
+    json_object_set(query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
     json_object_set(query, "library", json_create_string("system"));
     existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
     json_free(query);
@@ -629,7 +687,7 @@ int unified_documents_init(database_t* db) {
         /* PURE DOCUMENTS: Add type and library fields */
         json_object_set(admin_user, "type", json_create_string("user"));
         json_object_set(admin_user, "library", json_create_string("system"));
-        json_object_set(admin_user, "username", json_create_string("admin"));
+        json_object_set(admin_user, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
         json_object_set(admin_user, "email", json_create_string("admin@localhost"));
         json_object_set(admin_user, "full_name", json_create_string("System Administrator"));
         
@@ -637,7 +695,7 @@ int unified_documents_init(database_t* db) {
         extern char* hash_password(const char* password);
         char* password_hash = hash_password("admin");
         json_object_set(admin_user, "password_hash", json_create_string(password_hash));
-        free(password_hash);
+        BUFFER_FREE(password_hash);
         
         json_object_set(admin_user, "status", json_create_string("active"));
         json_object_set(admin_user, "is_admin", json_create_boolean(1));
@@ -652,7 +710,7 @@ int unified_documents_init(database_t* db) {
         /* Add system fields for unified documents */
         add_document_system_fields(admin_user, "user", "system", "users", SYSTEM_USER_ADMIN);
         
-        json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_user);
+        json_value_t* result = storage_insert_document(db, admin_user);
         if (result) {
             LOG_INFO("Created admin user with password 'admin' in documents collection");
             json_free(result);
@@ -660,7 +718,7 @@ int unified_documents_init(database_t* db) {
         json_free(admin_user);
     }
     if (existing) json_free(existing);
-    if (admin_role_id) free(admin_role_id);
+    if (admin_role_id) BUFFER_FREE(admin_role_id);
     
     /* Create predefined library templates */
     create_library_templates(db);
@@ -760,7 +818,7 @@ json_value_t* create_typed_document(database_t* db, const char* type,
     add_document_system_fields(doc, type, NULL, NULL, owner_id);
     
     /* Insert document */
-    return db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
+    return storage_insert_document(db, doc);
 }
 
 /* Validate document has required fields */

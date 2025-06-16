@@ -325,7 +325,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     }
     
     /* Store version */
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, version_collection, version_doc);
+    json_value_t* result = storage_insert_document(db, version_doc);
     json_free(version_doc);
     
     if (!result) {
@@ -392,7 +392,7 @@ int versioning_cleanup_old_versions(database_t* db, const char* library_name,
                     LOG_DEBUG("Would archive version %s", id_val->value.string);
                 } else {
                     /* Delete the version */
-                    db_delete_document(db, STORAGE_LIBRARY, version_collection, id_val->value.string);
+                    storage_delete_document(db, id_val->value.string);
                     LOG_DEBUG("Deleted excess version %s", id_val->value.string);
                 }
             }
@@ -422,7 +422,7 @@ int versioning_cleanup_old_versions(database_t* db, const char* library_name,
                                 LOG_DEBUG("Would archive old version %s", id_val->value.string);
                             } else {
                                 /* Delete the version */
-                                db_delete_document(db, STORAGE_LIBRARY, version_collection, id_val->value.string);
+                                storage_delete_document(db, id_val->value.string);
                                 LOG_DEBUG("Deleted old version %s (past retention)", id_val->value.string);
                             }
                         }
@@ -508,7 +508,7 @@ int versioning_restore_version(database_t* db, const char* library_name,
     
     /* Restore the snapshot */
     json_value_t* restored = json_clone(snapshot);
-    json_value_t* result = db_update_document(db, STORAGE_LIBRARY, collection_name, doc_id, restored);
+    json_value_t* result = storage_update_document(db, doc_id, restored);
     
     json_free(restored);
     json_free(version_doc);

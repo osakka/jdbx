@@ -89,11 +89,11 @@ const char* config_string_intern(const char* str) {
     
     if (!g_config_pool) {
         /* Fallback to regular strdup if pool failed */
-        return buffer_pool_strdup(str);
+        return BUFFER_STRDUP(str);
     }
     
     interned_string_t* istr = string_pool_intern(g_config_pool, str);
-    return istr ? istr->str : buffer_pool_strdup(str);
+    return istr ? istr->str : BUFFER_STRDUP(str);
 }
 
 /* Intern a JSON field name (_id, username, type, etc.) */
@@ -105,11 +105,11 @@ const char* json_key_intern(const char* str) {
     }
     
     if (!g_json_keys_pool) {
-        return buffer_pool_strdup(str);
+        return BUFFER_STRDUP(str);
     }
     
     interned_string_t* istr = string_pool_intern(g_json_keys_pool, str);
-    return istr ? istr->str : buffer_pool_strdup(str);
+    return istr ? istr->str : BUFFER_STRDUP(str);
 }
 
 /* Intern a document ID */
@@ -121,11 +121,11 @@ const char* doc_id_intern(const char* str) {
     }
     
     if (!g_doc_ids_pool) {
-        return buffer_pool_strdup(str);
+        return BUFFER_STRDUP(str);
     }
     
     interned_string_t* istr = string_pool_intern(g_doc_ids_pool, str);
-    return istr ? istr->str : buffer_pool_strdup(str);
+    return istr ? istr->str : BUFFER_STRDUP(str);
 }
 
 /* Intern an error message */
@@ -137,11 +137,11 @@ const char* error_message_intern(const char* str) {
     }
     
     if (!g_error_messages_pool) {
-        return buffer_pool_strdup(str);
+        return BUFFER_STRDUP(str);
     }
     
     interned_string_t* istr = string_pool_intern(g_error_messages_pool, str);
-    return istr ? istr->str : buffer_pool_strdup(str);
+    return istr ? istr->str : BUFFER_STRDUP(str);
 }
 
 /* Get statistics for all specialized pools */

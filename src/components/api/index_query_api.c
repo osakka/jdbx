@@ -22,7 +22,7 @@ static char* extract_collection_name(const char* path) {
   }
   
   /* Collection name is the rest of the path */
-  return strdup(path + prefix_len);
+  return BUFFER_STRDUP(path + prefix_len);
 }
 
 /* Parse limit and skip parameters */
@@ -37,7 +37,7 @@ static void parse_pagination(const char* query_str, size_t* limit, size_t* skip)
   *skip = 0;  /* No skip */
   
   /* Parse query string for limit and skip parameters */
-  char* query = strdup(query_str);
+  char* query = BUFFER_STRDUP(query_str);
   char* token = strtok(query, "&");
   
   while (token) {
@@ -49,7 +49,7 @@ static void parse_pagination(const char* query_str, size_t* limit, size_t* skip)
     token = strtok(NULL, "&");
   }
   
-  free(query);
+  BUFFER_FREE(query);
 }
 #endif
 
@@ -70,7 +70,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    free(collection);
+    BUFFER_FREE(collection);
     if (body) json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -79,7 +79,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   /* Extract field path */
   json_value_t* field_val = json_object_get(body, "field");
   if (!field_val || field_val->type != JSON_STRING) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Field path is required\"}", "application/json");
@@ -90,7 +90,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   /* Extract value to search for */
   json_value_t* value_val = json_object_get(body, "value");
   if (!value_val) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Search value is required\"}", "application/json");
@@ -100,31 +100,31 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   char* value_str = NULL;
   
   if (value_val->type == JSON_STRING) {
-    value_str = strdup(value_val->value.string);
+    value_str = BUFFER_STRDUP(value_val->value.string);
   } else if (value_val->type == JSON_NUMBER) {
-    value_str = malloc(64);
+    value_str = BUFFER_ALLOC(64);
     if (value_str) {
       snprintf(value_str, 64, "%f", value_val->value.number);
     }
   } else if (value_val->type == JSON_INTEGER) {
-    value_str = malloc(64);
+    value_str = BUFFER_ALLOC(64);
     if (value_str) {
       snprintf(value_str, 64, "%lld", (long long)value_val->value.integer);
     }
   } else if (value_val->type == JSON_BOOLEAN) {
-    value_str = strdup(value_val->value.boolean ? "true" : "false");
+    value_str = BUFFER_STRDUP(value_val->value.boolean ? "true" : "false");
   } else if (value_val->type == JSON_NULL) {
-    value_str = strdup("null");
+    value_str = BUFFER_STRDUP("null");
   } else {
     /* Complex types not supported */
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Unsupported value type\"}", "application/json");
   }
   
   if (!value_str) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -153,8 +153,8 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   json_value_t* results = db_query_by_index(ctx->db, collection, field_path, value_str, limit, skip);
   
   /* Free resources */
-  free(collection);
-  free(value_str);
+  BUFFER_FREE(collection);
+  BUFFER_FREE(value_str);
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -176,7 +176,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }
@@ -198,7 +198,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    free(collection);
+    BUFFER_FREE(collection);
     if (body) json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -207,7 +207,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   /* Extract queries array */
   json_value_t* queries_val = json_object_get(body, "queries");
   if (!queries_val || queries_val->type != JSON_ARRAY || json_array_size(queries_val) == 0) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Queries array is required\"}", "application/json");
@@ -235,7 +235,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   /* Convert queries array to a real query object for database */
   json_value_t* query = json_create_object();
   if (!query) {
-    free(collection);
+    BUFFER_FREE(collection);
     json_free(body);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -263,7 +263,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   
   /* Free resources */
   json_free(query);
-  free(collection);
+  BUFFER_FREE(collection);
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -303,7 +303,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
   
   /* Free response string */
-  buffer_pool_free_safe(response_str);
+  BUFFER_FREE(response_str);
   
   return http_response;
 }

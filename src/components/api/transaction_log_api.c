@@ -40,7 +40,7 @@ http_response_t* api_handle_transaction_logs(api_context_t* ctx, http_request_t*
   }
   
   http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-  buffer_pool_free_safe(json_str);
+  BUFFER_FREE(json_str);
   
   return response;
 }
@@ -141,7 +141,7 @@ http_response_t* api_handle_transaction_logs_configure(api_context_t* ctx, http_
   }
   
   http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-  buffer_pool_free_safe(json_str);
+  BUFFER_FREE(json_str);
   
   return response;
 }
@@ -245,7 +245,7 @@ http_response_t* api_handle_transaction_logs_report(api_context_t* ctx, http_req
   }
   
   http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-  buffer_pool_free_safe(json_str);
+  BUFFER_FREE(json_str);
   
   return response;
 }
@@ -324,7 +324,7 @@ http_response_t* api_handle_transaction_logs_document_history(api_context_t* ctx
   }
   
   http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-  buffer_pool_free_safe(json_str);
+  BUFFER_FREE(json_str);
   
   return response;
 }

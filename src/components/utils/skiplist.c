@@ -1,5 +1,6 @@
 #include "utils/skiplist.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -35,7 +36,7 @@ skiplist_t* skiplist_create(int (*compare)(const void*, size_t, const void*, siz
     /* Create sentinel head node */
     list->head = skiplist_create_node(SKIPLIST_MAX_LEVEL, NULL, 0, NULL, 0);
     if (!list->head) {
-        free(list);
+        BUFFER_FREE(list);
         return NULL;
     }
     
@@ -43,7 +44,7 @@ skiplist_t* skiplist_create(int (*compare)(const void*, size_t, const void*, siz
     list->hp_domain = hp_domain_create();
     if (!list->hp_domain) {
         skiplist_free_node(list->head);
-        free(list);
+        BUFFER_FREE(list);
         return NULL;
     }
     
@@ -69,7 +70,7 @@ void skiplist_destroy(skiplist_t* list) {
     }
     
     hp_domain_destroy(list->hp_domain);
-    free(list);
+    BUFFER_FREE(list);
 }
 
 /* Find predecessors and successors at each level */
@@ -165,7 +166,7 @@ bool skiplist_insert(skiplist_t* list, const void* key, size_t key_len,
             void* old_value = succs[0]->value;
             succs[0]->value = new_value;
             succs[0]->value_len = value_len;
-            free(old_value);
+            BUFFER_FREE(old_value);
             
             hp_release_record(hp_rec);
             return true;
@@ -332,7 +333,7 @@ skiplist_iterator_t* skiplist_iterator_create(skiplist_t* list) {
     iter->list = list;
     iter->hp_record = hp_acquire_record(list->hp_domain);
     if (!iter->hp_record) {
-        free(iter);
+        BUFFER_FREE(iter);
         return NULL;
     }
     
@@ -359,7 +360,7 @@ void skiplist_iterator_destroy(skiplist_iterator_t* iter) {
     __sync_synchronize();
     
     hp_release_record(iter->hp_record);
-    free(iter);
+    BUFFER_FREE(iter);
 }
 
 /* Get next item from iterator */

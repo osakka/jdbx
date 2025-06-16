@@ -1,4 +1,5 @@
 #include "utils/environment.h"
+#include "utils/buffer_pool.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +29,7 @@ char* ensure_absolute_path(const char* path, const char* base_dir) {
   
   /* Already absolute path */
   if (path[0] == '/') {
-    result = strdup(path);
+    result = BUFFER_STRDUP(path);
     return result;
   }
   
@@ -38,13 +39,13 @@ char* ensure_absolute_path(const char* path, const char* base_dir) {
     if (realpath(base_dir, resolved_base) == NULL) {
       /* fallback to current directory if base_dir is invalid */
       if (getcwd(resolved_base, sizeof(resolved_base)) == NULL) {
-        return strdup(path); /* last resort: return original path */
+        return BUFFER_STRDUP(path); /* last resort: return original path */
       }
     }
   } else {
     /* Use current working directory as base */
     if (getcwd(resolved_base, sizeof(resolved_base)) == NULL) {
-      return strdup(path); /* last resort: return original path */
+      return BUFFER_STRDUP(path); /* last resort: return original path */
     }
   }
   
@@ -53,7 +54,7 @@ char* ensure_absolute_path(const char* path, const char* base_dir) {
   size_t path_len = strlen(path);
   
   /* Allocate space for combined path, extra slash, and null terminator */
-  result = (char*)malloc(base_len + path_len + 2); 
+  result = (char*)BUFFER_ALLOC(base_len + path_len + 2); 
   if (!result) {
     return NULL; /* Memory allocation failed */
   }
@@ -119,12 +120,12 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   }
   
   /* Free original strings */
-  free(old_db_path);
-  free(old_pid_file);
-  free(old_log_file);
-  free(old_web_root);
-  free(old_cert_path);
-  free(old_key_path);
+  BUFFER_FREE(old_db_path);
+  BUFFER_FREE(old_pid_file);
+  BUFFER_FREE(old_log_file);
+  BUFFER_FREE(old_web_root);
+  BUFFER_FREE(old_cert_path);
+  BUFFER_FREE(old_key_path);
   
   return 1;
 }
@@ -161,35 +162,35 @@ int load_environment_config(server_config_t* config) {
   
   /* Update config with environment variables if they exist */
   if (db_dir) {
-    free(config->db_file);
-    config->db_file = strdup(db_dir);
+    BUFFER_FREE(config->db_file);
+    config->db_file = BUFFER_STRDUP(db_dir);
   }
   
   
   if (log_file) {
-    free(config->log_file);
-    config->log_file = strdup(log_file);
+    BUFFER_FREE(config->log_file);
+    config->log_file = BUFFER_STRDUP(log_file);
   }
   
   if (pid_file) {
-    free(config->pid_file);
-    config->pid_file = strdup(pid_file);
+    BUFFER_FREE(config->pid_file);
+    config->pid_file = BUFFER_STRDUP(pid_file);
   }
   
   if (web_root) {
-    free(config->web_root);
-    config->web_root = strdup(web_root);
+    BUFFER_FREE(config->web_root);
+    config->web_root = BUFFER_STRDUP(web_root);
   }
   
   
   if (ssl_cert_file) {
-    free(config->cert_path);
-    config->cert_path = strdup(ssl_cert_file);
+    BUFFER_FREE(config->cert_path);
+    config->cert_path = BUFFER_STRDUP(ssl_cert_file);
   }
   
   if (ssl_key_file) {
-    free(config->key_path);
-    config->key_path = strdup(ssl_key_file);
+    BUFFER_FREE(config->key_path);
+    config->key_path = BUFFER_STRDUP(ssl_key_file);
   }
   
   /* JDBX is the only storage backend - ignore env variable */
@@ -202,8 +203,8 @@ int load_environment_config(server_config_t* config) {
   
   const char* host = getenv("JDBX_HOST");
   if (host) {
-    free(config->host);
-    config->host = strdup(host);
+    BUFFER_FREE(config->host);
+    config->host = BUFFER_STRDUP(host);
   }
   
   const char* verbose_mode = getenv("JDBX_VERBOSE");

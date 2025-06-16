@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "transaction/transaction.h"
 #include "utils/json_helpers.h"
 #include "utils/logger.h"
@@ -138,7 +139,7 @@ const char* transaction_error_to_string(int error_code) {
 /* Generate a transaction ID */
 static char* generate_transaction_id() {
   /* Format: tx_<timestamp>_<random> */
-  char* id = (char*)malloc(40);
+  char* id = (char*)BUFFER_ALLOC(40);
   if (!id) {
     return NULL;
   }
@@ -172,7 +173,7 @@ static int transaction_hash_table_add(transaction_manager_t* manager, transactio
   unsigned int hash = hash_transaction_id(transaction->id, manager->tx_hash_size);
 
   /* Create a new hash entry */
-  transaction_hash_entry_t* entry = (transaction_hash_entry_t*)malloc(sizeof(transaction_hash_entry_t));
+  transaction_hash_entry_t* entry = (transaction_hash_entry_t*)BUFFER_ALLOC(sizeof(transaction_hash_entry_t));
   if (!entry) {
     return 0;
   }
@@ -205,7 +206,7 @@ static int transaction_hash_table_remove(transaction_manager_t* manager, const c
       strcmp(entry->transaction->id, id) == 0) {
       /* Remove the entry from the chain */
       *prev = entry->next;
-      free(entry);
+      BUFFER_FREE(entry);
       return 1;
     }
 
@@ -252,13 +253,13 @@ static void transaction_hash_table_free(transaction_manager_t* manager) {
 
     while (entry) {
       transaction_hash_entry_t* next = entry->next;
-      free(entry);
+      BUFFER_FREE(entry);
       entry = next;
     }
   }
 
   /* Free the hash table array */
-  free(manager->tx_hash_table);
+  BUFFER_FREE(manager->tx_hash_table);
   manager->tx_hash_table = NULL;
 }
 
@@ -266,7 +267,7 @@ static void transaction_hash_table_free(transaction_manager_t* manager) {
 transaction_manager_t* transaction_manager_create(database_t* db, int capacity) {
   LOG_INFO("Creating transaction manager with capacity %d", capacity);
 
-  transaction_manager_t* manager = (transaction_manager_t*)malloc(sizeof(transaction_manager_t));
+  transaction_manager_t* manager = (transaction_manager_t*)BUFFER_ALLOC(sizeof(transaction_manager_t));
   if (!manager) {
     LOG_ERROR("Out of memory.");
     return NULL;
@@ -283,17 +284,17 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
 
   if (pthread_mutex_init(&manager->lock, NULL) != 0) {
     LOG_ERROR("initialize transaction manager mutex.");
-    free(manager);
+    BUFFER_FREE(manager);
     return NULL;
   }
 
   /* Allocate transactions array */
   LOG_DEBUG("Allocating array for %d active transactions", manager->capacity);
-  manager->active_transactions = (transaction_t**)malloc(manager->capacity * sizeof(transaction_t*));
+  manager->active_transactions = (transaction_t**)BUFFER_ALLOC(manager->capacity * sizeof(transaction_t*));
   if (!manager->active_transactions) {
     LOG_ERROR("Out of memory.");
     pthread_mutex_destroy(&manager->lock);
-    free(manager);
+    BUFFER_FREE(manager);
     return NULL;
   }
 
@@ -306,9 +307,9 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
 
   if (!manager->tx_hash_table) {
     LOG_ERROR("Out of memory.");
-    free(manager->active_transactions);
+    BUFFER_FREE(manager->active_transactions);
     pthread_mutex_destroy(&manager->lock);
-    free(manager);
+    BUFFER_FREE(manager);
     return NULL;
   }
 
@@ -338,10 +339,10 @@ void transaction_manager_free(transaction_manager_t* manager) {
              manager->active_transactions[i]->state);
 
         if (manager->active_transactions[i]->id) {
-          free(manager->active_transactions[i]->id);
+          BUFFER_FREE(manager->active_transactions[i]->id);
         }
         if (manager->active_transactions[i]->user_id) {
-          free(manager->active_transactions[i]->user_id);
+          BUFFER_FREE(manager->active_transactions[i]->user_id);
         }
 
         /* Free operation list */
@@ -353,11 +354,11 @@ void transaction_manager_free(transaction_manager_t* manager) {
           op_count++;
 
           if (operation->collection_name) {
-            free(operation->collection_name);
+            BUFFER_FREE(operation->collection_name);
           }
 
           if (operation->document_id) {
-            free(operation->document_id);
+            BUFFER_FREE(operation->document_id);
           }
 
           if (operation->before_state) {
@@ -368,7 +369,7 @@ void transaction_manager_free(transaction_manager_t* manager) {
             json_free(operation->after_state);
           }
 
-          free(operation);
+          BUFFER_FREE(operation);
           operation = next;
         }
 
@@ -386,10 +387,10 @@ void transaction_manager_free(transaction_manager_t* manager) {
           sp_count++;
 
           if (savepoint->name) {
-            free(savepoint->name);
+            BUFFER_FREE(savepoint->name);
           }
 
-          free(savepoint);
+          BUFFER_FREE(savepoint);
           savepoint = next;
         }
 
@@ -399,12 +400,12 @@ void transaction_manager_free(transaction_manager_t* manager) {
              manager->active_transactions[i]->id : "unknown");
 
         pthread_mutex_destroy(&manager->active_transactions[i]->lock);
-        free(manager->active_transactions[i]);
+        BUFFER_FREE(manager->active_transactions[i]);
       }
     }
 
     LOG_DEBUG("Freeing transaction array.");
-    free(manager->active_transactions);
+    BUFFER_FREE(manager->active_transactions);
   }
 
   /* Free hash table */
@@ -427,7 +428,7 @@ void transaction_manager_free(transaction_manager_t* manager) {
   pthread_mutex_destroy(&manager->lock);
 
   LOG_INFO("Transaction manager freed.");
-  free(manager);
+  BUFFER_FREE(manager);
 }
 
 /* Find a transaction by ID */
@@ -505,7 +506,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
 
   /* Create a new transaction */
   LOG_DEBUG("Allocating memory for transaction structure.");
-  transaction_t* transaction = (transaction_t*)malloc(sizeof(transaction_t));
+  transaction_t* transaction = (transaction_t*)BUFFER_ALLOC(sizeof(transaction_t));
   if (!transaction) {
     LOG_ERROR("Out of memory.");
     return NULL;
@@ -516,17 +517,17 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
   transaction->id = generate_transaction_id();
   if (!transaction->id) {
     LOG_ERROR("generate transaction ID.");
-    free(transaction);
+    BUFFER_FREE(transaction);
     return NULL;
   }
 
   /* Copy user ID */
   LOG_DEBUG("Setting transaction user ID to '%s'", user_id);
-  transaction->user_id = strdup(user_id);
+  transaction->user_id = BUFFER_STRDUP(user_id);
   if (!transaction->user_id) {
     LOG_ERROR("Out of memory.");
-    free(transaction->id);
-    free(transaction);
+    BUFFER_FREE(transaction->id);
+    BUFFER_FREE(transaction);
     return NULL;
   }
 
@@ -543,9 +544,9 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
 
   if (pthread_mutex_init(&transaction->lock, NULL) != 0) {
     LOG_ERROR("initialize transaction mutex.");
-    free(transaction->user_id);
-    free(transaction->id);
-    free(transaction);
+    BUFFER_FREE(transaction->user_id);
+    BUFFER_FREE(transaction->id);
+    BUFFER_FREE(transaction);
     return NULL;
   }
 
@@ -569,9 +570,9 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
       /* Reallocation failed */
       LOG_ERROR("resize transaction array to %d elements", new_capacity);
       pthread_mutex_unlock(&manager->lock);
-      free(transaction->user_id);
-      free(transaction->id);
-      free(transaction);
+      BUFFER_FREE(transaction->user_id);
+      BUFFER_FREE(transaction->id);
+      BUFFER_FREE(transaction);
       return NULL;
     }
 
@@ -611,7 +612,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
 
       /* Replace the old hash table */
       LOG_DEBUG("Rehashed %d entries to new transaction hash table", rehashed_entries);
-      free(manager->tx_hash_table);
+      BUFFER_FREE(manager->tx_hash_table);
       manager->tx_hash_table = new_hash_table;
       manager->tx_hash_size = new_hash_size;
     }
@@ -800,16 +801,16 @@ int transaction_create_savepoint(transaction_t* transaction, const char* savepoi
   }
 
   /* Create a new savepoint */
-  savepoint_t* savepoint = (savepoint_t*)malloc(sizeof(savepoint_t));
+  savepoint_t* savepoint = (savepoint_t*)BUFFER_ALLOC(sizeof(savepoint_t));
   if (!savepoint) {
     pthread_mutex_unlock(&transaction->lock);
     return -1; /* Memory allocation failed */
   }
 
   /* Copy the name */
-  savepoint->name = strdup(savepoint_name);
+  savepoint->name = BUFFER_STRDUP(savepoint_name);
   if (!savepoint->name) {
-    free(savepoint);
+    BUFFER_FREE(savepoint);
     pthread_mutex_unlock(&transaction->lock);
     return -1; /* Memory allocation failed */
   }
@@ -911,8 +912,8 @@ int transaction_release_savepoint(transaction_t* transaction, const char* savepo
   }
 
   /* Free the savepoint */
-  free(savepoint->name);
-  free(savepoint);
+  BUFFER_FREE(savepoint->name);
+  BUFFER_FREE(savepoint);
 
   pthread_mutex_unlock(&transaction->lock);
 
@@ -1125,7 +1126,7 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
   }
 
   /* Create new operation */
-  transaction_operation_t* operation = (transaction_operation_t*)malloc(sizeof(transaction_operation_t));
+  transaction_operation_t* operation = (transaction_operation_t*)BUFFER_ALLOC(sizeof(transaction_operation_t));
   if (!operation) {
     pthread_mutex_unlock(&transaction->lock);
     return -1;
@@ -1133,9 +1134,9 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
 
   /* Initialize operation */
   operation->type = OPERATION_INSERT;
-  operation->collection_name = strdup(collection);
+  operation->collection_name = BUFFER_STRDUP(collection);
   if (!operation->collection_name) {
-    free(operation);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }
@@ -1143,7 +1144,7 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
   /* Get document ID, or generate one if not present */
   json_value_t* id_value = json_object_get(document, "uuid");
   if (id_value && id_value->type == JSON_STRING) {
-    operation->document_id = strdup(id_value->value.string);
+    operation->document_id = BUFFER_STRDUP(id_value->value.string);
   } else {
     /* Generate ID */
     char* new_id = generate_transaction_id();
@@ -1154,8 +1155,8 @@ int transaction_insert_document(transaction_manager_t* manager, transaction_t* t
   }
 
   if (!operation->document_id) {
-    free(operation->collection_name);
-    free(operation);
+    BUFFER_FREE(operation->collection_name);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }
@@ -1195,7 +1196,7 @@ int transaction_update_document(transaction_manager_t* manager, transaction_t* t
   json_value_t* before_document = NULL; /* This would come from the database */
 
   /* Create new operation */
-  transaction_operation_t* operation = (transaction_operation_t*)malloc(sizeof(transaction_operation_t));
+  transaction_operation_t* operation = (transaction_operation_t*)BUFFER_ALLOC(sizeof(transaction_operation_t));
   if (!operation) {
     pthread_mutex_unlock(&transaction->lock);
     return -1;
@@ -1203,17 +1204,17 @@ int transaction_update_document(transaction_manager_t* manager, transaction_t* t
 
   /* Initialize operation */
   operation->type = OPERATION_UPDATE;
-  operation->collection_name = strdup(collection);
+  operation->collection_name = BUFFER_STRDUP(collection);
   if (!operation->collection_name) {
-    free(operation);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }
 
-  operation->document_id = strdup(id);
+  operation->document_id = BUFFER_STRDUP(id);
   if (!operation->document_id) {
-    free(operation->collection_name);
-    free(operation);
+    BUFFER_FREE(operation->collection_name);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }
@@ -1253,7 +1254,7 @@ int transaction_delete_document(transaction_manager_t* manager, transaction_t* t
   json_value_t* before_document = NULL; /* This would come from the database */
 
   /* Create new operation */
-  transaction_operation_t* operation = (transaction_operation_t*)malloc(sizeof(transaction_operation_t));
+  transaction_operation_t* operation = (transaction_operation_t*)BUFFER_ALLOC(sizeof(transaction_operation_t));
   if (!operation) {
     pthread_mutex_unlock(&transaction->lock);
     return -1;
@@ -1261,17 +1262,17 @@ int transaction_delete_document(transaction_manager_t* manager, transaction_t* t
 
   /* Initialize operation */
   operation->type = OPERATION_DELETE;
-  operation->collection_name = strdup(collection);
+  operation->collection_name = BUFFER_STRDUP(collection);
   if (!operation->collection_name) {
-    free(operation);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }
 
-  operation->document_id = strdup(id);
+  operation->document_id = BUFFER_STRDUP(id);
   if (!operation->document_id) {
-    free(operation->collection_name);
-    free(operation);
+    BUFFER_FREE(operation->collection_name);
+    BUFFER_FREE(operation);
     pthread_mutex_unlock(&transaction->lock);
     return -1;
   }

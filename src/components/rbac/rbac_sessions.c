@@ -21,20 +21,26 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
     return NULL;
   }
   
-  /* Create session document */
+  /* Create session document using unified documents architecture */
   json_value_t* session_doc = json_create_object();
   if (!session_doc) {
     LOG_DEBUG("Failed to create session document");
     return NULL;
   }
   
-  /* Don't set _id - let db_insert_document generate it */
+  /* UNIFIED DOCUMENTS: Add mandatory fields for proper storage */
+  json_object_set(session_doc, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+  json_object_set(session_doc, "library", json_create_string("system"));
+  json_object_set(session_doc, "collection", json_create_string("sessions"));
+  json_object_set(session_doc, "owner", json_create_string("system"));
+  
+  /* Session-specific fields */
   json_object_set(session_doc, "user_id", json_create_string(user_id));
   json_object_set(session_doc, "token", json_create_string(token));
   
   /* Add username to session */
   LOG_DEBUG("Looking up username for user_id: %s", user_id);
-  json_value_t* user_doc = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
+  json_value_t* user_doc = storage_get_document(db, user_id);
   if (user_doc) {
     LOG_DEBUG("Found user document");
     json_value_t* username_val = json_object_get(user_doc, "username");
@@ -74,7 +80,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   
   /* Insert session */
   LOG_DEBUG("Inserting session into %s", SESSIONS_COLLECTION);
-  json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_doc);
+  json_value_t* result = storage_insert_document(db, session_doc);
   json_free(session_doc);
   
   if (!result) {
@@ -87,7 +93,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   char* session_id_copy = NULL;
   if (actual_id) {
     size_t len = strlen(actual_id) + 1;
-    session_id_copy = (char*)buffer_pool_alloc(len);
+    session_id_copy = (char*)BUFFER_ALLOC(len);
     if (session_id_copy) {
       memcpy(session_id_copy, actual_id, len);
     }
@@ -117,7 +123,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(db, query);
   json_free(query);
   
   if (!results) {
@@ -147,7 +153,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   char* user_id = NULL;
   if (user_id_val && user_id_val->type == JSON_STRING) {
     size_t len = strlen(user_id_val->value.string) + 1;
-    user_id = (char*)buffer_pool_alloc(len);
+    user_id = (char*)BUFFER_ALLOC(len);
     if (user_id) {
       memcpy(user_id, user_id_val->value.string, len);
     }
@@ -166,7 +172,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
       strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
       json_object_set(update, "last_seen", json_create_string(timestamp));
       
-      db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update);
+      storage_update_document(db, session_id, update);
       json_free(update);
     }
   }
@@ -204,7 +210,7 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
   json_object_set(query, "user_id", json_create_string(user_id));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(db, query);
   json_free(query);
   
   if (!results) {
@@ -242,7 +248,7 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
   json_object_set(update, "invalidated_at", json_create_string(timestamp));
   
-  int result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update) != NULL;
+  int result = storage_update_document(db, session_id, update) != NULL;
   json_free(update);
   
   return result;

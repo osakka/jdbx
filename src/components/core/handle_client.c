@@ -3,6 +3,7 @@
 #include "utils/metrics.h"
 #include "utils/ssl.h"
 #include "utils/config_loader.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -369,7 +370,7 @@ void handle_client(void* client_data) {
         if (client_write_data(client, response_str, response_len) < 0) {
           perror("write failed");
         }
-        free(response_str);
+        BUFFER_FREE(response_str);
       }
 
       free_http_response(response);
@@ -384,7 +385,7 @@ void handle_client(void* client_data) {
   if (client && request) {
     char ip_str[INET_ADDRSTRLEN];
     if (inet_ntop(AF_INET, &(client->address.sin_addr), ip_str, INET_ADDRSTRLEN)) {
-      request->remote_addr = strdup(ip_str);
+      request->remote_addr = BUFFER_STRDUP(ip_str);
     }
   }
   
@@ -416,7 +417,7 @@ void handle_client(void* client_data) {
     if (response_str) {
       size_t response_len = strlen(response_str); /* Safe now with null-termination */
       client_write_data(client, response_str, response_len);
-      free(response_str);
+      BUFFER_FREE(response_str);
     }
 
     free_http_response(response);
@@ -526,7 +527,7 @@ void handle_client(void* client_data) {
     /* For HEAD requests, clear the body but keep headers including Content-Length */
     if (request->method == HTTP_HEAD && response->body) {
       size_t original_length = response->content_length;
-      free(response->body);
+      BUFFER_FREE(response->body);
       response->body = NULL;
       /* Keep the original content length for HEAD responses */
       response->content_length = original_length;
@@ -602,7 +603,7 @@ void handle_client(void* client_data) {
       }
       if (g_logger) LOG_DEBUG("[FILE_SERVING] Completed sending %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
       
-      free(response_str);
+      BUFFER_FREE(response_str);
     }
 
     /* Cleanup */
@@ -682,7 +683,7 @@ void handle_client(void* client_data) {
         bytes_sent += result;
       }
     }
-    free(response_str);
+    BUFFER_FREE(response_str);
   }
 
   /* Cleanup */
@@ -716,7 +717,7 @@ void handle_client(void* client_data) {
       client->api_ctx = NULL;
       client->ssl_conn = NULL;
       
-      free(client);
+      BUFFER_FREE(client);
       client = NULL;
       
       if (g_logger) {
@@ -819,7 +820,7 @@ cleanup:
       client->ssl_conn = NULL;
       
       /* Free the structure */
-      free(client);
+      BUFFER_FREE(client);
       
       /* Set client pointer to NULL to prevent double-free (if passed by reference) */
       /* Note: This only protects the local variable, but adds logging clarity */

@@ -66,7 +66,7 @@ http_response_t* api_handle_index_cleanup_status(api_context_t* ctx, http_reques
     }
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-    buffer_pool_free_safe(json_str);
+    BUFFER_FREE(json_str);
     
     return response;
 }
@@ -192,15 +192,15 @@ http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_requ
     if (slash) {
         index_name = strndup(rest, slash - rest);
     } else {
-        index_name = strdup(rest);
+        index_name = BUFFER_STRDUP(rest);
     }
     
     /* Evaluate the index */
     cleanup_decision_t* decision = index_cleanup_evaluate(g_index_cleanup,
                                                         collection_name, index_name);
     
-    free(collection_name);
-    free(index_name);
+    BUFFER_FREE(collection_name);
+    BUFFER_FREE(index_name);
     
     if (!decision) {
         return create_http_response(HTTP_NOT_FOUND,
@@ -230,7 +230,7 @@ http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_requ
         json_object_set(result, "reason", json_create_string(reason_str));
     }
     
-    free(decision);
+    BUFFER_FREE(decision);
     
     /* Convert to string */
     char* json_str = json_stringify(result);
@@ -243,7 +243,7 @@ http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_requ
     }
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
-    buffer_pool_free_safe(json_str);
+    BUFFER_FREE(json_str);
     
     return response;
 }
@@ -280,14 +280,14 @@ http_response_t* api_handle_index_cleanup_remove(api_context_t* ctx, http_reques
     }
     
     collection_name = strndup(rest, slash - rest);
-    index_name = strdup(slash + 1);
+    index_name = BUFFER_STRDUP(slash + 1);
     
     /* Remove the index */
     int result = index_cleanup_remove_index(g_index_cleanup, collection_name,
                                           index_name, CLEANUP_REASON_MANUAL);
     
-    free(collection_name);
-    free(index_name);
+    BUFFER_FREE(collection_name);
+    BUFFER_FREE(index_name);
     
     if (result == 0) {
         return create_http_response(HTTP_OK, "{\"status\":\"removed\"}", "application/json");

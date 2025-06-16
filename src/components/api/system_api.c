@@ -221,7 +221,7 @@ http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* requ
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
   
   /* Free result string */
-  buffer_pool_free_safe(result_str);
+  BUFFER_FREE(result_str);
   
   return response;
 }
@@ -319,7 +319,7 @@ http_response_t* api_handle_log_control(api_context_t* ctx, http_request_t* requ
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
-  buffer_pool_free_safe(result_str);
+  BUFFER_FREE(result_str);
   
   return response;
 }

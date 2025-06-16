@@ -68,7 +68,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id, user_copy);
+      json_value_t* result = storage_update_document(db, user_id, user_copy);
       
       if (!result) {
         LOG_ERROR("update user %s in database", user_id);
@@ -88,7 +88,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_copy);
+      json_value_t* result = storage_insert_document(db, user_copy);
       
       if (!result) {
         LOG_ERROR("insert user %s into database", user_id);
@@ -150,7 +150,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
         continue;
       }
       
-      json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_copy);
+      json_value_t* result = storage_insert_document(db, role_copy);
       
       if (!result) {
         LOG_ERROR("insert role %s into database", role_id);
@@ -166,7 +166,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   
   /* Add special default admin user if none exists */
   json_value_t* query = json_create_object();
-  json_value_t* users_result = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* users_result = storage_query_documents(db, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -186,7 +186,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     json_object_set(admin_user, "roles", roles_array);
     
     /* Insert admin user */
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, admin_user);
+    json_value_t* result = storage_insert_document(db, admin_user);
     if (!result) {
       LOG_ERROR("create default admin user.");
     } else {

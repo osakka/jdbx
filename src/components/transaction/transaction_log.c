@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "transaction/transaction.h"
 #include "utils/json.h"
 #include <stdio.h>
@@ -58,13 +59,13 @@ static unsigned int hash_transaction_id(const char* id, int size) {
 static void free_cache_entry(cache_entry_t* entry) {
   if (!entry) return;
 
-  if (entry->type) free(entry->type);
-  if (entry->transaction_id) free(entry->transaction_id);
-  if (entry->collection) free(entry->collection);
-  if (entry->document_id) free(entry->document_id);
-  if (entry->user_id) free(entry->user_id);
+  if (entry->type) BUFFER_FREE(entry->type);
+  if (entry->transaction_id) BUFFER_FREE(entry->transaction_id);
+  if (entry->collection) BUFFER_FREE(entry->collection);
+  if (entry->document_id) BUFFER_FREE(entry->document_id);
+  if (entry->user_id) BUFFER_FREE(entry->user_id);
 
-  free(entry);
+  BUFFER_FREE(entry);
 }
 
 /* Add an entry to the cache */
@@ -104,18 +105,18 @@ static int add_to_cache(transaction_log_t* log, const char* type, const char* tr
   if (log->cache_entry_count >= log->max_cache_entries) return 0;
 
   /* Create a new cache entry */
-  cache_entry_t* entry = (cache_entry_t*)malloc(sizeof(cache_entry_t));
+  cache_entry_t* entry = (cache_entry_t*)BUFFER_ALLOC(sizeof(cache_entry_t));
   if (!entry) return 0;
 
   /* Copy data */
   entry->timestamp = timestamp;
-  entry->type = strdup(type);
-  entry->transaction_id = strdup(transaction_id);
+  entry->type = BUFFER_STRDUP(type);
+  entry->transaction_id = BUFFER_STRDUP(transaction_id);
   entry->state = state;
   entry->op_type = op_type;
-  entry->collection = collection ? strdup(collection) : NULL;
-  entry->document_id = document_id ? strdup(document_id) : NULL;
-  entry->user_id = user_id ? strdup(user_id) : NULL;
+  entry->collection = collection ? BUFFER_STRDUP(collection) : NULL;
+  entry->document_id = document_id ? BUFFER_STRDUP(document_id) : NULL;
+  entry->user_id = user_id ? BUFFER_STRDUP(user_id) : NULL;
 
   /* Check for memory allocation failures */
   if (!entry->type || !entry->transaction_id ||
@@ -158,14 +159,14 @@ transaction_log_t* transaction_log_create(const char* log_file) {
     return NULL;
   }
 
-  transaction_log_t* log = (transaction_log_t*)malloc(sizeof(transaction_log_t));
+  transaction_log_t* log = (transaction_log_t*)BUFFER_ALLOC(sizeof(transaction_log_t));
   if (!log) {
     return NULL;
   }
 
-  log->log_file = strdup(log_file);
+  log->log_file = BUFFER_STRDUP(log_file);
   if (!log->log_file) {
-    free(log);
+    BUFFER_FREE(log);
     return NULL;
   }
 
@@ -185,8 +186,8 @@ transaction_log_t* transaction_log_create(const char* log_file) {
   /* Allocate cache hash table */
   log->entry_cache = (cache_entry_t**)calloc(log->cache_size, sizeof(cache_entry_t*));
   if (!log->entry_cache) {
-    free(log->log_file);
-    free(log);
+    BUFFER_FREE(log->log_file);
+    BUFFER_FREE(log);
     return NULL;
   }
 
@@ -226,7 +227,7 @@ transaction_log_t* transaction_log_create(const char* log_file) {
         }
       }
 
-      free(dir_path);
+      BUFFER_FREE(dir_path);
     }
   }
 
@@ -234,10 +235,10 @@ transaction_log_t* transaction_log_create(const char* log_file) {
   FILE* file = fopen(log->log_file, "a+");
   if (!file) {
     perror("Failed to open transaction log file");
-    free(log->entry_cache);
-    free(log->log_file);
+    BUFFER_FREE(log->entry_cache);
+    BUFFER_FREE(log->log_file);
     pthread_mutex_destroy(&log->lock);
-    free(log);
+    BUFFER_FREE(log);
     return NULL;
   }
 
@@ -265,11 +266,11 @@ void transaction_log_free(transaction_log_t* log) {
   pthread_mutex_lock(&log->lock);
 
   if (log->log_file) {
-    free(log->log_file);
+    BUFFER_FREE(log->log_file);
   }
 
   if (log->audit_file) {
-    free(log->audit_file);
+    BUFFER_FREE(log->audit_file);
   }
 
   /* Free cache entries */
@@ -282,13 +283,13 @@ void transaction_log_free(transaction_log_t* log) {
         entry = next;
       }
     }
-    free(log->entry_cache);
+    BUFFER_FREE(log->entry_cache);
   }
 
   pthread_mutex_unlock(&log->lock);
   pthread_mutex_destroy(&log->lock);
 
-  free(log);
+  BUFFER_FREE(log);
 }
 
 /* Helper function to append an entry to the log file */
@@ -437,7 +438,7 @@ int transaction_log_write_state_change(transaction_log_t* log, transaction_t* tr
   
   int result = log_append_entry(log, LOG_ENTRY_STATE_CHANGE, transaction->id, data_json);
   
-  free(data_json);
+  BUFFER_FREE(data_json);
   
   return result;
 }
@@ -499,7 +500,7 @@ int transaction_log_write_operation(transaction_log_t* log, transaction_t* trans
   
   int result = log_append_entry(log, LOG_ENTRY_OPERATION, transaction->id, data_json);
   
-  free(data_json);
+  BUFFER_FREE(data_json);
   
   return result;
 }
@@ -578,15 +579,15 @@ static transaction_operation_t* operation_from_json(const char* data_json) {
   json_value_t* after_state = json_object_get(data, "after_state");
   
   /* Create operation */
-  transaction_operation_t* operation = (transaction_operation_t*)malloc(sizeof(transaction_operation_t));
+  transaction_operation_t* operation = (transaction_operation_t*)BUFFER_ALLOC(sizeof(transaction_operation_t));
   if (!operation) {
     json_free(data);
     return NULL;
   }
   
   operation->type = op_type;
-  operation->collection_name = strdup(collection_val->value.string);
-  operation->document_id = doc_id ? strdup(doc_id) : NULL;
+  operation->collection_name = BUFFER_STRDUP(collection_val->value.string);
+  operation->document_id = doc_id ? BUFFER_STRDUP(doc_id) : NULL;
   operation->before_state = before_state ? json_clone(before_state) : NULL;
   operation->after_state = after_state ? json_clone(after_state) : NULL;
   operation->next = NULL;
@@ -621,17 +622,17 @@ static transaction_t* create_recovery_transaction(const char* transaction_id,
   }
   
   /* Create transaction */
-  transaction_t* transaction = (transaction_t*)malloc(sizeof(transaction_t));
+  transaction_t* transaction = (transaction_t*)BUFFER_ALLOC(sizeof(transaction_t));
   if (!transaction) {
     json_free(data);
     return NULL;
   }
   
-  transaction->id = strdup(transaction_id);
+  transaction->id = BUFFER_STRDUP(transaction_id);
   transaction->state = TRANSACTION_ACTIVE; /* Default, will be updated later */
   transaction->start_time = timestamp;
   transaction->commit_time = 0;
-  transaction->user_id = strdup(user_id_val->value.string);
+  transaction->user_id = BUFFER_STRDUP(user_id_val->value.string);
   transaction->operations = NULL;
   transaction->operation_count = 0;
   transaction->isolation_level = isolation;
@@ -781,19 +782,19 @@ int transaction_log_read_operations(transaction_log_t* log, transaction_manager_
       transaction_operation_t* next = operation->next;
       
       /* Free operation memory */
-      if (operation->collection_name) free(operation->collection_name);
-      if (operation->document_id) free(operation->document_id);
+      if (operation->collection_name) BUFFER_FREE(operation->collection_name);
+      if (operation->document_id) BUFFER_FREE(operation->document_id);
       if (operation->before_state) json_free(operation->before_state);
       if (operation->after_state) json_free(operation->after_state);
       
-      free(operation);
+      BUFFER_FREE(operation);
       operation = next;
     }
     
-    if (transaction->id) free(transaction->id);
-    if (transaction->user_id) free(transaction->user_id);
+    if (transaction->id) BUFFER_FREE(transaction->id);
+    if (transaction->user_id) BUFFER_FREE(transaction->user_id);
     pthread_mutex_destroy(&transaction->lock);
-    free(transaction);
+    BUFFER_FREE(transaction);
   }
   
   pthread_mutex_unlock(&log->lock);
@@ -879,7 +880,7 @@ int transaction_log_compact(transaction_log_t* log) {
         }
         
         if (!found) {
-          completed_transactions[completed_count++] = strdup(transaction_id);
+          completed_transactions[completed_count++] = BUFFER_STRDUP(transaction_id);
         }
       }
       
@@ -932,7 +933,7 @@ int transaction_log_compact(transaction_log_t* log) {
   /* Clean up */
   for (int i = 0; i < completed_count; i++) {
     if (completed_transactions[i]) {
-      free(completed_transactions[i]);
+      BUFFER_FREE(completed_transactions[i]);
     }
   }
   
@@ -977,7 +978,7 @@ transaction_log_t* transaction_log_create_advanced(const char* log_file, const c
   
   /* Set advanced parameters */
   if (audit_file) {
-    log->audit_file = strdup(audit_file);
+    log->audit_file = BUFFER_STRDUP(audit_file);
     if (!log->audit_file) {
       transaction_log_free(log);
       return NULL;
@@ -1008,7 +1009,7 @@ transaction_log_t* transaction_log_create_advanced(const char* log_file, const c
           }
         }
         
-        free(dir_path);
+        BUFFER_FREE(dir_path);
       }
     }
     
@@ -1130,7 +1131,7 @@ int transaction_log_write_audit(transaction_log_t* log, transaction_t* transacti
     pthread_mutex_unlock(&log->lock);
   }
   
-  free(data_json);
+  BUFFER_FREE(data_json);
   
   return result;
 }
@@ -1330,7 +1331,7 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
         }
         
         if (is_new && seen_count < MAX_REPORT_TRANSACTIONS) {
-          seen_transactions[seen_count++] = strdup(transaction_id);
+          seen_transactions[seen_count++] = BUFFER_STRDUP(transaction_id);
           total_transactions++;
           
           /* Add transaction summary to report if it's a terminal state */
@@ -1406,7 +1407,7 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
   /* Clean up seen transactions */
   for (int i = 0; i < seen_count; i++) {
     if (seen_transactions[i]) {
-      free(seen_transactions[i]);
+      BUFFER_FREE(seen_transactions[i]);
     }
   }
   

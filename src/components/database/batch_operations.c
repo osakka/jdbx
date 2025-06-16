@@ -117,7 +117,7 @@ static int batch_insert_jdbx(
             continue;
         }
         
-        json_value_t* insert_result = db_insert_document(db, STORAGE_LIBRARY, collection_name, parsed_doc);
+        json_value_t* insert_result = storage_insert_document(db, parsed_doc);
         int success = (insert_result != NULL);
         
         if (success) {

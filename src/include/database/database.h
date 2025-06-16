@@ -190,8 +190,26 @@ json_value_t* db_list_collections_with_info(database_t* db);
 int db_collection_exists(database_t* db, const char* collection_name);
 int db_create_collection(database_t* db, const char* collection_name);
 
-/* Document operations */
-/* Clean API with separate library and collection parameters */
+/* UNIFIED DOCUMENTS ARCHITECTURE - Clear Storage vs Virtual Separation */
+
+/* Storage Operations - Direct physical unified collection access */
+json_value_t* storage_insert_document(database_t* db, json_value_t* document);
+json_value_t* storage_get_document(database_t* db, const char* uuid);
+json_value_t* storage_update_document(database_t* db, const char* uuid, json_value_t* document);
+int storage_delete_document(database_t* db, const char* uuid);
+json_value_t* storage_query_documents(database_t* db, json_value_t* query);
+
+/* Virtual Operations - GENERIC document operations with business logic and field handling */
+json_value_t* virtual_insert(database_t* db, const char* type, const char* library, const char* collection, json_value_t* document, const char* owner);
+json_value_t* virtual_query(database_t* db, const char* type, const char* library, const char* collection, json_value_t* filters);
+json_value_t* virtual_update(database_t* db, const char* uuid, json_value_t* document);
+json_value_t* virtual_get(database_t* db, const char* uuid);
+int virtual_delete(database_t* db, const char* uuid);
+
+/* Compatibility functions - map specific entity operations to generic virtual operations */
+json_value_t* virtual_query_users(database_t* db, const char* library, json_value_t* filters);
+
+/* Legacy API - Compatibility layer that maps to virtual operations */
 json_value_t* db_insert_document(database_t* db, const char* library, const char* collection, json_value_t* document);
 json_value_t* db_get_document(database_t* db, const char* library, const char* collection, const char* id);
 json_value_t* db_update_document(database_t* db, const char* library, const char* collection, const char* id, json_value_t* document);

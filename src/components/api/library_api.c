@@ -6,6 +6,7 @@
 #include "rbac/rbac_database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +30,7 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("library"));
   
-  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
   if (!results) {
@@ -102,13 +103,23 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
                  "{\"error\":\"Invalid library name\"}", "application/json");
   }
   
-  /* Check if library already exists */
-  char test_path[1024];
-  snprintf(test_path, sizeof(test_path), "%s/users", library_name);
-  if (db_collection_exists(ctx->db, test_path)) {
-    json_free(body);
-    return create_http_response(HTTP_CONFLICT,
-                 "{\"error\":\"Library already exists\"}", "application/json");
+  /* Check if library already exists using unified documents */
+  json_value_t* exists_query = json_create_object();
+  json_object_set(exists_query, "type", json_create_string("library"));
+  json_object_set(exists_query, "name", json_create_string(library_name));
+  
+  json_value_t* exists_results = storage_query_documents(ctx->db, exists_query);
+  json_free(exists_query);
+  
+  if (exists_results) {
+    json_value_t* existing_docs = json_object_get(exists_results, "documents");
+    if (existing_docs && existing_docs->type == JSON_ARRAY && json_array_size(existing_docs) > 0) {
+      json_free(exists_results);
+      json_free(body);
+      return create_http_response(HTTP_CONFLICT,
+                   "{\"error\":\"Library already exists\"}", "application/json");
+    }
+    json_free(exists_results);
   }
   
   /* Get template name (optional) */
@@ -116,40 +127,36 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   const char* template_name = template_val && template_val->type == JSON_STRING ? 
                               template_val->value.string : "standard";
   
-  /* Library directory will be created automatically when first collection is created */
-  
-  /* Look up template from library_templates collection */
+  /* Look up template from unified documents storage */
   json_value_t* template_collections = NULL;
   json_value_t* template_settings = NULL;
   
-  if (db_collection_exists(ctx->db, "documents")) {
-    /* Query for the template */
-    json_value_t* template_query = json_create_object();
-    json_object_set(template_query, "type", json_create_string("library_template"));
-    json_object_set(template_query, "name", json_create_string(template_name));
-    
-    json_value_t* template_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, template_query);
-    json_free(template_query);
-    
-    if (template_results) {
-      json_value_t* templates = json_object_get(template_results, "documents");
-      if (templates && templates->type == JSON_ARRAY && json_array_size(templates) > 0) {
-        json_value_t* template_doc = json_array_get(templates, 0);
-        
-        /* Get collections from template */
-        json_value_t* cols = json_object_get(template_doc, "collections");
-        if (cols && cols->type == JSON_ARRAY) {
-          template_collections = json_clone(cols);
-        }
-        
-        /* Get settings from template */
-        json_value_t* settings = json_object_get(template_doc, "settings");
-        if (settings && settings->type == JSON_OBJECT) {
-          template_settings = json_clone(settings);
-        }
+  /* Query for the template in unified documents */
+  json_value_t* template_query = json_create_object();
+  json_object_set(template_query, "type", json_create_string("library_template"));
+  json_object_set(template_query, "name", json_create_string(template_name));
+  
+  json_value_t* template_results = storage_query_documents(ctx->db, template_query);
+  json_free(template_query);
+  
+  if (template_results) {
+    json_value_t* templates = json_object_get(template_results, "documents");
+    if (templates && templates->type == JSON_ARRAY && json_array_size(templates) > 0) {
+      json_value_t* template_doc = json_array_get(templates, 0);
+      
+      /* Get collections from template */
+      json_value_t* cols = json_object_get(template_doc, "collections");
+      if (cols && cols->type == JSON_ARRAY) {
+        template_collections = json_clone(cols);
       }
-      json_free(template_results);
+      
+      /* Get settings from template */
+      json_value_t* settings = json_object_get(template_doc, "settings");
+      if (settings && settings->type == JSON_OBJECT) {
+        template_settings = json_clone(settings);
+      }
     }
+    json_free(template_results);
   }
   
   /* If no template found, use default collections */
@@ -175,17 +182,33 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
       collections = minimal_collections;
     }
     
-    /* Create default collections */
+    /* Create default collection documents in unified storage */
     for (int i = 0; collections[i] != NULL; i++) {
-      char collection_path[512];
-      snprintf(collection_path, sizeof(collection_path), "%s/%s", library_name, collections[i]);
+      json_value_t* col_doc = json_create_object();
+      json_object_set(col_doc, "type", json_create_string("collection"));
+      json_object_set(col_doc, "name", json_create_string(collections[i]));
+      json_object_set(col_doc, "library", json_create_string(library_name));
+      json_object_set(col_doc, "collection", json_create_string("collections"));
+      json_object_set(col_doc, "owner", json_create_string("admin"));
       
-      if (db_create_collection(ctx->db, collection_path) != 0) {
-        LOG_WARNING("Failed to create collection %s in library %s", collections[i], library_name);
+      /* Add timestamps */
+      time_t now = time(NULL);
+      char timestamp[64];
+      struct tm* utc_tm = gmtime(&now);
+      strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+      json_object_set(col_doc, "created_at", json_create_string(timestamp));
+      json_object_set(col_doc, "modified_at", json_create_string(timestamp));
+      
+      json_value_t* col_result = storage_insert_document(ctx->db, col_doc);
+      if (col_result) {
+        json_free(col_result);
+      } else {
+        LOG_WARNING("Failed to create collection document %s in library %s", collections[i], library_name);
       }
+      json_free(col_doc);
     }
   } else {
-    /* Create collections from template */
+    /* Create collection documents from template */
     size_t num_collections = json_array_size(template_collections);
     for (size_t i = 0; i < num_collections; i++) {
       json_value_t* col_def = json_array_get(template_collections, i);
@@ -193,54 +216,72 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
       
       if (col_name_val && col_name_val->type == JSON_STRING) {
         const char* col_name = col_name_val->value.string;
-        char collection_path[512];
-        snprintf(collection_path, sizeof(collection_path), "%s/%s", library_name, col_name);
         
-        if (db_create_collection(ctx->db, collection_path) != 0) {
-          LOG_WARNING("Failed to create collection %s in library %s", col_name, library_name);
-        }
+        json_value_t* col_doc = json_create_object();
+        json_object_set(col_doc, "type", json_create_string("collection"));
+        json_object_set(col_doc, "name", json_create_string(col_name));
+        json_object_set(col_doc, "library", json_create_string(library_name));
+        json_object_set(col_doc, "collection", json_create_string("collections"));
+        json_object_set(col_doc, "owner", json_create_string("admin"));
         
-        /* TODO: Apply schema if provided */
+        /* Add timestamps */
+        time_t now = time(NULL);
+        char timestamp[64];
+        struct tm* utc_tm = gmtime(&now);
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+        json_object_set(col_doc, "created_at", json_create_string(timestamp));
+        json_object_set(col_doc, "modified_at", json_create_string(timestamp));
+        
+        /* Add schema if provided */
         json_value_t* schema = json_object_get(col_def, "schema");
         if (schema) {
-          /* Future: Apply schema to collection */
+          json_object_set(col_doc, "schema", json_clone(schema));
         }
+        
+        json_value_t* col_result = storage_insert_document(ctx->db, col_doc);
+        if (col_result) {
+          json_free(col_result);
+        } else {
+          LOG_WARNING("Failed to create collection document %s in library %s", col_name, library_name);
+        }
+        json_free(col_doc);
       }
     }
     json_free(template_collections);
   }
   
-  /* Create library metadata document if documents collection exists */
-  if (db_collection_exists(ctx->db, "documents")) {
-    json_value_t* lib_doc = json_create_object();
-    json_object_set(lib_doc, "type", json_create_string("library"));
-    json_object_set(lib_doc, "name", json_create_string(library_name));
-    json_object_set(lib_doc, "template", json_create_string(template_name));
-    
-    /* Add timestamps */
-    time_t now = time(NULL);
-    char timestamp[64];
-    struct tm* utc_tm = gmtime(&now);
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
-    json_object_set(lib_doc, "created_at", json_create_string(timestamp));
-    json_object_set(lib_doc, "updated_at", json_create_string(timestamp));
-    
-    /* Add settings from template if available */
-    if (template_settings) {
-      json_object_set(lib_doc, "settings", template_settings);
-    }
-    
-    /* TODO: Add owner from JWT token when available */
-    /* For now, set owner as admin */
-    json_object_set(lib_doc, "owner", json_create_string("admin"));
-    
-    /* Save to documents collection */
-    json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
-    if (result) {
-      json_free(result);
-    }
-    json_free(lib_doc);
+  /* Create library document in unified storage (system/libraries) */
+  json_value_t* lib_doc = json_create_object();
+  json_object_set(lib_doc, "type", json_create_string("library"));
+  json_object_set(lib_doc, "name", json_create_string(library_name));
+  json_object_set(lib_doc, "library", json_create_string("system"));
+  json_object_set(lib_doc, "collection", json_create_string("libraries"));
+  json_object_set(lib_doc, "template", json_create_string(template_name));
+  json_object_set(lib_doc, "owner", json_create_string("admin"));
+  
+  /* Add timestamps */
+  time_t now = time(NULL);
+  char timestamp[64];
+  struct tm* utc_tm = gmtime(&now);
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+  json_object_set(lib_doc, "created_at", json_create_string(timestamp));
+  json_object_set(lib_doc, "modified_at", json_create_string(timestamp));
+  
+  /* Add settings from template if available */
+  if (template_settings) {
+    json_object_set(lib_doc, "settings", template_settings);
   }
+  
+  /* Save library document to unified storage */
+  json_value_t* result = storage_insert_document(ctx->db, lib_doc);
+  if (!result) {
+    json_free(lib_doc);
+    json_free(body);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                 "{\"error\":\"Failed to create library document\"}", "application/json");
+  }
+  json_free(result);
+  json_free(lib_doc);
   
   json_free(body);
   
@@ -280,65 +321,93 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
                  "{\"error\":\"Cannot delete system library\"}", "application/json");
   }
   
-  /* Check if library exists */
-  char test_path[1024];
-  snprintf(test_path, sizeof(test_path), "%s/users", library_name);
-  if (!db_collection_exists(ctx->db, test_path)) {
+  /* Check if library exists using unified documents */
+  json_value_t* lib_query = json_create_object();
+  json_object_set(lib_query, "type", json_create_string("library"));
+  json_object_set(lib_query, "name", json_create_string(library_name));
+  
+  json_value_t* lib_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_query);
+  json_free(lib_query);
+  
+  if (!lib_results) {
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
   }
   
-  /* List all collections in the library */
+  json_value_t* lib_docs = json_object_get(lib_results, "documents");
+  if (!lib_docs || lib_docs->type != JSON_ARRAY || json_array_size(lib_docs) == 0) {
+    json_free(lib_results);
+    return create_http_response(HTTP_NOT_FOUND,
+                 "{\"error\":\"Library not found\"}", "application/json");
+  }
+  
+  /* Get the library document UUID for deletion */
+  json_value_t* lib_doc = json_array_get(lib_docs, 0);
+  json_value_t* lib_uuid = json_object_get(lib_doc, "uuid");
+  const char* library_uuid = lib_uuid && lib_uuid->type == JSON_STRING ? lib_uuid->value.string : NULL;
+  json_free(lib_results);
+  
+  /* Find all collections in this library */
+  json_value_t* coll_query = json_create_object();
+  json_object_set(coll_query, "type", json_create_string("collection"));
+  json_object_set(coll_query, "library", json_create_string(library_name));
+  
+  json_value_t* coll_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_query);
+  json_free(coll_query);
+  
   json_value_t* collections = json_create_array();
-  char lib_path[1024];
-  snprintf(lib_path, sizeof(lib_path), "%s/%s", ctx->db->path, library_name);
   
-  DIR* dir = opendir(lib_path);
-  if (dir) {
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-      if (strstr(entry->d_name, ".mmap") != NULL) {
-        /* Extract collection name without extension */
-        char coll_name[256];
-        strncpy(coll_name, entry->d_name, sizeof(coll_name) - 1);
-        char* dot = strrchr(coll_name, '.');
-        if (dot) *dot = '\0';
+  /* Delete all collection documents for this library */
+  if (coll_results) {
+    json_value_t* coll_docs = json_object_get(coll_results, "documents");
+    if (coll_docs && coll_docs->type == JSON_ARRAY) {
+      for (size_t i = 0; i < json_array_size(coll_docs); i++) {
+        json_value_t* coll_doc = json_array_get(coll_docs, i);
+        json_value_t* coll_uuid = json_object_get(coll_doc, "uuid");
+        json_value_t* coll_name = json_object_get(coll_doc, "name");
         
-        /* Drop collection */
-        char collection_path[512];
-        snprintf(collection_path, sizeof(collection_path), "%s/%s", library_name, coll_name);
-        db_drop_collection(ctx->db, collection_path);
-        
-        json_array_append(collections, json_create_string(coll_name));
-      }
-    }
-    closedir(dir);
-  }
-  
-  /* Remove library directory */
-  if (rmdir(lib_path) != 0) {
-    LOG_WARNING("Failed to remove library directory: %s", lib_path);
-  }
-  
-  /* Remove library metadata from documents collection if exists */
-  if (db_collection_exists(ctx->db, "documents")) {
-    json_value_t* query = json_create_object();
-    json_object_set(query, "type", json_create_string("library"));
-    json_object_set(query, "name", json_create_string(library_name));
-    
-    json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    if (results) {
-      json_value_t* documents = json_object_get(results, "documents");
-      if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
-        json_value_t* lib_doc = json_array_get(documents, 0);
-        json_value_t* id_val = json_object_get(lib_doc, "uuid");
-        if (id_val && id_val->type == JSON_STRING) {
-          db_delete_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_val->value.string);
+        if (coll_uuid && coll_uuid->type == JSON_STRING) {
+          /* Delete collection document */
+          if (storage_delete_document(ctx->db, coll_uuid->value.string)) {
+            if (coll_name && coll_name->type == JSON_STRING) {
+              json_array_append(collections, json_create_string(coll_name->value.string));
+            }
+          }
         }
       }
-      json_free(results);
     }
-    json_free(query);
+    json_free(coll_results);
+  }
+  
+  /* Delete all documents that belong to this library */
+  json_value_t* data_query = json_create_object();
+  json_object_set(data_query, "library", json_create_string(library_name));
+  
+  json_value_t* data_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, data_query);
+  json_free(data_query);
+  
+  if (data_results) {
+    json_value_t* data_docs = json_object_get(data_results, "documents");
+    if (data_docs && data_docs->type == JSON_ARRAY) {
+      for (size_t i = 0; i < json_array_size(data_docs); i++) {
+        json_value_t* data_doc = json_array_get(data_docs, i);
+        json_value_t* data_uuid = json_object_get(data_doc, "uuid");
+        
+        if (data_uuid && data_uuid->type == JSON_STRING) {
+          storage_delete_document(ctx->db, data_uuid->value.string);
+        }
+      }
+    }
+    json_free(data_results);
+  }
+  
+  /* Delete the library document itself */
+  if (library_uuid) {
+    if (!storage_delete_document(ctx->db, library_uuid)) {
+      json_free(collections);
+      return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                   "{\"error\":\"Failed to delete library document\"}", "application/json");
+    }
   }
   
   /* Return success response */
@@ -591,8 +660,7 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
   /* Update in database */
-  json_value_t* update_result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, 
-                                                  lib_id->value.string, update_doc);
+  json_value_t* update_result = storage_update_document(ctx->db, lib_id->value.string, update_doc);
   
   json_free(update_doc);
   json_free(results);
@@ -722,7 +790,7 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
   json_free(stats);
   
   if (library_name && strncmp(request->path, "/api/libraries/", 15) == 0) {
-    free((void*)library_name);
+    BUFFER_FREE((void*)library_name);
   }
   
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -768,7 +836,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (source_library) free((void*)source_library);
+    if (source_library) BUFFER_FREE((void*)source_library);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid JSON body\"}", "application/json");
   }
@@ -777,7 +845,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   json_value_t* target_name_val = json_object_get(body, "name");
   if (!target_name_val || target_name_val->type != JSON_STRING) {
     json_free(body);
-    if (source_library) free((void*)source_library);
+    if (source_library) BUFFER_FREE((void*)source_library);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Target library name required\"}", "application/json");
   }
@@ -789,7 +857,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   snprintf(test_path, sizeof(test_path), "%s/users", target_library);
   if (db_collection_exists(ctx->db, test_path)) {
     json_free(body);
-    if (source_library) free((void*)source_library);
+    if (source_library) BUFFER_FREE((void*)source_library);
     return create_http_response(HTTP_CONFLICT,
                  "{\"error\":\"Target library already exists\"}", "application/json");
   }
@@ -833,7 +901,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   
   /* Save library metadata */
   if (db_collection_exists(ctx->db, "documents")) {
-    json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_doc);
+    json_value_t* result = storage_insert_document(ctx->db, lib_doc);
     if (result) {
       json_free(result);
     }
@@ -883,7 +951,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
                       json_value_t* doc_copy = json_clone(doc);
                       /* Remove uuid to generate new one */
                       json_object_remove(doc_copy, "uuid");
-                      db_insert_document(ctx->db, STORAGE_LIBRARY, target_coll_path, doc_copy);
+                      storage_insert_document(ctx->db, doc_copy);
                       json_free(doc_copy);
                     }
                   }

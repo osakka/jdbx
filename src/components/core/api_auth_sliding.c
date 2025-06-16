@@ -7,6 +7,10 @@
 #include "utils/logger.h"
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
+
+/* RBAC constants for unified documents */
+#define RBAC_SYSTEM_LIBRARY "system"
+#define RBAC_SESSIONS_COLLECTION_NAME "sessions"
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
@@ -132,7 +136,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
             ctx->db->is_bootstrap_mode = 0;
             unsetenv("JDBX_DEFERRED_BOOTSTRAP");
           }
-          free(admin_role_id);
+          BUFFER_FREE(admin_role_id);
         }
       }
     }
@@ -191,7 +195,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
       if (g_logger) {
         LOG_INFO("Admin token authentication allowed - client=%s", client_ip);
       }
-      free(token);
+      BUFFER_FREE(token);
       return 1;
     }
   }
@@ -212,7 +216,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     /* Extend session expiration for sliding sessions */
     extend_session_expiration(ctx, token);
     
-    free(token);
+    BUFFER_FREE(token);
     return 1;
   }
   
@@ -221,7 +225,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     if (g_logger) {
       LOG_ERROR("JWT secret not set - client=%s, ctx=%p", client_ip, (void*)ctx);
     }
-    free(token);
+    BUFFER_FREE(token);
     return 0;
   }
   
@@ -232,10 +236,13 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   /* Check if session exists in database before JWT verification */
   json_value_t* session_query = json_create_object();
+  json_object_set(session_query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+  json_object_set(session_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
+  json_object_set(session_query, "collection", json_create_string(RBAC_SESSIONS_COLLECTION_NAME));
   json_object_set(session_query, "token", json_create_string(token));
   json_object_set(session_query, "active", json_create_boolean(1));
   
-  json_value_t* session_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_query);
+  json_value_t* session_results = storage_query_documents(ctx->db, session_query);
   json_free(session_query);
   
   int session_found = 0;
@@ -375,22 +382,22 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   /* Clean up session variable copies to prevent use-after-free */
   if (session_user) {
-    buffer_pool_free_safe((char*)session_user);
+    BUFFER_FREE((char*)session_user);
   }
   if (session_id) {
-    buffer_pool_free_safe((char*)session_id);
+    BUFFER_FREE((char*)session_id);
   }
   if (session_expires) {
-    buffer_pool_free_safe((char*)session_expires);
+    BUFFER_FREE((char*)session_expires);
   }
   if (session_created) {
-    buffer_pool_free_safe((char*)session_created);
+    BUFFER_FREE((char*)session_created);
   }
   if (session_last_seen) {
-    buffer_pool_free_safe((char*)session_last_seen);
+    BUFFER_FREE((char*)session_last_seen);
   }
   
-  free(token);
+  BUFFER_FREE(token);
   
   return result;
 }

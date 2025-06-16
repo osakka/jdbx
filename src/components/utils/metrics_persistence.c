@@ -1,4 +1,5 @@
 #include "utils/metrics.h"
+#include "utils/buffer_pool.h"
 #include "database/document_storage.h"
 #include "database/database.h"
 #include "utils/logger.h"
@@ -62,7 +63,7 @@ int metrics_persistence_init(database_t* db) {
   LOG_INFO("Initializing metrics persistence system.");
   
   /* Allocate persistence structure */
-  g_metrics_persistence = (metrics_persistence_t*)malloc(sizeof(metrics_persistence_t));
+  g_metrics_persistence = (metrics_persistence_t*)BUFFER_ALLOC(sizeof(metrics_persistence_t));
   if (!g_metrics_persistence) {
     LOG_ERROR("allocate metrics persistence structure.");
     return 0;
@@ -95,7 +96,7 @@ int metrics_persistence_init(database_t* db) {
   if (pthread_create(&g_metrics_persistence->persistence_thread, NULL, 
            metrics_persistence_thread, g_metrics_persistence) != 0) {
     LOG_ERROR("create metrics persistence thread.");
-    free(g_metrics_persistence);
+    BUFFER_FREE(g_metrics_persistence);
     g_metrics_persistence = NULL;
     return 0;
   }
@@ -127,15 +128,15 @@ void metrics_persistence_shutdown(void) {
   
   /* Cleanup */
   pthread_mutex_destroy(&g_metrics_persistence->lock);
-  free(g_metrics_persistence);
+  BUFFER_FREE(g_metrics_persistence);
   g_metrics_persistence = NULL;
   
   /* Free metric IDs */
-  if (g_metric_id_operations) { free(g_metric_id_operations); g_metric_id_operations = NULL; }
-  if (g_metric_id_performance) { free(g_metric_id_performance); g_metric_id_performance = NULL; }
-  if (g_metric_id_cache) { free(g_metric_id_cache); g_metric_id_cache = NULL; }
-  if (g_metric_id_memory) { free(g_metric_id_memory); g_metric_id_memory = NULL; }
-  if (g_metric_id_connections) { free(g_metric_id_connections); g_metric_id_connections = NULL; }
+  if (g_metric_id_operations) { BUFFER_FREE(g_metric_id_operations); g_metric_id_operations = NULL; }
+  if (g_metric_id_performance) { BUFFER_FREE(g_metric_id_performance); g_metric_id_performance = NULL; }
+  if (g_metric_id_cache) { BUFFER_FREE(g_metric_id_cache); g_metric_id_cache = NULL; }
+  if (g_metric_id_memory) { BUFFER_FREE(g_metric_id_memory); g_metric_id_memory = NULL; }
+  if (g_metric_id_connections) { BUFFER_FREE(g_metric_id_connections); g_metric_id_connections = NULL; }
   
   LOG_INFO("Metrics persistence shutdown complete.");
 }
@@ -203,7 +204,7 @@ static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_n
         id = json_object_get(doc, "uuid");
       }
       if (id && id->type == JSON_STRING) {
-        char* id_copy = strdup(json_get_string(id));
+        char* id_copy = BUFFER_STRDUP(json_get_string(id));
         json_free(result);
         return id_copy;
       }
@@ -297,6 +298,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
     json_object_set(new_doc, "type", json_create_string("metric"));
     json_object_set(new_doc, "library", json_create_string("system"));
     json_object_set(new_doc, "collection", json_create_string("metrics"));
+    json_object_set(new_doc, "owner", json_create_string("system-metrics"));
     
     /* Metric-specific fields */
     json_object_set(new_doc, "name", json_create_string(metric_name));
@@ -321,15 +323,15 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   json_value_t* result = NULL;
   if (existing && metric_id) {
     /* Update existing document */
-    result = db_update_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, metric_id, document_to_save);
+    result = storage_update_document(mp->db, metric_id, document_to_save);
   } else {
     /* Insert new document */
-    result = db_insert_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_to_save);
+    result = storage_insert_document(mp->db, document_to_save);
     if (result && !*metric_id_ptr) {
       /* Get and store the generated ID */
       json_value_t* id_val = json_object_get(result, "uuid");
       if (id_val && id_val->type == JSON_STRING) {
-        *metric_id_ptr = strdup(json_get_string(id_val));
+        *metric_id_ptr = BUFFER_STRDUP(json_get_string(id_val));
       }
     }
   }
@@ -498,7 +500,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
         
         if (id && id->type == JSON_STRING) {
           const char* id_str = json_get_string(id);
-          if (db_delete_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, id_str)) {
+          if (storage_delete_document(mp->db, id_str)) {
             deleted_count++;
           }
         }

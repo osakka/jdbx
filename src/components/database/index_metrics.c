@@ -54,7 +54,7 @@ int index_metrics_init(void) {
     }
     
     /* Allocate collector */
-    g_metrics_collector = calloc(1, sizeof(index_metrics_collector_t));
+    g_metrics_collector = BUFFER_ALLOC(sizeof(index_metrics_collector_t));
     if (!g_metrics_collector) {
         LOG_ERROR("Cannot allocate index metrics collector.");
         return -1;
@@ -63,18 +63,17 @@ int index_metrics_init(void) {
     /* Initialize collector */
     if (pthread_mutex_init(&g_metrics_collector->metrics_lock, NULL) != 0) {
         LOG_ERROR("Cannot initialize metrics lock.");
-        free(g_metrics_collector);
+        BUFFER_FREE(g_metrics_collector);
         g_metrics_collector = NULL;
         return -1;
     }
     
     g_metrics_collector->metrics_capacity = 100; /* Initial capacity */
-    g_metrics_collector->metrics_array = calloc(g_metrics_collector->metrics_capacity, 
-                                               sizeof(index_performance_metrics_t));
+    g_metrics_collector->metrics_array = BUFFER_ALLOC(g_metrics_collector->metrics_capacity * sizeof(index_performance_metrics_t));
     if (!g_metrics_collector->metrics_array) {
         LOG_ERROR("Cannot allocate metrics array.");
         pthread_mutex_destroy(&g_metrics_collector->metrics_lock);
-        free(g_metrics_collector);
+        BUFFER_FREE(g_metrics_collector);
         g_metrics_collector = NULL;
         return -1;
     }
@@ -108,9 +107,9 @@ void index_metrics_cleanup(void) {
     
     /* Cleanup */
     pthread_mutex_destroy(&g_metrics_collector->metrics_lock);
-    free(g_metrics_collector->metrics_array);
-    free(g_metrics_collector->metrics_file_path);
-    free(g_metrics_collector);
+    BUFFER_FREE(g_metrics_collector->metrics_array);
+    BUFFER_FREE(g_metrics_collector->metrics_file_path);
+    BUFFER_FREE(g_metrics_collector);
     g_metrics_collector = NULL;
     
     g_metrics_initialized = 0;
@@ -139,7 +138,7 @@ int index_metrics_start_tracking(const char* collection_name,
     /* Expand array if needed */
     if (g_metrics_collector->metrics_count >= g_metrics_collector->metrics_capacity) {
         size_t new_capacity = g_metrics_collector->metrics_capacity * 2;
-        index_performance_metrics_t* new_array = realloc(g_metrics_collector->metrics_array,
+        index_performance_metrics_t* new_array = BUFFER_REALLOC(g_metrics_collector->metrics_array,
                                                         new_capacity * sizeof(index_performance_metrics_t));
         if (!new_array) {
             pthread_mutex_unlock(&g_metrics_collector->metrics_lock);
@@ -691,13 +690,13 @@ int index_metrics_export(const char* file_path) {
     /* Write to file */
     FILE* fp = fopen(file_path, "w");
     if (!fp) {
-        buffer_pool_free_safe(json_str);
+        BUFFER_FREE(json_str);
         return -1;
     }
     
     size_t written = fwrite(json_str, 1, strlen(json_str), fp);
     fclose(fp);
-    buffer_pool_free_safe(json_str);
+    BUFFER_FREE(json_str);
     
     return written > 0 ? 0 : -1;
 }
@@ -716,7 +715,7 @@ int index_metrics_enable_persistence(const char* file_path, int interval_seconds
     }
     
     /* Set persistence parameters */
-    g_metrics_collector->metrics_file_path = strdup(file_path);
+    g_metrics_collector->metrics_file_path = BUFFER_STRDUP(file_path);
     g_metrics_collector->auto_persist_enabled = 1;
     g_metrics_collector->collection_interval_seconds = interval_seconds;
     

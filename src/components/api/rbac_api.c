@@ -18,9 +18,9 @@ static http_response_t* create_error_response(const char* message, int status_co
   json_object_set(error, "error", json_create_string(message));
   
   char* error_str = json_stringify(error);
-  http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
+  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
   if (!response) {
-    free(error_str);
+    BUFFER_FREE(error_str);
     json_free(error);
     return NULL;
   }
@@ -28,7 +28,7 @@ static http_response_t* create_error_response(const char* message, int status_co
   /* Initialize response */
   response->status = (http_status_t)status_code;
   response->body = error_str;
-  response->content_type = strdup("application/json");
+  response->content_type = BUFFER_STRDUP("application/json");
   response->content_length = strlen(error_str);
   response->headers = NULL;
   response->num_headers = 0;
@@ -61,7 +61,7 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
       }
       
       if (user_id_len > 0) {
-        char* user_id = (char*)malloc(user_id_len + 1);
+        char* user_id = (char*)BUFFER_ALLOC(user_id_len + 1);
         if (user_id) {
           strncpy(user_id, user_id_start, user_id_len);
           user_id[user_id_len] = '\0';
@@ -85,7 +85,7 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
         size_t role_id_len = users_pos - role_id_start;
         
         if (role_id_len > 0) {
-          char* role_id = (char*)malloc(role_id_len + 1);
+          char* role_id = (char*)BUFFER_ALLOC(role_id_len + 1);
           if (role_id) {
             strncpy(role_id, role_id_start, role_id_len);
             role_id[role_id_len] = '\0';
@@ -107,7 +107,7 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
         size_t role_id_len = permissions_pos - role_id_start;
         
         if (role_id_len > 0) {
-          char* role_id = (char*)malloc(role_id_len + 1);
+          char* role_id = (char*)BUFFER_ALLOC(role_id_len + 1);
           if (role_id) {
             strncpy(role_id, role_id_start, role_id_len);
             role_id[role_id_len] = '\0';
@@ -134,7 +134,7 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
     }
     
     if (id_len > 0) {
-      char* id = (char*)malloc(id_len + 1);
+      char* id = (char*)BUFFER_ALLOC(id_len + 1);
       if (id) {
         strncpy(id, id_start, id_len);
         id[id_len] = '\0';
@@ -202,15 +202,15 @@ static http_response_t* create_json_response(json_value_t* json_data, int status
   }
   
   char* json_str = json_stringify(json_data);
-  http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
+  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
   if (!response) {
-    buffer_pool_free_safe(json_str);
+    BUFFER_FREE(json_str);
     return create_error_response("Out of memory", HTTP_INTERNAL_SERVER_ERROR);
   }
   
   response->status = (http_status_t)status_code;
   response->body = json_str;
-  response->content_type = strdup("application/json");
+  response->content_type = BUFFER_STRDUP("application/json");
   response->content_length = strlen(json_str);
   response->headers = NULL;
   response->num_headers = 0;
@@ -359,13 +359,13 @@ http_response_t* api_handle_rbac_get_user(api_context_t* ctx, http_request_t* re
   int is_admin = rbac_db_check_permission(ctx->db, requester_id, RBAC_USER, "*", RBAC_ADMIN);
   
   if (!is_self && !is_admin) {
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
   /* Get user document */
   json_value_t* user_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, user_id);
-  free(user_id);
+  BUFFER_FREE(user_id);
   
   if (!user_doc) {
     return create_error_response("User not found", HTTP_NOT_FOUND);
@@ -508,20 +508,20 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   int is_admin = rbac_db_check_permission(ctx->db, requester_id, RBAC_USER, "*", RBAC_ADMIN);
   
   if (!is_self && !is_admin) {
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
   /* Parse request body */
   if (!request->body) {
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("Request body is empty", HTTP_BAD_REQUEST);
   }
   
   json_value_t* request_json = json_parse(request->body);
   if (!request_json || request_json->type != JSON_OBJECT) {
     if (request_json) json_free(request_json);
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
   }
   
@@ -529,7 +529,7 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   rbac_user_t* user = rbac_db_get_user(ctx->db, user_id);
   if (!user) {
     json_free(request_json);
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("User not found", HTTP_NOT_FOUND);
   }
   
@@ -538,12 +538,12 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   if (!user_doc) {
     rbac_free_user(user);
     json_free(request_json);
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("User document not found", HTTP_INTERNAL_SERVER_ERROR);
   }
   
   /* Store the actual document ID */
-  char* actual_doc_id = strdup(user->id);
+  char* actual_doc_id = BUFFER_STRDUP(user->id);
   rbac_free_user(user);
   
   /* Update fields */
@@ -562,7 +562,7 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
     char* password_hash = hash_password(password_val->value.string);
     if (password_hash) {
       json_object_set(user_doc, "password_hash", json_create_string(password_hash));
-      free(password_hash);
+      BUFFER_FREE(password_hash);
       updated = 1;
     }
   }
@@ -571,21 +571,21 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   
   if (!updated) {
     json_free(user_doc);
-    free(user_id);
-    free(actual_doc_id);
+    BUFFER_FREE(user_id);
+    BUFFER_FREE(actual_doc_id);
     return create_error_response("No fields to update", HTTP_BAD_REQUEST);
   }
   
   /* Update user document using actual document ID */
-  json_value_t* result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, actual_doc_id, user_doc);
+  json_value_t* result = storage_update_document(ctx->db, actual_doc_id, user_doc);
   if (!result) {
     json_free(user_doc);
-    free(user_id);
-    free(actual_doc_id);
+    BUFFER_FREE(user_id);
+    BUFFER_FREE(actual_doc_id);
     return create_error_response("Failed to update user", HTTP_INTERNAL_SERVER_ERROR);
   }
   
-  free(actual_doc_id);
+  BUFFER_FREE(actual_doc_id);
   
   json_free(result);
   
@@ -619,7 +619,7 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
   }
   
   json_free(user_doc);
-  free(user_id);
+  BUFFER_FREE(user_id);
   
   return create_json_response(sanitized, HTTP_OK);
 }
@@ -648,13 +648,13 @@ http_response_t* api_handle_rbac_delete_user(api_context_t* ctx, http_request_t*
   
   /* Prevent deleting own account */
   if (strcmp(requester_id, user_id) == 0) {
-    free(user_id);
+    BUFFER_FREE(user_id);
     return create_error_response("Cannot delete your own account", HTTP_BAD_REQUEST);
   }
   
   /* Delete user */
   int result = rbac_db_delete_user(ctx->db, user_id);
-  free(user_id);
+  BUFFER_FREE(user_id);
   
   if (!result) {
     return create_error_response("Failed to delete user", HTTP_INTERNAL_SERVER_ERROR);
@@ -834,7 +834,7 @@ http_response_t* api_handle_rbac_get_role(api_context_t* ctx, http_request_t* re
   
   /* Get role document */
   json_value_t* role_doc = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, role_id);
-  free(role_id);
+  BUFFER_FREE(role_id);
   
   if (!role_doc) {
     return create_error_response("Role not found", HTTP_NOT_FOUND);
@@ -980,7 +980,7 @@ http_response_t* api_handle_rbac_delete_role(api_context_t* ctx, http_request_t*
   
   /* Delete role */
   int result = rbac_db_delete_role(ctx->db, role_id);
-  free(role_id);
+  BUFFER_FREE(role_id);
   
   if (!result) {
     return create_error_response("Failed to delete role", HTTP_INTERNAL_SERVER_ERROR);
@@ -1019,13 +1019,13 @@ http_response_t* api_handle_rbac_update_role(api_context_t* ctx, http_request_t*
   
   /* Parse request body */
   if (!request->body) {
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Request body required", HTTP_BAD_REQUEST);
   }
   
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    free(role_id);
+    BUFFER_FREE(role_id);
     if (body) json_free(body);
     return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
   }
@@ -1033,7 +1033,7 @@ http_response_t* api_handle_rbac_update_role(api_context_t* ctx, http_request_t*
   /* Check if role exists first */
   rbac_role_t* existing_role_obj = rbac_db_get_role(ctx->db, role_id);
   if (!existing_role_obj) {
-    free(role_id);
+    BUFFER_FREE(role_id);
     json_free(body);
     return create_error_response("Role not found", HTTP_NOT_FOUND);
   }
@@ -1069,7 +1069,7 @@ http_response_t* api_handle_rbac_update_role(api_context_t* ctx, http_request_t*
   rbac_free_role(existing_role_obj);
   json_free(body);
   json_free(permissions);
-  free(role_id);
+  BUFFER_FREE(role_id);
   
   if (!result) {
     return create_error_response("Failed to update role", HTTP_INTERNAL_SERVER_ERROR);
@@ -1103,15 +1103,15 @@ http_response_t* api_handle_rbac_add_user_to_role(api_context_t* ctx, http_reque
   char* user_id = extract_path_parameter(request->path, "user_id");
   
   if (!role_id || !user_id) {
-    if (role_id) free(role_id);
-    if (user_id) free(user_id);
+    if (role_id) BUFFER_FREE(role_id);
+    if (user_id) BUFFER_FREE(user_id);
     return create_error_response("Role ID and User ID are required", HTTP_BAD_REQUEST);
   }
   
   /* Add user to role */
   int result = rbac_db_add_user_to_role(ctx->db, user_id, role_id);
-  free(role_id);
-  free(user_id);
+  BUFFER_FREE(role_id);
+  BUFFER_FREE(user_id);
   
   if (!result) {
     return create_error_response("Failed to add user to role", HTTP_INTERNAL_SERVER_ERROR);
@@ -1145,15 +1145,15 @@ http_response_t* api_handle_rbac_remove_user_from_role(api_context_t* ctx, http_
   char* user_id = extract_path_parameter(request->path, "user_id");
   
   if (!role_id || !user_id) {
-    if (role_id) free(role_id);
-    if (user_id) free(user_id);
+    if (role_id) BUFFER_FREE(role_id);
+    if (user_id) BUFFER_FREE(user_id);
     return create_error_response("Role ID and User ID are required", HTTP_BAD_REQUEST);
   }
   
   /* Remove user from role */
   int result = rbac_db_remove_user_from_role(ctx->db, user_id, role_id);
-  free(role_id);
-  free(user_id);
+  BUFFER_FREE(role_id);
+  BUFFER_FREE(user_id);
   
   if (!result) {
     return create_error_response("Failed to remove user from role", HTTP_INTERNAL_SERVER_ERROR);
@@ -1192,14 +1192,14 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
   
   /* Parse request body */
   if (!request->body) {
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Request body is empty", HTTP_BAD_REQUEST);
   }
   
   json_value_t* request_json = json_parse(request->body);
   if (!request_json || request_json->type != JSON_OBJECT) {
     if (request_json) json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
   }
   
@@ -1212,7 +1212,7 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
     !resource_id_val || resource_id_val->type != JSON_STRING ||
     !permission_val || permission_val->type != JSON_STRING) {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Resource type, resource ID, and permission are required", HTTP_BAD_REQUEST);
   }
   
@@ -1233,7 +1233,7 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
     resource_type = RBAC_PERMISSION;
   } else {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid resource type", HTTP_BAD_REQUEST);
   }
   
@@ -1250,7 +1250,7 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
     permission = RBAC_ADMIN;
   } else {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid permission", HTTP_BAD_REQUEST);
   }
   
@@ -1260,19 +1260,19 @@ http_response_t* api_handle_rbac_grant_permission(api_context_t* ctx, http_reque
   rbac_role_t* role = rbac_db_get_role(ctx->db, role_id);
   if (!role) {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Role not found", HTTP_NOT_FOUND);
   }
   
   /* Store the actual document ID */
-  char* actual_role_id = strdup(role->id);
+  char* actual_role_id = BUFFER_STRDUP(role->id);
   rbac_free_role(role);
   
   /* Grant permission using actual document ID */
   int result = rbac_db_grant_permission(ctx->db, actual_role_id, resource_type, resource_id, permission);
   json_free(request_json);
-  free(role_id);
-  free(actual_role_id);
+  BUFFER_FREE(role_id);
+  BUFFER_FREE(actual_role_id);
   
   if (!result) {
     return create_error_response("Failed to grant permission", HTTP_INTERNAL_SERVER_ERROR);
@@ -1311,14 +1311,14 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
   
   /* Parse request body */
   if (!request->body) {
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Request body is empty", HTTP_BAD_REQUEST);
   }
   
   json_value_t* request_json = json_parse(request->body);
   if (!request_json || request_json->type != JSON_OBJECT) {
     if (request_json) json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid JSON body", HTTP_BAD_REQUEST);
   }
   
@@ -1331,7 +1331,7 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
     !resource_id_val || resource_id_val->type != JSON_STRING ||
     !permission_val || permission_val->type != JSON_STRING) {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Resource type, resource ID, and permission are required", HTTP_BAD_REQUEST);
   }
   
@@ -1352,7 +1352,7 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
     resource_type = RBAC_PERMISSION;
   } else {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid resource type", HTTP_BAD_REQUEST);
   }
   
@@ -1369,7 +1369,7 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
     permission = RBAC_ADMIN;
   } else {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Invalid permission", HTTP_BAD_REQUEST);
   }
   
@@ -1379,19 +1379,19 @@ http_response_t* api_handle_rbac_revoke_permission(api_context_t* ctx, http_requ
   rbac_role_t* role = rbac_db_get_role(ctx->db, role_id);
   if (!role) {
     json_free(request_json);
-    free(role_id);
+    BUFFER_FREE(role_id);
     return create_error_response("Role not found", HTTP_NOT_FOUND);
   }
   
   /* Store the actual document ID */
-  char* actual_role_id = strdup(role->id);
+  char* actual_role_id = BUFFER_STRDUP(role->id);
   rbac_free_role(role);
   
   /* Revoke permission using actual document ID */
   int result = rbac_db_revoke_permission(ctx->db, actual_role_id, resource_type, resource_id, permission);
   json_free(request_json);
-  free(role_id);
-  free(actual_role_id);
+  BUFFER_FREE(role_id);
+  BUFFER_FREE(actual_role_id);
   
   if (!result) {
     return create_error_response("Failed to revoke permission", HTTP_INTERNAL_SERVER_ERROR);

@@ -137,12 +137,12 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
       }
 
       /* Parse log entry: TIMESTAMP|TYPE|TRANSACTION_ID|DATA_JSON */
-      char* line_copy = strdup(line);
+      char* line_copy = BUFFER_STRDUP(line);
       if (!line_copy) continue;
 
       char* token = strtok(line_copy, "|");
       if (!token) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
       time_t timestamp = atol(token);
@@ -150,27 +150,27 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
       /* Skip entries outside the time range */
       if ((start_time > 0 && timestamp < start_time) ||
         (end_time > 0 && timestamp > end_time)) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
 
       token = strtok(NULL, "|");
       if (!token) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
       char* type = token;
 
       token = strtok(NULL, "|");
       if (!token) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
       char* transaction_id = token;
 
       token = strtok(NULL, "\n");
       if (!token) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
       char* data_json = token;
@@ -178,7 +178,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
       /* Parse data JSON */
       json_value_t* data = json_parse(data_json);
       if (!data) {
-        free(line_copy);
+        BUFFER_FREE(line_copy);
         continue;
       }
 
@@ -265,7 +265,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
       }
 
       json_free(data);
-      free(line_copy);
+      BUFFER_FREE(line_copy);
     }
 
     /* Clean up */

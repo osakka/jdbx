@@ -48,6 +48,7 @@
 #include "utils/generic_cache.h"
 #include "utils/skiplist.h"
 #include "utils/buffer_pool.h"
+#include "rbac/rbac_db.h"
 
 /**
  * Library structure - top level container for collections
@@ -124,6 +125,7 @@ static jdbx_database_t g_db = {
 /* Forward declarations */
 static library_t* get_or_create_library(const char* name);
 static collection_t* get_or_create_collection(const char* library_name, const char* collection_name);
+static void ensure_virtual_collection_exists(const char* virtual_library, const char* collection_name);
 static int parse_collection_path(const char* path, char* library, char* collection);
 static int skiplist_string_compare(const void* a, size_t a_len, const void* b, size_t b_len);
 
@@ -229,7 +231,7 @@ static library_t* get_or_create_library(const char* name) {
         LOG_ERROR("Failed to insert library '%s' into skiplist", name);
         skiplist_destroy(lib->collections);
         pthread_rwlock_destroy(&lib->lock);
-        free(lib);
+        BUFFER_FREE(lib);
         return NULL;
     }
     
@@ -241,46 +243,423 @@ static library_t* get_or_create_library(const char* name) {
 static collection_t* get_or_create_collection(const char* library_name, const char* collection_name) {
     if (!library_name || !collection_name) return NULL;
     
-    library_t* lib = get_or_create_library(library_name);
-    if (!lib) return NULL;
+    /* UNIFIED DOCUMENTS ARCHITECTURE:
+     * Only allow creation of the single physical unified collection.
+     * All other "collections" should be virtual (document-based).
+     */
     
-    pthread_rwlock_wrlock(&lib->lock);
-    
-    /* Check if collection exists */
-    size_t value_len;
-    collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection_name, 
-                                                       strlen(collection_name) + 1, &value_len);
-    if (coll) {
+    /* Only allow the unified documents collection */
+    if (strcmp(library_name, PHYSICAL_STORAGE_LIBRARY) == 0 && 
+        strcmp(collection_name, PHYSICAL_STORAGE_COLLECTION) == 0) {
+        
+        /* This is the single physical unified collection - allow creation */
+        library_t* lib = get_or_create_library(library_name);
+        if (!lib) return NULL;
+        
+        pthread_rwlock_wrlock(&lib->lock);
+        
+        /* Check if collection exists */
+        size_t value_len;
+        collection_t* coll = (collection_t*)skiplist_search(lib->collections, collection_name, 
+                                                           strlen(collection_name) + 1, &value_len);
+        if (coll) {
+            pthread_rwlock_unlock(&lib->lock);
+            return coll;
+        }
+        
+        /* Create the unified documents collection */
+        coll = calloc(1, sizeof(collection_t));
+        if (!coll) {
+            pthread_rwlock_unlock(&lib->lock);
+            return NULL;
+        }
+        
+        strncpy(coll->name, collection_name, sizeof(coll->name) - 1);
+        strncpy(coll->library, library_name, sizeof(coll->library) - 1);
+        coll->documents = skiplist_create(skiplist_string_compare);
+        coll->indexes = skiplist_create(skiplist_string_compare);
+        pthread_rwlock_init(&coll->lock, NULL);
+        
+        /* Add to library */
+        skiplist_insert(lib->collections, coll->name, strlen(coll->name) + 1, 
+                       coll, sizeof(collection_t));
+        
         pthread_rwlock_unlock(&lib->lock);
+        
+        LOG_INFO("Created unified documents collection '%s/%s'", library_name, collection_name);
         return coll;
+        
+    } else {
+        /* For any other collection request, this is a virtual collection.
+         * We should ensure it exists as a virtual collection document.
+         */
+        ensure_virtual_collection_exists(library_name, collection_name);
+        
+        /* Return the unified documents collection for actual storage */
+        return get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    }
+}
+
+/**
+ * Ensure virtual collection exists as a document in unified storage
+ * This creates a collection document if it doesn't exist
+ * 
+ * Virtual collections are stored as documents with:
+ * - type: "collection"
+ * - library: virtual_library
+ * - collection: "collections"
+ * - name: collection_name
+ */
+static void ensure_virtual_collection_exists(const char* virtual_library, const char* collection_name) {
+    if (!virtual_library || !collection_name) return;
+    
+    /* Query for existing collection document */
+    json_value_t* query = json_create_object();
+    json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_COLLECTION));
+    json_object_set(query, "library", json_create_string(virtual_library));
+    json_object_set(query, "collection", json_create_string("collections"));
+    json_object_set(query, "name", json_create_string(collection_name));
+    
+    /* Check if collection document already exists */
+    json_value_t* results = db_query_documents(&g_db.facade, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, query);
+    
+    bool collection_exists = false;
+    if (results && json_get_type(results) == JSON_OBJECT) {
+        json_value_t* documents = json_object_get(results, "documents");
+        if (documents && json_get_type(documents) == JSON_ARRAY && json_array_size(documents) > 0) {
+            collection_exists = true;
+        }
     }
     
-    /* Create new collection */
-    coll = calloc(1, sizeof(collection_t));
-    if (!coll) {
-        pthread_rwlock_unlock(&lib->lock);
+    if (results) {
+        json_free(results);
+    }
+    json_free(query);
+    
+    if (collection_exists) {
+        LOG_DEBUG("Virtual collection %s/%s already exists", virtual_library, collection_name);
+        return;
+    }
+    
+    /* Create virtual collection document */
+    json_value_t* collection_doc = json_create_object();
+    json_object_set(collection_doc, "type", json_create_string(DOC_TYPE_NAME_COLLECTION));
+    json_object_set(collection_doc, "library", json_create_string(virtual_library));
+    json_object_set(collection_doc, "collection", json_create_string("collections"));
+    json_object_set(collection_doc, "name", json_create_string(collection_name));
+    
+    /* Add metadata */
+    char timestamp[64];
+    time_t now = time(NULL);
+    struct tm* utc_tm = gmtime(&now);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+    json_object_set(collection_doc, "created_at", json_create_string(timestamp));
+    json_object_set(collection_doc, "modified_at", json_create_string(timestamp));
+    json_object_set(collection_doc, "owner", json_create_string("system"));
+    
+    /* Insert collection document */
+    json_value_t* inserted = storage_insert_document(&g_db.facade, collection_doc);
+    
+    if (inserted) {
+        LOG_INFO("Created virtual collection document: %s/%s", virtual_library, collection_name);
+        json_free(inserted);
+    } else {
+        LOG_ERROR("Failed to create virtual collection document: %s/%s", virtual_library, collection_name);
+    }
+    
+    json_free(collection_doc);
+}
+
+/*==============================================================================
+ * UNIFIED DOCUMENTS - Storage vs Virtual Function Separation
+ *============================================================================*/
+
+/**
+ * Virtual Operations - High-level document type operations with proper field handling
+ */
+
+/**
+ * GENERIC virtual query - works with any document type
+ * Virtual layer handles business logic and field validation
+ */
+json_value_t* virtual_query(database_t* db, const char* type, const char* library, 
+                           const char* collection, json_value_t* filters) {
+    if (!type || !library) {
+        LOG_ERROR("Virtual query: Missing required type or library");
         return NULL;
     }
     
-    strncpy(coll->name, collection_name, sizeof(coll->name) - 1);
-    strncpy(coll->library, library_name, sizeof(coll->library) - 1);
-    coll->documents = skiplist_create(skiplist_string_compare);
-    coll->indexes = skiplist_create(skiplist_string_compare);
-    pthread_rwlock_init(&coll->lock, NULL);
+    LOG_DEBUG("Virtual: Querying documents type='%s' library='%s' collection='%s'", 
+              type, library, collection ? collection : "auto");
     
-    /* Add to library */
-    skiplist_insert(lib->collections, coll->name, strlen(coll->name) + 1, 
-                   coll, sizeof(collection_t));
+    // Create unified query with proper type/library/collection fields
+    json_value_t* unified_query = json_create_object();
+    json_object_set(unified_query, "type", json_create_string(type));
+    json_object_set(unified_query, "library", json_create_string(library));
     
-    pthread_rwlock_unlock(&lib->lock);
+    // Auto-determine collection from type if not provided
+    if (collection) {
+        json_object_set(unified_query, "collection", json_create_string(collection));
+    } else {
+        // Auto-map type to collection (user -> users, role -> roles, etc.)
+        char auto_collection[64];
+        snprintf(auto_collection, sizeof(auto_collection), "%ss", type); // Simple pluralization
+        json_object_set(unified_query, "collection", json_create_string(auto_collection));
+    }
     
-    LOG_INFO("Created collection '%s/%s'", library_name, collection_name);
+    // Add any additional filters
+    if (filters && json_get_type(filters) == JSON_OBJECT) {
+        json_value_t* filter_keys = json_object_get_keys(filters);
+        if (filter_keys && json_get_type(filter_keys) == JSON_ARRAY) {
+            for (size_t i = 0; i < json_array_size(filter_keys); i++) {
+                json_value_t* key_val = json_array_get(filter_keys, i);
+                if (key_val && json_get_type(key_val) == JSON_STRING) {
+                    const char* key = json_get_string(key_val);
+                    json_value_t* value = json_object_get(filters, key);
+                    if (value) {
+                        json_object_set(unified_query, key, json_clone(value));
+                    }
+                }
+            }
+        }
+        json_free(filter_keys);
+    }
     
-    /* Register with adaptive indexing */
-    char full_path[128];
-    snprintf(full_path, sizeof(full_path), "%s/%s", library_name, collection_name);
+    // STORAGE LAYER: Execute query
+    json_value_t* results = storage_query_documents(db, unified_query);
+    json_free(unified_query);
     
-    return coll;
+    return results;
+}
+
+/**
+ * GENERIC virtual insert - works with any document type  
+ * Virtual layer handles business logic, validation, and mandatory field population
+ */
+json_value_t* virtual_insert(database_t* db, const char* type, const char* library,
+                            const char* collection, json_value_t* document, const char* owner) {
+    if (!type || !library || !document || !owner) {
+        LOG_ERROR("Virtual insert: Missing required parameters (type, library, document, owner)");
+        return NULL;
+    }
+    
+    LOG_DEBUG("Virtual: Inserting document type='%s' library='%s' collection='%s'", 
+              type, library, collection ? collection : "auto");
+    
+    // Create document copy with mandatory unified documents fields
+    json_value_t* doc_copy = json_deep_copy(document);
+    
+    // MANDATORY UNIFIED DOCUMENTS FIELDS (override any existing values)
+    json_object_set(doc_copy, "type", json_create_string(type));
+    json_object_set(doc_copy, "library", json_create_string(library));
+    
+    // Auto-determine collection from type if not provided
+    if (collection) {
+        json_object_set(doc_copy, "collection", json_create_string(collection));
+    } else {
+        char auto_collection[64];
+        snprintf(auto_collection, sizeof(auto_collection), "%ss", type);
+        json_object_set(doc_copy, "collection", json_create_string(auto_collection));
+    }
+    
+    // Set owner from parameter (explicit ownership)
+    json_object_set(doc_copy, "owner", json_create_string(owner));
+    
+    // STORAGE LAYER: Insert with proper fields
+    json_value_t* result = storage_insert_document(db, doc_copy);
+    json_free(doc_copy);
+    
+    if (result) {
+        const char* doc_id = json_get_string(json_object_get(result, "uuid"));
+        LOG_INFO("Virtual: Document created successfully type='%s' id='%s'", type, doc_id);
+    } else {
+        LOG_ERROR("Virtual: Failed to create document type='%s'", type);
+    }
+    
+    return result;
+}
+
+/**
+ * COMPATIBILITY: Legacy specific function that calls generic virtual_query
+ */
+json_value_t* virtual_query_users(database_t* db, const char* library, json_value_t* filters) {
+    return virtual_query(db, DOC_TYPE_NAME_USER, library, VIRTUAL_COLLECTION_USERS, filters);
+}
+
+/**
+ * Virtual update with audit trail
+ */
+json_value_t* virtual_update(database_t* db, const char* uuid, json_value_t* document) {
+    if (!db || !uuid || !document) {
+        LOG_ERROR("Virtual update: Missing required parameters");
+        return NULL;
+    }
+    
+    LOG_DEBUG("Virtual: Updating document uuid='%s'", uuid);
+    
+    // Create document copy for update
+    json_value_t* doc_copy = json_deep_copy(document);
+    
+    // Add audit trail - updated_at timestamp  
+    time_t now = time(NULL);
+    json_object_set(doc_copy, "updated_at", json_create_integer(now));
+    
+    // Validate owner is present (should not be changed in updates)
+    if (!json_object_get(doc_copy, "owner")) {
+        LOG_ERROR("Virtual update: Document missing required 'owner' field");
+        json_free(doc_copy);
+        return NULL;
+    }
+    
+    // STORAGE LAYER: Update with proper fields
+    json_value_t* result = storage_update_document(db, uuid, doc_copy);
+    json_free(doc_copy);
+    
+    if (result) {
+        LOG_INFO("Virtual: Document updated successfully uuid='%s'", uuid);
+    } else {
+        LOG_ERROR("Virtual: Failed to update document uuid='%s'", uuid);
+    }
+    
+    return result;
+}
+
+/**
+ * Virtual get by UUID
+ */
+json_value_t* virtual_get(database_t* db, const char* uuid) {
+    if (!db || !uuid) {
+        LOG_ERROR("Virtual get: Missing required parameters");
+        return NULL;
+    }
+    
+    return storage_get_document(db, uuid);
+}
+
+/**
+ * Virtual delete by UUID  
+ */
+int virtual_delete(database_t* db, const char* uuid) {
+    if (!db || !uuid) {
+        LOG_ERROR("Virtual delete: Missing required parameters");
+        return -1;
+    }
+    
+    LOG_DEBUG("Virtual: Deleting document uuid='%s'", uuid);
+    
+    int result = storage_delete_document(db, uuid);
+    
+    if (result == 0) {
+        LOG_INFO("Virtual: Document deleted successfully uuid='%s'", uuid);
+    } else {
+        LOG_ERROR("Virtual: Failed to delete document uuid='%s'", uuid);
+    }
+    
+    return result;
+}
+
+
+/**
+ * Storage Operations - Direct physical unified collection access
+ */
+
+/**
+ * Query documents directly from physical storage with unified query
+ * This is a storage operation that works directly on the default/documents collection
+ */
+json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
+    (void)db; // Use global database
+    
+    LOG_DEBUG("Storage query on unified collection");
+    
+    pthread_rwlock_rdlock(&g_db.lock);
+    library_t* lib = get_or_create_library(STORAGE_LIBRARY);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    collection_t* coll = get_or_create_collection(STORAGE_LIBRARY, STORAGE_COLLECTION);
+    if (!coll) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_rdlock(&coll->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    // Iterate through all documents in the single unified collection
+    json_value_t* result = json_create_object();
+    json_value_t* filtered_docs = json_create_array();
+    int count = 0;
+    
+    // Use skiplist iterator to traverse all documents
+    void* iter = skiplist_iterator_create(coll->documents);
+    if (!iter) {
+        pthread_rwlock_unlock(&coll->lock);
+        json_free(result);
+        json_free(filtered_docs);
+        return NULL;
+    }
+    
+    char* key;
+    size_t key_len;
+    json_value_t** doc_ptr;
+    size_t value_len;
+    
+    while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr, &value_len)) {
+        if (!doc_ptr || !*doc_ptr) continue;
+        
+        json_value_t* doc = *doc_ptr;
+        if (!doc || doc->type != JSON_OBJECT) continue;
+        
+        // Apply query filter if provided
+        bool matches_query = true;
+        if (query && query->type == JSON_OBJECT) {
+            // Simple field matching - iterate through query keys
+            json_value_t* query_keys = json_object_get_keys(query);
+            if (query_keys && query_keys->type == JSON_ARRAY) {
+                for (size_t j = 0; j < json_array_size(query_keys) && matches_query; j++) {
+                    json_value_t* key_val = json_array_get(query_keys, j);
+                    if (key_val && key_val->type == JSON_STRING) {
+                        const char* field_key = json_get_string(key_val);
+                        json_value_t* query_value = json_object_get(query, field_key);
+                        json_value_t* doc_field = json_object_get(doc, field_key);
+                        
+                        if (!doc_field) {
+                            matches_query = false;
+                            break;
+                        }
+                        
+                        // Simple string comparison for now
+                        if (query_value->type == JSON_STRING && doc_field->type == JSON_STRING) {
+                            if (strcmp(json_get_string(query_value), json_get_string(doc_field)) != 0) {
+                                matches_query = false;
+                                break;
+                            }
+                        } else if (query_value->type != doc_field->type) {
+                            matches_query = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            json_free(query_keys);
+        }
+        
+        if (matches_query) {
+            json_array_append(filtered_docs, json_clone(doc));
+            count++;
+        }
+    }
+    
+    skiplist_iterator_destroy(iter);
+    pthread_rwlock_unlock(&coll->lock);
+    
+    json_object_set(result, "documents", filtered_docs);
+    json_object_set(result, "count", json_create_integer(count));
+    
+    return result;
 }
 
 /*==============================================================================
@@ -394,7 +773,7 @@ database_t* db_init(const char* path) {
     g_db.initialized = true;
     
     /* Initialize facade for compatibility */
-    g_db.facade.path = strdup(g_db.path);
+    g_db.facade.path = BUFFER_STRDUP(g_db.path);
     g_db.facade.is_bootstrap_mode = 0;
     g_db.facade.collections = json_create_object();
     pthread_rwlock_init(&g_db.facade.rwlock, NULL);
@@ -451,7 +830,7 @@ void db_shutdown(void) {
     
     /* Clean up facade */
     if (g_db.facade.path) {
-        free(g_db.facade.path);
+        BUFFER_FREE(g_db.facade.path);
         g_db.facade.path = NULL;
     }
     if (g_db.facade.collections) {
@@ -599,9 +978,27 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     // Create document copy with mandatory unified fields
     json_value_t* doc_copy = json_deep_copy(document);
     json_object_set(doc_copy, "uuid", json_create_string(uuid));
-    json_object_set(doc_copy, "library", json_create_string(library));
-    json_object_set(doc_copy, "type", json_create_string(collection));
-    json_object_set(doc_copy, "collection", json_create_string(collection));
+    
+    // UNIFIED DOCUMENTS: Preserve document type if already set, otherwise infer from collection
+    json_value_t* existing_type = json_object_get(doc_copy, "type");
+    if (!existing_type || json_get_type(existing_type) != JSON_STRING) {
+        // Only set type if not already specified - infer from collection for backward compatibility
+        json_object_set(doc_copy, "type", json_create_string(collection));
+    }
+    
+    // UNIFIED DOCUMENTS: Preserve document library if already set, otherwise use storage library
+    json_value_t* existing_library = json_object_get(doc_copy, "library");
+    if (!existing_library || json_get_type(existing_library) != JSON_STRING) {
+        // Only set library if not already specified
+        json_object_set(doc_copy, "library", json_create_string(library));
+    }
+    
+    // UNIFIED DOCUMENTS: Preserve document collection if already set, otherwise use storage collection
+    json_value_t* existing_collection = json_object_get(doc_copy, "collection");
+    if (!existing_collection || json_get_type(existing_collection) != JSON_STRING) {
+        // Only set collection if not already specified
+        json_object_set(doc_copy, "collection", json_create_string(collection));
+    }
     
     // Add timestamps
     time_t now = time(NULL);
@@ -850,15 +1247,9 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
             continue;
         }
         
-        // Filter by type (which corresponds to collection name)
-        json_value_t* doc_type = json_object_get(doc, "type");
-        if (!doc_type || strcmp(json_get_string(doc_type), collection) != 0) {
-            LOG_DEBUG("Document filtered out by type: wanted='%s', got='%s'", 
-                      collection, doc_type ? json_get_string(doc_type) : "(null)");
-            continue;
-        }
-        
-        LOG_DEBUG("Document passed library/type filters, checking query filters");
+        // UNIFIED DOCUMENTS: Don't filter by collection parameter for type
+        // The type filtering will be done in the query matching below
+        LOG_DEBUG("Document passed library filter, checking query filters");
         
         // Apply query filter if provided
         bool matches_query = true;
@@ -999,7 +1390,7 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
                 /* Index entry: field_value -> document_id */
                 skiplist_insert(index_skiplist, field_str, strlen(field_str) + 1,
                                (void*)doc_id, strlen(doc_id) + 1);
-                buffer_pool_free_safe(field_str);
+                BUFFER_FREE(field_str);
                 indexed_count++;
             }
         }
@@ -1011,8 +1402,8 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
     /* Create index metadata for compatibility */
     index_t* idx = calloc(1, sizeof(index_t));
     if (idx) {
-        idx->name = strdup(name ? name : field_path);
-        idx->field_path = strdup(field_path);
+        idx->name = BUFFER_STRDUP(name ? name : field_path);
+        idx->field_path = BUFFER_STRDUP(field_path);
         idx->type = type;
         pthread_rwlock_init(&idx->lock, NULL);
         /* The actual skiplist is stored in the collection's indexes skiplist */
@@ -1049,6 +1440,222 @@ json_value_t* db_stats(database_t* db, const char* collection) {
     json_object_set(stats, "engine", json_create_string("JDBX"));
     json_object_set(stats, "storage", json_create_string("B-tree with WAL"));
     return stats;
+}
+
+/* ========================================================================
+ * STORAGE LAYER FUNCTIONS - Direct unified collection access
+ * ======================================================================== */
+
+/**
+ * Insert document directly into unified storage
+ * Storage layer function - operates on physical unified collection
+ * SURGICAL FIX: Direct skiplist access, no virtual layer interference
+ */
+json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
+    (void)db; // Use global database
+    
+    // Direct access to unified collection - NO virtual logic
+    pthread_rwlock_rdlock(&g_db.lock);
+    library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    collection_t* coll = get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    if (!coll) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    // Generate UUID
+    char uuid[64];
+    snprintf(uuid, sizeof(uuid), "doc-%ld-%u", time(NULL), rand());
+    
+    // Create document copy preserving ALL existing fields
+    json_value_t* doc_copy = json_deep_copy(document);
+    json_object_set(doc_copy, "uuid", json_create_string(uuid));
+    
+    // Add timestamps only if missing - preserve existing values
+    time_t now = time(NULL);
+    if (!json_object_get(doc_copy, "created_at")) {
+        json_object_set(doc_copy, "created_at", json_create_integer(now));
+    }
+    json_object_set(doc_copy, "modified_at", json_create_integer(now));
+    
+    // Direct skiplist insertion - pure storage operation
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &doc_copy, sizeof(json_value_t*));
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    LOG_INFO("Storage: Inserted document '%s' directly into unified collection", uuid);
+    
+    return json_deep_copy(doc_copy);
+}
+
+/**
+ * Update document directly in unified storage
+ * Storage layer function - operates on physical unified collection
+ * SURGICAL FIX: Direct skiplist access, no virtual layer interference
+ */
+json_value_t* storage_update_document(database_t* db, const char* uuid, json_value_t* document) {
+    (void)db; // Use global database
+    
+    // Direct access to unified collection - NO virtual logic
+    pthread_rwlock_rdlock(&g_db.lock);
+    library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    collection_t* coll = get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    if (!coll) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    // Find existing document
+    size_t value_len;
+    json_value_t** existing_doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
+                                                                      strlen(uuid) + 1, &value_len);
+    if (!existing_doc_ptr || !*existing_doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        return NULL;
+    }
+    
+    // Create updated document preserving ALL existing fields and adding new ones
+    json_value_t* updated_doc = json_deep_copy(*existing_doc_ptr);
+    
+    // Merge new fields from document parameter
+    if (document && document->type == JSON_OBJECT) {
+        json_value_t* keys = json_object_get_keys(document);
+        if (keys && keys->type == JSON_ARRAY) {
+            for (size_t i = 0; i < json_array_size(keys); i++) {
+                json_value_t* key_val = json_array_get(keys, i);
+                if (key_val && key_val->type == JSON_STRING) {
+                    const char* key = json_get_string(key_val);
+                    json_value_t* value = json_object_get(document, key);
+                    if (value) {
+                        json_object_set(updated_doc, key, json_clone(value));
+                    }
+                }
+            }
+        }
+        json_free(keys);
+    }
+    
+    // Update timestamp
+    json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
+    
+    // Direct skiplist update - atomic pointer replacement
+    json_value_t* old_doc = *existing_doc_ptr;
+    *existing_doc_ptr = updated_doc;
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    // Clean up old document
+    json_free(old_doc);
+    
+    LOG_INFO("Storage: Updated document '%s' directly in unified collection", uuid);
+    
+    return json_deep_copy(updated_doc);
+}
+
+/**
+ * Delete document directly from unified storage
+ * Storage layer function - operates on physical unified collection
+ * SURGICAL FIX: Direct skiplist access, no virtual layer interference
+ */
+int storage_delete_document(database_t* db, const char* uuid) {
+    (void)db; // Use global database
+    
+    // Direct access to unified collection - NO virtual logic
+    pthread_rwlock_rdlock(&g_db.lock);
+    library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return 0;
+    }
+    
+    collection_t* coll = get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    if (!coll) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return 0;
+    }
+    
+    pthread_rwlock_wrlock(&coll->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    // Find and remove document
+    size_t value_len;
+    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
+                                                             strlen(uuid) + 1, &value_len);
+    if (!doc_ptr || !*doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        return 0;
+    }
+    
+    // Free the document
+    json_free(*doc_ptr);
+    
+    // Remove from skiplist
+    int result = skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    LOG_INFO("Storage: Deleted document '%s' directly from unified collection", uuid);
+    
+    return result;
+}
+
+/**
+ * Get document directly from unified storage
+ * Storage layer function - operates on physical unified collection
+ * SURGICAL FIX: Direct skiplist access, no virtual layer interference
+ */
+json_value_t* storage_get_document(database_t* db, const char* uuid) {
+    (void)db; // Use global database
+    
+    // Direct access to unified collection - NO virtual logic
+    pthread_rwlock_rdlock(&g_db.lock);
+    library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
+    if (!lib) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    collection_t* coll = get_or_create_collection(PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION);
+    if (!coll) {
+        pthread_rwlock_unlock(&g_db.lock);
+        return NULL;
+    }
+    
+    pthread_rwlock_rdlock(&coll->lock);
+    pthread_rwlock_unlock(&g_db.lock);
+    
+    // Find document by UUID
+    size_t value_len;
+    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
+                                                             strlen(uuid) + 1, &value_len);
+    json_value_t* result = NULL;
+    
+    if (doc_ptr && *doc_ptr) {
+        result = json_deep_copy(*doc_ptr);
+        LOG_DEBUG("Storage: Found document '%s' in unified collection", uuid);
+    } else {
+        LOG_DEBUG("Storage: Document '%s' not found in unified collection", uuid);
+    }
+    
+    pthread_rwlock_unlock(&coll->lock);
+    
+    return result;
 }
 
 /* REMOVED: Legacy bootstrap function eliminated for TRUE unified documents architecture */

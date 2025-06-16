@@ -51,10 +51,10 @@ int jdbx_hash_index_find(jdbx_btree_t* hash_idx, const char* doc_id, uint64_t* d
     if (jdbx_btree_get(hash_idx, hash_key, strlen(hash_key), &value, &value_len) == 0) {
         if (value_len == sizeof(uint64_t)) {
             *doc_offset = *(uint64_t*)value;
-            free(value);
+            BUFFER_FREE(value);
             return 0;
         }
-        free(value);
+        BUFFER_FREE(value);
     }
     
     return -1;
@@ -125,13 +125,13 @@ json_value_t* jdbx_secondary_index_find(jdbx_btree_t* idx, const char* field_val
             }
         } else if (memcmp(key, field_value, field_len) > 0) {
             /* Passed our range */
-            free(key);
-            free(value);
+            BUFFER_FREE(key);
+            BUFFER_FREE(value);
             break;
         }
         
-        free(key);
-        free(value);
+        BUFFER_FREE(key);
+        BUFFER_FREE(value);
     }
     
     jdbx_btree_iterator_destroy(iter);
@@ -176,14 +176,14 @@ int jdbx_update_document_indexes(jdbx_btree_t* hash_idx,
             /* Convert field value to string */
             switch (field_val->type) {
                 case JSON_STRING:
-                    field_str = strdup(json_get_string(field_val));
+                    field_str = BUFFER_STRDUP(json_get_string(field_val));
                     break;
                 case JSON_NUMBER:
-                    field_str = malloc(32);
+                    field_str = BUFFER_ALLOC(32);
                     snprintf(field_str, 32, "%.6f", json_get_number(field_val));
                     break;
                 case JSON_BOOLEAN:
-                    field_str = strdup(json_get_boolean(field_val) ? "true" : "false");
+                    field_str = BUFFER_STRDUP(json_get_boolean(field_val) ? "true" : "false");
                     break;
                 default:
                     /* Skip non-indexable types */
@@ -194,7 +194,7 @@ int jdbx_update_document_indexes(jdbx_btree_t* hash_idx,
                 if (jdbx_secondary_index_insert(secondary_indexes[i], field_str, doc_id) != 0) {
                     LOG_WARNING("Failed to update secondary index for field %s", index_fields[i]);
                 }
-                free(field_str);
+                BUFFER_FREE(field_str);
             }
         }
     }
@@ -226,14 +226,14 @@ int jdbx_remove_document_indexes(jdbx_btree_t* hash_idx,
             /* Convert field value to string */
             switch (field_val->type) {
                 case JSON_STRING:
-                    field_str = strdup(json_get_string(field_val));
+                    field_str = BUFFER_STRDUP(json_get_string(field_val));
                     break;
                 case JSON_NUMBER:
-                    field_str = malloc(32);
+                    field_str = BUFFER_ALLOC(32);
                     snprintf(field_str, 32, "%.6f", json_get_number(field_val));
                     break;
                 case JSON_BOOLEAN:
-                    field_str = strdup(json_get_boolean(field_val) ? "true" : "false");
+                    field_str = BUFFER_STRDUP(json_get_boolean(field_val) ? "true" : "false");
                     break;
                 default:
                     continue;
@@ -243,7 +243,7 @@ int jdbx_remove_document_indexes(jdbx_btree_t* hash_idx,
                 if (jdbx_secondary_index_delete(secondary_indexes[i], field_str, doc_id) != 0) {
                     LOG_WARNING("Failed to remove from secondary index for field %s", index_fields[i]);
                 }
-                free(field_str);
+                BUFFER_FREE(field_str);
             }
         }
     }
@@ -277,14 +277,14 @@ int jdbx_rebuild_secondary_index(jdbx_btree_t* doc_tree, jdbx_btree_t* idx,
                 /* Convert to string */
                 switch (field_val->type) {
                     case JSON_STRING:
-                        field_str = strdup(json_get_string(field_val));
+                        field_str = BUFFER_STRDUP(json_get_string(field_val));
                         break;
                     case JSON_NUMBER:
-                        field_str = malloc(32);
+                        field_str = BUFFER_ALLOC(32);
                         snprintf(field_str, 32, "%.6f", json_get_number(field_val));
                         break;
                     case JSON_BOOLEAN:
-                        field_str = strdup(json_get_boolean(field_val) ? "true" : "false");
+                        field_str = BUFFER_STRDUP(json_get_boolean(field_val) ? "true" : "false");
                         break;
                     default:
                         break;
@@ -301,14 +301,14 @@ int jdbx_rebuild_secondary_index(jdbx_btree_t* doc_tree, jdbx_btree_t* idx,
                             count++;
                         }
                     }
-                    free(field_str);
+                    BUFFER_FREE(field_str);
                 }
             }
             json_free(doc);
         }
         
-        free(key);
-        free(value);
+        BUFFER_FREE(key);
+        BUFFER_FREE(value);
     }
     
     jdbx_btree_iterator_destroy(iter);

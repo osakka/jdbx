@@ -4,6 +4,7 @@
 #include "rbac/rbac_database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   
   /* Query all sessions */
   json_value_t* query = json_create_object();
-  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
   if (!results) {
@@ -98,7 +99,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   json_value_t* query = json_create_object();
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
   if (!results) {
@@ -191,7 +192,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
   if (!results) {
@@ -265,10 +266,23 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   
   const char* library_name = library_val->value.string;
   
-  /* Validate library exists */
-  char collection_path[512];
-  snprintf(collection_path, sizeof(collection_path), "%s/users", library_name);
-  if (!db_collection_exists(ctx->db, collection_path)) {
+  /* Validate library exists using unified documents architecture */
+  json_value_t* library_query = json_create_object();
+  json_object_set(library_query, "type", json_create_string("library"));
+  json_object_set(library_query, "name", json_create_string(library_name));
+  json_value_t* library_results = storage_query_documents(ctx->db, library_query);
+  json_free(library_query);
+  
+  int library_exists = 0;
+  if (library_results) {
+    json_value_t* docs = json_object_get(library_results, "documents");
+    if (docs && docs->type == JSON_ARRAY && json_array_size(docs) > 0) {
+      library_exists = 1;
+    }
+    json_free(library_results);
+  }
+  
+  if (!library_exists) {
     json_free(body);
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
@@ -279,7 +293,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
   if (!results) {
@@ -322,7 +336,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
   /* Update session in database */
-  json_value_t* update_result = db_update_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id, update_doc);
+  json_value_t* update_result = storage_update_document(ctx->db, session_id, update_doc);
   json_free(update_doc);
   
   if (!update_result) {

@@ -1,5 +1,6 @@
 #include "database/database.h"
 #include "utils/import_export.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,26 +47,26 @@ static char** split_comma_list(const char* list, int* count) {
   }
   
   /* Allocate array */
-  char** items = (char**)malloc(num_items * sizeof(char*));
+  char** items = (char**)BUFFER_ALLOC(num_items * sizeof(char*));
   if (!items) {
     return NULL;
   }
   
   /* Split string */
-  char* list_copy = strdup(list);
+  char* list_copy = BUFFER_STRDUP(list);
   if (!list_copy) {
-    free(items);
+    BUFFER_FREE(items);
     return NULL;
   }
   
   char* token = strtok(list_copy, ",");
   int i = 0;
   while (token && i < num_items) {
-    items[i++] = strdup(token);
+    items[i++] = BUFFER_STRDUP(token);
     token = strtok(NULL, ",");
   }
   
-  free(list_copy);
+  BUFFER_FREE(list_copy);
   *count = i;
   
   return items;
@@ -78,10 +79,10 @@ static void free_string_array(char** array, int count) {
   }
   
   for (int i = 0; i < count; i++) {
-    free(array[i]);
+    BUFFER_FREE(array[i]);
   }
   
-  free(array);
+  BUFFER_FREE(array);
 }
 
 /* Export command */
@@ -301,7 +302,7 @@ static int cmd_backup(int argc, char** argv) {
   }
   
   printf("Database backed up successfully to %s\n", backup_path);
-  free(backup_path);
+  BUFFER_FREE(backup_path);
   return 0;
 }
 

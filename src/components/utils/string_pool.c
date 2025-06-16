@@ -71,11 +71,11 @@ string_pool_t* string_pool_create(size_t initial_capacity, size_t max_strings) {
         initial_capacity = 1024;  /* Default to 1024 buckets */
     }
     
-    string_pool_t* pool = buffer_pool_alloc(sizeof(string_pool_t));
+    string_pool_t* pool = BUFFER_ALLOC(sizeof(string_pool_t));
     if (!pool) return NULL;
     
     /* Allocate bucket array */
-    pool->buckets = buffer_pool_alloc(initial_capacity * sizeof(hash_bucket_t));
+    pool->buckets = BUFFER_ALLOC(initial_capacity * sizeof(hash_bucket_t));
     if (!pool->buckets) {
         buffer_pool_free(pool);
         return NULL;
@@ -176,7 +176,7 @@ interned_string_t* string_pool_intern_len(string_pool_t* pool, const char* str, 
     
     /* Not found - create new entry */
     size_t entry_size = sizeof(pool_entry_t) + len + 1;
-    entry = buffer_pool_alloc(entry_size);
+    entry = BUFFER_ALLOC(entry_size);
     if (!entry) {
         pthread_mutex_unlock(&bucket->lock);
         return NULL;

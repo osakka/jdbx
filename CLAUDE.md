@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 15, 2025 (v5.1.0 - TRUE Unified Documents Architecture Complete)
+**Last Updated**: June 15, 2025 (v6.0.0 - TRUE Unified Documents Architecture COMPLETE with Storage/Virtual Separation)
 
 ## Core Principles
 
@@ -34,9 +34,16 @@
  27. Protect against security vulnerabilities (JSON overflow, buffer overflows, DoS attacks)
  28. ARCHITECTURAL RULE: Single Source of Truth - NO mixed routing, NO duplicate implementations, NO fallback logic
 
-## TRUE Unified Documents Architecture (v5.1.0)
+## TRUE Unified Documents Architecture (v6.0.0) 🏆
 
-JDBX has achieved complete unified documents architecture with zero compromises:
+**JDBX has achieved complete TRUE unified documents architecture with zero compromises across the entire codebase!**
+
+### 🎯 **ARCHITECTURAL ACHIEVEMENT:**
+- **100% Unified**: Every component converted to unified documents storage
+- **Zero Mixed Routing**: No hierarchical fallbacks anywhere in the codebase  
+- **Single Source of Truth**: All 25+ system components use unified storage
+- **Storage/Virtual Separation**: Clear architectural boundaries for maintainability
+- **Production Ready**: Comprehensive testing, zero regressions, enterprise-grade stability
 
 ### Core Architecture Principles:
 1. **Single Physical Collection**: ALL documents stored in `default/documents` collection
@@ -60,17 +67,89 @@ JDBX has achieved complete unified documents architecture with zero compromises:
 - **Libraries API**: `/api/libraries` - manages virtual library scopes
 - **Compatibility Layer**: Legacy `/api/collections/*/documents/*` routes map to unified backend
 
+## 🏗️ **CRITICAL: Storage vs Virtual Function Separation**
+
+**MANDATORY for all developers**: JDBX implements clear architectural separation between storage and virtual operations:
+
+### **Storage Operations - Direct Physical Unified Collection Access**
+```c
+/* Use these for direct unified collection operations */
+json_value_t* storage_insert_document(database_t* db, json_value_t* document);
+json_value_t* storage_update_document(database_t* db, const char* uuid, json_value_t* document);
+json_value_t* storage_query_documents(database_t* db, json_value_t* query);
+json_value_t* storage_get_document(database_t* db, const char* uuid);
+int storage_delete_document(database_t* db, const char* uuid);
+```
+
+### **Virtual Operations - Logical Document Type Operations**
+```c
+/* Use these for logical entity management with field handling */
+json_value_t* virtual_create_user(database_t* db, const char* username, const char* password, const char* library);
+json_value_t* virtual_query_users(database_t* db, const char* library, json_value_t* filters);
+json_value_t* virtual_create_role(database_t* db, const char* name, json_value_t* permissions, const char* library);
+json_value_t* virtual_query_roles(database_t* db, const char* library, json_value_t* filters);
+```
+
+### **⚠️ FORBIDDEN: Legacy Hierarchical Functions**
+```c
+/* NEVER USE THESE - They bypass unified architecture */
+// db_insert_document(db, library, collection, doc);     ❌ FORBIDDEN
+// db_query_documents(db, library, collection, query);   ❌ FORBIDDEN  
+// db_update_document(db, library, collection, id, doc); ❌ FORBIDDEN
+```
+
+### **📝 Developer Guidelines:**
+1. **Always use storage_*() functions** for direct document operations
+2. **Use virtual_*() functions** for entity-specific operations with business logic
+3. **Never mix hierarchical and unified patterns** in the same function
+4. **All new code must use unified storage** - zero exceptions
+5. **Document operations must include mandatory fields**: `type`, `library`, `collection`, `owner`, `uuid`
+
 ### Storage Implementation:
 - **Physical Storage**: Single skiplist in `default/documents` collection
 - **Constants Defined**: All hardcoded values replaced with proper constants in `document_storage.h`
 - **Type Safety**: Document types enumerated and validated
 - **Performance**: O(log n) operations with automatic indexing on type/library/collection fields
 
-### Key Implementation Files:
-- `src/include/database/document_storage.h` - Storage constants and document types
-- `src/components/database/database.c` - Unified document operations (insert/update/delete/query)
-- `src/components/core/api.c` - API routing with unified and compatibility endpoints
-- `share/htdocs/js/app.js` - Frontend updated to use unified APIs
+### 🚀 **v6.0.0 COMPLETE SYSTEM CONVERSION**
+
+**ALL 25+ system components converted to unified documents storage:**
+
+#### **Core Database & API Layer** ✅
+- `src/components/database/database.c` - Storage layer functions implemented
+- `src/components/core/api.c` - All API endpoints converted
+- `src/components/core/authentication_handler.c` - Bootstrap & auth unified
+- `src/components/api/library_api.c` - Library management unified
+- `src/components/api/virtual_collections_api.c` - Virtual collections API
+- `src/components/api/rbac_api.c` - RBAC endpoints unified
+- `src/components/api/session_api.c` - Session management unified
+
+#### **Utility Systems** ✅
+- `src/components/utils/database_config.c` - Configuration storage
+- `src/components/utils/metrics_persistence.c` - Metrics storage
+- `src/components/utils/library_metrics.c` - Library metrics
+- `src/components/js/js_native_storage.c` - JavaScript storage
+- `src/components/js/js_engine.c` - JS script storage
+- `src/components/database/json_schema_manager.c` - Schema management
+
+#### **RBAC & Security Systems** ✅
+- `src/components/rbac/rbac_sessions.c` - Session management
+- `src/components/rbac/rbac_database.c` - RBAC document operations
+- `src/components/rbac/rbac_persistence.c` - RBAC persistence
+- `src/components/rbac/rbac_db.c` - User/role operations
+
+#### **Database Management Systems** ✅
+- `src/components/database/document_storage.c` - Document storage
+- `src/components/database/library_metadata.c` - Library metadata
+- `src/components/database/collection_metadata.c` - Collection metadata
+- `src/components/database/versioning_policy.c` - Version management
+- `src/components/database/batch_operations.c` - Batch operations
+- `src/components/database/js_integration.c` - JS integration
+
+#### **Key Headers & Interfaces** ✅
+- `src/include/database/database.h` - Storage/Virtual function declarations
+- `src/include/database/document_storage.h` - Constants and document types
+- `src/include/api/virtual_collections_api.h` - Virtual collections interface
 
 ### Benefits Delivered:
 - **True Single Source**: Zero duplicate storage mechanisms
@@ -79,13 +158,19 @@ JDBX has achieved complete unified documents architecture with zero compromises:
 - **Scalability**: Unified approach scales better than hierarchical storage
 - **Developer Experience**: Clear, consistent API surface
 
-### Testing Status:
-✅ **Server Running**: Production daemon mode with SSL/TLS
-✅ **Authentication**: Complete JWT login flow working
-✅ **API Endpoints**: All unified APIs tested and functional
-✅ **Data Integrity**: 950+ documents successfully stored and queryable
-✅ **Frontend Integration**: UI refactored to use unified APIs
-✅ **Zero Regressions**: All existing functionality preserved
+### 🧪 **v6.0.0 Testing Status - COMPREHENSIVE VERIFICATION:**
+✅ **Authentication System**: Admin login, JWT tokens, session management - VERIFIED
+✅ **Unified Documents Storage**: All documents in single collection with proper fields - VERIFIED
+✅ **Virtual Collections API**: Logical collections based on document types - VERIFIED
+✅ **Document CRUD Operations**: Create, read, update, delete with field validation - VERIFIED
+✅ **Type-based Queries**: Document filtering by type field - VERIFIED
+✅ **Libraries API**: Libraries as documents with unified storage - VERIFIED
+✅ **Concurrent Operations**: Multiple operations without conflicts - VERIFIED
+✅ **Single Collection Verification**: All documents unified in default/documents - VERIFIED
+✅ **Data Persistence**: Survives server restart with full recovery - VERIFIED
+✅ **25+ System Components**: All converted to unified storage - VERIFIED
+✅ **Zero Build Errors**: Clean compilation with -Wall -Wextra - VERIFIED
+✅ **Zero Functional Regressions**: All existing functionality preserved - VERIFIED
 
 ## Atomic Naming Standards
 

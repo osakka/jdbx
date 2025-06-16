@@ -14,7 +14,7 @@ static const char base64_chars[] =
 /* Base64 encode a string */
 static char* base64_encode(const unsigned char* input, int length) {
   int encoded_len = ((length + 2) / 3) * 4;
-  char* output = (char*)buffer_pool_alloc(encoded_len + 1);
+  char* output = (char*)BUFFER_ALLOC(encoded_len + 1);
   if (!output) return NULL;
   
   int i, j;
@@ -66,7 +66,7 @@ static unsigned char* base64_decode(const char* input, int* output_length) {
   if (input_len > 0 && input[input_len-1] == '=') decoded_len--;
   if (input_len > 1 && input[input_len-2] == '=') decoded_len--;
   
-  unsigned char* output = (unsigned char*)buffer_pool_alloc(decoded_len + 1);
+  unsigned char* output = (unsigned char*)BUFFER_ALLOC(decoded_len + 1);
   if (!output) return NULL;
   
   /* Create reverse lookup table */
@@ -137,7 +137,7 @@ static unsigned char* base64_url_decode(const char* input, int* output_length) {
   int len = strlen(input_copy);
   int padding = (4 - (len % 4)) % 4;
   
-  char* padded_input = (char*)buffer_pool_alloc(len + padding + 1);
+  char* padded_input = (char*)BUFFER_ALLOC(len + padding + 1);
   if (!padded_input) {
     buffer_pool_free(input_copy);
     return NULL;
@@ -237,7 +237,7 @@ static void hmac_sha256(const char* key, size_t key_len,
   
   /* Concatenate k_ipad with data */
   size_t total_len = 64 + data_len;
-  char* inner_data = malloc(total_len);
+  char* inner_data = BUFFER_ALLOC(total_len);
   if (!inner_data) return;
   
   memcpy(inner_data, k_ipad, 64);
@@ -245,7 +245,7 @@ static void hmac_sha256(const char* key, size_t key_len,
   
   /* Hash inner_data */
   simple_sha256(inner_data, total_len, inner_hash);
-  free(inner_data);
+  BUFFER_FREE(inner_data);
   
   /* Perform outer hash */
   /* Concatenate k_opad with inner_hash */
@@ -277,19 +277,19 @@ static char* jwt_sign(const char* header_payload, const char* secret, const char
 
 /* Create new JWT token */
 jwt_token_t* jwt_create(const char* secret __attribute__((unused))) {
-  jwt_token_t* token = (jwt_token_t*)buffer_pool_alloc(sizeof(jwt_token_t));
+  jwt_token_t* token = (jwt_token_t*)BUFFER_ALLOC(sizeof(jwt_token_t));
   if (!token) {
     return NULL;
   }
   
   /* Initialize token */
-  token->header = (jwt_header_t*)buffer_pool_alloc(sizeof(jwt_header_t));
+  token->header = (jwt_header_t*)BUFFER_ALLOC(sizeof(jwt_header_t));
   if (!token->header) {
     buffer_pool_free(token);
     return NULL;
   }
   
-  token->payload = (jwt_payload_t*)buffer_pool_alloc(sizeof(jwt_payload_t));
+  token->payload = (jwt_payload_t*)BUFFER_ALLOC(sizeof(jwt_payload_t));
   if (!token->payload) {
     buffer_pool_free(token->header);
     buffer_pool_free(token);
@@ -324,26 +324,26 @@ void jwt_free(jwt_token_t* token) {
   
   /* Free header */
   if (token->header) {
-    if (token->header->alg) buffer_pool_free_safe(token->header->alg);
-    if (token->header->typ) buffer_pool_free_safe(token->header->typ);
-    buffer_pool_free_safe(token->header);
+    if (token->header->alg) BUFFER_FREE(token->header->alg);
+    if (token->header->typ) BUFFER_FREE(token->header->typ);
+    BUFFER_FREE(token->header);
   }
   
   /* Free payload */
   if (token->payload) {
-    if (token->payload->iss) buffer_pool_free_safe(token->payload->iss);
-    if (token->payload->sub) buffer_pool_free_safe(token->payload->sub);
-    if (token->payload->aud) buffer_pool_free_safe(token->payload->aud);
-    if (token->payload->jti) free(token->payload->jti);
+    if (token->payload->iss) BUFFER_FREE(token->payload->iss);
+    if (token->payload->sub) BUFFER_FREE(token->payload->sub);
+    if (token->payload->aud) BUFFER_FREE(token->payload->aud);
+    if (token->payload->jti) BUFFER_FREE(token->payload->jti);
     if (token->payload->claims) json_free(token->payload->claims);
-    buffer_pool_free_safe(token->payload);
+    BUFFER_FREE(token->payload);
   }
   
   /* Free other fields */
-  if (token->signature) buffer_pool_free_safe(token->signature);
-  if (token->token_str) free(token->token_str);  /* strdup allocated */
+  if (token->signature) BUFFER_FREE(token->signature);
+  if (token->token_str) BUFFER_FREE(token->token_str);  /* buffer_pool allocated */
   
-  buffer_pool_free_safe(token);
+  BUFFER_FREE(token);
 }
 
 /* Set JWT algorithm */
@@ -353,7 +353,7 @@ void jwt_set_algorithm(jwt_token_t* token, const char* alg) {
   }
   
   if (token->header->alg) {
-    buffer_pool_free_safe(token->header->alg);
+    BUFFER_FREE(token->header->alg);
   }
   
   token->header->alg = buffer_pool_strdup(alg);
@@ -366,7 +366,7 @@ void jwt_set_issuer(jwt_token_t* token, const char* iss) {
   }
   
   if (token->payload->iss) {
-    buffer_pool_free_safe(token->payload->iss);
+    BUFFER_FREE(token->payload->iss);
   }
   
   token->payload->iss = buffer_pool_strdup(iss);
@@ -379,7 +379,7 @@ void jwt_set_subject(jwt_token_t* token, const char* sub) {
   }
   
   if (token->payload->sub) {
-    buffer_pool_free_safe(token->payload->sub);
+    BUFFER_FREE(token->payload->sub);
   }
   
   token->payload->sub = buffer_pool_strdup(sub);
@@ -392,7 +392,7 @@ void jwt_set_audience(jwt_token_t* token, const char* aud) {
   }
   
   if (token->payload->aud) {
-    buffer_pool_free_safe(token->payload->aud);
+    BUFFER_FREE(token->payload->aud);
   }
   
   token->payload->aud = buffer_pool_strdup(aud);
@@ -432,10 +432,10 @@ void jwt_set_jwt_id(jwt_token_t* token, const char* jti) {
   }
   
   if (token->payload->jti) {
-    free(token->payload->jti);
+    BUFFER_FREE(token->payload->jti);
   }
   
-  token->payload->jti = strdup(jti);
+  token->payload->jti = BUFFER_STRDUP(jti);
 }
 
 /* Add claim to JWT */
@@ -483,7 +483,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   
   /* Base64url encode header */
   char* header_enc = base64_url_encode((unsigned char*)header_str, strlen(header_str));
-  buffer_pool_free_safe(header_str);
+  BUFFER_FREE(header_str);
   
   LOG_DEBUG("Header encoded.");
   
@@ -494,7 +494,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   /* Create payload JSON */
   json_value_t* payload_json = json_create_object();
   if (!payload_json) {
-    free(header_enc);
+    BUFFER_FREE(header_enc);
     return NULL;
   }
   
@@ -535,7 +535,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
     char* value_str = json_stringify(entry->value);
     if (value_str) {
       json_value_t* value_copy = json_parse(value_str);
-      buffer_pool_free_safe(value_str);
+      BUFFER_FREE(value_str);
       
       if (value_copy) {
         json_object_set(payload_json, entry->key, value_copy);
@@ -547,13 +547,13 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   json_free(payload_json);
   
   if (!payload_str) {
-    free(header_enc);
+    BUFFER_FREE(header_enc);
     return NULL;
   }
   
   /* Base64url encode payload */
   char* payload_enc = base64_url_encode((unsigned char*)payload_str, strlen(payload_str));
-  buffer_pool_free_safe(payload_str);
+  BUFFER_FREE(payload_str);
   
   if (!payload_enc) {
     buffer_pool_free(header_enc);
@@ -561,7 +561,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   }
   
   /* Create header.payload string for signing */
-  char* header_payload = (char*)buffer_pool_alloc(strlen(header_enc) + strlen(payload_enc) + 2);
+  char* header_payload = (char*)BUFFER_ALLOC(strlen(header_enc) + strlen(payload_enc) + 2);
   if (!header_payload) {
     buffer_pool_free(header_enc);
     buffer_pool_free(payload_enc);
@@ -580,7 +580,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   }
   
   /* Create final token string */
-  char* token_str = (char*)buffer_pool_alloc(strlen(header_payload) + strlen(signature) + 2);
+  char* token_str = (char*)BUFFER_ALLOC(strlen(header_payload) + strlen(signature) + 2);
   if (!token_str) {
     buffer_pool_free(header_enc);
     buffer_pool_free(payload_enc);
@@ -593,14 +593,14 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   
   /* Store signature and token string */
   if (token->signature) {
-    free(token->signature);
+    BUFFER_FREE(token->signature);
   }
   token->signature = signature;
   
   if (token->token_str) {
-    free(token->token_str);
+    BUFFER_FREE(token->token_str);
   }
-  token->token_str = strdup(token_str);
+  token->token_str = BUFFER_STRDUP(token_str);
   
   /* Clean up */
   buffer_pool_free(header_enc);
@@ -634,19 +634,19 @@ jwt_token_t* jwt_decode(const char* token_str) {
   
   char* header_b64 = strtok(token_copy, ".");
   if (!header_b64 || strlen(header_b64) == 0) {
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
   char* payload_b64 = strtok(NULL, ".");
   if (!payload_b64 || strlen(payload_b64) == 0) {
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
   char* signature_b64 = strtok(NULL, ".");
   if (!signature_b64 || strlen(signature_b64) == 0) {
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
@@ -654,17 +654,17 @@ jwt_token_t* jwt_decode(const char* token_str) {
   int header_len;
   unsigned char* header_json = base64_url_decode(header_b64, &header_len);
   if (!header_json) {
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
   /* Parse header JSON */
   json_value_t* header = json_parse((const char*)header_json);
-  buffer_pool_free_safe(header_json);
+  BUFFER_FREE(header_json);
   
   if (!header || header->type != JSON_OBJECT) {
     if (header) json_free(header);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
@@ -673,18 +673,18 @@ jwt_token_t* jwt_decode(const char* token_str) {
   unsigned char* payload_json = base64_url_decode(payload_b64, &payload_len);
   if (!payload_json) {
     json_free(header);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
   /* Parse payload JSON */
   json_value_t* payload = json_parse((const char*)payload_json);
-  buffer_pool_free_safe(payload_json);
+  BUFFER_FREE(payload_json);
   
   if (!payload || payload->type != JSON_OBJECT) {
     json_free(header);
     if (payload) json_free(payload);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
@@ -693,7 +693,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   if (!token) {
     json_free(header);
     json_free(payload);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return NULL;
   }
   
@@ -701,7 +701,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* alg = json_object_get(header, "alg");
   if (alg && alg->type == JSON_STRING) {
     if (token->header->alg) {
-      buffer_pool_free_safe(token->header->alg);
+      BUFFER_FREE(token->header->alg);
     }
     token->header->alg = buffer_pool_strdup(alg->value.string);
   }
@@ -709,7 +709,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* typ = json_object_get(header, "typ");
   if (typ && typ->type == JSON_STRING) {
     if (token->header->typ) {
-      buffer_pool_free_safe(token->header->typ);
+      BUFFER_FREE(token->header->typ);
     }
     token->header->typ = buffer_pool_strdup(typ->value.string);
   }
@@ -718,7 +718,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* iss = json_object_get(payload, "iss");
   if (iss && iss->type == JSON_STRING) {
     if (token->payload->iss) {
-      buffer_pool_free_safe(token->payload->iss);
+      BUFFER_FREE(token->payload->iss);
     }
     token->payload->iss = buffer_pool_strdup(iss->value.string);
   }
@@ -726,7 +726,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* sub = json_object_get(payload, "sub");
   if (sub && sub->type == JSON_STRING) {
     if (token->payload->sub) {
-      buffer_pool_free_safe(token->payload->sub);
+      BUFFER_FREE(token->payload->sub);
     }
     token->payload->sub = buffer_pool_strdup(sub->value.string);
   }
@@ -734,7 +734,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* aud = json_object_get(payload, "aud");
   if (aud && aud->type == JSON_STRING) {
     if (token->payload->aud) {
-      buffer_pool_free_safe(token->payload->aud);
+      BUFFER_FREE(token->payload->aud);
     }
     token->payload->aud = buffer_pool_strdup(aud->value.string);
   }
@@ -769,9 +769,9 @@ jwt_token_t* jwt_decode(const char* token_str) {
   json_value_t* jti = json_object_get(payload, "jti");
   if (jti && jti->type == JSON_STRING) {
     if (token->payload->jti) {
-      free(token->payload->jti);
+      BUFFER_FREE(token->payload->jti);
     }
-    token->payload->jti = strdup(jti->value.string);
+    token->payload->jti = BUFFER_STRDUP(jti->value.string);
   }
   
   /* Add all other claims */
@@ -790,7 +790,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
     char* value_str = json_stringify(entry->value);
     if (value_str) {
       json_value_t* value_copy = json_parse(value_str);
-      buffer_pool_free_safe(value_str);
+      BUFFER_FREE(value_str);
       
       if (value_copy) {
         json_object_set(token->payload->claims, entry->key, value_copy);
@@ -800,12 +800,12 @@ jwt_token_t* jwt_decode(const char* token_str) {
   
   /* Set signature and token string */
   token->signature = buffer_pool_strdup(signature_b64);
-  token->token_str = strdup(token_str);
+  token->token_str = BUFFER_STRDUP(token_str);
   
   /* Clean up */
   json_free(header);
   json_free(payload);
-  buffer_pool_free_safe(token_copy);
+  BUFFER_FREE(token_copy);
   
   return token;
 }
@@ -846,29 +846,29 @@ int jwt_verify(const char* token_str, const char* secret) {
   char* header_b64 = strtok(token_copy, ".");
   if (!header_b64) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return 0;
   }
   
   char* payload_b64 = strtok(NULL, ".");
   if (!payload_b64) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return 0;
   }
   
   char* signature_b64 = strtok(NULL, ".");
   if (!signature_b64) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return 0;
   }
   
   /* Create header.payload string for verification */
-  char* header_payload = (char*)buffer_pool_alloc(strlen(header_b64) + strlen(payload_b64) + 2);
+  char* header_payload = (char*)BUFFER_ALLOC(strlen(header_b64) + strlen(payload_b64) + 2);
   if (!header_payload) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
+    BUFFER_FREE(token_copy);
     return 0;
   }
   
@@ -878,8 +878,8 @@ int jwt_verify(const char* token_str, const char* secret) {
   char* signature = jwt_sign(header_payload, secret, token->header->alg);
   if (!signature) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
-    buffer_pool_free_safe(header_payload);
+    BUFFER_FREE(token_copy);
+    BUFFER_FREE(header_payload);
     return 0;
   }
   
@@ -890,9 +890,9 @@ int jwt_verify(const char* token_str, const char* secret) {
   /* Check signature lengths match */
   if (signature_len != signature_b64_len) {
     jwt_free(token);
-    buffer_pool_free_safe(token_copy);
-    buffer_pool_free_safe(header_payload);
-    buffer_pool_free_safe(signature);
+    BUFFER_FREE(token_copy);
+    BUFFER_FREE(header_payload);
+    BUFFER_FREE(signature);
     return 0;
   }
   
@@ -907,9 +907,9 @@ int jwt_verify(const char* token_str, const char* secret) {
   
   /* Clean up */
   jwt_free(token);
-  buffer_pool_free_safe(token_copy);
-  buffer_pool_free_safe(header_payload);
-  buffer_pool_free_safe(signature);
+  BUFFER_FREE(token_copy);
+  BUFFER_FREE(header_payload);
+  BUFFER_FREE(signature);
   
   TRACE_AUTH("JWT verification result: %d", result);
   return result;
@@ -1001,8 +1001,8 @@ char* jwt_create_token_pair(const char* secret, const char* user_id, const char*
   TRACE_AUTH("Token structures freed.");
   
   if (!access_token_str || !refresh_token_str) {
-    if (access_token_str) free(access_token_str);  /* strdup allocated */
-    if (refresh_token_str) free(refresh_token_str);  /* strdup allocated */
+    if (access_token_str) BUFFER_FREE(access_token_str);  /* strdup allocated */
+    if (refresh_token_str) BUFFER_FREE(refresh_token_str);  /* strdup allocated */
     return NULL;
   }
   
@@ -1069,7 +1069,7 @@ int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char
   
   /* Set the output parameter */
   size_t len = strlen(token->payload->sub) + 1;
-  *user_id = (char*)buffer_pool_alloc(len);
+  *user_id = (char*)BUFFER_ALLOC(len);
   if (!*user_id) {
     jwt_free(token);
     return 0;
@@ -1086,20 +1086,20 @@ int jwt_verify_refresh_token(const char* refresh_token, const char* secret, char
 void jwt_payload_free(jwt_payload_t* payload) {
   if (!payload) return;
   
-  if (payload->iss) buffer_pool_free_safe(payload->iss);
-  if (payload->sub) buffer_pool_free_safe(payload->sub);
-  if (payload->aud) buffer_pool_free_safe(payload->aud);
-  if (payload->jti) free(payload->jti);  /* strdup allocated */
+  if (payload->iss) BUFFER_FREE(payload->iss);
+  if (payload->sub) BUFFER_FREE(payload->sub);
+  if (payload->aud) BUFFER_FREE(payload->aud);
+  if (payload->jti) BUFFER_FREE(payload->jti);  /* strdup allocated */
   if (payload->claims) json_free(payload->claims);
   
-  buffer_pool_free_safe(payload);
+  BUFFER_FREE(payload);
 }
 
 /* Duplicate JWT payload for caching */
 jwt_payload_t* jwt_payload_duplicate(const jwt_payload_t* payload) {
   if (!payload) return NULL;
   
-  jwt_payload_t* dup = (jwt_payload_t*)buffer_pool_alloc(sizeof(jwt_payload_t));
+  jwt_payload_t* dup = (jwt_payload_t*)BUFFER_ALLOC(sizeof(jwt_payload_t));
   if (!dup) return NULL;
   
   /* Copy all fields */

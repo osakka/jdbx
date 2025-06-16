@@ -6,6 +6,7 @@
 #include "utils/metrics.h"
 #include "database/system_schemas.h"
 #include "rbac/rbac_db.h"
+#include "utils/buffer_pool.h"
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -105,7 +106,7 @@ void js_native_generate_script_id(char *buffer, size_t buffer_size) {
 
 /* Create script metadata structure */
 js_script_metadata_t* js_native_create_script_metadata(void) {
-    js_script_metadata_t *metadata = calloc(1, sizeof(js_script_metadata_t));
+    js_script_metadata_t *metadata = BUFFER_ALLOC(sizeof(js_script_metadata_t));
     if (!metadata) {
         LOG_ERROR("Cannot allocate memory for script metadata.");
         return NULL;
@@ -130,7 +131,7 @@ void js_native_free_script_metadata(js_script_metadata_t *metadata) {
     if (!metadata) return;
 
     if (metadata->script_code) {
-        free(metadata->script_code);
+        BUFFER_FREE(metadata->script_code);
     }
     if (metadata->trigger_tags) {
         json_free(metadata->trigger_tags);
@@ -142,7 +143,7 @@ void js_native_free_script_metadata(js_script_metadata_t *metadata) {
         json_free(metadata->execution_stats);
     }
     
-    free(metadata);
+    BUFFER_FREE(metadata);
 }
 
 /* Convert script metadata to JSON */
@@ -225,7 +226,7 @@ js_script_metadata_t* js_native_script_metadata_from_json(json_value_t *json) {
     /* Extract script code */
     val = json_object_get(json, "script_code");
     if (val && val->type == JSON_STRING) {
-        metadata->script_code = strdup(val->value.string);
+        metadata->script_code = BUFFER_STRDUP(val->value.string);
     }
 
     /* Extract created_by */
@@ -305,7 +306,7 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
     }
 
     /* Insert into database */
-    json_value_t *result = db_insert_document(db, STORAGE_LIBRARY, collection_name, script_doc);
+    json_value_t *result = storage_insert_document(db, script_doc);
     json_free(script_doc);
 
     if (!result) {
@@ -414,7 +415,7 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
             /* Extract the actual code from resolved function */
             json_value_t* code_field = json_object_get(resolved, "code");
             if (code_field && code_field->type == JSON_STRING) {
-                char* resolved_code = strdup(code_field->value.string);
+                char* resolved_code = BUFFER_STRDUP(code_field->value.string);
                 json_free(resolved);
                 LOG_DEBUG("Resolved function reference to code: %s", metadata->id);
                 return resolved_code;
@@ -441,13 +442,13 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
             if (resolved_code_field->type == JSON_OBJECT) {
                 json_value_t* code_field = json_object_get(resolved_code_field, "code");
                 if (code_field && code_field->type == JSON_STRING) {
-                    char* final_code = strdup(code_field->value.string);
+                    char* final_code = BUFFER_STRDUP(code_field->value.string);
                     json_free(resolved_doc);
                     return final_code;
                 }
             } else if (resolved_code_field->type == JSON_STRING) {
                 /* Still a string, use as is */
-                char* final_code = strdup(resolved_code_field->value.string);
+                char* final_code = BUFFER_STRDUP(resolved_code_field->value.string);
                 json_free(resolved_doc);
                 return final_code;
             }
@@ -456,7 +457,7 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
     }
     
     /* No resolution needed, return original code */
-    return strdup(metadata->script_code);
+    return BUFFER_STRDUP(metadata->script_code);
 }
 
 /* Record script execution metrics */
@@ -493,7 +494,7 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
         char *input_str = json_stringify(context->input_data);
         if (input_str) {
             json_object_set(metrics_doc, "input_size_bytes", json_create_integer(strlen(input_str)));
-            free(input_str);
+            BUFFER_FREE(input_str);
         }
     }
 
@@ -501,12 +502,12 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
         char *output_str = json_stringify(context->output_data);
         if (output_str) {
             json_object_set(metrics_doc, "output_size_bytes", json_create_integer(strlen(output_str)));
-            free(output_str);
+            BUFFER_FREE(output_str);
         }
     }
 
     /* Insert metrics document */
-    json_value_t *result = db_insert_document(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, metrics_doc);
+    json_value_t *result = storage_insert_document(db, metrics_doc);
     json_free(metrics_doc);
 
     if (!result) {
@@ -625,7 +626,7 @@ int js_native_validate_script_syntax(js_engine_t *engine, const char *script_cod
                                     char **error_message) {
     if (!engine || !script_code) {
         if (error_message) {
-            *error_message = strdup("Invalid parameters for script validation");
+            *error_message = BUFFER_STRDUP("Invalid parameters for script validation");
         }
         return 0;
     }
@@ -633,7 +634,7 @@ int js_native_validate_script_syntax(js_engine_t *engine, const char *script_cod
     /* For now, perform basic validation - check if script is non-empty and well-formed */
     if (strlen(script_code) == 0) {
         if (error_message) {
-            *error_message = strdup("Script code cannot be empty");
+            *error_message = BUFFER_STRDUP("Script code cannot be empty");
         }
         return 0;
     }
@@ -657,7 +658,7 @@ int js_native_validate_script_syntax(js_engine_t *engine, const char *script_cod
         /* Check for negative counts (mismatched brackets) */
         if (brace_count < 0 || paren_count < 0 || bracket_count < 0) {
             if (error_message) {
-                *error_message = strdup("Mismatched brackets or parentheses");
+                *error_message = BUFFER_STRDUP("Mismatched brackets or parentheses");
             }
             return 0;
         }
@@ -666,7 +667,7 @@ int js_native_validate_script_syntax(js_engine_t *engine, const char *script_cod
     /* Check for unmatched brackets */
     if (brace_count != 0 || paren_count != 0 || bracket_count != 0) {
         if (error_message) {
-            *error_message = strdup("Unmatched brackets or parentheses");
+            *error_message = BUFFER_STRDUP("Unmatched brackets or parentheses");
         }
         return 0;
     }
@@ -772,7 +773,7 @@ int js_native_execute_script(js_engine_t *engine, database_t *db, const char *sc
             break;
     }
     
-    free(resolved_code);
+    BUFFER_FREE(resolved_code);
 
     clock_gettime(CLOCK_MONOTONIC, &context->end_time);
     context->success = success;
@@ -1043,7 +1044,7 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
     }
 
     /* Update in database */
-    json_value_t *result = db_update_document(db, STORAGE_LIBRARY, collection_name, script_id, script_doc);
+    json_value_t *result = storage_update_document(db, script_id, script_doc);
     json_free(script_doc);
 
     if (!result) {
@@ -1091,7 +1092,7 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
     js_native_free_script_metadata(existing);
 
     /* Delete from database */
-    int result = db_delete_document(db, STORAGE_LIBRARY, collection_name, script_id);
+    int result = storage_delete_document(db, script_id);
     if (!result) {
         LOG_ERROR("Cannot delete JavaScript script from database.");
         return 0;

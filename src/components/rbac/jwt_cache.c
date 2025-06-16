@@ -1,6 +1,7 @@
 #include "rbac/jwt_cache.h"
 #include "rbac/jwt.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/evp.h>
@@ -88,13 +89,13 @@ static void lru_remove(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
 /* Free cache entry */
 static void free_cache_entry(jwt_cache_entry_t* entry) {
     if (entry) {
-        free(entry->token_hash);
-        free(entry->username);
-        free(entry->user_id);
+        BUFFER_FREE(entry->token_hash);
+        BUFFER_FREE(entry->username);
+        BUFFER_FREE(entry->user_id);
         if (entry->claims) {
             jwt_payload_free(entry->claims);
         }
-        free(entry);
+        BUFFER_FREE(entry);
     }
 }
 
@@ -105,16 +106,16 @@ int jwt_cache_init(size_t max_entries) {
         return 0;
     }
     
-    g_jwt_cache = calloc(1, sizeof(jwt_cache_t));
+    g_jwt_cache = BUFFER_ALLOC(sizeof(jwt_cache_t));
     if (!g_jwt_cache) {
         LOG_ERROR("Cannot allocate JWT cache.");
         return -1;
     }
     
     g_jwt_cache->bucket_count = CACHE_BUCKET_COUNT;
-    g_jwt_cache->buckets = calloc(g_jwt_cache->bucket_count, sizeof(jwt_cache_entry_t*));
+    g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*));
     if (!g_jwt_cache->buckets) {
-        free(g_jwt_cache);
+        BUFFER_FREE(g_jwt_cache);
         g_jwt_cache = NULL;
         LOG_ERROR("Cannot allocate JWT cache buckets.");
         return -1;
@@ -126,8 +127,8 @@ int jwt_cache_init(size_t max_entries) {
     g_jwt_cache->lru_tail = NULL;
     
     if (pthread_rwlock_init(&g_jwt_cache->lock, NULL) != 0) {
-        free(g_jwt_cache->buckets);
-        free(g_jwt_cache);
+        BUFFER_FREE(g_jwt_cache->buckets);
+        BUFFER_FREE(g_jwt_cache);
         g_jwt_cache = NULL;
         LOG_ERROR("Cannot initialize JWT cache lock.");
         return -1;
@@ -153,14 +154,14 @@ void jwt_cache_shutdown(void) {
         }
     }
     
-    free(g_jwt_cache->buckets);
+    BUFFER_FREE(g_jwt_cache->buckets);
     pthread_rwlock_unlock(&g_jwt_cache->lock);
     pthread_rwlock_destroy(&g_jwt_cache->lock);
     
     LOG_INFO("JWT cache shutdown (hits: %lu, misses: %lu, evictions: %lu)",
              g_jwt_cache->hits, g_jwt_cache->misses, g_jwt_cache->evictions);
     
-    free(g_jwt_cache);
+    BUFFER_FREE(g_jwt_cache);
     g_jwt_cache = NULL;
 }
 
@@ -255,16 +256,16 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     }
     
     /* Create new entry */
-    jwt_cache_entry_t* new_entry = calloc(1, sizeof(jwt_cache_entry_t));
+    jwt_cache_entry_t* new_entry = BUFFER_ALLOC(sizeof(jwt_cache_entry_t));
     if (!new_entry) {
         pthread_rwlock_unlock(&g_jwt_cache->lock);
         return;
     }
     
-    new_entry->token_hash = strdup(token_hash);
+    new_entry->token_hash = BUFFER_STRDUP(token_hash);
     new_entry->claims = claims;  /* Cache takes ownership */
-    new_entry->username = username ? strdup(username) : NULL;
-    new_entry->user_id = user_id ? strdup(user_id) : NULL;
+    new_entry->username = username ? BUFFER_STRDUP(username) : NULL;
+    new_entry->user_id = user_id ? BUFFER_STRDUP(user_id) : NULL;
     new_entry->expiry = claims->exp;
     new_entry->cached_at = now;
     

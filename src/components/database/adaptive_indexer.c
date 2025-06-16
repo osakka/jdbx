@@ -49,17 +49,17 @@ char* generate_adaptive_index_name(const char* collection_name, const char* fiel
     if (!collection_name || !field_path) return NULL;
     
     size_t name_len = strlen(collection_name) + strlen(field_path) + 20;
-    char* index_name = (char*)malloc(name_len);
+    char* index_name = (char*)BUFFER_ALLOC(name_len);
     if (!index_name) return NULL;
     
     /* Create a safe index name by replacing dots with underscores */
-    char* safe_field = strdup(field_path);
+    char* safe_field = BUFFER_STRDUP(field_path);
     for (char* p = safe_field; p && *p; p++) {
         if (*p == '.') *p = '_';
     }
     
     snprintf(index_name, name_len, "adaptive_%s_%s", collection_name, safe_field);
-    free(safe_field);
+    BUFFER_FREE(safe_field);
     
     return index_name;
 }
@@ -282,7 +282,7 @@ index_creation_status_t create_adaptive_index(const char* collection_name,
                                          field_path, INDEX_TYPE_NON_UNIQUE);
     
     if (!new_index) {
-        free(index_name);
+        BUFFER_FREE(index_name);
         log_index_creation(collection_name, field_path, INDEX_CREATION_ERROR,
                           "Failed to create database index");
         return INDEX_CREATION_ERROR;
@@ -291,17 +291,17 @@ index_creation_status_t create_adaptive_index(const char* collection_name,
     LOG_INFO("created index: %s", index_name);
     
     /* Create adaptive index info record */
-    adaptive_index_info_t* index_info = (adaptive_index_info_t*)malloc(sizeof(adaptive_index_info_t));
+    adaptive_index_info_t* index_info = (adaptive_index_info_t*)BUFFER_ALLOC(sizeof(adaptive_index_info_t));
     if (!index_info) {
-        free(index_name);
+        BUFFER_FREE(index_name);
         log_index_creation(collection_name, field_path, INDEX_CREATION_ERROR,
                           "Failed to allocate index info");
         return INDEX_CREATION_ERROR;
     }
     
     /* Initialize index info */
-    index_info->collection_name = strdup(collection_name);
-    index_info->field_path = strdup(field_path);
+    index_info->collection_name = BUFFER_STRDUP(collection_name);
+    index_info->field_path = BUFFER_STRDUP(field_path);
     index_info->index_name = index_name;
     index_info->created_at = time(NULL);
     index_info->queries_before_index = 0;  /* Would be populated from query tracker */
@@ -380,7 +380,7 @@ void process_index_candidates(void) {
     }
     
     /* Free candidates array */
-    free(candidates);
+    BUFFER_FREE(candidates);
 }
 
 /**
@@ -427,7 +427,7 @@ int adaptive_indexer_init(database_t* database) {
         return 0;
     }
     
-    g_adaptive_indexer = (adaptive_indexer_t*)malloc(sizeof(adaptive_indexer_t));
+    g_adaptive_indexer = (adaptive_indexer_t*)BUFFER_ALLOC(sizeof(adaptive_indexer_t));
     if (!g_adaptive_indexer) {
         LOG_ERROR("Cannot allocate adaptive indexer.");
         return 0;
@@ -443,7 +443,7 @@ int adaptive_indexer_init(database_t* database) {
     
     /* Initialize mutex */
     if (pthread_mutex_init(&g_adaptive_indexer->indexes_lock, NULL) != 0) {
-        free(g_adaptive_indexer);
+        BUFFER_FREE(g_adaptive_indexer);
         g_adaptive_indexer = NULL;
         LOG_ERROR("Cannot initialize adaptive indexer mutex.");
         return 0;
@@ -513,10 +513,10 @@ void adaptive_indexer_cleanup(void) {
     adaptive_index_info_t* current = g_adaptive_indexer->indexes;
     while (current) {
         adaptive_index_info_t* next = current->next;
-        free(current->collection_name);
-        free(current->field_path);
-        free(current->index_name);
-        free(current);
+        BUFFER_FREE(current->collection_name);
+        BUFFER_FREE(current->field_path);
+        BUFFER_FREE(current->index_name);
+        BUFFER_FREE(current);
         current = next;
     }
     
@@ -526,7 +526,7 @@ void adaptive_indexer_cleanup(void) {
     pthread_mutex_destroy(&g_adaptive_indexer->indexes_lock);
     
     /* Free indexer structure */
-    free(g_adaptive_indexer);
+    BUFFER_FREE(g_adaptive_indexer);
     g_adaptive_indexer = NULL;
     
     LOG_INFO("Adaptive indexer cleaned up.");

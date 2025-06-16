@@ -59,7 +59,7 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
     }
 
     /* 3. Perform the actual database insertion */
-    json_value_t *result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, transformed_document);
+    json_value_t *result = storage_insert_document(db, transformed_document);
     
     /* 4. Clean up transformed document if it's different from original */
     if (transformed_document != document) {
@@ -148,7 +148,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
     }
 
     /* 5. Perform the actual database update */
-    json_value_t *result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id, transformed_document);
+    json_value_t *result = storage_update_document(db, document_id, transformed_document);
     
     /* 6. Clean up */
     if (transformed_document != merged_doc) {
@@ -190,7 +190,7 @@ int db_delete_document_with_js(database_t* db, const char* collection_name,
     }
 
     /* 2. Perform the actual database deletion */
-    int result = db_delete_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
+    int result = storage_delete_document(db, document_id);
     
     /* 3. Clean up */
     if (document) {

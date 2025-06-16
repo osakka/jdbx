@@ -4,6 +4,7 @@
 #include "utils/logger.h"
 #include "utils/json_helpers.h"
 #include "utils/json_deep_copy.h"
+#include "utils/buffer_pool.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -26,13 +27,13 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
     
     LOG_DEBUG("Loaded metadata for collection %s", collection_name);
     
-    collection_metadata_t* metadata = calloc(1, sizeof(collection_metadata_t));
+    collection_metadata_t* metadata = BUFFER_ALLOC(sizeof(collection_metadata_t));
     if (!metadata) {
         json_free(meta_doc);
         return NULL;
     }
     
-    metadata->collection_name = strdup(collection_name);
+    metadata->collection_name = BUFFER_STRDUP(collection_name);
     
     /* Parse permissions */
     json_value_t* perms = json_object_get(meta_doc, "permissions");
@@ -53,11 +54,11 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
         json_value_t* owners = json_object_get(perms, "owners");
         if (owners && owners->type == JSON_ARRAY) {
             metadata->permissions.owner_count = owners->value.array.size;
-            metadata->permissions.owner_ids = calloc(owners->value.array.size, sizeof(char*));
+            metadata->permissions.owner_ids = BUFFER_ALLOC(sizeof(char*));
             for (size_t i = 0; i < owners->value.array.size; i++) {
                 json_value_t* owner = json_array_get(owners, i);
                 if (owner->type == JSON_STRING) {
-                    metadata->permissions.owner_ids[i] = strdup(owner->value.string);
+                    metadata->permissions.owner_ids[i] = BUFFER_STRDUP(owner->value.string);
                 }
             }
         }
@@ -85,11 +86,11 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
         
         if (exclude && exclude->type == JSON_ARRAY) {
             metadata->versioning.exclude_count = exclude->value.array.size;
-            metadata->versioning.exclude_fields = calloc(exclude->value.array.size, sizeof(char*));
+            metadata->versioning.exclude_fields = BUFFER_ALLOC(sizeof(char*));
             for (size_t i = 0; i < exclude->value.array.size; i++) {
                 json_value_t* field = json_array_get(exclude, i);
                 if (field->type == JSON_STRING) {
-                    metadata->versioning.exclude_fields[i] = strdup(field->value.string);
+                    metadata->versioning.exclude_fields[i] = BUFFER_STRDUP(field->value.string);
                 }
             }
         }
@@ -99,7 +100,7 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
     json_value_t* indexes = json_object_get(meta_doc, "indexes");
     if (indexes && indexes->type == JSON_ARRAY) {
         metadata->index_count = indexes->value.array.size;
-        metadata->indexes = calloc(metadata->index_count, sizeof(index_metadata_t));
+        metadata->indexes = BUFFER_ALLOC(sizeof(index_metadata_t));
         
         for (size_t i = 0; i < indexes->value.array.size; i++) {
             json_value_t* idx = json_array_get(indexes, i);
@@ -110,7 +111,7 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
             json_value_t* unique = json_object_get(idx, "unique");
             
             if (field && field->type == JSON_STRING) {
-                metadata->indexes[i].field_name = strdup(field->value.string);
+                metadata->indexes[i].field_name = BUFFER_STRDUP(field->value.string);
                 metadata->indexes[i].type = INDEX_META_TYPE_HASH; /* Default */
                 
                 if (type && type->type == JSON_STRING) {
@@ -145,10 +146,10 @@ static uint8_t parse_permission_string(const char* perm_str) {
 
 /* Create default metadata for new collection */
 collection_metadata_t* collection_metadata_create_default(const char* collection_name) {
-    collection_metadata_t* metadata = calloc(1, sizeof(collection_metadata_t));
+    collection_metadata_t* metadata = BUFFER_ALLOC(sizeof(collection_metadata_t));
     if (!metadata) return NULL;
     
-    metadata->collection_name = strdup(collection_name);
+    metadata->collection_name = BUFFER_STRDUP(collection_name);
     
     /* Default permissions: owner=all, world=read */
     metadata->permissions.owner_perms = RBAC_READ | RBAC_WRITE | RBAC_DELETE | RBAC_EXECUTE | RBAC_ADMIN;
@@ -197,31 +198,31 @@ bool collection_field_is_unique(collection_metadata_t* metadata, const char* fie
 void collection_metadata_free(collection_metadata_t* metadata) {
     if (!metadata) return;
     
-    free(metadata->collection_name);
+    BUFFER_FREE(metadata->collection_name);
     
     /* Free multiple owners */
     for (size_t i = 0; i < metadata->permissions.owner_count; i++) {
-        free(metadata->permissions.owner_ids[i]);
+        BUFFER_FREE(metadata->permissions.owner_ids[i]);
     }
-    free(metadata->permissions.owner_ids);
+    BUFFER_FREE(metadata->permissions.owner_ids);
     
     /* Free versioning exclude fields */
     for (size_t i = 0; i < metadata->versioning.exclude_count; i++) {
-        free(metadata->versioning.exclude_fields[i]);
+        BUFFER_FREE(metadata->versioning.exclude_fields[i]);
     }
-    free(metadata->versioning.exclude_fields);
+    BUFFER_FREE(metadata->versioning.exclude_fields);
     
     /* Free indexes */
     for (size_t i = 0; i < metadata->index_count; i++) {
-        free(metadata->indexes[i].field_name);
-        free(metadata->indexes[i].transform_function);
-        free(metadata->indexes[i].validate_function);
+        BUFFER_FREE(metadata->indexes[i].field_name);
+        BUFFER_FREE(metadata->indexes[i].transform_function);
+        BUFFER_FREE(metadata->indexes[i].validate_function);
     }
-    free(metadata->indexes);
+    BUFFER_FREE(metadata->indexes);
     
     /* Note: We don't free schema, functions, etc. as they're references to the JSON document */
     
-    free(metadata);
+    BUFFER_FREE(metadata);
 }
 
 /* Save collection metadata to database */
@@ -306,7 +307,7 @@ int collection_metadata_save(database_t* db, const char* collection_name,
     }
     
     /* Insert the metadata document */
-    json_value_t* result = db_insert_document(db, STORAGE_LIBRARY, collection_name, meta_doc);
+    json_value_t* result = storage_insert_document(db, meta_doc);
     json_free(meta_doc);
     
     if (result) {

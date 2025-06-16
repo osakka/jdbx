@@ -1,3 +1,4 @@
+#include "utils/buffer_pool.h"
 #include "database/database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
@@ -26,21 +27,21 @@ static schema_validation_result_t success_result() {
 static schema_validation_result_t error_result(const char* error, const char* path) {
   return (schema_validation_result_t){ 
     .is_valid = 0, 
-    .error_message = strdup(error), 
-    .error_field = strdup(path) 
+    .error_message = BUFFER_STRDUP(error), 
+    .error_field = BUFFER_STRDUP(path) 
   };
 }
 
 /* Free validation result */
 static void free_validation_result(schema_validation_result_t* result) {
-  if (result->error_message) free(result->error_message);
-  if (result->error_field) free(result->error_field);
+  if (result->error_message) BUFFER_FREE(result->error_message);
+  if (result->error_field) BUFFER_FREE(result->error_field);
 }
 
 /* Validate JSON value against JSON Schema */
 int json_schema_validate(json_value_t* schema, json_value_t* value, char** error_msg) {
   if (!schema || !value) {
-    if (error_msg) *error_msg = strdup("Schema and value cannot be NULL");
+    if (error_msg) *error_msg = BUFFER_STRDUP("Schema and value cannot be NULL");
     return 0;
   }
   
@@ -51,7 +52,7 @@ int json_schema_validate(json_value_t* schema, json_value_t* value, char** error
     snprintf(buffer, sizeof(buffer), "Validation failed at %s: %s", 
          result.error_field ? result.error_field : "unknown", 
          result.error_message ? result.error_message : "unknown error");
-    *error_msg = strdup(buffer);
+    *error_msg = BUFFER_STRDUP(buffer);
   }
   
   int valid = result.is_valid;

@@ -2,6 +2,7 @@
 #include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/js_file_utils.h"
+#include "utils/buffer_pool.h"
 
 /* Ensure USE_QUICKJS is defined when JavaScript is enabled */
 #if !defined(DISABLE_JS) && !defined(USE_QUICKJS)
@@ -159,7 +160,7 @@ static json_value_t* js_to_json(JSContext *ctx, JSValueConst js_val) {
 
 /* Initialize JavaScript engine */
 js_engine_t* js_engine_init(database_t *db) {
-  js_engine_t *engine = (js_engine_t*)malloc(sizeof(js_engine_t));
+  js_engine_t *engine = (js_engine_t*)BUFFER_ALLOC(sizeof(js_engine_t));
   if (!engine) {
     return NULL;
   }
@@ -171,14 +172,14 @@ js_engine_t* js_engine_init(database_t *db) {
   /* Create JavaScript runtime and context */
   engine->rt = JS_NewRuntime();
   if (!engine->rt) {
-    free(engine);
+    BUFFER_FREE(engine);
     return NULL;
   }
   
   engine->ctx = JS_NewContext(engine->rt);
   if (!engine->ctx) {
     JS_FreeRuntime(engine->rt);
-    free(engine);
+    BUFFER_FREE(engine);
     return NULL;
   }
   
@@ -232,7 +233,7 @@ void js_engine_free(js_engine_t *engine) {
   if (engine) {
     /* Free last error string if exists */
     if (engine->last_error) {
-      free(engine->last_error);
+      BUFFER_FREE(engine->last_error);
       engine->last_error = NULL;
     }
     
@@ -254,7 +255,7 @@ void js_engine_free(js_engine_t *engine) {
     }
     
     /* Free the engine structure itself */
-    free(engine);
+    BUFFER_FREE(engine);
   }
 }
 
@@ -320,20 +321,20 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
   
   if (result) {
     if (JS_IsNull(val) || JS_IsUndefined(val)) {
-      *result = strdup("");
+      *result = BUFFER_STRDUP("");
     } else {
       JSValue json_val = JS_JSONStringify(engine->ctx, val, JS_NULL, JS_NULL);
       
       if (JS_IsException(json_val)) {
-        *result = strdup("{\"error\":\"Cannot stringify result\"}");
+        *result = BUFFER_STRDUP("{\"error\":\"Cannot stringify result\"}");
         JS_FreeValue(engine->ctx, json_val);
       } else {
         const char *str = JS_ToCString(engine->ctx, json_val);
         if (str) {
-          *result = strdup(str);
+          *result = BUFFER_STRDUP(str);
           JS_FreeCString(engine->ctx, str);
         } else {
-          *result = strdup("");
+          *result = BUFFER_STRDUP("");
         }
         JS_FreeValue(engine->ctx, json_val);
       }
@@ -409,7 +410,7 @@ int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **resul
   }
 
   /* Read file contents */
-  char *script = (char*)malloc(file_size + 1);
+  char *script = (char*)BUFFER_ALLOC(file_size + 1);
   if (!script) {
     fclose(file);
     js_set_error(engine, "Out of memory");
@@ -426,7 +427,7 @@ int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **resul
 
   /* Check if file was read correctly */
   if (read_size != (size_t)file_size) {
-    free(script);
+    BUFFER_FREE(script);
     char error_msg[PATH_MAX + 100];
     snprintf(error_msg, sizeof(error_msg), "Failed to read JavaScript file: %s (Error: %s)",
         resolved_path, strerror(errno));
@@ -459,7 +460,7 @@ int js_engine_eval_file(js_engine_t *engine, const char *file_path, char **resul
     }
   }
 
-  free(script);
+  BUFFER_FREE(script);
   return ret;
 }
 
@@ -650,7 +651,7 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *document = js_to_json(ctx, argv[1]);
   
   /* Insert document */
-  json_value_t *result = db_insert_document(engine->db, STORAGE_LIBRARY, collection_name, document);
+  json_value_t *result = storage_insert_document(engine->db, document);
   
   /* Free resources */
   json_free(document);
@@ -854,11 +855,11 @@ int js_validate_document(js_engine_t *engine, const char *collection_name, json_
   /* Load and evaluate the validation script */
   char *validation_result = NULL;
   if (!js_engine_eval_file(engine, script_path, &validation_result)) {
-    if (validation_result) free(validation_result);
+    if (validation_result) BUFFER_FREE(validation_result);
     JS_FreeValue(engine->ctx, js_doc);
     return 0;
   }
-  if (validation_result) free(validation_result);
+  if (validation_result) BUFFER_FREE(validation_result);
   
   /* Execute validation */
   const char *validation_code = "validateDocument(document); isValid;";
@@ -934,11 +935,11 @@ json_value_t* js_transform_document(js_engine_t *engine, const char *collection_
   /* Load and evaluate the transformation script */
   char *transform_result = NULL;
   if (!js_engine_eval_file(engine, script_path, &transform_result)) {
-    if (transform_result) free(transform_result);
+    if (transform_result) BUFFER_FREE(transform_result);
     JS_FreeValue(engine->ctx, js_doc);
     return NULL;
   }
-  if (transform_result) free(transform_result);
+  if (transform_result) BUFFER_FREE(transform_result);
   
   /* Execute transformation */
   const char *transform_code = "transformDocument(document, operation);";
@@ -1078,11 +1079,11 @@ int js_call_user_function(js_engine_t *engine, const char *name, json_value_t *a
   /* Load and evaluate the function script */
   char *function_result = NULL;
   if (!js_engine_eval_file(engine, script_path, &function_result)) {
-    if (function_result) free(function_result);
+    if (function_result) BUFFER_FREE(function_result);
     JS_FreeValue(engine->ctx, js_args);
     return 0;
   }
-  if (function_result) free(function_result);
+  if (function_result) BUFFER_FREE(function_result);
   
   /* Call the function */
   const char *call_code = "typeof userFunction === 'function' ? userFunction(args) : null;";
@@ -1123,9 +1124,9 @@ const char* js_get_last_error(js_engine_t *engine) {
 void js_set_error(js_engine_t *engine, const char *error) {
   if (engine) {
     if (engine->last_error) {
-      free(engine->last_error);
+      BUFFER_FREE(engine->last_error);
     }
-    engine->last_error = error ? strdup(error) : NULL;
+    engine->last_error = error ? BUFFER_STRDUP(error) : NULL;
   }
 }
 
@@ -1150,7 +1151,7 @@ json_value_t* js_engine_eval_code(js_engine_t *engine, const char *code, json_va
   JS_FreeValue(engine->ctx, global);
 
   /* Wrap the code in a function to allow return statements */
-  char *wrapped_code = malloc(strlen(code) + 100);
+  char *wrapped_code = BUFFER_ALLOC(strlen(code) + 100);
   if (!wrapped_code) {
     JS_FreeValue(engine->ctx, js_input);
     js_set_error(engine, "Out of memory");
@@ -1160,7 +1161,7 @@ json_value_t* js_engine_eval_code(js_engine_t *engine, const char *code, json_va
 
   /* Evaluate the wrapped code */
   JSValue result = JS_Eval(engine->ctx, wrapped_code, strlen(wrapped_code), "<eval-code>", JS_EVAL_TYPE_GLOBAL);
-  free(wrapped_code);
+  BUFFER_FREE(wrapped_code);
 
   if (JS_IsException(result)) {
     JSValue exception = JS_GetException(engine->ctx);
@@ -1436,7 +1437,7 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
   }
 
   /* Allocate buffer for file content */
-  char* script = (char*)malloc(file_size + 1);
+  char* script = (char*)BUFFER_ALLOC(file_size + 1);
   if (!script) {
     fclose(file);
     js_set_error(engine, "Out of memory");
@@ -1454,7 +1455,7 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
 
   /* Check if file was read correctly */
   if (read_size != (size_t)file_size) {
-    free(script);
+    BUFFER_FREE(script);
     char error_msg[PATH_MAX + 100];
     snprintf(error_msg, sizeof(error_msg), "Failed to read JavaScript file: %s (Error: %s)",
         resolved_path, strerror(errno));
@@ -1493,9 +1494,9 @@ int js_execute_file(js_engine_t* engine, const char* file_path) {
   }
 
   /* Cleanup */
-  free(script);
+  BUFFER_FREE(script);
   if (result) {
-    free(result);
+    BUFFER_FREE(result);
   }
 
   return success;

@@ -6,6 +6,7 @@
  */
 
 #include "utils/config_loader.h"
+#include "utils/buffer_pool.h"
 #include "database/database.h"
 #include "database/document_storage.h"
 #include "utils/logger.h"
@@ -35,7 +36,7 @@ int config_register_callback(void (*callback)(const char*, json_value_t*, json_v
         return -1;
     }
     
-    config_callback_t* cb = calloc(1, sizeof(config_callback_t));
+    config_callback_t* cb = BUFFER_ALLOC(sizeof(config_callback_t));
     if (!cb) {
         LOG_ERROR("Cannot allocate configuration callback.");
         return -1;
@@ -110,6 +111,7 @@ int config_save_to_database(database_t* db, json_value_t* config) {
     json_value_t* doc = json_create_object();
     json_object_set(doc, "uuid", json_create_string(CONFIG_DOCUMENT_ID));
     json_object_set(doc, "type", json_create_string("configuration"));
+    json_object_set(doc, "owner", json_create_string(SYSTEM_USER_ADMIN));
     json_object_set(doc, "version", json_create_integer(1));
     json_object_set(doc, "settings", json_clone(config));
     json_object_set(doc, "updated_at", json_create_integer(time(NULL)));
@@ -121,10 +123,10 @@ int config_save_to_database(database_t* db, json_value_t* config) {
     if (existing) {
         /* Update existing */
         json_free(existing);
-        result = db_update_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, CONFIG_DOCUMENT_ID, doc);
+        result = storage_update_document(db, CONFIG_DOCUMENT_ID, doc);
     } else {
         /* Insert new */
-        result = db_insert_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
+        result = storage_insert_document(db, doc);
     }
     
     json_free(doc);
@@ -165,8 +167,8 @@ int config_apply_database_settings(server_config_t* config, database_t* db) {
         
         val = json_object_get(server, "host");
         if (val && val->type == JSON_STRING) {
-            free(config->host);
-            config->host = strdup(val->value.string);
+            BUFFER_FREE(config->host);
+            config->host = BUFFER_STRDUP(val->value.string);
         }
         
         val = json_object_get(server, "port");
@@ -189,14 +191,14 @@ int config_apply_database_settings(server_config_t* config, database_t* db) {
             
             val = json_object_get(ssl, "cert_path");
             if (val && val->type == JSON_STRING) {
-                free(config->cert_path);
-                config->cert_path = strdup(val->value.string);
+                BUFFER_FREE(config->cert_path);
+                config->cert_path = BUFFER_STRDUP(val->value.string);
             }
             
             val = json_object_get(ssl, "key_path");
             if (val && val->type == JSON_STRING) {
-                free(config->key_path);
-                config->key_path = strdup(val->value.string);
+                BUFFER_FREE(config->key_path);
+                config->key_path = BUFFER_STRDUP(val->value.string);
             }
         }
     }
@@ -405,7 +407,7 @@ void config_cleanup(void) {
     config_callback_t* cb = callbacks;
     while (cb) {
         config_callback_t* next = cb->next;
-        free(cb);
+        BUFFER_FREE(cb);
         cb = next;
     }
     callbacks = NULL;

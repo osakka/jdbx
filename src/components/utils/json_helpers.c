@@ -1,4 +1,5 @@
 #include "utils/json_helpers.h"
+#include "utils/buffer_pool.h"
 #include "utils/import_export.h"
 #include "database/database.h"
 #include <math.h>
@@ -44,7 +45,7 @@ int json_object_keys(json_value_t* obj, char** keys, int max_keys) {
     const char* key = common_keys[i];
     json_value_t* value = json_object_get(obj, key);
     if (value) {
-      keys[count] = strdup(key);
+      keys[count] = BUFFER_STRDUP(key);
       if (keys[count]) {
         count++;
       }

@@ -23,6 +23,7 @@
  */
 
 #include "rbac/rbac.h"
+#include "utils/buffer_pool.h"
 #include "rbac/rbac_database.h"
 #include "utils/logger.h"
 #include <stdio.h>
@@ -154,7 +155,7 @@ char* hash_password(const char* password) {
   generate_salt(salt, SALT_LENGTH);
   
   /* Format: $pbkdf2$iterations$salt$hash */
-  char* result = (char*)malloc(SALT_LENGTH * 2 + HASH_LENGTH * 2 + 32);
+  char* result = (char*)BUFFER_ALLOC(SALT_LENGTH * 2 + HASH_LENGTH * 2 + 32);
   if (!result) {
     return NULL;
   }
@@ -162,7 +163,7 @@ char* hash_password(const char* password) {
   /* For now, use simple SHA256 - TODO: Implement pbkdf2_hmac_sha256 */
   unsigned char hash[HASH_LENGTH];
   if (SHA256((unsigned char*)password, strlen(password), hash) == NULL) {
-    free(result);
+    BUFFER_FREE(result);
     return NULL;
   }
   
@@ -186,7 +187,7 @@ char* hash_password(const char* password) {
 
 /* Generate a simple UUID */
 static char* generate_uuid() {
-  char* uuid = (char*)malloc(37); /* 36 chars + null terminator */
+  char* uuid = (char*)BUFFER_ALLOC(37); /* 36 chars + null terminator */
   if (!uuid) return NULL;
   
   /* Format: 8-4-4-4-12 hexadecimal digits */
@@ -204,7 +205,7 @@ static char* generate_uuid() {
 
 /* Initialize RBAC system */
 rbac_system_t* rbac_init() {
-  rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
+  rbac_system_t* rbac = (rbac_system_t*)BUFFER_ALLOC(sizeof(rbac_system_t));
   if (!rbac) {
     return NULL;
   }
@@ -216,7 +217,7 @@ rbac_system_t* rbac_init() {
   if (!rbac->users || !rbac->roles) {
     if (rbac->users) json_free(rbac->users);
     if (rbac->roles) json_free(rbac->roles);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -255,7 +256,7 @@ void rbac_free(rbac_system_t* rbac) {
   rbac->roles = NULL;
   
   /* First free the RBAC structure itself */
-  free(rbac);
+  BUFFER_FREE(rbac);
   
   /* Now free the JSON values */
   if (users) {
@@ -293,14 +294,14 @@ int rbac_save(rbac_system_t* rbac, const char* path) {
   /* Write to file */
   FILE* file = fopen(path, "w");
   if (!file) {
-    free(json_str);
+    BUFFER_FREE(json_str);
     json_free(rbac_json);
     return 0;
   }
   
   int result = fputs(json_str, file) != EOF;
   fclose(file);
-  free(json_str);
+  BUFFER_FREE(json_str);
   json_free(rbac_json);
   
   return result;
@@ -324,7 +325,7 @@ rbac_system_t* rbac_load(const char* path) {
   fseek(file, 0, SEEK_SET);
   
   /* Allocate buffer */
-  char* buffer = (char*)malloc(file_size + 1);
+  char* buffer = (char*)BUFFER_ALLOC(file_size + 1);
   if (!buffer) {
     fclose(file);
     return NULL;
@@ -338,7 +339,7 @@ rbac_system_t* rbac_load(const char* path) {
   
   /* Parse JSON */
   json_value_t* rbac_json = json_parse(buffer);
-  free(buffer);
+  BUFFER_FREE(buffer);
   
   if (!rbac_json || rbac_json->type != JSON_OBJECT) {
     if (rbac_json) {
@@ -348,7 +349,7 @@ rbac_system_t* rbac_load(const char* path) {
   }
   
   /* Create RBAC system */
-  rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
+  rbac_system_t* rbac = (rbac_system_t*)BUFFER_ALLOC(sizeof(rbac_system_t));
   if (!rbac) {
     json_free(rbac_json);
     return NULL;
@@ -360,7 +361,7 @@ rbac_system_t* rbac_load(const char* path) {
   
   if (!users || users->type != JSON_OBJECT || !roles || roles->type != JSON_OBJECT) {
     json_free(rbac_json);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -429,7 +430,7 @@ rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const c
   char* password_hash = hash_password(password);
   if (!password_hash) {
     LOG_DEBUG("Failed to hash password");
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
@@ -440,8 +441,8 @@ rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const c
   json_value_t* user = json_create_object();
   if (!user) {
     LOG_DEBUG("Failed to create user JSON object");
-    free(id);
-    free(password_hash);
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
@@ -458,18 +459,18 @@ rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const c
   
   /* Create user structure */
   TRACE_RBAC("RBAC_TRACE: Creating user structure.");
-  rbac_user_t* result = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* result = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!result) {
     LOG_DEBUG("Failed to allocate memory for user structure");
-    free(id);
-    free(password_hash);
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
     return NULL;
   }
   
   /* Set user fields */
   TRACE_RBAC("RBAC_TRACE: Setting user fields.");
   result->id = id;
-  result->username = strdup(username);
+  result->username = BUFFER_STRDUP(username);
   result->password_hash = password_hash;
   result->roles = json_create_array();
   
@@ -539,15 +540,15 @@ rbac_user_t* rbac_get_user(rbac_system_t* rbac, const char* user_id) {
   }
   
   /* Create user structure */
-  rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     return NULL;
   }
   
   /* Set user fields */
-  user->id = strdup(user_id);
-  user->username = strdup(username_val->value.string);
-  user->password_hash = strdup(password_hash_val->value.string);
+  user->id = BUFFER_STRDUP(user_id);
+  user->username = BUFFER_STRDUP(username_val->value.string);
+  user->password_hash = BUFFER_STRDUP(password_hash_val->value.string);
   
   /* Create roles array */
   user->roles = json_create_array();
@@ -768,12 +769,12 @@ void rbac_free_user(rbac_user_t* user) {
   }
   
   /* Free user fields */
-  if (user->id) free(user->id);
-  if (user->username) free(user->username);
-  if (user->password_hash) free(user->password_hash);
+  if (user->id) BUFFER_FREE(user->id);
+  if (user->username) BUFFER_FREE(user->username);
+  if (user->password_hash) BUFFER_FREE(user->password_hash);
   if (user->roles) json_free(user->roles);
   
-  free(user);
+  BUFFER_FREE(user);
 }
 
 /* Create role */
@@ -803,7 +804,7 @@ rbac_role_t* rbac_create_role(rbac_system_t* rbac, const char* name) {
   /* Create role object */
   json_value_t* role = json_create_object();
   if (!role) {
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
@@ -817,15 +818,15 @@ rbac_role_t* rbac_create_role(rbac_system_t* rbac, const char* name) {
   json_object_set(rbac->roles, id, role);
   
   /* Create role structure */
-  rbac_role_t* result = (rbac_role_t*)malloc(sizeof(rbac_role_t));
+  rbac_role_t* result = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!result) {
-    free(id);
+    BUFFER_FREE(id);
     return NULL;
   }
   
   /* Set role fields */
   result->id = id;
-  result->name = strdup(name);
+  result->name = BUFFER_STRDUP(name);
   result->permissions = json_create_object();
   
   return result;
@@ -892,19 +893,19 @@ rbac_role_t* rbac_get_role(rbac_system_t* rbac, const char* role_id) {
   }
   
   /* Create role structure */
-  rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
+  rbac_role_t* role = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!role) {
     return NULL;
   }
   
   /* Set role fields */
-  role->id = strdup(role_id);
-  role->name = strdup(name_val->value.string);
+  role->id = BUFFER_STRDUP(role_id);
+  role->name = BUFFER_STRDUP(name_val->value.string);
   
   /* Create deep copy of permissions */
   char* permissions_str = json_stringify(permissions_val);
   role->permissions = json_parse(permissions_str);
-  free(permissions_str);
+  BUFFER_FREE(permissions_str);
   
   return role;
 }
@@ -916,11 +917,11 @@ void rbac_free_role(rbac_role_t* role) {
   }
   
   /* Free role fields */
-  if (role->id) free(role->id);
-  if (role->name) free(role->name);
+  if (role->id) BUFFER_FREE(role->id);
+  if (role->name) BUFFER_FREE(role->name);
   if (role->permissions) json_free(role->permissions);
   
-  free(role);
+  BUFFER_FREE(role);
 }
 
 /* Add user to role */
@@ -1036,7 +1037,7 @@ static char* get_resource_permission_key(rbac_resource_type_t resource_type, con
   }
   
   /* Create key string */
-  char* key = (char*)malloc(strlen(resource_id) + 32);
+  char* key = (char*)BUFFER_ALLOC(strlen(resource_id) + 32);
   if (!key) {
     return NULL;
   }
@@ -1085,7 +1086,7 @@ int rbac_grant_permission(rbac_system_t* rbac, const char* role_id, rbac_resourc
   /* Update permission */
   json_object_set(permissions, key, json_create_number(current_permission));
   
-  free(key);
+  BUFFER_FREE(key);
   
   return 1;
 }
@@ -1122,7 +1123,7 @@ int rbac_revoke_permission(rbac_system_t* rbac, const char* role_id, rbac_resour
     current_permission = (int)current->value.number;
   } else {
     /* No permission set, nothing to revoke */
-    free(key);
+    BUFFER_FREE(key);
     return 1;
   }
   
@@ -1136,7 +1137,7 @@ int rbac_revoke_permission(rbac_system_t* rbac, const char* role_id, rbac_resour
     json_object_set(permissions, key, json_create_number(current_permission));
   }
   
-  free(key);
+  BUFFER_FREE(key);
   
   return 1;
 }
@@ -1169,7 +1170,7 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
   /* Create wildcard resource permission key */
   char* wildcard_key = get_resource_permission_key(resource_type, "*");
   if (!wildcard_key) {
-    free(key);
+    BUFFER_FREE(key);
     return 0;
   }
   
@@ -1199,8 +1200,8 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
     if (perm_val && perm_val->type == JSON_NUMBER) {
       int perm = (int)perm_val->value.number;
       if ((perm & permission) == permission) {
-        free(key);
-        free(wildcard_key);
+        BUFFER_FREE(key);
+        BUFFER_FREE(wildcard_key);
         return 1;
       }
     }
@@ -1210,15 +1211,15 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
     if (perm_val && perm_val->type == JSON_NUMBER) {
       int perm = (int)perm_val->value.number;
       if ((perm & permission) == permission) {
-        free(key);
-        free(wildcard_key);
+        BUFFER_FREE(key);
+        BUFFER_FREE(wildcard_key);
         return 1;
       }
     }
   }
   
-  free(key);
-  free(wildcard_key);
+  BUFFER_FREE(key);
+  BUFFER_FREE(wildcard_key);
   
   return 0;
 }

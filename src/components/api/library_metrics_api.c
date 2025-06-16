@@ -2,6 +2,7 @@
 #include "utils/library_metrics.h"
 #include "utils/json.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -35,7 +36,7 @@ http_response_t* api_handle_library_metrics(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Library name required\"}", "application/json");
   }
   
-  char* library_name_copy = malloc(library_name_len + 1);
+  char* library_name_copy = BUFFER_ALLOC(library_name_len + 1);
   if (!library_name_copy) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -46,7 +47,7 @@ http_response_t* api_handle_library_metrics(api_context_t* ctx, http_request_t* 
   
   /* Get aggregated metrics for the library */
   json_value_t* metrics = library_metrics_aggregate(ctx->db, library_name_copy);
-  free(library_name_copy);
+  BUFFER_FREE(library_name_copy);
   
   if (!metrics) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -89,7 +90,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
                  "{\"error\":\"Library name required\"}", "application/json");
   }
   
-  char* library_name_copy = malloc(library_name_len + 1);
+  char* library_name_copy = BUFFER_ALLOC(library_name_len + 1);
   if (!library_name_copy) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -101,7 +102,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    free(library_name_copy);
+    BUFFER_FREE(library_name_copy);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid JSON body\"}", "application/json");
   }
@@ -110,7 +111,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   json_value_t* metric_type_val = json_object_get(body, "metric_type");
   if (!metric_type_val || metric_type_val->type != JSON_STRING) {
     json_free(body);
-    free(library_name_copy);
+    BUFFER_FREE(library_name_copy);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"metric_type required\"}", "application/json");
   }
@@ -121,7 +122,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   json_value_t* metric_data = json_object_get(body, "data");
   if (!metric_data) {
     json_free(body);
-    free(library_name_copy);
+    BUFFER_FREE(library_name_copy);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"data required\"}", "application/json");
   }
@@ -130,7 +131,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   int success = library_metrics_record(ctx->db, library_name_copy, metric_type, metric_data);
   
   json_free(body);
-  free(library_name_copy);
+  BUFFER_FREE(library_name_copy);
   
   if (success) {
     return create_http_response(HTTP_CREATED,
@@ -174,7 +175,7 @@ http_response_t* api_handle_query_library_metrics(api_context_t* ctx, http_reque
                  "{\"error\":\"Library name required\"}", "application/json");
   }
   
-  char* library_name_copy = malloc(library_name_len + 1);
+  char* library_name_copy = BUFFER_ALLOC(library_name_len + 1);
   if (!library_name_copy) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -188,7 +189,7 @@ http_response_t* api_handle_query_library_metrics(api_context_t* ctx, http_reque
   int limit = 100; /* Default limit */
   
   if (query_start) {
-    char* query_copy = strdup(query_start + 1);
+    char* query_copy = BUFFER_STRDUP(query_start + 1);
     char* saveptr;
     char* param = strtok_r(query_copy, "&", &saveptr);
     
@@ -199,22 +200,22 @@ http_response_t* api_handle_query_library_metrics(api_context_t* ctx, http_reque
         char* value = equals + 1;
         
         if (strcmp(param, "type") == 0) {
-          metric_type = strdup(value);
+          metric_type = BUFFER_STRDUP(value);
         } else if (strcmp(param, "limit") == 0) {
           limit = atoi(value);
         }
       }
       param = strtok_r(NULL, "&", &saveptr);
     }
-    free(query_copy);
+    BUFFER_FREE(query_copy);
   }
   
   /* Query metrics */
   json_value_t* results = library_metrics_query(ctx->db, library_name_copy, metric_type, limit);
-  free(library_name_copy);
+  BUFFER_FREE(library_name_copy);
   
   if (metric_type) {
-    free((void*)metric_type);
+    BUFFER_FREE((void*)metric_type);
   }
   
   if (!results) {
