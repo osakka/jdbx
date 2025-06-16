@@ -1,6 +1,6 @@
 # REST API Reference
 
-**Version**: 4.6.0  
+**Version**: 6.2.0  
 **Last Updated**: June 15, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 

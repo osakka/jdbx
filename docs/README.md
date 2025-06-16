@@ -1,107 +1,122 @@
 # JDBX Documentation
 
-**Version**: 4.6.0  
-**Last Updated**: June 15, 2025
+**Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
-Welcome to the comprehensive documentation for JDBX - a high-performance document database built specifically for JSON data with lock-free architecture and enterprise-grade features.
+## 🚀 Quick Start
 
-## 🔒 **v4.6.0 Security Update**
-This version introduces **enterprise-grade collection and document ownership security** with comprehensive namespace isolation and admin-only system collection access. See [Security Guidelines](security/SECURITY_GUIDELINES.md) for details.
+**New to JDBX?** Start here for the fastest path to productivity:
 
-## 📚 Documentation Structure
+1. **[Installation & Quick Start](getting-started/README.md)** - Get JDBX running in 5 minutes
+2. **[Basic Tutorial](tutorials/beginner/README.md)** - Learn essential operations
+3. **[API Overview](reference/api/README.md)** - Understand the REST API
 
-This documentation follows industry-standard categorization. **Only this README exists in the `/docs/` root** - all content is properly categorized for easy navigation.
+## 📚 Documentation Categories
 
-### 🎯 Quick Navigation
+### 🎯 **Getting Started**
+Perfect for first-time users and evaluators
+- **[Installation Guide](getting-started/installation.md)** - System requirements and installation steps
+- **[Quick Start](getting-started/quick-start.md)** - 5-minute setup and first operations *(Coming Soon)*
+- **[Basic Operations](getting-started/basic-operations.md)** - Essential CRUD operations *(Coming Soon)*
 
-| Category | Purpose | Key Documents |
-|----------|---------|---------------|
-| **[🚀 Getting Started](getting-started/)** | New to JDBX? | [Installation Guide](getting-started/installation.md) |
-| **[📖 Tutorials](tutorials/)** | Step-by-step learning | [Basic CRUD Operations](tutorials/basic/) |
-| **[🛠️ How-To Guides](how-to/)** | Problem-solving | [Troubleshooting](how-to/troubleshooting/) |
-| **[📚 Reference](reference/)** | Technical specifications | [API Reference](reference/api/), [Configuration](reference/configuration/) |
-| **[🏗️ Architecture](architecture/)** | System design & internals | [JDBX Storage](architecture/jdbx-storage.md), [Security Model](architecture/) |
-| **[🔧 Development](development/)** | Contributing & building | [Contributing Guide](development/CONTRIBUTING.md) |
-| **[🚀 Deployment](deployment/)** | Production operations | [Production Setup](deployment/production-deployment.md) |
-| **[🔐 Security](security/)** | Security guidelines | [Security Model](security/SECURITY_GUIDELINES.md) |
+### 📖 **Tutorials**
+Step-by-step learning paths for different skill levels
+- **[Beginner Tutorials](tutorials/beginner/README.md)** - Data modeling, authentication, basic queries *(Coming Soon)*
+- **[Intermediate Tutorials](tutorials/intermediate/README.md)** - RBAC, JavaScript functions, performance tuning *(Coming Soon)*
+- **[Advanced Tutorials](tutorials/advanced/README.md)** - Custom indexing, clustering, enterprise integration *(Coming Soon)*
 
-### 🎯 Quick Start Paths
+### 🛠️ **How-To Guides**
+Problem-solving guides for specific tasks
+- **[Operations](how-to/operations/README.md)** - Backup, monitoring, SSL configuration *(Coming Soon)*
+- **[Development](how-to/development/README.md)** - Custom validators, debugging, migrations *(Coming Soon)*
+- **[Troubleshooting](how-to/troubleshooting/README.md)** - Common issues and solutions *(Coming Soon)*
 
-| User Type | Recommended Path |
-|-----------|------------------|
-| **New User** | [Installation](getting-started/installation.md) → [Authentication Setup](guides/authentication-guide.md) → [API Reference](reference/api/rest-api.md) |
-| **Developer** | [Development Setup](development/) → [API Guides](guides/) → [Architecture Overview](architecture/) |
-| **Administrator** | [Security Guidelines](security/) → [RBAC Setup](guides/rbac-setup.md) → [Production Deployment](deployment/) |
-| **Contributor** | [Contributing Guide](development/CONTRIBUTING.md) → [Development Standards](development/documentation-standards.md) |
+### 📋 **Reference Documentation**
+Complete technical specifications and API documentation
+- **[API Reference](reference/api/README.md)** - Complete REST API documentation
+- **[Configuration Reference](reference/configuration/README.md)** - Server and database configuration
+- **[Query Language](reference/query-language/README.md)** - JSON query syntax and operators
+- **[Technical Specifications](reference/specifications/README.md)** - Performance specs, error codes, compatibility
 
-### 📋 Documentation Categories Explained
+### 🏗️ **Architecture**
+System design and technical deep-dives
+- **[Core Concepts](architecture/core-concepts/)** - Unified documents, buffer pool, threading model
+- **[Security Architecture](architecture/security/)** - RBAC design, authentication, field-level security
+- **[Performance Architecture](architecture/performance/)** - Memory management, optimization strategies
+- **[Design Decisions](architecture/design-decisions/)** - Architecture Decision Records (ADRs) *(Coming Soon)*
 
-#### 🚀 **Getting Started**
-First-time user experience, installation, and basic setup guidance.
+### 🔒 **Security**
+Security guidelines and compliance information
+- **[Security Guidelines](security/guidelines/)** - Security best practices *(Coming Soon)*
+- **[Compliance](security/compliance/)** - GDPR, SOX compliance guides *(Coming Soon)*
+- **[Threat Modeling](security/threat-modeling/)** - Security assessments *(Coming Soon)*
 
-#### 📖 **Tutorials** 
-Task-oriented learning with specific outcomes - step-by-step instructions for common tasks.
+### 🚀 **Deployment**
+Production deployment and operations
+- **[Production Deployment](deployment/production/)** - Production setup and checklist
+- **[Platform Guides](deployment/platforms/)** - Docker, Kubernetes, cloud platforms *(Coming Soon)*
+- **[Scaling](deployment/scaling/)** - Horizontal and vertical scaling strategies *(Coming Soon)*
+- **[Operations](deployment/operations/)** - Backup, monitoring, disaster recovery *(Coming Soon)*
 
-#### 🛠️ **How-To Guides**
-Problem-solving documentation - solutions to specific issues and configuration scenarios.
+### 💻 **Development**
+For contributors and maintainers
+- **[Contributing](development/contributing/)** - How to contribute to JDBX
+- **[Building & Testing](development/building/)** - Build instructions and testing procedures *(Coming Soon)*
+- **[Documentation](development/documentation/)** - Documentation writing and maintenance standards
+- **[Processes](development/processes/)** - Development workflows and release management *(Coming Soon)*
 
-#### 📚 **Reference**
-Authoritative technical information including complete API documentation, configuration options, and technical specifications.
+### 📦 **Examples**
+Working code examples and templates
+- **[Basic Examples](examples/basic/)** - CRUD operations, simple queries *(Coming Soon)*
+- **[Advanced Examples](examples/advanced/)** - Complex patterns, function embedding
+- **[Templates](examples/templates/)** - Configuration and deployment templates *(Coming Soon)*
+- **[Integration Examples](examples/integrations/)** - Client libraries and REST API usage *(Coming Soon)*
 
-#### 🏗️ **Architecture**
-System design and internals - deep technical understanding of JDBX components and design decisions.
+## 🔍 **Popular Topics**
 
-#### 🔧 **Development**
-Resources for contributors including build instructions, coding standards, and development workflows.
+### Most Accessed Documentation:
+- [REST API Authentication](reference/api/README.md#authentication)
+- [JavaScript Functions Guide](guides/javascript-development-guide.md)
+- [RBAC Setup Guide](guides/rbac-setup.md)
+- [Unified Documents Architecture](architecture/core-concepts/unified-documents.md)
+- [Performance Optimization](architecture/performance/optimization-guide.md)
 
-#### 🚀 **Deployment**
-Production operations including deployment strategies, monitoring, and maintenance.
+### Common Use Cases:
+- **[User Authentication Setup](tutorials/beginner/user-authentication.md)** *(Coming Soon)*
+- **[Data Modeling Best Practices](tutorials/beginner/data-modeling.md)** *(Coming Soon)*
+- **[Custom Validation Functions](how-to/development/custom-validators.md)** *(Coming Soon)*
+- **[Production Monitoring](how-to/operations/monitoring-setup.md)** *(Coming Soon)*
+- **[Performance Tuning](tutorials/intermediate/performance-tuning.md)** *(Coming Soon)*
 
-#### 🔐 **Security**
-Security model, RBAC configuration, and security best practices.
+## 🏷️ **Documentation by Version**
 
-**API Integration**: [Authentication](guides/authentication.md) → [REST API](api/rest-api.md) → [Basic Operations](examples/basic-operations.md)
+- **v6.2.0** (Current) - Enterprise Configuration Security Complete
+- **v6.1.0** - Buffer Pool Memory Architecture
+- **v6.0.0** - TRUE Unified Documents Architecture
 
-**Production Deployment**: [Production Guide](guides/production-deployment.md) → [Configuration Reference](reference/configuration.md) → [Performance Tuning](guides/performance-tuning.md)
+See [Changelog](development/changelog.md) for detailed version history.
 
-**Architecture Deep Dive**: [JDBX Storage](architecture/jdbx-storage.md) → [Lock-Free Operations](architecture/lock-free-operations.md) → [Unified Documents](architecture/unified-documents.md)
+## 🔗 **External Resources**
 
-## 📋 Documentation Standards
+- **[GitHub Repository](https://github.com/your-org/jdbx)** - Source code and issues
+- **[Community Forums](https://community.jdbx.dev)** - Community support *(Coming Soon)*
+- **[API Status Page](https://status.jdbx.dev)** - Service status *(Coming Soon)*
 
-### Accuracy Guarantee
-- All code examples compile and execute correctly against v3.3.0
-- API documentation reflects actual implemented endpoints
-- Configuration parameters match current codebase
-- Performance benchmarks use real measurement data
+## 📝 **Contributing to Documentation**
 
-### Cross-References
-- Related documentation is linked bi-directionally
-- Code references include file paths and line numbers
-- API endpoints link to implementation guides
-- Examples reference complete specifications
+Help improve this documentation:
 
-### Version Tracking
-- Documentation version matches codebase version
-- Breaking changes clearly marked and documented
-- Migration guides provided for major version changes
-- Deprecated features identified with timelines
+1. **[Documentation Writing Guide](development/documentation/writing-guide.md)** - Standards and best practices
+2. **[Style Guide](development/documentation/style-guide.md)** - Formatting and style rules  
+3. **[Taxonomy](development/documentation/taxonomy.md)** - Organization principles
 
-## 🎯 Quality Metrics
+## 🆘 **Need Help?**
 
-This documentation maintains:
-- **Zero outdated examples** - All code verified against v3.3.0
-- **Complete API coverage** - Every endpoint documented
-- **Comprehensive indexing** - Cross-referenced and searchable
-- **Industry standards** - Follows documentation best practices
-
-## 📖 Contributing to Documentation
-
-See [Documentation Standards](development/documentation-standards.md) for:
-- Writing guidelines and style requirements
-- Technical accuracy verification procedures
-- Cross-reference and indexing standards
-- Review and maintenance processes
+- **Quick Questions**: Check the [FAQ](how-to/troubleshooting/README.md) *(Coming Soon)*
+- **Issues**: Report documentation issues on [GitHub Issues](https://github.com/your-org/jdbx/issues)
+- **Community**: Join the [JDBX Community](https://community.jdbx.dev) *(Coming Soon)*
 
 ---
 
-**Need Help?** Start with [Quick Start Guide](getting-started/quick-start.md) or browse by category above.
+**Documentation Version**: 6.2.0  
+**Last Updated**: June 16, 2025  
+**Contributors**: Technical Writing Team, JDBX Maintainers

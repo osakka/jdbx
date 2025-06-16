@@ -2,7 +2,7 @@
 
 Complete REST API reference for JDBX server.
 
-**Version**: 3.1.0  
+**Version**: 6.2.0  
 **Last Updated**: June 8, 2025  
 **Base URL**: `https://localhost:5000` (SSL enabled by default)
 

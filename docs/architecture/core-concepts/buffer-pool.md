@@ -1,52 +1,77 @@
-# Buffer Pool Managed JSON Storage Architecture
+# Buffer Pool Memory Management
 
-**Version**: 6.1.0  
+**Version**: 6.2.0  
 **Date**: June 16, 2025  
-**Status**: ✅ PRODUCTION READY
+**Status**: ✅ IMPLEMENTED
 
 ## Overview
 
-JDBX implements enterprise-grade buffer pool managed JSON storage, eliminating memory corruption issues while maintaining ultra-high performance. This architecture ensures memory safety through proper lifecycle management of JSON objects in skiplist storage.
+JDBX implements a simple malloc/free wrapper for memory management with debugging support and allocation tracking. This provides consistent memory allocation across the codebase with basic monitoring capabilities.
 
-## Critical Problem Solved
+## Implementation
 
-### Previous Issue
-- **Memory Corruption**: Storing pointers to local variables (`&stored_doc`) in skiplist
-- **Segmentation Faults**: Invalid memory access when dereferencing stored pointers
-- **Race Conditions**: Memory freed while still referenced in skiplist structures
+### Core Functions
 
-### Buffer Pool Solution
-- **Persistent Allocation**: All JSON objects allocated via buffer pool with proper lifecycle
-- **Memory Safety**: No more dangling pointers or use-after-free issues
-- **Performance Optimized**: Buffer pool provides high-performance memory management
+The buffer pool provides simple wrapper functions around malloc/free:
 
-## Implementation Details
-
-### Document Storage Pattern
 ```c
-// BAR RAISING: Buffer pool managed JSON storage
-json_value_t** doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
-if (!doc_ptr) {
-    pthread_rwlock_unlock(&coll->lock);
-    json_free(doc_copy);
+void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char* func) {
+    (void)file; (void)line; (void)func;
+    if (size == 0) {
+        return NULL;
+    }
+    void* ptr = malloc(size);
+    if (ptr) {
+        __sync_fetch_and_add(&g_stats.total_allocations, 1);
+    }
+    return ptr;
+}
+
+void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func) {
+    (void)file; (void)line; (void)func;
+    if (ptr) {
+        free(ptr);
+        __sync_fetch_and_add(&g_stats.total_frees, 1);
+    }
+}
+```
+
+### Usage Pattern
+
+```c
+// Allocate memory with debugging information
+char* data = BUFFER_ALLOC(size);
+if (!data) {
+    // Handle allocation failure
     return NULL;
 }
-*doc_ptr = json_deep_copy(doc_copy);
-skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
+
+// Use the allocated memory
+memcpy(data, source, size);
+
+// Free when done
+BUFFER_FREE(data);
 ```
 
-### Document Retrieval Pattern
+### Statistics Tracking
+
+The buffer pool maintains basic allocation statistics:
+
 ```c
-// Extract JSON object from buffer pool managed pointer
-json_value_t** doc_ptr = (json_value_t**)raw_data;
-json_value_t* existing_doc = *doc_ptr;
+static struct {
+    volatile uint64_t total_allocations;
+    volatile uint64_t total_frees;
+} g_stats = {0, 0};
 ```
 
-### Document Cleanup Pattern
+### Document Storage
+
+In the database implementation, document storage uses standard JSON deep copying:
+
 ```c
-// Free both JSON object and buffer pool allocation
-json_value_t** doc_ptr = (json_value_t**)raw_data;
-json_value_t* doc = *doc_ptr;
+// Store document with deep copy
+json_value_t* stored_doc = json_deep_copy(doc_copy);
+skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_doc, sizeof(json_value_t*));
 json_free(doc);
 BUFFER_FREE(doc_ptr);
 ```

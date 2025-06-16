@@ -1,6 +1,6 @@
 # JDBX Transaction System Reference
 
-**Version**: 2.0.7  
+**Version**: 6.2.0  
 **Last Updated**: January 2025
 
 This comprehensive guide documents the JDBX transaction system, including ACID compliance, isolation levels, and advanced features.

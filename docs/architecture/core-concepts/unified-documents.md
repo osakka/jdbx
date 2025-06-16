@@ -1,12 +1,12 @@
-# Unified Documents Architecture (v3.2.0)
+# Unified Documents Architecture
 
-**Date**: June 11, 2025  
-**Status**: Production Ready and Fully Integrated  
-**Version**: 3.2.0
+**Date**: June 16, 2025  
+**Status**: Implemented with Mixed Routing  
+**Version**: 6.2.0
 
 ## Overview
 
-JDBX v3.2.0 introduces a revolutionary unified documents architecture where everything is treated as a document with type-based discrimination. This design provides unprecedented flexibility while maintaining high performance and data integrity.
+JDBX implements a unified documents architecture with mixed routing between physical and virtual collections. The system provides both unified document storage and traditional hierarchical collection access patterns.
 
 ## Core Principles
 
@@ -20,13 +20,26 @@ All entities in JDBX are now stored as documents in a single 'documents' collect
 - **Collections**: `{"type": "collection", "name": "products", "library": "library1", ...}`
 - **Regular Data**: `{"type": "data", "collection": "products", "library": "library1", ...}`
 
-### Hybrid Architecture
+### Mixed Routing Architecture
 
-The system implements a hybrid approach:
+The system implements mixed routing between two storage patterns:
 
-1. **Metadata in Documents**: Entity metadata (users, roles, libraries, collections) stored in the unified documents collection
-2. **Data in Traditional Paths**: Actual collection data remains in library/collection-specific storage paths for performance
-3. **Unified Query Interface**: Single API can query across all entity types
+1. **Physical Storage**: Special handling for the `PHYSICAL_STORAGE_LIBRARY/PHYSICAL_STORAGE_COLLECTION` path that stores all unified documents
+2. **Virtual Collections**: Traditional library/collection hierarchical paths that map to the unified storage for metadata queries
+3. **Fallback Logic**: When creating virtual collections, the system falls back to unified collection storage for system entities
+
+### Implementation Pattern
+
+```c
+// Mixed routing logic in database.c:246-301
+if (strcmp(library_name, PHYSICAL_STORAGE_LIBRARY) == 0 && 
+    strcmp(collection_name, PHYSICAL_STORAGE_COLLECTION) == 0) {
+    // Handle physical unified collection
+    return create_physical_collection(db, library_name, collection_name);
+} else {
+    // Handle virtual collection with fallback to unified storage
+    return create_virtual_collection_with_unified_fallback(db, library_name, collection_name);
+}
 
 ### Type-Based Discrimination
 
