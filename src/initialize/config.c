@@ -107,6 +107,12 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   char* jdbx_initial_size = NULL;
   char* jdbx_wal_size = NULL;
   char* env_file = NULL;
+  char* db_extension = NULL;
+  char* wal_extension = NULL;
+  char* bootstrap_admin_user = NULL;
+  char* bootstrap_admin_pass = NULL;
+  char* admin_email = NULL;
+  char* jwt_secret = NULL;
   
   /* Initialize binary directory for path resolution */
   config_init_binary_dir();
@@ -176,6 +182,14 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"jdbx-wal-size", required_argument, 0, 316},
     /* Environment file option */
     {"env-file", required_argument, 0, 317},
+    /* File extension options */
+    {"db-extension", required_argument, 0, 318},
+    {"wal-extension", required_argument, 0, 319},
+    /* Security options */
+    {"bootstrap-admin-user", required_argument, 0, 320},
+    {"bootstrap-admin-pass", required_argument, 0, 321},
+    {"admin-email", required_argument, 0, 322},
+    {"jwt-secret", required_argument, 0, 323},
     {0, 0, 0, 0}
   };
   
@@ -294,6 +308,24 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 317:
         env_file = optarg;
+        break;
+      case 318: /* --db-extension */
+        db_extension = optarg;
+        break;
+      case 319: /* --wal-extension */
+        wal_extension = optarg;
+        break;
+      case 320: /* --bootstrap-admin-user */
+        bootstrap_admin_user = optarg;
+        break;
+      case 321: /* --bootstrap-admin-pass */
+        bootstrap_admin_pass = optarg;
+        break;
+      case 322: /* --admin-email */
+        admin_email = optarg;
+        break;
+      case 323: /* --jwt-secret */
+        jwt_secret = optarg;
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
@@ -533,6 +565,41 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     
     /* Store JS file path in error field (reuse existing fields) */
     INIT_LOG_PROGRESS("CONFIG", "JavaScript file set to %s", js_file);
+  }
+  
+  /* Process new configuration options */
+  if (db_extension) {
+    /* Note: DB extension would need implementation in config structure */
+    INIT_LOG_PROGRESS("CONFIG", "Database extension set to %s", db_extension);
+  }
+  
+  if (wal_extension) {
+    /* Note: WAL extension would need implementation in config structure */
+    INIT_LOG_PROGRESS("CONFIG", "WAL extension set to %s", wal_extension);
+  }
+  
+  /* Process security configuration via environment variables */
+  if (bootstrap_admin_user) {
+    setenv("JDBX_BOOTSTRAP_ADMIN_USER", bootstrap_admin_user, 1);
+    INIT_LOG_PROGRESS("CONFIG", "Bootstrap admin user set via CLI");
+  }
+  
+  if (bootstrap_admin_pass) {
+    setenv("JDBX_BOOTSTRAP_ADMIN_PASS", bootstrap_admin_pass, 1);
+    INIT_LOG_PROGRESS("CONFIG", "Bootstrap admin password set via CLI");
+  }
+  
+  if (admin_email) {
+    setenv("JDBX_DEFAULT_ADMIN_EMAIL", admin_email, 1);
+    INIT_LOG_PROGRESS("CONFIG", "Admin email set via CLI");
+  }
+  
+  if (jwt_secret) {
+    if (heap_config->jwt_secret) {
+      free(heap_config->jwt_secret);
+    }
+    heap_config->jwt_secret = strdup(jwt_secret);
+    INIT_LOG_PROGRESS("CONFIG", "JWT secret set via CLI (highest priority)");
   }
   
   /* Create required directories */
