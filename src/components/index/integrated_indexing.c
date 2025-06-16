@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "storage/jdbx.h"
+#include "utils/buffer_pool.h"
 #include "database/database.h"
 #include "utils/logger.h"
 #include "utils/json_helpers.h"

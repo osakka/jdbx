@@ -22,6 +22,7 @@ static struct {
  * Allocate memory with debugging information
  */
 void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char* func) {
+    (void)file; (void)line; (void)func;
     if (size == 0) {
         return NULL;
     }
@@ -38,6 +39,7 @@ void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char
  * Free memory with debugging information
  */
 void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func) {
+    (void)file; (void)line; (void)func;
     if (ptr) {
         free(ptr);
         __sync_fetch_and_add(&g_stats.total_frees, 1);

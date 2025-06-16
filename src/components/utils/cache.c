@@ -1,6 +1,7 @@
 #include "utils/cache.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
+#include "utils/buffer_pool.h"
 #include <math.h>
 
 /* Estimate memory size of a string */
