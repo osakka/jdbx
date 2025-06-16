@@ -36,14 +36,20 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     return -1;
   }
   
-  if (client->use_ssl && client->ssl_conn) {
+  if (client->use_ssl) {
+    /* Safely get SSL connection pointer */
+    ssl_connection_t* ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
+    if (!ssl_conn) {
+      return -1;  /* SSL expected but not available */
+    }
+    
     /* SSL read with retry handling for non-blocking sockets */
     size_t bytes_read = 0;
     int retries = 0;
     const int max_retries = 150;  /* 150 * 100ms = 15 seconds max */
     
     while (retries < max_retries) {
-      ssl_error_t error = ssl_read(client->ssl_conn, buffer, buffer_size - 1, &bytes_read);
+      ssl_error_t error = ssl_read(ssl_conn, buffer, buffer_size - 1, &bytes_read);
       
       if (error == SSL_SUCCESS) {
         /* Success - either got data or connection closed cleanly */
@@ -87,10 +93,16 @@ static int client_write_data(client_conn_t* client, const char* data, size_t dat
     return -1;
   }
   
-  if (client->use_ssl && client->ssl_conn) {
+  if (client->use_ssl) {
+    /* Safely get SSL connection pointer */
+    ssl_connection_t* ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
+    if (!ssl_conn) {
+      return -1;  /* SSL expected but not available */
+    }
+    
     /* SSL write - now handles all retries internally */
     size_t bytes_written = 0;
-    ssl_error_t error = ssl_write(client->ssl_conn, data, data_len, &bytes_written);
+    ssl_error_t error = ssl_write(ssl_conn, data, data_len, &bytes_written);
     
     if (error != SSL_SUCCESS) {
       if (g_logger) {
@@ -157,12 +169,18 @@ static int client_setup_ssl(client_conn_t* client) {
  * @param client Client connection
  */
 static void client_cleanup_ssl(client_conn_t* client) {
-  if (client && client->ssl_conn) {
+  if (!client) {
+    return;
+  }
+  
+  /* Use atomic exchange to ensure only one thread cleans up the SSL connection */
+  ssl_connection_t* ssl_conn = __sync_lock_test_and_set(&client->ssl_conn, NULL);
+  
+  if (ssl_conn) {
     if (g_logger) {
       LOG_DEBUG("Cleaning up SSL connection for client fd=%d", client->client_fd);
     }
-    ssl_connection_free(client->ssl_conn);
-    client->ssl_conn = NULL;
+    ssl_connection_free(ssl_conn);
   }
 }
 
