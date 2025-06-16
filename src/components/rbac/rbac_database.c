@@ -58,16 +58,11 @@ rbac_system_t* rbac_database_init(struct database* db, const char* jwt_secret) {
   if (rbac) memset(rbac, 0, sizeof(rbac_system_t));
   if (!rbac) return NULL;
   
-  /* Set up fields */
-  rbac->users = json_create_object();
-  rbac->roles = json_create_object();
+  /* Set up fields - SINGLE SOURCE OF TRUTH: Database Only */
   rbac->db = db;
   rbac->jwt_secret = jwt_secret ? BUFFER_STRDUP(jwt_secret) : BUFFER_STRDUP("change-this-secret-in-production");
   
-  if (!rbac->users || !rbac->roles || !rbac->jwt_secret) {
-    if (rbac->users) json_free(rbac->users);
-    if (rbac->roles) json_free(rbac->roles);
-    if (rbac->jwt_secret) BUFFER_FREE(rbac->jwt_secret);
+  if (!rbac->jwt_secret) {
     BUFFER_FREE(rbac);
     return NULL;
   }

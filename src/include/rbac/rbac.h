@@ -76,11 +76,9 @@ typedef struct {
 /* Forward declaration */
 struct database;
 
-/* RBAC system */
+/* RBAC system - Single Source of Truth: Database Only */
 typedef struct {
-    json_value_t* users; /* JSON object of users (deprecated - use database) */
-    json_value_t* roles; /* JSON object of roles (deprecated - use database) */
-    struct database* db; /* Database for RBAC storage */
+    struct database* db; /* Database for RBAC storage - SINGLE SOURCE OF TRUTH */
     char* jwt_secret;    /* JWT secret for token generation */
 } rbac_system_t;
 

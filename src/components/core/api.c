@@ -102,12 +102,6 @@ api_route_t routes[] = {
   {"/api/libraries/:library/metrics", HTTP_GET, api_handle_library_metrics, 1},
   {"/api/libraries/:library/metrics", HTTP_POST, api_handle_record_library_metric, 1},
   
-  {"/api/libraries/", HTTP_DELETE, api_handle_delete_library, 1},
-  /* Field-level access must be checked in library GET handler */
-  {"/api/libraries/", HTTP_GET, api_handle_library_document_field_access, 1},
-  {"/api/libraries/", HTTP_PUT, api_handle_update_library, 1},
-  {"/api/libraries/", HTTP_POST, api_handle_copy_library, 1},
-  
   /* Virtual Collection routes */
   {"/api/collections", HTTP_GET, api_handle_virtual_collections_list, 1},
   {"/api/collections", HTTP_POST, api_handle_virtual_collection_create, 1},
@@ -121,13 +115,8 @@ api_route_t routes[] = {
   
   /* Document routes - Authentication enabled */
   /* NOTE: The order matters - the first matching route wins */
-  /* Library-scoped document routes */
-  {"/api/libraries/", HTTP_GET, api_handle_documents_query, 1}, /* Library-scoped query */
-  {"/api/libraries/", HTTP_POST, api_handle_document_create, 1}, /* Library-scoped create */
-  {"/api/libraries/", HTTP_PUT, api_handle_document_update, 1}, /* Library-scoped update */
-  {"/api/libraries/", HTTP_DELETE, api_handle_document_delete, 1}, /* Library-scoped delete */
   
-  /* Collection-scoped document routes (legacy) */
+  /* Collection-scoped document routes (supports both legacy and library-scoped) */
   {"/api/collections/", HTTP_GET, api_handle_documents_query, 1}, /* General query handler - checks for /documents suffix */
   {"/api/collections/", HTTP_GET, api_handle_document_field_access, 1}, /* Field access - checks for field path */
   {"/api/collections/", HTTP_GET, api_handle_document_get, 1}, /* Specific document GET */
@@ -286,9 +275,37 @@ api_route_t routes[] = {
    */
   {"/api/transactions/", HTTP_DELETE, api_handle_transaction_document_operation, 1},
 
+  /* Library-scoped document routes - must come AFTER other library routes */
+  {"/api/libraries/", HTTP_GET, api_handle_documents_query, 1}, /* Handles /api/libraries/:lib/collections/:col/documents */
+  {"/api/libraries/", HTTP_POST, api_handle_document_create, 1}, /* Handles /api/libraries/:lib/collections/:col/documents */
+  /* TODO: Update these handlers to support library-scoped paths
+  {"/api/libraries/", HTTP_PUT, api_handle_document_update, 1},
+  {"/api/libraries/", HTTP_DELETE, api_handle_document_delete, 1},
+  */
+  
+  /* Library management routes - must come AFTER library document routes */
+  {"/api/libraries/", HTTP_DELETE, api_handle_delete_library, 1},
+  {"/api/libraries/", HTTP_GET, api_handle_library_document_field_access, 1},
+  {"/api/libraries/", HTTP_PUT, api_handle_update_library, 1},
+  {"/api/libraries/", HTTP_POST, api_handle_copy_library, 1},
+  
   /* End of routes */
   {NULL, HTTP_UNKNOWN, NULL, 0}
 };
+
+/* Helper function to get string value from JSON object */
+static const char* json_object_get_string(json_value_t* object, const char* key) {
+  if (!object || object->type != JSON_OBJECT || !key) {
+    return NULL;
+  }
+  
+  json_value_t* value = json_object_get(object, key);
+  if (!value || value->type != JSON_STRING) {
+    return NULL;
+  }
+  
+  return value->value.string;
+}
 
 /* Create API context */
 
@@ -2005,22 +2022,32 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   if (extracted_library) {
     /* Library was explicitly specified in path */
     strncpy(library_name, extracted_library, sizeof(library_name) - 1);
+    library_name[sizeof(library_name) - 1] = '\0';  /* Ensure null termination */
     strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+    coll_name_only[sizeof(coll_name_only) - 1] = '\0';  /* Ensure null termination */
     BUFFER_FREE(extracted_library);
   } else {
     /* Check if collection_name has library prefix */
     const char* slash = strchr(collection_name, '/');
     if (slash) {
       size_t lib_len = slash - collection_name;
-      if (lib_len < sizeof(library_name)) {
+      if (lib_len < sizeof(library_name) - 1) {
         strncpy(library_name, collection_name, lib_len);
         library_name[lib_len] = '\0';
         strncpy(coll_name_only, slash + 1, sizeof(coll_name_only) - 1);
+        coll_name_only[sizeof(coll_name_only) - 1] = '\0';  /* Ensure null termination */
+      } else {
+        /* Library name too long */
+        BUFFER_FREE(collection_name);
+        return create_http_response(HTTP_BAD_REQUEST, 
+                     "{\"error\":\"Library name too long\"}", "application/json");
       }
     } else {
       /* If no slash, assume it's in default library */
-      strcpy(library_name, "default");
+      strncpy(library_name, "default", sizeof(library_name) - 1);
+      library_name[sizeof(library_name) - 1] = '\0';
       strncpy(coll_name_only, collection_name, sizeof(coll_name_only) - 1);
+      coll_name_only[sizeof(coll_name_only) - 1] = '\0';  /* Ensure null termination */
     }
   }
   
@@ -2402,33 +2429,55 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   
   jwt_free(jwt);
   
-  /* Create a JSON array of users from the RBAC system's users object */
+  /* SINGLE SOURCE OF TRUTH: Query users directly from database */
+  json_value_t* users_query = json_create_object();
+  json_object_set(users_query, "type", json_create_string("user"));
+  json_object_set(users_query, "library", json_create_string("system"));
+  
+  json_value_t* users_results = storage_query_documents(ctx->db, users_query);
+  json_free(users_query);
+  
+  if (!users_results) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to query users\"}", "application/json");
+  }
+  
+  json_value_t* users_docs = json_object_get(users_results, "documents");
+  if (!users_docs || users_docs->type != JSON_ARRAY) {
+    json_free(users_results);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Invalid users response\"}", "application/json");
+  }
+  
+  /* Create a JSON array of users */
   json_value_t* users_array = json_create_array();
   if (!users_array) {
+    json_free(users_results);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create users array\"}", "application/json");
   }
   
-  /* Iterate through all users in the RBAC system */
-  for (size_t i = 0; i < ctx->rbac->users->value.object.size; i++) {
-    const char* user_id = ctx->rbac->users->value.object.entries[i].key;
-    json_value_t* user_obj = ctx->rbac->users->value.object.entries[i].value;
-    
-    if (user_obj->type == JSON_OBJECT) {
+  /* Process each user document */
+  for (size_t i = 0; i < json_array_size(users_docs); i++) {
+    json_value_t* user_doc = json_array_get(users_docs, i);
+    if (user_doc && user_doc->type == JSON_OBJECT) {
       /* Create a new user object with a subset of information (exclude password hash) */
       json_value_t* user = json_create_object();
       
-      /* Add user ID */
-      json_object_set(user, "id", json_create_string(user_id));
+      /* Add user ID from uuid field */
+      json_value_t* uuid = json_object_get(user_doc, "uuid");
+      if (uuid && uuid->type == JSON_STRING) {
+        json_object_set(user, "id", json_create_string(uuid->value.string));
+      }
       
       /* Add username if present */
-      json_value_t* username = json_object_get(user_obj, "username");
+      json_value_t* username = json_object_get(user_doc, "username");
       if (username && username->type == JSON_STRING) {
         json_object_set(user, "username", json_create_string(username->value.string));
       }
       
       /* Add roles array if present */
-      json_value_t* roles = json_object_get(user_obj, "roles");
+      json_value_t* roles = json_object_get(user_doc, "roles");
       if (roles && roles->type == JSON_ARRAY) {
         /* Create a deep copy of the roles array */
         json_value_t* roles_copy = json_create_array();
@@ -2445,6 +2494,8 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
       json_array_append(users_array, user);
     }
   }
+  
+  json_free(users_results);
   
   /* Create response object */
   json_value_t* response = json_create_object();
@@ -2794,14 +2845,41 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   json_value_t* password_val = json_object_get(body, "password");
   json_value_t* roles_val = json_object_get(body, "roles");
   
-  /* Get the actual JSON user object from the RBAC system */
-  json_value_t* user_obj = json_object_get(ctx->rbac->users, target_user_id);
-  if (!user_obj || user_obj->type != JSON_OBJECT) {
+  /* Get the actual JSON user object from the database */
+  json_value_t* user_query = json_create_object();
+  json_object_set(user_query, "type", json_create_string("user"));
+  json_object_set(user_query, "uuid", json_create_string(target_user_id));
+  json_object_set(user_query, "library", json_create_string("system"));
+  
+  json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+  json_free(user_query);
+  
+  if (!user_result) {
     rbac_free_user(user);
     json_free(body);
     jwt_free(jwt);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to find user in RBAC system\"}", "application/json");
+                 "{\"error\":\"Failed to query user from database\"}", "application/json");
+  }
+  
+  json_value_t* user_docs = json_object_get(user_result, "documents");
+  if (!user_docs || user_docs->type != JSON_ARRAY || user_docs->value.array.size == 0) {
+    rbac_free_user(user);
+    json_free(body);
+    jwt_free(jwt);
+    json_free(user_result);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to find user in database\"}", "application/json");
+  }
+  
+  json_value_t* user_obj = json_array_get(user_docs, 0);
+  if (!user_obj || user_obj->type != JSON_OBJECT) {
+    rbac_free_user(user);
+    json_free(body);
+    jwt_free(jwt);
+    json_free(user_result);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Invalid user document\"}", "application/json");
   }
   
   /* Update username if provided */
@@ -2893,26 +2971,45 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
       if (role_id_val && role_id_val->type == JSON_STRING) {
         const char* role_id = role_id_val->value.string;
         
-        /* Get role */
-        json_value_t* role_obj = json_object_get(ctx->rbac->roles, role_id);
-        if (role_obj && role_obj->type == JSON_OBJECT) {
-          /* Get users array */
-          json_value_t* users = json_object_get(role_obj, "users");
-          if (users && users->type == JSON_ARRAY) {
-            /* Remove user from role */
-            for (size_t j = 0; j < users->value.array.size; j++) {
-              json_value_t* user_id_val = users->value.array.items[j];
-              if (user_id_val && user_id_val->type == JSON_STRING && 
-                strcmp(user_id_val->value.string, target_user_id) == 0) {
-                /* Remove user from array */
-                for (size_t k = j; k < users->value.array.size - 1; k++) {
-                  users->value.array.items[k] = users->value.array.items[k + 1];
+        /* Get role from database */
+        json_value_t* role_query = json_create_object();
+        json_object_set(role_query, "type", json_create_string("role"));
+        json_object_set(role_query, "uuid", json_create_string(role_id));
+        json_object_set(role_query, "library", json_create_string("system"));
+        
+        json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+        json_free(role_query);
+        
+        if (role_result) {
+          json_value_t* role_docs = json_object_get(role_result, "documents");
+          if (role_docs && role_docs->type == JSON_ARRAY && role_docs->value.array.size > 0) {
+            json_value_t* role_obj = json_array_get(role_docs, 0);
+            if (role_obj && role_obj->type == JSON_OBJECT) {
+              /* Get users array */
+              json_value_t* users = json_object_get(role_obj, "users");
+              if (users && users->type == JSON_ARRAY) {
+                /* Remove user from role */
+                for (size_t j = 0; j < users->value.array.size; j++) {
+                  json_value_t* user_id_val = users->value.array.items[j];
+                  if (user_id_val && user_id_val->type == JSON_STRING && 
+                    strcmp(user_id_val->value.string, target_user_id) == 0) {
+                    /* Remove user from array */
+                    for (size_t k = j; k < users->value.array.size - 1; k++) {
+                      users->value.array.items[k] = users->value.array.items[k + 1];
+                    }
+                    users->value.array.size--;
+                    break;
+                  }
                 }
-                users->value.array.size--;
-                break;
+                /* Update role document in database */
+                const char* role_uuid = json_object_get_string(role_obj, "uuid");
+                if (role_uuid) {
+                  storage_update_document(ctx->db, role_uuid, role_obj);
+                }
               }
             }
           }
+          json_free(role_result);
         }
       }
     }
@@ -2926,35 +3023,55 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
       if (role_id_val && role_id_val->type == JSON_STRING) {
         const char* role_id = role_id_val->value.string;
         
-        /* Verify that role exists */
-        json_value_t* role_obj = json_object_get(ctx->rbac->roles, role_id);
-        if (role_obj && role_obj->type == JSON_OBJECT) {
-          /* Add role ID to user's roles */
-          json_array_append(current_roles, json_create_string(role_id));
-          
-          /* Add user to role's users */
-          json_value_t* users = json_object_get(role_obj, "users");
-          if (!users || users->type != JSON_ARRAY) {
-            /* Create users array if it doesn't exist */
-            users = json_create_array();
-            json_object_set(role_obj, "users", users);
-          }
-          
-          /* Check if user is already in role */
-          int user_in_role = 0;
-          for (size_t j = 0; j < users->value.array.size; j++) {
-            json_value_t* user_id_val = users->value.array.items[j];
-            if (user_id_val && user_id_val->type == JSON_STRING && 
-              strcmp(user_id_val->value.string, target_user_id) == 0) {
-              user_in_role = 1;
-              break;
+        /* Verify that role exists in database */
+        json_value_t* role_query = json_create_object();
+        json_object_set(role_query, "type", json_create_string("role"));
+        json_object_set(role_query, "uuid", json_create_string(role_id));
+        json_object_set(role_query, "library", json_create_string("system"));
+        
+        json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+        json_free(role_query);
+        
+        if (role_result) {
+          json_value_t* role_docs = json_object_get(role_result, "documents");
+          if (role_docs && role_docs->type == JSON_ARRAY && role_docs->value.array.size > 0) {
+            json_value_t* role_obj = json_array_get(role_docs, 0);
+            if (role_obj && role_obj->type == JSON_OBJECT) {
+              /* Add role ID to user's roles */
+              json_array_append(current_roles, json_create_string(role_id));
+              
+              /* Add user to role's users */
+              json_value_t* users = json_object_get(role_obj, "users");
+              if (!users || users->type != JSON_ARRAY) {
+                /* Create users array if it doesn't exist */
+                users = json_create_array();
+                json_object_set(role_obj, "users", users);
+              }
+              
+              /* Check if user is already in role */
+              int user_in_role = 0;
+              for (size_t j = 0; j < users->value.array.size; j++) {
+                json_value_t* user_id_val = users->value.array.items[j];
+                if (user_id_val && user_id_val->type == JSON_STRING && 
+                  strcmp(user_id_val->value.string, target_user_id) == 0) {
+                  user_in_role = 1;
+                  break;
+                }
+              }
+              
+              /* Add user to role if not already present */
+              if (!user_in_role) {
+                json_array_append(users, json_create_string(target_user_id));
+              }
+              
+              /* Update role document in database */
+              const char* role_uuid = json_object_get_string(role_obj, "uuid");
+              if (role_uuid) {
+                storage_update_document(ctx->db, role_uuid, role_obj);
+              }
             }
           }
-          
-          /* Add user to role if not already present */
-          if (!user_in_role) {
-            json_array_append(users, json_create_string(target_user_id));
-          }
+          json_free(role_result);
         }
       }
     }
@@ -2986,11 +3103,18 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   /* Serialize response */
   char* response_str = json_stringify(response);
   
+  /* Update the user document in the database */
+  const char* user_uuid = json_object_get_string(user_obj, "uuid");
+  if (user_uuid) {
+    storage_update_document(ctx->db, user_uuid, user_obj);
+  }
+  
   /* Free resources */
   rbac_free_user(user);
   json_free(response);
   json_free(body);
   jwt_free(jwt);
+  json_free(user_result);
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -3054,11 +3178,27 @@ http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* requ
   
   jwt_free(jwt);
   
-  /* Check if user exists */
-  if (!json_object_has(ctx->rbac->users, target_user_id)) {
+  /* Check if user exists in database */
+  json_value_t* user_query = json_create_object();
+  json_object_set(user_query, "type", json_create_string("user"));
+  json_object_set(user_query, "uuid", json_create_string(target_user_id));
+  json_object_set(user_query, "library", json_create_string("system"));
+  
+  json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+  json_free(user_query);
+  
+  if (!user_result) {
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"User not found\"}", "application/json");
   }
+  
+  json_value_t* user_docs = json_object_get(user_result, "documents");
+  if (!user_docs || user_docs->type != JSON_ARRAY || user_docs->value.array.size == 0) {
+    json_free(user_result);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"User not found\"}", "application/json");
+  }
+  json_free(user_result);
   
   /* Delete user */
   if (!rbac_delete_user(ctx->rbac, target_user_id)) {
@@ -3111,33 +3251,55 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   
   jwt_free(jwt);
   
-  /* Create a JSON array of roles from the RBAC system's roles object */
+  /* SINGLE SOURCE OF TRUTH: Query roles directly from database */
+  json_value_t* roles_query = json_create_object();
+  json_object_set(roles_query, "type", json_create_string("role"));
+  json_object_set(roles_query, "library", json_create_string("system"));
+  
+  json_value_t* roles_results = storage_query_documents(ctx->db, roles_query);
+  json_free(roles_query);
+  
+  if (!roles_results) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to query roles\"}", "application/json");
+  }
+  
+  json_value_t* roles_docs = json_object_get(roles_results, "documents");
+  if (!roles_docs || roles_docs->type != JSON_ARRAY) {
+    json_free(roles_results);
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Invalid roles response\"}", "application/json");
+  }
+  
+  /* Create a JSON array of roles */
   json_value_t* roles_array = json_create_array();
   if (!roles_array) {
+    json_free(roles_results);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create roles array\"}", "application/json");
   }
   
-  /* Iterate through all roles in the RBAC system */
-  for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
-    const char* role_id = ctx->rbac->roles->value.object.entries[i].key;
-    json_value_t* role_obj = ctx->rbac->roles->value.object.entries[i].value;
-    
-    if (role_obj->type == JSON_OBJECT) {
+  /* Process each role document */
+  for (size_t i = 0; i < json_array_size(roles_docs); i++) {
+    json_value_t* role_doc = json_array_get(roles_docs, i);
+    if (role_doc && role_doc->type == JSON_OBJECT) {
       /* Create a new role object with relevant information */
       json_value_t* role = json_create_object();
       
-      /* Add role ID */
-      json_object_set(role, "id", json_create_string(role_id));
+      /* Add role ID from uuid field */
+      json_value_t* uuid = json_object_get(role_doc, "uuid");
+      if (uuid && uuid->type == JSON_STRING) {
+        json_object_set(role, "id", json_create_string(uuid->value.string));
+      }
       
       /* Add name if present */
-      json_value_t* name = json_object_get(role_obj, "name");
+      json_value_t* name = json_object_get(role_doc, "name");
       if (name && name->type == JSON_STRING) {
         json_object_set(role, "name", json_create_string(name->value.string));
       }
       
       /* Add users array if present */
-      json_value_t* users = json_object_get(role_obj, "users");
+      json_value_t* users = json_object_get(role_doc, "users");
       if (users && users->type == JSON_ARRAY) {
         /* Create a deep copy of the users array */
         json_value_t* users_copy = json_create_array();
@@ -3151,7 +3313,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
       }
       
       /* Add permissions object if present */
-      json_value_t* permissions = json_object_get(role_obj, "permissions");
+      json_value_t* permissions = json_object_get(role_doc, "permissions");
       if (permissions && permissions->type == JSON_OBJECT) {
         /* Create a deep copy of the permissions object */
         json_value_t* permissions_copy = json_create_object();
@@ -3172,6 +3334,8 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
       json_array_append(roles_array, role);
     }
   }
+  
+  json_free(roles_results);
   
   /* Create response object */
   json_value_t* response = json_create_object();
@@ -3274,35 +3438,63 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
   /* Add users array */
   json_value_t* users_array = json_create_array();
   
-  /* Get role users from JSON data */
-  json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
-  if (role_json && role_json->type == JSON_OBJECT) {
-    json_value_t* users = json_object_get(role_json, "users");
-    if (users && users->type == JSON_ARRAY) {
-      for (size_t i = 0; i < users->value.array.size; i++) {
-        json_value_t* user_id_val = users->value.array.items[i];
-        if (user_id_val && user_id_val->type == JSON_STRING) {
-          /* Add user ID to array */
-          json_array_append(users_array, json_create_string(user_id_val->value.string));
-          
-          /* Optionally, add user details */
-          const char* user_id_str = user_id_val->value.string;
-          json_value_t* user_json = json_object_get(ctx->rbac->users, user_id_str);
-          if (user_json && user_json->type == JSON_OBJECT) {
-            json_value_t* username_val = json_object_get(user_json, "username");
-            if (username_val && username_val->type == JSON_STRING) {
-              /* Create user info object */
-              json_value_t* user_info = json_create_object();
-              json_object_set(user_info, "id", json_create_string(user_id_str));
-              json_object_set(user_info, "username", json_create_string(username_val->value.string));
+  /* Get role users from database */
+  json_value_t* role_query = json_create_object();
+  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "uuid", json_create_string(role_id));
+  json_object_set(role_query, "library", json_create_string("system"));
+  
+  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_free(role_query);
+  
+  if (role_result) {
+    json_value_t* role_docs = json_object_get(role_result, "documents");
+    if (role_docs && role_docs->type == JSON_ARRAY && role_docs->value.array.size > 0) {
+      json_value_t* role_json = json_array_get(role_docs, 0);
+      if (role_json && role_json->type == JSON_OBJECT) {
+        json_value_t* users = json_object_get(role_json, "users");
+        if (users && users->type == JSON_ARRAY) {
+          for (size_t i = 0; i < users->value.array.size; i++) {
+            json_value_t* user_id_val = users->value.array.items[i];
+            if (user_id_val && user_id_val->type == JSON_STRING) {
+              /* Add user ID to array */
+              json_array_append(users_array, json_create_string(user_id_val->value.string));
               
-              /* Add user info to array (replacing the simple ID string) */
-              users_array->value.array.items[users_array->value.array.size - 1] = user_info;
+              /* Optionally, add user details from database */
+              const char* user_id_str = user_id_val->value.string;
+              json_value_t* user_query = json_create_object();
+              json_object_set(user_query, "type", json_create_string("user"));
+              json_object_set(user_query, "uuid", json_create_string(user_id_str));
+              json_object_set(user_query, "library", json_create_string("system"));
+              
+              json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+              json_free(user_query);
+              
+              if (user_result) {
+                json_value_t* user_docs = json_object_get(user_result, "documents");
+                if (user_docs && user_docs->type == JSON_ARRAY && user_docs->value.array.size > 0) {
+                  json_value_t* user_json = json_array_get(user_docs, 0);
+                  if (user_json && user_json->type == JSON_OBJECT) {
+                    json_value_t* username_val = json_object_get(user_json, "username");
+                    if (username_val && username_val->type == JSON_STRING) {
+                      /* Create user info object */
+                      json_value_t* user_info = json_create_object();
+                      json_object_set(user_info, "id", json_create_string(user_id_str));
+                      json_object_set(user_info, "username", json_create_string(username_val->value.string));
+                      
+                      /* Add user info to array (replacing the simple ID string) */
+                      users_array->value.array.items[users_array->value.array.size - 1] = user_info;
+                    }
+                  }
+                }
+                json_free(user_result);
+              }
             }
           }
         }
       }
     }
+    json_free(role_result);
   }
   
   json_object_set(role_obj, "users", users_array);
@@ -3388,17 +3580,24 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
                  "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
   }
   
-  /* Check if role name already exists */
-  for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
-    json_value_t* role = ctx->rbac->roles->value.object.entries[i].value;
-    json_value_t* role_name = json_object_get(role, "name");
-    
-    if (role_name && role_name->type == JSON_STRING && 
-      strcmp(role_name->value.string, name) == 0) {
+  /* Check if role name already exists in database */
+  json_value_t* role_query = json_create_object();
+  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "library", json_create_string("system"));
+  json_object_set(role_query, "name", json_create_string(name));
+  
+  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_free(role_query);
+  
+  if (role_result) {
+    json_value_t* role_docs = json_object_get(role_result, "documents");
+    if (role_docs && role_docs->type == JSON_ARRAY && role_docs->value.array.size > 0) {
+      json_free(role_result);
       json_free(body);
       return create_http_response(HTTP_CONFLICT, 
                    "{\"error\":\"Role name already exists\"}", "application/json");
     }
+    json_free(role_result);
   }
   
   /* Create role */
@@ -3571,11 +3770,32 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   
   jwt_free(jwt);
   
-  /* Check if role exists */
-  json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
-  if (!role_json || role_json->type != JSON_OBJECT) {
+  /* Check if role exists in database */
+  json_value_t* role_query = json_create_object();
+  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "uuid", json_create_string(role_id));
+  json_object_set(role_query, "library", json_create_string("system"));
+  
+  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_free(role_query);
+  
+  if (!role_result) {
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Role not found\"}", "application/json");
+  }
+  
+  json_value_t* role_docs = json_object_get(role_result, "documents");
+  if (!role_docs || role_docs->type != JSON_ARRAY || role_docs->value.array.size == 0) {
+    json_free(role_result);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Role not found\"}", "application/json");
+  }
+  
+  json_value_t* role_json = json_array_get(role_docs, 0);
+  if (!role_json || role_json->type != JSON_OBJECT) {
+    json_free(role_result);
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Invalid role document\"}", "application/json");
   }
   
   /* Parse request body */
@@ -3602,20 +3822,33 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
                    "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
     }
     
-    /* Check if name is already taken by another role */
-    for (size_t i = 0; i < ctx->rbac->roles->value.object.size; i++) {
-      const char* current_role_id = ctx->rbac->roles->value.object.entries[i].key;
-      json_value_t* current_role = ctx->rbac->roles->value.object.entries[i].value;
-      
-      if (strcmp(current_role_id, role_id) != 0 && current_role->type == JSON_OBJECT) {
-        json_value_t* current_name = json_object_get(current_role, "name");
-        if (current_name && current_name->type == JSON_STRING && 
-          strcmp(current_name->value.string, new_name) == 0) {
-          json_free(body);
-          return create_http_response(HTTP_CONFLICT, 
-                       "{\"error\":\"Role name already exists\"}", "application/json");
+    /* Check if name is already taken by another role in database */
+    json_value_t* name_query = json_create_object();
+    json_object_set(name_query, "type", json_create_string("role"));
+    json_object_set(name_query, "library", json_create_string("system"));
+    json_object_set(name_query, "name", json_create_string(new_name));
+    
+    json_value_t* name_result = storage_query_documents(ctx->db, name_query);
+    json_free(name_query);
+    
+    if (name_result) {
+      json_value_t* name_docs = json_object_get(name_result, "documents");
+      if (name_docs && name_docs->type == JSON_ARRAY) {
+        for (size_t i = 0; i < name_docs->value.array.size; i++) {
+          json_value_t* existing_role = json_array_get(name_docs, i);
+          if (existing_role && existing_role->type == JSON_OBJECT) {
+            const char* existing_uuid = json_object_get_string(existing_role, "uuid");
+            if (existing_uuid && strcmp(existing_uuid, role_id) != 0) {
+              json_free(name_result);
+              json_free(body);
+              json_free(role_result);
+              return create_http_response(HTTP_CONFLICT, 
+                           "{\"error\":\"Role name already exists\"}", "application/json");
+            }
+          }
         }
       }
+      json_free(name_result);
     }
     
     /* Update name */
@@ -3697,25 +3930,44 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
       if (user_id_val && user_id_val->type == JSON_STRING) {
         const char* user_id_str = user_id_val->value.string;
         
-        /* Get user */
-        json_value_t* user_obj = json_object_get(ctx->rbac->users, user_id_str);
-        if (user_obj && user_obj->type == JSON_OBJECT) {
-          /* Get user roles */
-          json_value_t* user_roles = json_object_get(user_obj, "roles");
-          if (user_roles && user_roles->type == JSON_ARRAY) {
-            /* Find role in user */
-            for (size_t j = 0; j < user_roles->value.array.size; j++) {
-              json_value_t* id = user_roles->value.array.items[j];
-              if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
-                /* Remove role from user */
-                for (size_t k = j; k < user_roles->value.array.size - 1; k++) {
-                  user_roles->value.array.items[k] = user_roles->value.array.items[k + 1];
+        /* Get user from database */
+        json_value_t* user_query = json_create_object();
+        json_object_set(user_query, "type", json_create_string("user"));
+        json_object_set(user_query, "uuid", json_create_string(user_id_str));
+        json_object_set(user_query, "library", json_create_string("system"));
+        
+        json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+        json_free(user_query);
+        
+        if (user_result) {
+          json_value_t* user_docs = json_object_get(user_result, "documents");
+          if (user_docs && user_docs->type == JSON_ARRAY && user_docs->value.array.size > 0) {
+            json_value_t* user_obj = json_array_get(user_docs, 0);
+            if (user_obj && user_obj->type == JSON_OBJECT) {
+              /* Get user roles */
+              json_value_t* user_roles = json_object_get(user_obj, "roles");
+              if (user_roles && user_roles->type == JSON_ARRAY) {
+                /* Find role in user */
+                for (size_t j = 0; j < user_roles->value.array.size; j++) {
+                  json_value_t* id = user_roles->value.array.items[j];
+                  if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
+                    /* Remove role from user */
+                    for (size_t k = j; k < user_roles->value.array.size - 1; k++) {
+                      user_roles->value.array.items[k] = user_roles->value.array.items[k + 1];
+                    }
+                    user_roles->value.array.size--;
+                    break;
+                  }
                 }
-                user_roles->value.array.size--;
-                break;
+                /* Update user document in database */
+                const char* user_uuid = json_object_get_string(user_obj, "uuid");
+                if (user_uuid) {
+                  storage_update_document(ctx->db, user_uuid, user_obj);
+                }
               }
             }
           }
+          json_free(user_result);
         }
       }
     }
@@ -3739,34 +3991,54 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
       }
       
       if (user_id_str) {
-        /* Check if user exists */
-        json_value_t* user_obj = json_object_get(ctx->rbac->users, user_id_str);
-        if (user_obj && user_obj->type == JSON_OBJECT) {
-          /* Add user to role */
-          json_array_append(current_users, json_create_string(user_id_str));
-          
-          /* Add role to user's roles */
-          json_value_t* user_roles = json_object_get(user_obj, "roles");
-          if (!user_roles || user_roles->type != JSON_ARRAY) {
-            /* Create roles array if it doesn't exist */
-            user_roles = json_create_array();
-            json_object_set(user_obj, "roles", user_roles);
-          }
-          
-          /* Check if role is already in user's roles */
-          int role_found = 0;
-          for (size_t j = 0; j < user_roles->value.array.size; j++) {
-            json_value_t* id = user_roles->value.array.items[j];
-            if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
-              role_found = 1;
-              break;
+        /* Check if user exists in database */
+        json_value_t* user_query = json_create_object();
+        json_object_set(user_query, "type", json_create_string("user"));
+        json_object_set(user_query, "uuid", json_create_string(user_id_str));
+        json_object_set(user_query, "library", json_create_string("system"));
+        
+        json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+        json_free(user_query);
+        
+        if (user_result) {
+          json_value_t* user_docs = json_object_get(user_result, "documents");
+          if (user_docs && user_docs->type == JSON_ARRAY && user_docs->value.array.size > 0) {
+            json_value_t* user_obj = json_array_get(user_docs, 0);
+            if (user_obj && user_obj->type == JSON_OBJECT) {
+              /* Add user to role */
+              json_array_append(current_users, json_create_string(user_id_str));
+              
+              /* Add role to user's roles */
+              json_value_t* user_roles = json_object_get(user_obj, "roles");
+              if (!user_roles || user_roles->type != JSON_ARRAY) {
+                /* Create roles array if it doesn't exist */
+                user_roles = json_create_array();
+                json_object_set(user_obj, "roles", user_roles);
+              }
+              
+              /* Check if role is already in user's roles */
+              int role_found = 0;
+              for (size_t j = 0; j < user_roles->value.array.size; j++) {
+                json_value_t* id = user_roles->value.array.items[j];
+                if (id->type == JSON_STRING && strcmp(id->value.string, role_id) == 0) {
+                  role_found = 1;
+                  break;
+                }
+              }
+              
+              /* Add role to user if not already present */
+              if (!role_found) {
+                json_array_append(user_roles, json_create_string(role_id));
+              }
+              
+              /* Update user document in database */
+              const char* user_uuid = json_object_get_string(user_obj, "uuid");
+              if (user_uuid) {
+                storage_update_document(ctx->db, user_uuid, user_obj);
+              }
             }
           }
-          
-          /* Add role to user if not already present */
-          if (!role_found) {
-            json_array_append(user_roles, json_create_string(role_id));
-          }
+          json_free(user_result);
         }
       }
     }
@@ -3804,17 +4076,14 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   /* Add users array */
   json_value_t* users_array = json_create_array();
   
-  /* Get role users from JSON data */
-  role_json = json_object_get(ctx->rbac->roles, role_id);
-  if (role_json && role_json->type == JSON_OBJECT) {
-    json_value_t* users = json_object_get(role_json, "users");
-    if (users && users->type == JSON_ARRAY) {
-      for (size_t i = 0; i < users->value.array.size; i++) {
-        json_value_t* user_id_val = users->value.array.items[i];
-        if (user_id_val && user_id_val->type == JSON_STRING) {
-          /* Add user ID to array */
-          json_array_append(users_array, json_create_string(user_id_val->value.string));
-        }
+  /* Get role users from the role_json we already have */
+  json_value_t* users = json_object_get(role_json, "users");
+  if (users && users->type == JSON_ARRAY) {
+    for (size_t i = 0; i < users->value.array.size; i++) {
+      json_value_t* user_id_val = users->value.array.items[i];
+      if (user_id_val && user_id_val->type == JSON_STRING) {
+        /* Add user ID to array */
+        json_array_append(users_array, json_create_string(user_id_val->value.string));
       }
     }
   }
@@ -3826,10 +4095,17 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   /* Serialize response */
   char* response_str = json_stringify(response);
   
+  /* Update the role document in the database */
+  const char* role_uuid = json_object_get_string(role_json, "uuid");
+  if (role_uuid) {
+    storage_update_document(ctx->db, role_uuid, role_json);
+  }
+  
   /* Free resources */
   json_free(response);
   json_free(body);
   rbac_free_role(role);
+  json_free(role_result);
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -3886,22 +4162,39 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   
   jwt_free(jwt);
   
-  /* Check if role exists */
-  if (!json_object_has(ctx->rbac->roles, role_id)) {
+  /* Check if role exists in database */
+  json_value_t* role_query = json_create_object();
+  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "uuid", json_create_string(role_id));
+  json_object_set(role_query, "library", json_create_string("system"));
+  
+  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_free(role_query);
+  
+  if (!role_result) {
+    return create_http_response(HTTP_NOT_FOUND, 
+                 "{\"error\":\"Role not found\"}", "application/json");
+  }
+  
+  json_value_t* role_docs = json_object_get(role_result, "documents");
+  if (!role_docs || role_docs->type != JSON_ARRAY || role_docs->value.array.size == 0) {
+    json_free(role_result);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Role not found\"}", "application/json");
   }
   
   /* Special case: Don't allow deletion of the admin role */
-  json_value_t* role_json = json_object_get(ctx->rbac->roles, role_id);
+  json_value_t* role_json = json_array_get(role_docs, 0);
   if (role_json && role_json->type == JSON_OBJECT) {
     json_value_t* name_val = json_object_get(role_json, "name");
     if (name_val && name_val->type == JSON_STRING && 
       strcmp(name_val->value.string, "admin") == 0) {
+      json_free(role_result);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Cannot delete the admin role\"}", "application/json");
     }
   }
+  json_free(role_result);
   
   /* Delete role */
   if (!rbac_delete_role(ctx->rbac, role_id)) {

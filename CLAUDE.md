@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 16, 2025 (v6.3.0 - REVOLUTIONARY MEMORY MANAGER with Checkpoint-Based Allocation)
+**Last Updated**: June 16, 2025 (v6.4.0 - RBAC Database Single Source of Truth)
 
 ## Core Principles
 
@@ -74,6 +74,43 @@ memory_promote(ptr);                                // Promote allocation to sur
 - **Performance**: Zero overhead for allocations outside checkpoints
 - **Debugging**: Magic number validation detects memory corruption
 - **Zero Leaks**: Comprehensive testing shows zero memory leaks
+
+## 🏛️ RBAC DATABASE SINGLE SOURCE OF TRUTH (v6.4.0)
+
+**JDBX has eliminated all in-memory RBAC storage, making the database the single source of truth for all authentication and authorization.**
+
+### 🎯 **RBAC TRANSFORMATION ACHIEVEMENT:**
+- **🗄️ DATABASE-ONLY STORAGE**: Removed in-memory `rbac->users` and `rbac->roles` structures
+- **🔐 SECURITY FIX**: Eliminated hardcoded "admin" password backdoor vulnerability
+- **📊 SCALABILITY**: No memory limitations from loading all users/roles into RAM
+- **🎯 TRUE SINGLE SOURCE**: All RBAC queries go directly to database with adaptive indexing
+- **🧹 CODE CLEANUP**: Removed ~500 lines of synchronization and persistence code
+
+### Core RBAC Architecture:
+1. **Simplified Structure**: `rbac_system_t` now only contains database pointer and JWT secret
+2. **Direct Database Queries**: All permission checks query live data from database
+3. **Adaptive Indexing**: Frequently queried RBAC data automatically indexed for performance
+4. **Thread Safety**: Database handles concurrent access with proper locking
+5. **Zero Duplication**: No in-memory copies means no synchronization issues
+
+### RBAC API Changes:
+```c
+// BEFORE: In-memory access
+json_value_t* user = json_object_get(rbac->users, user_id);
+
+// AFTER: Direct database query
+json_value_t* query = json_create_object();
+json_object_set(query, "uuid", json_create_string(user_id));
+json_object_set(query, "type", json_create_string("user"));
+json_object_set(query, "library", json_create_string("system"));
+json_value_t* result = storage_query_documents(rbac->db, query);
+```
+
+### Security Improvements:
+- **No Hardcoded Passwords**: Removed development backdoor in `verify_password()`
+- **Proper Password Verification**: All passwords verified against stored hashes
+- **Session Library Fix**: Sessions correctly queried from "system" library
+- **Complete Audit Trail**: All RBAC operations logged with database queries
 
 ## 🔒 ENTERPRISE CONFIGURATION SECURITY (v6.2.0)
 

@@ -201,6 +201,8 @@ json_value_t* rbac_refcount_get_roles(rbac_refcount_t* rbac) {
 
 /**
  * Convert between regular RBAC and reference counted RBAC
+ * Note: Since RBAC now uses database as single source of truth,
+ * these functions create empty structures for compatibility only.
  */
 rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
   if (!rbac) {
@@ -212,9 +214,10 @@ rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
     return NULL;
   }
   
-  /* Create reference counted wrappers for the JSON objects */
-  ref_rbac->users = ref_json_create(rbac->users);
-  ref_rbac->roles = ref_json_create(rbac->roles);
+  /* Create empty reference counted JSON objects for compatibility */
+  /* In the new architecture, users and roles are stored in the database */
+  ref_rbac->users = ref_json_create(json_create_object());
+  ref_rbac->roles = ref_json_create(json_create_object());
   
   if (!ref_rbac->users || !ref_rbac->roles) {
     if (ref_rbac->users) ref_json_release(ref_rbac->users);
@@ -222,11 +225,6 @@ rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
     BUFFER_FREE(ref_rbac);
     return NULL;
   }
-  
-  /* Clear the pointers in the original RBAC to prevent double-free */
-  /* FIXME: This breaks the API which still uses the original RBAC pointer */
-  /* rbac->users = NULL; */
-  /* rbac->roles = NULL; */
   
   return ref_rbac;
 }
@@ -241,9 +239,10 @@ rbac_system_t* rbac_from_refcount(rbac_refcount_t* rbac) {
     return NULL;
   }
   
-  /* Get the underlying JSON objects */
-  reg_rbac->users = ref_json_get(rbac->users);
-  reg_rbac->roles = ref_json_get(rbac->roles);
+  /* The new RBAC system only needs database and JWT secret */
+  /* Users and roles are accessed directly from the database */
+  reg_rbac->db = NULL;  /* Database reference should be set by caller */
+  reg_rbac->jwt_secret = NULL;  /* JWT secret should be set by caller */
   
   return reg_rbac;
 }

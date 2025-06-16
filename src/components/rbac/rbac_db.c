@@ -243,174 +243,41 @@ rbac_system_t* rbac_db_load(database_t* db) {
     return NULL;
   }
   
-  /* Initialize users and roles containers */
-  rbac->users = json_create_object();
-  rbac->roles = json_create_object();
+  /* Initialize RBAC structure */
+  memset(rbac, 0, sizeof(rbac_system_t));
   
-  if (!rbac->users || !rbac->roles) {
-    if (rbac->users) json_free(rbac->users);
-    if (rbac->roles) json_free(rbac->roles);
-    BUFFER_FREE(rbac);
-    return NULL;
-  }
+  /* Set database pointer - this is the single source of truth */
+  rbac->db = db;
   
-  /* Load all users */
-  json_value_t* all_users_query = json_create_object();
-  json_value_t* users_result = storage_query_documents(db, all_users_query);
-  json_free(all_users_query);
-  
-  /* Extract documents array from response object */
-  json_value_t* users_documents = json_object_get(users_result, "documents");
-  if (!users_documents || users_documents->type != JSON_ARRAY) {
-    if (users_result) json_free(users_result);
-    rbac_free(rbac);
-    return NULL;
-  }
-  
-  /* Add each user to users object */
-  for (size_t i = 0; i < users_documents->value.array.size; i++) {
-    json_value_t* user_doc = users_documents->value.array.items[i];
-    if (user_doc->type == JSON_OBJECT) {
-      json_value_t* id_val = json_object_get(user_doc, "id");
-      if (id_val && id_val->type == JSON_STRING) {
-        /* Deep copy the user document */
-        char* user_str = json_stringify(user_doc);
-        json_value_t* user_copy = json_parse(user_str);
-        BUFFER_FREE(user_str);
-        
-        if (user_copy) {
-          json_object_set(rbac->users, id_val->value.string, user_copy);
-        }
-      }
-    }
-  }
-  
-  json_free(users_result);
-  
-  /* Load all roles */
-  json_value_t* all_roles_query = json_create_object();
-  json_value_t* roles_result = storage_query_documents(db, all_roles_query);
-  json_free(all_roles_query);
-  
-  /* Extract documents array from response object */
-  json_value_t* roles_documents = json_object_get(roles_result, "documents");
-  if (!roles_documents || roles_documents->type != JSON_ARRAY) {
-    if (roles_result) json_free(roles_result);
-    rbac_free(rbac);
-    return NULL;
-  }
-  
-  /* Add each role to roles object */
-  for (size_t i = 0; i < roles_documents->value.array.size; i++) {
-    json_value_t* role_doc = roles_documents->value.array.items[i];
-    if (role_doc->type == JSON_OBJECT) {
-      json_value_t* id_val = json_object_get(role_doc, "id");
-      if (id_val && id_val->type == JSON_STRING) {
-        /* Deep copy the role document */
-        char* role_str = json_stringify(role_doc);
-        json_value_t* role_copy = json_parse(role_str);
-        BUFFER_FREE(role_str);
-        
-        if (role_copy) {
-          json_object_set(rbac->roles, id_val->value.string, role_copy);
-        }
-      }
-    }
-  }
-  
-  json_free(roles_result);
+  /* SINGLE SOURCE OF TRUTH: Database handles all user/role storage */
+  /* No in-memory structures to populate - all data stays in database */
   
   return rbac;
 }
 
 /* Save RBAC system to database */
 int rbac_db_save(database_t* db, rbac_system_t* rbac) {
-  if (!db || !rbac) {
+  if (!db) {
     return 0;
   }
+  
+  /* Note: rbac parameter is kept for compatibility but not used since
+   * we use database as single source of truth */
+  (void)rbac;
   
   /* Initialize RBAC collections if they don't exist */
   rbac_db_status_t status = rbac_db_init_collections(db);
   if (!status.success) {
-    LOG_ERROR("initialize RBAC collections: %s", status.error_message);
+    LOG_ERROR("Failed to initialize RBAC collections: %s", status.error_message);
     if (status.error_message) BUFFER_FREE(status.error_message);
     return 0;
   }
   
-  /* Clear existing users and roles */
-  json_value_t* clear_query = json_create_object();
+  /* With database as single source of truth, there's nothing to "save" from memory.
+   * All RBAC data is already persisted in the database as it's created/modified.
+   * This function now just ensures the collections exist. */
   
-  /* Get all users */
-  json_value_t* existing_users = storage_query_documents(db, clear_query);
-  if (existing_users && existing_users->type == JSON_ARRAY) {
-    /* Delete each user */
-    for (size_t i = 0; i < existing_users->value.array.size; i++) {
-      json_value_t* user = existing_users->value.array.items[i];
-      if (user->type == JSON_OBJECT) {
-        json_value_t* id_val = json_object_get(user, "id");
-        if (id_val && id_val->type == JSON_STRING) {
-          storage_delete_document(db, id_val->value.string);
-        }
-      }
-    }
-    json_free(existing_users);
-  }
-  
-  /* Get all roles */
-  json_value_t* existing_roles = storage_query_documents(db, clear_query);
-  if (existing_roles && existing_roles->type == JSON_ARRAY) {
-    /* Delete each role */
-    for (size_t i = 0; i < existing_roles->value.array.size; i++) {
-      json_value_t* role = existing_roles->value.array.items[i];
-      if (role->type == JSON_OBJECT) {
-        json_value_t* id_val = json_object_get(role, "id");
-        if (id_val && id_val->type == JSON_STRING) {
-          storage_delete_document(db, id_val->value.string);
-        }
-      }
-    }
-    json_free(existing_roles);
-  }
-  
-  json_free(clear_query);
-  
-  /* Save users */
-  for (size_t i = 0; i < rbac->users->value.object.size; i++) {
-    const char* user_id = rbac->users->value.object.entries[i].key;
-    json_value_t* user = rbac->users->value.object.entries[i].value;
-    
-    if (user->type == JSON_OBJECT) {
-      /* Insert user into database */
-      json_value_t* user_copy = json_clone(user);
-      json_value_t* result = storage_insert_document(db, user_copy);
-      
-      if (!result) {
-        LOG_ERROR("insert user %s into database", user_id);
-        return 0;
-      }
-      
-      json_free(result);
-    }
-  }
-  
-  /* Save roles */
-  for (size_t i = 0; i < rbac->roles->value.object.size; i++) {
-    const char* role_id = rbac->roles->value.object.entries[i].key;
-    json_value_t* role = rbac->roles->value.object.entries[i].value;
-    
-    if (role->type == JSON_OBJECT) {
-      /* Insert role into database */
-      json_value_t* role_copy = json_clone(role);
-      json_value_t* result = storage_insert_document(db, role_copy);
-      
-      if (!result) {
-        LOG_ERROR("insert role %s into database", role_id);
-        return 0;
-      }
-      
-      json_free(result);
-    }
-  }
+  LOG_INFO("RBAC collections verified. Database is the single source of truth.");
   
   return 1;
 }

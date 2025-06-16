@@ -31,7 +31,7 @@ fi
 echo -e "\n${YELLOW}Testing: Authentication${NC}"
 LOGIN=$(curl -sk -X POST "$HOST/api/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"username": "admin", "password": "admin"}')
+    -d '{"username": "admin", "password": "admin123456789"}')
 
 TOKEN=$(echo "$LOGIN" | jq -r '.token' 2>/dev/null)
 if [ "$TOKEN" != "null" ] && [ -n "$TOKEN" ]; then
