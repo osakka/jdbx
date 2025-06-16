@@ -624,8 +624,14 @@ int rbac_revoke_permission(rbac_system_t* rbac, const char* role_id, rbac_resour
 int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resource_type_t resource_type, 
              const char* resource_id, rbac_permission_t permission) {
   if (!rbac || !user_id || !resource_id || !rbac->db) {
+    LOG_DEBUG("rbac_check_permission: Invalid parameters - rbac=%p, user_id=%s, resource_id=%s, db=%p",
+              rbac, user_id ? user_id : "NULL", resource_id ? resource_id : "NULL", 
+              rbac ? rbac->db : NULL);
     return 0;
   }
+
+  LOG_DEBUG("rbac_check_permission: Checking permission for user_id='%s', resource_type=%d, resource_id='%s', permission=%d",
+            user_id, resource_type, resource_id, permission);
 
   /* SINGLE SOURCE OF TRUTH: Query user directly from database */
   json_value_t* user_query = json_create_object();
@@ -637,8 +643,11 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
   json_free(user_query);
   
   if (!user_results) {
+    LOG_DEBUG("rbac_check_permission: No user results found for user_id='%s'", user_id);
     return 0;
   }
+  
+  LOG_DEBUG("rbac_check_permission: User query returned results");
   
   json_value_t* user_docs = json_object_get(user_results, "documents");
   if (!user_docs || user_docs->type != JSON_ARRAY || json_array_size(user_docs) == 0) {

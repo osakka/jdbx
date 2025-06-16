@@ -570,7 +570,12 @@ int virtual_delete(database_t* db, const char* uuid) {
 json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     (void)db; // Use global database
     
-    LOG_DEBUG("Storage query on unified collection");
+    LOG_DEBUG("Storage query on unified collection with query=%p", query);
+    
+    if (!query) {
+        LOG_WARNING("storage_query_documents called with NULL query");
+        return NULL;
+    }
     
     pthread_rwlock_rdlock(&g_db.lock);
     library_t* lib = get_or_create_library(STORAGE_LIBRARY);
