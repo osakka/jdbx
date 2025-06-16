@@ -494,6 +494,10 @@ int api_authenticate_request(api_context_t* ctx, http_request_t* request) {
       }
     }
     if (g_logger) LOG_DEBUG("JWT cache hit - token valid for user: %s", username);
+    
+    /* CRITICAL: Free the duplicated payload returned by jwt_cache_get */
+    jwt_payload_free(cached_payload);
+    
     BUFFER_FREE(token);
     return 1;
   }

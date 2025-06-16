@@ -17,8 +17,11 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* Query all sessions */
+  /* Query all sessions - filter by type and collection */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+  json_object_set(query, "library", json_create_string("system"));
+  json_object_set(query, "collection", json_create_string("sessions"));
   json_value_t* results = storage_query_documents(ctx->db, query);
   json_free(query);
   
@@ -97,6 +100,9 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   
   /* Query active sessions */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+  json_object_set(query, "library", json_create_string("system"));
+  json_object_set(query, "collection", json_create_string("sessions"));
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = storage_query_documents(ctx->db, query);

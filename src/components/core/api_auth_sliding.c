@@ -216,6 +216,9 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     /* Extend session expiration for sliding sessions */
     extend_session_expiration(ctx, token);
     
+    /* CRITICAL: Free the duplicated payload returned by jwt_cache_get */
+    jwt_payload_free(cached_payload);
+    
     BUFFER_FREE(token);
     return 1;
   }

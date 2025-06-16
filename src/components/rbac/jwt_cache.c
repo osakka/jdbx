@@ -195,13 +195,20 @@ jwt_payload_t* jwt_cache_get(const char* token) {
             /* Check if entry is expired */
             if (now < entry->expiry && now < entry->cached_at + CACHE_TTL_SECONDS) {
                 g_jwt_cache->hits++;
-                jwt_payload_t* claims = entry->claims;
                 
-                /* RACE CONDITION FIX: Keep read lock and defer LRU update */
+                /* CRITICAL FIX: Duplicate the payload before releasing the lock to prevent use-after-free */
+                jwt_payload_t* claims_copy = jwt_payload_duplicate(entry->claims);
+                const char* username = entry->username ? entry->username : "unknown";
+                
                 pthread_rwlock_unlock(&g_jwt_cache->lock);
                 
-                LOG_INFO("JWT cache hit for user: %s", entry->username);
-                return claims;
+                if (claims_copy) {
+                    LOG_INFO("JWT cache hit for user: %s", username);
+                    return claims_copy;
+                } else {
+                    LOG_ERROR("Failed to duplicate JWT payload for user: %s", username);
+                    return NULL;
+                }
             } else {
                 /* Entry expired */
                 TRACE_RBAC("JWT cache entry expired for user: %s", entry->username);
@@ -280,12 +287,18 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
         return;
     }
     
+    /* Initialize all fields to prevent uninitialized memory access */
+    memset(new_entry, 0, sizeof(jwt_cache_entry_t));
+    
     new_entry->token_hash = BUFFER_STRDUP(token_hash);
     new_entry->claims = claims;  /* Cache takes ownership */
     new_entry->username = username ? BUFFER_STRDUP(username) : NULL;
     new_entry->user_id = user_id ? BUFFER_STRDUP(user_id) : NULL;
     new_entry->expiry = claims->exp;
     new_entry->cached_at = now;
+    new_entry->next = NULL;
+    new_entry->lru_prev = NULL;
+    new_entry->lru_next = NULL;
     
     /* Add to bucket chain */
     new_entry->next = g_jwt_cache->buckets[bucket];
