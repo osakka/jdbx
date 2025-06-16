@@ -42,7 +42,8 @@ System design and technical deep-dives
 - **[Core Concepts](architecture/core-concepts/)** - Unified documents, buffer pool, threading model
 - **[Security Architecture](architecture/security/)** - RBAC design, authentication, field-level security
 - **[Performance Architecture](architecture/performance/)** - Memory management, optimization strategies
-- **[Design Decisions](architecture/design-decisions/)** - Architecture Decision Records (ADRs) *(Coming Soon)*
+- **[Architectural Decisions](architecture/ARCHITECTURAL_DECISIONS.md)** - Complete Architecture Decision Records (ADRs)
+- **[Design Decisions](architecture/design-decisions/)** - Implementation patterns and choices
 
 ### 🔒 **Security**
 Security guidelines and compliance information
@@ -63,6 +64,7 @@ For contributors and maintainers
 - **[Building & Testing](development/building/)** - Build instructions and testing procedures *(Coming Soon)*
 - **[Documentation](development/documentation/)** - Documentation writing and maintenance standards
 - **[Processes](development/processes/)** - Development workflows and release management *(Coming Soon)*
+- **[Changelog](development/changelog.md)** - Complete version history and release notes
 
 ### 📦 **Examples**
 Working code examples and templates
@@ -89,7 +91,8 @@ Working code examples and templates
 
 ## 🏷️ **Documentation by Version**
 
-- **v6.2.0** (Current) - Enterprise Configuration Security Complete
+- **v6.3.0** (Current) - Revolutionary Memory Manager with Checkpoint-Based Allocation
+- **v6.2.0** - Enterprise Configuration Security Complete
 - **v6.1.0** - Buffer Pool Memory Architecture
 - **v6.0.0** - TRUE Unified Documents Architecture
 
