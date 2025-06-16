@@ -61,6 +61,107 @@ server_config_t* g_server_config = NULL;
 /* Path to the executable's directory, used for resolving relative paths */
 static char g_binary_dir[PATH_MAX] = {0};
 
+/* JWT Secret Generation */
+/**
+ * Generate a cryptographically secure JWT secret
+ * 
+ * @return Newly allocated random JWT secret (caller must free with BUFFER_FREE)
+ */
+static char* generate_jwt_secret(void) {
+    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=-_";
+    const int secret_length = 64; /* 64 characters = ~384 bits of entropy */
+    
+    char* secret = BUFFER_ALLOC(secret_length + 1);
+    if (!secret) {
+        LOG_ERROR("Failed to allocate memory for JWT secret generation");
+        return NULL;
+    }
+    
+    /* Use /dev/urandom for cryptographic randomness */
+    FILE* urandom = fopen("/dev/urandom", "rb");
+    if (!urandom) {
+        LOG_ERROR("Failed to open /dev/urandom for JWT secret generation: %s", strerror(errno));
+        BUFFER_FREE(secret);
+        return NULL;
+    }
+    
+    for (int i = 0; i < secret_length; i++) {
+        unsigned char byte;
+        if (fread(&byte, 1, 1, urandom) != 1) {
+            LOG_ERROR("Failed to read random bytes for JWT secret generation");
+            fclose(urandom);
+            BUFFER_FREE(secret);
+            return NULL;
+        }
+        secret[i] = charset[byte % (sizeof(charset) - 1)];
+    }
+    
+    secret[secret_length] = '\0';
+    fclose(urandom);
+    
+    LOG_INFO("Generated cryptographically secure JWT secret (%d characters)", secret_length);
+    return secret;
+}
+
+/**
+ * Load JWT secret with three-tier priority system
+ * 
+ * Priority order:
+ * 1. Database configuration (highest) - persistent across restarts
+ * 2. Environment variable JDBX_JWT_SECRET (medium)
+ * 3. Auto-generated secure random secret (fallback)
+ * 
+ * @param config Server configuration to update
+ * @return 0 on success, -1 on error
+ */
+static int load_jwt_secret_secure(server_config_t* config) {
+    char* jwt_secret = NULL;
+    int used_secure_method = 0;
+    
+    /* 1. Database configuration handled later in config flow */
+    /* 2. Check environment variable (medium priority) */
+    const char* env_secret = getenv("JDBX_JWT_SECRET");
+    if (env_secret && strlen(env_secret) >= DEFAULT_JWT_SECRET_MIN_LENGTH) {
+        jwt_secret = BUFFER_STRDUP(env_secret);
+        used_secure_method = 1;
+        LOG_INFO("JWT secret loaded from environment variable JDBX_JWT_SECRET");
+    }
+    
+    /* 3. Auto-generate secure random secret (fallback) */
+    if (!jwt_secret) {
+        jwt_secret = generate_jwt_secret();
+        if (jwt_secret) {
+            used_secure_method = 1;
+            LOG_INFO("Generated new cryptographically secure JWT secret");
+        } else {
+            LOG_ERROR("Failed to generate secure JWT secret, using insecure placeholder");
+        }
+    }
+    
+    /* Last resort: insecure placeholder with security warning */
+    if (!jwt_secret) {
+        jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET_PLACEHOLDER);
+        LOG_ERROR("SECURITY CRITICAL: Using insecure placeholder JWT secret! "
+                  "This is a SEVERE SECURITY RISK in production. "
+                  "Set JDBX_JWT_SECRET environment variable or enable database configuration.");
+        used_secure_method = 0;
+    }
+    
+    /* Validate secret length */
+    if (jwt_secret && strlen(jwt_secret) < DEFAULT_JWT_SECRET_MIN_LENGTH) {
+        LOG_WARNING("JWT secret is shorter than recommended minimum length (%d characters). "
+                   "Consider using a longer secret for better security.", DEFAULT_JWT_SECRET_MIN_LENGTH);
+    }
+    
+    /* Update configuration */
+    if (config->jwt_secret) {
+        BUFFER_FREE(config->jwt_secret);
+    }
+    config->jwt_secret = jwt_secret;
+    
+    return used_secure_method ? 0 : -1;
+}
+
 /* JDBX file path utilities */
 char* jdbx_generate_db_path(const char* basename) {
   if (!basename) return NULL;
@@ -765,9 +866,9 @@ int config_load_json(const char* filepath, server_config_t* config) {
               LOG_WARNING("JWT secret is too short (< 16 chars), this is a security risk.");
             }
             
-            if (secret_val->value.string && strcmp(secret_val->value.string, DEFAULT_JWT_SECRET) == 0) {
-              LOG_ERROR("Using default JWT secret in configuration - "
-                  "this is a SEVERE SECURITY RISK in production!");
+            if (secret_val->value.string && strcmp(secret_val->value.string, DEFAULT_JWT_SECRET_PLACEHOLDER) == 0) {
+              LOG_ERROR("SECURITY CRITICAL: Using insecure placeholder JWT secret in configuration - "
+                        "this is a SEVERE SECURITY RISK in production!");
             }
           }
         } else {
@@ -778,27 +879,27 @@ int config_load_json(const char* filepath, server_config_t* config) {
         }
       } else {
         if (g_logger) {
-          LOG_WARNING("No JWT secret specified, using default (INSECURE for production).");
-          
-          /* Only in debug, never log secrets at INFO or above */
-          TRACE_API("Using default JWT secret: %s", DEFAULT_JWT_SECRET);
+          LOG_WARNING("No JWT secret specified in configuration, using secure fallback.");
         }
         
-        config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
+        /* Use secure JWT secret loading with three-tier priority */
+        load_jwt_secret_secure(config);
       }
     } else {
       if (g_logger) {
-        LOG_WARNING("'jwt' section is not an object (found %s), using defaults", 
+        LOG_WARNING("'jwt' section is not an object (found %s), using secure fallback", 
               json_type_name(jwt_section->type));
       }
       
-      config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
+      /* Use secure JWT secret loading with three-tier priority */
+      load_jwt_secret_secure(config);
     }
   } else {
     if (g_logger) {
-      LOG_WARNING("No 'jwt' section found in config, using default secret (INSECURE for production).");
-      config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
+      LOG_WARNING("No 'jwt' section found in config, using secure fallback.");
     }
+    /* Use secure JWT secret loading with three-tier priority */
+    load_jwt_secret_secure(config);
   }
   
   /* Parse SSL section */
@@ -1863,8 +1964,8 @@ void config_init_defaults(server_config_t* config) {
   /* Web root path */
   config->web_root = config_get_web_root();
   
-  /* Security settings */
-  config->jwt_secret = BUFFER_STRDUP(DEFAULT_JWT_SECRET);
+  /* Security settings - JWT secret with three-tier priority */
+  load_jwt_secret_secure(config);
   
   /* Initialize CORS configuration */
   init_cors_config(&config->cors);

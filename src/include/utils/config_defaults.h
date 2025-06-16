@@ -67,8 +67,19 @@
  * Security Defaults
  *============================================================================*/
 
-/** Default JWT secret (SHOULD BE CHANGED in production) */
-#define DEFAULT_JWT_SECRET "change-this-secret-in-production"
+/** JWT SECRET CONFIGURATION - Three-Tier Priority System
+ * 
+ * SECURITY IMPLEMENTATION: JWT secrets follow three-tier configuration priority:
+ * 1. Database config (highest) - Persistent across restarts
+ * 2. Environment variable JDBX_JWT_SECRET (medium) 
+ * 3. Auto-generated secure random secret (fallback)
+ * 
+ * CRITICAL: This placeholder is used only as an insecure fallback when
+ * all other methods fail. It triggers security warnings in logs.
+ */
+#define DEFAULT_JWT_SECRET_PLACEHOLDER "CHANGE_ME_INSECURE_DEFAULT_SECRET"
+#define DEFAULT_JWT_SECRET_AUTO_GENERATE 1
+#define DEFAULT_JWT_SECRET_MIN_LENGTH 32
 
 /*==============================================================================
  * Feature Defaults

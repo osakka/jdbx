@@ -316,6 +316,19 @@ int load_environment_config(server_config_t* config) {
     config->index_check_interval = atoi(index_check_interval);
   }
   
+  /* JWT secret configuration (environment variable support) */
+  const char* jwt_secret = getenv("JDBX_JWT_SECRET");
+  if (jwt_secret && strlen(jwt_secret) >= 16) {
+    BUFFER_FREE(config->jwt_secret);
+    config->jwt_secret = BUFFER_STRDUP(jwt_secret);
+    LOG_INFO("JWT secret loaded from environment variable JDBX_JWT_SECRET");
+    
+    /* Security validation */
+    if (strlen(jwt_secret) < 32) {
+      LOG_WARNING("JWT secret from environment is shorter than recommended 32 characters");
+    }
+  }
+  
   /* Apply log configuration to active logger if it exists */
   if (g_logger) {
     const char* runtime_log_level = getenv("JDBX_LOG_LEVEL");

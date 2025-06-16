@@ -313,6 +313,26 @@ int config_apply_database_settings(server_config_t* config, database_t* db) {
         }
     }
     
+    /* Apply JWT settings (highest priority in three-tier system) */
+    json_value_t* jwt = json_object_get(db_config, "jwt");
+    if (jwt && jwt->type == JSON_OBJECT) {
+        json_value_t* val;
+        
+        val = json_object_get(jwt, "secret");
+        if (val && val->type == JSON_STRING && strlen(val->value.string) >= 16) {
+            BUFFER_FREE(config->jwt_secret);
+            config->jwt_secret = BUFFER_STRDUP(val->value.string);
+            LOG_INFO("JWT secret updated from database configuration (highest priority)");
+            
+            /* Security validation */
+            if (strlen(val->value.string) < 32) {
+                LOG_WARNING("JWT secret from database is shorter than recommended 32 characters");
+            }
+        } else if (val) {
+            LOG_ERROR("Invalid JWT secret in database configuration (too short or wrong type)");
+        }
+    }
+    
     /* Notify callbacks of changes */
     config_callback_t* cb = callbacks;
     while (cb) {
@@ -395,6 +415,12 @@ json_value_t* config_to_json(server_config_t* config) {
     json_value_t* logging = json_create_object();
     json_object_set(logging, "level", json_create_string(logger_level_string(config->log_level)));
     json_object_set(root, "logging", logging);
+    
+    /* JWT settings (NOTE: JWT secret is NOT included in serialization for security) */
+    json_value_t* jwt = json_create_object();
+    json_object_set(jwt, "secret_configured", json_create_boolean(config->jwt_secret && strlen(config->jwt_secret) > 0));
+    json_object_set(jwt, "secret_length", json_create_integer(config->jwt_secret ? strlen(config->jwt_secret) : 0));
+    json_object_set(root, "jwt", jwt);
     
     return root;
 }
