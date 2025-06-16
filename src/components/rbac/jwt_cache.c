@@ -167,6 +167,10 @@ void jwt_cache_shutdown(void) {
 
 /* Get cached JWT payload */
 jwt_payload_t* jwt_cache_get(const char* token) {
+    /* BAR RAISING: Temporarily disable cache to test buffer pool document storage */
+    (void)token;
+    return NULL;
+    
     if (!g_jwt_cache || !token) return NULL;
     
     char token_hash[65];  /* SHA256 = 64 hex chars + null terminator */
@@ -178,6 +182,18 @@ jwt_payload_t* jwt_cache_get(const char* token) {
     
     jwt_cache_entry_t* entry = g_jwt_cache->buckets[bucket];
     while (entry) {
+        /* BAR RAISING: Buffer pool safety - comprehensive memory validation */
+        if ((uintptr_t)entry < 0x1000 || (uintptr_t)entry > 0x7fffffffffff) {
+            LOG_ERROR("JWT cache corruption - invalid entry pointer: %p", entry);
+            break;
+        }
+        
+        if (!entry->token_hash || (uintptr_t)entry->token_hash < 0x1000) {
+            LOG_ERROR("JWT cache corruption - invalid token_hash pointer: %p in entry %p", entry->token_hash, entry);
+            entry = entry->next;
+            continue;
+        }
+        
         if (strcmp(entry->token_hash, token_hash) == 0) {
             /* Check if entry is expired */
             if (now < entry->expiry && now < entry->cached_at + CACHE_TTL_SECONDS) {
@@ -195,7 +211,12 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                 break;
             }
         }
+        /* BAR RAISING: Buffer pool safety - validate next pointer before traversal */
         entry = entry->next;
+        if (entry && ((uintptr_t)entry < 0x1000 || (uintptr_t)entry > 0x7fffffffffff)) {
+            LOG_ERROR("JWT cache corruption detected - invalid next pointer: %p", entry);
+            break;
+        }
     }
     
     g_jwt_cache->misses++;

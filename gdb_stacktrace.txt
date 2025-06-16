@@ -1,0 +1,8 @@
+No executable file specified.
+Use the "file" or "exec-file" command.
+No stack.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Detaching after fork from child process 4016268]
+[Inferior 1 (process 4016265) exited normally]
+No stack.

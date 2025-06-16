@@ -369,7 +369,15 @@ bool skiplist_iterator_next(skiplist_iterator_t* iter,
                            void** value, size_t* value_len) {
     if (!iter || !iter->current) return false;
     
-    /* Return direct pointers to current item - no copying needed */
+    /* CRITICAL FIX: Protect next node BEFORE returning current node's data */
+    skiplist_node_t* next;
+    do {
+        next = atomic_load(&iter->current->next[0]);
+        next = (skiplist_node_t*)((uintptr_t)next & ~1);
+        HP_PROTECT_PTR(iter->hp_record, 1, next); /* Protect next in slot 1 */
+    } while (next && ((uintptr_t)atomic_load(&next->next[0]) & 1));
+    
+    /* Return direct pointers to current item - now safely protected */
     if (key) {
         *key = iter->current->key;
         if (key_len) *key_len = iter->current->key_len;
@@ -380,13 +388,9 @@ bool skiplist_iterator_next(skiplist_iterator_t* iter,
         if (value_len) *value_len = iter->current->value_len;
     }
     
-    /* Move to next non-marked node */
-    skiplist_node_t* next;
-    do {
-        next = atomic_load(&iter->current->next[0]);
-        iter->current = (skiplist_node_t*)((uintptr_t)next & ~1);
-        HP_PROTECT_PTR(iter->hp_record, 0, iter->current);
-    } while (iter->current && ((uintptr_t)atomic_load(&iter->current->next[0]) & 1));
+    /* Move to next node and update primary protection */
+    iter->current = next;
+    HP_PROTECT_PTR(iter->hp_record, 0, iter->current);
     
     return true;
 }

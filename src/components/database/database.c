@@ -604,13 +604,13 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     
     char* key;
     size_t key_len;
-    json_value_t** doc_ptr;
+    void* doc_ptr_data;
     size_t value_len;
     
-    while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr, &value_len)) {
-        if (!doc_ptr || !*doc_ptr) continue;
+    while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr_data, &value_len)) {
+        if (!doc_ptr_data || value_len != sizeof(json_value_t*)) continue;
         
-        json_value_t* doc = *doc_ptr;
+        json_value_t* doc = *(json_value_t**)doc_ptr_data;
         if (!doc || doc->type != JSON_OBJECT) continue;
         
         // Apply query filter if provided
@@ -651,6 +651,8 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
             json_array_append(filtered_docs, json_clone(doc));
             count++;
         }
+        
+        // Reference counting handles memory lifecycle automatically
     }
     
     skiplist_iterator_destroy(iter);
@@ -1024,8 +1026,15 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     pthread_rwlock_wrlock(&coll->lock);
     pthread_rwlock_unlock(&g_db.lock);
     
-    // Insert document into the single unified collection
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &doc_copy, sizeof(json_value_t*));
+    // BAR RAISING: Buffer pool managed JSON storage - allocate persistent pointer
+    json_value_t** doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
+    if (!doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        json_free(doc_copy);
+        return NULL;
+    }
+    *doc_ptr = json_deep_copy(doc_copy);
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1081,13 +1090,19 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
     
     // Find existing document in unified collection
     size_t value_len;
-    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
-    if (!doc_ptr || !*doc_ptr) {
+    void* raw_data = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
+    if (!raw_data || value_len != sizeof(json_value_t*)) {
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
     
+    // Extract JSON object from buffer pool managed pointer
+    json_value_t** doc_ptr = (json_value_t**)raw_data;
     json_value_t* existing_doc = *doc_ptr;
+    if (!existing_doc) {
+        pthread_rwlock_unlock(&coll->lock);
+        return NULL;
+    }
     
     // Verify this document matches the requested library/collection
     json_value_t* doc_library = json_object_get(existing_doc, "library");
@@ -1125,10 +1140,38 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
     // Update modified timestamp
     json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
     
-    // Replace document in unified collection with atomic operation
-    json_value_t* old_doc = (json_value_t*)__sync_lock_test_and_set((json_value_t**)doc_ptr, updated_doc);
-    (void)old_doc; // Intentionally unused - atomic replacement handles cleanup
-    __sync_synchronize();
+    // BAR RAISING: Buffer pool managed JSON storage - atomic replace with proper lifecycle management
+    // 1. Get reference to old data before deletion
+    size_t old_ptr_size;
+    void* old_ptr_data = skiplist_search(coll->documents, id, strlen(id) + 1, &old_ptr_size);
+    json_value_t** old_doc_ptr = NULL;
+    json_value_t* old_json = NULL;
+    
+    if (old_ptr_data && old_ptr_size == sizeof(json_value_t*)) {
+        old_doc_ptr = (json_value_t**)old_ptr_data;
+        old_json = *old_doc_ptr;
+    }
+    
+    // 2. Allocate new buffer pool managed pointer  
+    json_value_t** new_doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
+    if (!new_doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        json_free(updated_doc);
+        return NULL;
+    }
+    *new_doc_ptr = json_deep_copy(updated_doc);
+    
+    // 3. Atomic replace in skiplist
+    skiplist_delete(coll->documents, id, strlen(id) + 1);
+    skiplist_insert(coll->documents, id, strlen(id) + 1, new_doc_ptr, sizeof(json_value_t*));
+    
+    // 4. Free old resources after successful replacement
+    if (old_json) {
+        json_free(old_json);
+    }
+    if (old_doc_ptr) {
+        BUFFER_FREE(old_doc_ptr);
+    }
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1160,13 +1203,17 @@ int db_delete_document(database_t* db, const char* library, const char* collecti
     
     // Find and verify document in unified collection
     size_t value_len;
-    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
-    if (!doc_ptr || !*doc_ptr) {
+    void* raw_data = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
+    if (!raw_data || value_len != sizeof(json_value_t*)) {
         pthread_rwlock_unlock(&coll->lock);
         return 0;
     }
     
-    json_value_t* existing_doc = *doc_ptr;
+    json_value_t* existing_doc = *(json_value_t**)raw_data;
+    if (!existing_doc) {
+        pthread_rwlock_unlock(&coll->lock);
+        return 0;
+    }
     
     // Verify this document matches the requested library/collection
     json_value_t* doc_library = json_object_get(existing_doc, "library");
@@ -1178,7 +1225,8 @@ int db_delete_document(database_t* db, const char* library, const char* collecti
         return 0;
     }
     
-    // Delete document from unified collection
+    // Delete document from unified collection and free JSON object
+    json_free(existing_doc);
     int result = skiplist_delete(coll->documents, id, strlen(id) + 1);
     
     pthread_rwlock_unlock(&coll->lock);
@@ -1228,15 +1276,15 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
     
     char* key;
     size_t key_len;
-    json_value_t** doc_ptr;
+    void* ref_data;
     size_t value_len;
     
     LOG_DEBUG("Starting document iteration in unified collection");
     
-    while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr, &value_len)) {
-        if (!doc_ptr || !*doc_ptr) continue;
+    while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&ref_data, &value_len)) {
+        if (!ref_data || value_len != sizeof(json_value_t*)) continue;
         
-        json_value_t* doc = *doc_ptr;
+        json_value_t* doc = *(json_value_t**)ref_data;
         if (!doc || doc->type != JSON_OBJECT) continue;
         
         // Filter by library
@@ -1379,8 +1427,11 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
     
     int indexed_count = 0;
     while (skiplist_iterator_next(doc_iter, &doc_key, &doc_key_len, &doc_value, &doc_value_len)) {
+        if (!doc_value || doc_value_len != sizeof(json_value_t*)) continue;
+        
         const char* doc_id = (const char*)doc_key;
         json_value_t* doc = *(json_value_t**)doc_value;
+        if (!doc) continue;
         
         /* Extract field value for indexing */
         json_value_t* field_value = json_object_get(doc, field_path);
@@ -1486,8 +1537,9 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     }
     json_object_set(doc_copy, "modified_at", json_create_integer(now));
     
-    // Direct skiplist insertion - pure storage operation
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &doc_copy, sizeof(json_value_t*));
+    // BAR RAISING: Store JSON object directly - skiplist manages pointer lifecycle
+    json_value_t* stored_doc = json_deep_copy(doc_copy);
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_doc, sizeof(json_value_t*));
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1523,15 +1575,20 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     
     // Find existing document
     size_t value_len;
-    json_value_t** existing_doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
-                                                                      strlen(uuid) + 1, &value_len);
-    if (!existing_doc_ptr || !*existing_doc_ptr) {
+    void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
+    if (!raw_data || value_len != sizeof(json_value_t*)) {
+        pthread_rwlock_unlock(&coll->lock);
+        return NULL;
+    }
+    
+    json_value_t* existing_doc = *(json_value_t**)raw_data;
+    if (!existing_doc) {
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
     
     // Create updated document preserving ALL existing fields and adding new ones
-    json_value_t* updated_doc = json_deep_copy(*existing_doc_ptr);
+    json_value_t* updated_doc = json_deep_copy(existing_doc);
     
     // Merge new fields from document parameter
     if (document && document->type == JSON_OBJECT) {
@@ -1554,14 +1611,13 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     // Update timestamp
     json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
     
-    // Direct skiplist update - atomic pointer replacement
-    json_value_t* old_doc = *existing_doc_ptr;
-    *existing_doc_ptr = updated_doc;
+    // BAR RAISING: Replace JSON object - skiplist manages pointer lifecycle
+    json_value_t* stored_updated = json_deep_copy(updated_doc);
+    skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_updated, sizeof(json_value_t*));
+    json_free(existing_doc);  // Free old JSON object
     
     pthread_rwlock_unlock(&coll->lock);
-    
-    // Clean up old document
-    json_free(old_doc);
     
     LOG_INFO("Storage: Updated document '%s' directly in unified collection", uuid);
     
@@ -1595,17 +1651,19 @@ int storage_delete_document(database_t* db, const char* uuid) {
     
     // Find and remove document
     size_t value_len;
-    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
-                                                             strlen(uuid) + 1, &value_len);
-    if (!doc_ptr || !*doc_ptr) {
+    void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
+    if (!raw_data || value_len != sizeof(json_value_t*)) {
         pthread_rwlock_unlock(&coll->lock);
         return 0;
     }
     
-    // Free the document
-    json_free(*doc_ptr);
+    // Extract and free both JSON object and buffer pool allocation
+    json_value_t** doc_ptr = (json_value_t**)raw_data;
+    json_value_t* doc = *doc_ptr;
     
-    // Remove from skiplist
+    // Remove from skiplist and free both JSON object and buffer pool allocation
+    json_free(doc);
+    BUFFER_FREE(doc_ptr);
     int result = skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
     
     pthread_rwlock_unlock(&coll->lock);
@@ -1642,13 +1700,15 @@ json_value_t* storage_get_document(database_t* db, const char* uuid) {
     
     // Find document by UUID
     size_t value_len;
-    json_value_t** doc_ptr = (json_value_t**)skiplist_search(coll->documents, uuid, 
-                                                             strlen(uuid) + 1, &value_len);
+    void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
     json_value_t* result = NULL;
     
-    if (doc_ptr && *doc_ptr) {
-        result = json_deep_copy(*doc_ptr);
-        LOG_DEBUG("Storage: Found document '%s' in unified collection", uuid);
+    if (raw_data && value_len == sizeof(json_value_t*)) {
+        json_value_t* doc = *(json_value_t**)raw_data;
+        if (doc) {
+            result = json_deep_copy(doc);
+            LOG_DEBUG("Storage: Found document '%s' in unified collection", uuid);
+        }
     } else {
         LOG_DEBUG("Storage: Document '%s' not found in unified collection", uuid);
     }
