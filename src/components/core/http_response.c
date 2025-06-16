@@ -100,7 +100,22 @@ http_response_t* create_http_response_binary(http_status_t status, const char* b
 http_response_t* http_response_error(const char* message, int status_code) {
   char buffer[512];
   snprintf(buffer, sizeof(buffer), "{\"error\":\"%s\"}", message);
-  return create_http_response((http_status_t)status_code, buffer, "application/json");
+  
+  /* CRITICAL FIX: Create response with proper string duplication */
+  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
+  if (!response) {
+    return NULL;
+  }
+  
+  response->status = (http_status_t)status_code;
+  response->body = buffer_pool_strdup(buffer);  /* Safe copy of stack buffer */
+  response->content_type = buffer_pool_strdup("application/json");
+  response->content_length = response->body ? strlen(response->body) : 0;
+  response->headers = NULL;
+  response->num_headers = 0;
+  response->keep_alive = 0;
+  
+  return response;
 }
 
 /* Create a JSON response */
@@ -331,9 +346,30 @@ int add_response_header(http_response_t* response, const char* header) {
     return 0;
   }
   
+  /* CRITICAL FIX: Initialize headers array if NULL */
+  if (response->num_headers > 0 && response->headers == NULL) {
+    LOG_ERROR("Corrupted response: num_headers=%zu but headers=NULL", response->num_headers);
+    response->num_headers = 0;
+  }
+  
+  /* CRITICAL FIX: Validate num_headers is reasonable */
+  if (response->num_headers > 1000) {
+    LOG_ERROR("Suspicious num_headers value: %zu", response->num_headers);
+    return 0;
+  }
+  
   /* Allocate or reallocate headers array */
-  char** new_headers = (char**)BUFFER_REALLOC(response->headers, 
-                    (response->num_headers + 1) * sizeof(char*));
+  size_t new_size = (response->num_headers + 1) * sizeof(char*);
+  char** new_headers;
+  
+  if (response->headers == NULL) {
+    /* First allocation */
+    new_headers = (char**)BUFFER_ALLOC(new_size);
+  } else {
+    /* Reallocation */
+    new_headers = (char**)BUFFER_REALLOC(response->headers, new_size);
+  }
+  
   if (!new_headers) {
     return 0;
   }
@@ -348,13 +384,45 @@ int add_response_header(http_response_t* response, const char* header) {
 /* Free HTTP response */
 void free_http_response(http_response_t* response) {
   if (response) {
-    if (response->body) BUFFER_FREE(response->body);
-    if (response->content_type) BUFFER_FREE(response->content_type);
+    /* CRITICAL FIX: Validate response structure before freeing */
+    if ((char*)response < (char*)0x1000000 || (char*)response > (char*)0x7fffffffffff) {
+      LOG_ERROR("Invalid response pointer in free: %p", response);
+      return;
+    }
     
-    /* Free headers */
+    /* CRITICAL FIX: Validate body pointer before freeing */
+    if (response->body) {
+      if ((char*)response->body < (char*)0x1000000 || (char*)response->body > (char*)0x7fffffffffff) {
+        LOG_ERROR("Corrupted body pointer: %p", response->body);
+        response->body = NULL;
+      } else {
+        BUFFER_FREE(response->body);
+      }
+    }
+    
+    /* CRITICAL FIX: Validate content_type pointer before freeing */
+    if (response->content_type) {
+      if ((char*)response->content_type < (char*)0x1000000 || (char*)response->content_type > (char*)0x7fffffffffff) {
+        LOG_ERROR("Corrupted content_type pointer: %p", response->content_type);
+        response->content_type = NULL;
+      } else {
+        BUFFER_FREE(response->content_type);
+      }
+    }
+    
+    /* Free headers with validation */
+    if (response->num_headers > 1000) {
+      LOG_ERROR("Suspicious num_headers in free: %zu", response->num_headers);
+      response->num_headers = 0;
+    }
+    
     for (size_t i = 0; i < response->num_headers; i++) {
-      if (response->headers[i]) {
-        BUFFER_FREE(response->headers[i]);
+      if (response->headers && response->headers[i]) {
+        if ((char*)response->headers[i] < (char*)0x1000000 || (char*)response->headers[i] > (char*)0x7fffffffffff) {
+          LOG_ERROR("Corrupted header[%zu] pointer: %p", i, response->headers[i]);
+        } else {
+          BUFFER_FREE(response->headers[i]);
+        }
       }
     }
     
