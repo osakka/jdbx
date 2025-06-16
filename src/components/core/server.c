@@ -20,6 +20,7 @@
 #include <time.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
+#include "utils/buffer_pool.h"
 
 /* Graceful shutdown flag */
 static volatile int g_shutdown_requested = 0;
@@ -480,7 +481,7 @@ static void* accept_thread_func(void* arg) {
           connection_count, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
       
       /* Create client connection structure with enhanced safety */
-      client_conn_t* client = (client_conn_t*)malloc(sizeof(client_conn_t));
+      client_conn_t* client = (client_conn_t*)BUFFER_ALLOC(sizeof(client_conn_t));
       if (!client) {
         fprintf(stderr, "Error: Failed to allocate memory for client connection\n");
         close(client_fd);
@@ -506,7 +507,7 @@ static void* accept_thread_func(void* arg) {
       /* Add client to thread pool using the unified handle_client function */
       if (thread_pool_add_work(config->thread_pool, handle_client, client) != 0) {
         fprintf(stderr, "Error: Failed to add client to thread pool\n");
-        free(client);
+        BUFFER_FREE(client);
         close(client_fd);
         continue;
       }

@@ -24,9 +24,9 @@ static int random_level(void) {
 
 /* Create skip list */
 skiplist_t* skiplist_create(int (*compare)(const void*, size_t, const void*, size_t)) {
-    skiplist_t* list = calloc(1, sizeof(skiplist_t));
+    skiplist_t* list =BUFFER_CALLOC(1, sizeof(skiplist_t));
     if (!list) {
-        LOG_ERROR("Cannot allocate skip list.");
+        /* Don't log if logger might not be initialized */
         return NULL;
     }
     
@@ -156,7 +156,7 @@ bool skiplist_insert(skiplist_t* list, const void* key, size_t key_len,
         if (succs[0] && list->compare(succs[0]->key, succs[0]->key_len,
                                       key, key_len) == 0) {
             /* Key exists, update value */
-            void* new_value = malloc(value_len);
+            void* new_value =BUFFER_ALLOC(value_len);
             if (!new_value) {
                 hp_release_record(hp_rec);
                 return false;
@@ -310,7 +310,7 @@ void* skiplist_search(skiplist_t* list, const void* key, size_t key_len,
     if (succs[0] && list->compare(succs[0]->key, succs[0]->key_len,
                                   key, key_len) == 0) {
         /* Found */
-        void* result = malloc(succs[0]->value_len);
+        void* result =BUFFER_ALLOC(succs[0]->value_len);
         if (result) {
             memcpy(result, succs[0]->value, succs[0]->value_len);
             if (value_len) *value_len = succs[0]->value_len;
@@ -327,7 +327,7 @@ void* skiplist_search(skiplist_t* list, const void* key, size_t key_len,
 skiplist_iterator_t* skiplist_iterator_create(skiplist_t* list) {
     if (!list) return NULL;
     
-    skiplist_iterator_t* iter = calloc(1, sizeof(skiplist_iterator_t));
+    skiplist_iterator_t* iter =BUFFER_CALLOC(1, sizeof(skiplist_iterator_t));
     if (!iter) return NULL;
     
     iter->list = list;

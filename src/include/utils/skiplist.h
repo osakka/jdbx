@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "utils/hazard_pointer.h"
+#include "utils/buffer_pool.h"
 
 /* Lock-free skip list for high-performance indexing
  * Supports concurrent reads and writes without locks
@@ -23,8 +24,8 @@ typedef struct skiplist_node {
     size_t key_len;
     size_t value_len;
     
-    /* Atomic next pointers for each level */
-    _Atomic(struct skiplist_node*) next[1]; /* Variable length array */
+    /* Atomic next pointers for each level - ensure proper alignment */
+    _Alignas(sizeof(_Atomic(struct skiplist_node*))) _Atomic(struct skiplist_node*) next[1]; /* Variable length array */
 } skiplist_node_t;
 
 /* Skip list structure */
@@ -32,8 +33,8 @@ typedef struct skiplist {
     /* Head node (sentinel) */
     skiplist_node_t* head;
     
-    /* Current maximum level */
-    _Atomic int level;
+    /* Current maximum level - aligned for atomic access */
+    _Alignas(sizeof(_Atomic int)) _Atomic int level;
     
     /* Comparison function */
     int (*compare)(const void* a, size_t a_len, const void* b, size_t b_len);
@@ -41,11 +42,11 @@ typedef struct skiplist {
     /* Hazard pointer domain for safe reclamation */
     hp_domain_t* hp_domain;
     
-    /* Statistics */
-    _Atomic uint64_t size;
-    _Atomic uint64_t insert_count;
-    _Atomic uint64_t delete_count;
-    _Atomic uint64_t search_count;
+    /* Statistics - aligned for atomic access */
+    _Alignas(sizeof(_Atomic uint64_t)) _Atomic uint64_t size;
+    _Alignas(sizeof(_Atomic uint64_t)) _Atomic uint64_t insert_count;
+    _Alignas(sizeof(_Atomic uint64_t)) _Atomic uint64_t delete_count;
+    _Alignas(sizeof(_Atomic uint64_t)) _Atomic uint64_t search_count;
 } skiplist_t;
 
 /* Create and destroy skip list */
@@ -93,21 +94,33 @@ static inline skiplist_node_t* skiplist_create_node(int level,
                                                    const void* value, size_t value_len) {
     size_t node_size = sizeof(skiplist_node_t) + 
                       sizeof(_Atomic(skiplist_node_t*)) * (level - 1);
-    skiplist_node_t* node = malloc(node_size);
+    skiplist_node_t* node = BUFFER_ALLOC(node_size);
     if (!node) return NULL;
     
-    /* Allocate and copy key/value */
-    node->key = malloc(key_len);
-    node->value = malloc(value_len);
-    if (!node->key || !node->value) {
-        free(node->key);
-        free(node->value);
-        free(node);
-        return NULL;
+    /* Handle NULL key/value (for sentinel nodes) */
+    if (key && key_len > 0) {
+        node->key = BUFFER_ALLOC(key_len);
+        if (!node->key) {
+            BUFFER_FREE(node);
+            return NULL;
+        }
+        memcpy(node->key, key, key_len);
+    } else {
+        node->key = NULL;
     }
     
-    memcpy(node->key, key, key_len);
-    memcpy(node->value, value, value_len);
+    if (value && value_len > 0) {
+        node->value = BUFFER_ALLOC(value_len);
+        if (!node->value) {
+            BUFFER_FREE(node->key);
+            BUFFER_FREE(node);
+            return NULL;
+        }
+        memcpy(node->value, value, value_len);
+    } else {
+        node->value = NULL;
+    }
+    
     node->key_len = key_len;
     node->value_len = value_len;
     
@@ -121,9 +134,9 @@ static inline skiplist_node_t* skiplist_create_node(int level,
 
 static inline void skiplist_free_node(void* ptr) {
     skiplist_node_t* node = (skiplist_node_t*)ptr;
-    free(node->key);
-    free(node->value);
-    free(node);
+    BUFFER_FREE(node->key);
+    BUFFER_FREE(node->value);
+    BUFFER_FREE(node);
 }
 
 #endif /* SKIPLIST_H */

@@ -184,7 +184,7 @@ transaction_log_t* transaction_log_create(const char* log_file) {
   log->cache_expiry_seconds = 24 * 60 * 60; /* Default expiry: 24 hours */
 
   /* Allocate cache hash table */
-  log->entry_cache = (cache_entry_t**)calloc(log->cache_size, sizeof(cache_entry_t*));
+  log->entry_cache = (cache_entry_t**)BUFFER_CALLOC(log->cache_size, sizeof(cache_entry_t*));
   if (!log->entry_cache) {
     BUFFER_FREE(log->log_file);
     BUFFER_FREE(log);

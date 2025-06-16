@@ -59,14 +59,14 @@ static int batch_insert_jdbx(
     size_t errors = 0;
     
     /* Phase 1: Prepare documents */
-    char** doc_ids = calloc(count, sizeof(char*));
-    char** json_strings = calloc(count, sizeof(char*));
-    size_t* doc_sizes = calloc(count, sizeof(size_t));
+    char** doc_ids =BUFFER_CALLOC(count, sizeof(char*));
+    char** json_strings =BUFFER_CALLOC(count, sizeof(char*));
+    size_t* doc_sizes =BUFFER_CALLOC(count, sizeof(size_t));
     
     if (!doc_ids || !json_strings || !doc_sizes) {
-        free(doc_ids);
-        free(json_strings);
-        free(doc_sizes);
+        BUFFER_FREE(doc_ids);
+        BUFFER_FREE(json_strings);
+        BUFFER_FREE(doc_sizes);
         return -1;
     }
     
@@ -78,7 +78,7 @@ static int batch_insert_jdbx(
         }
         
         /* Generate or extract document ID */
-        doc_ids[i] = malloc(256);
+        doc_ids[i] =BUFFER_ALLOC(256);
         json_value_t* id_field = json_object_get(doc, "id");
         
         if (!id_field || id_field->type != JSON_STRING) {
@@ -142,13 +142,13 @@ static int batch_insert_jdbx(
     
     /* Phase 3: Cleanup */
     for (size_t i = 0; i < count; i++) {
-        if (json_strings[i]) free(json_strings[i]);
-        if (doc_ids[i]) free(doc_ids[i]);
+        if (json_strings[i]) BUFFER_FREE(json_strings[i]);
+        if (doc_ids[i]) BUFFER_FREE(doc_ids[i]);
     }
     
-    free(json_strings);
-    free(doc_ids);
-    free(doc_sizes);
+    BUFFER_FREE(json_strings);
+    BUFFER_FREE(doc_ids);
+    BUFFER_FREE(doc_sizes);
     
     return 0;
 }
@@ -168,7 +168,7 @@ batch_insert_result_t* db_batch_insert_documents(
     batch_insert_options_t opts = options ? *options : BATCH_INSERT_OPTIONS_DEFAULT;
     
     /* Allocate result structure */
-    batch_insert_result_t* result = calloc(1, sizeof(batch_insert_result_t));
+    batch_insert_result_t* result =BUFFER_CALLOC(1, sizeof(batch_insert_result_t));
     if (!result) return NULL;
     
     result->errors = json_create_array();
@@ -184,7 +184,7 @@ batch_insert_result_t* db_batch_insert_documents(
     
     if (ret != 0) {
         json_free(result->errors);
-        free(result);
+        BUFFER_FREE(result);
         return NULL;
     }
     
@@ -199,6 +199,6 @@ void batch_insert_result_free(batch_insert_result_t* result) {
         if (result->errors) {
             json_free(result->errors);
         }
-        free(result);
+        BUFFER_FREE(result);
     }
 }

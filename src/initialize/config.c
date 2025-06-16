@@ -11,6 +11,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include "utils/buffer_pool.h"
 
 /* Function to load environment variables from a file */
 static int load_env_file(const char* filename) {
@@ -118,7 +119,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   config_init_binary_dir();
   
   /* Initialize the server config with defaults from centralized configuration */
-  server_config_t* heap_config = malloc(sizeof(server_config_t));
+  server_config_t* heap_config =BUFFER_ALLOC(sizeof(server_config_t));
   if (!heap_config) {
     INIT_LOG_FAILURE("CONFIG", "Out of memory");
     return INIT_CONFIG_ERROR;
@@ -329,7 +330,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");
-        free(heap_config);
+        BUFFER_FREE(heap_config);
         return INIT_CONFIG_ERROR;
     }
   }
@@ -338,14 +339,14 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   
   /* Show help if requested or if no arguments provided */
   if (show_help) {
-    free(heap_config);
+    BUFFER_FREE(heap_config);
     /* Return special code to indicate help should be shown */
     return INIT_CONFIG_ERROR;
   }
   
   /* Show version if requested */
   if (show_version) {
-    free(heap_config);
+    BUFFER_FREE(heap_config);
     /* Return special code to indicate version should be shown */
     return INIT_CONFIG_ERROR;
   }
@@ -363,7 +364,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_PROGRESS("CONFIG", "Loading configuration from '%s'", config_file);
     if (!config_load(config_file, heap_config)) {
       INIT_LOG_FAILURE("CONFIG", "Failed to load configuration from '%s'", config_file);
-      free(heap_config);
+      BUFFER_FREE(heap_config);
       return INIT_CONFIG_ERROR;
     }
     INIT_LOG_SUCCESS("CONFIG", "Configuration loaded from '%s'", config_file);
@@ -374,7 +375,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     INIT_LOG_PROGRESS("CONFIG", "Loading environment file '%s'", env_file);
     if (!load_env_file(env_file)) {
       INIT_LOG_FAILURE("CONFIG", "Failed to load environment file '%s'", env_file);
-      free(heap_config);
+      BUFFER_FREE(heap_config);
       return INIT_CONFIG_ERROR;
     }
     INIT_LOG_SUCCESS("CONFIG", "Environment file loaded from '%s'", env_file);
@@ -388,19 +389,19 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     char* config_dir = config_construct_path(DEFAULT_CONFIG_DIR_RELATIVE);
     
     if (var_dir) {
-      var_env_path = malloc(strlen(var_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
+      var_env_path =BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
       if (var_env_path) {
         sprintf(var_env_path, "%s/%s", var_dir, DEFAULT_ENV_FILE_BASENAME);
       }
-      free(var_dir);
+      BUFFER_FREE(var_dir);
     }
     
     if (config_dir) {
-      config_env_path = malloc(strlen(config_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
+      config_env_path =BUFFER_ALLOC(strlen(config_dir) + strlen(DEFAULT_ENV_FILE_BASENAME) + 2);
       if (config_env_path) {
         sprintf(config_env_path, "%s/%s", config_dir, DEFAULT_ENV_FILE_BASENAME);
       }
-      free(config_dir);
+      BUFFER_FREE(config_dir);
     }
     
     const char* env_files[] = {
@@ -423,8 +424,8 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     }
     
     /* Clean up allocated paths */
-    if (var_env_path) free(var_env_path);
-    if (config_env_path) free(config_env_path);
+    if (var_env_path) BUFFER_FREE(var_env_path);
+    if (config_env_path) BUFFER_FREE(config_env_path);
   }
 
   /* Load configuration from environment variables (lowest priority) */
@@ -464,9 +465,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   if (db_file) {
     /* Free previous value if allocated */
     if (heap_config->db_file) {
-      free(heap_config->db_file);
+      BUFFER_FREE(heap_config->db_file);
     }
-    heap_config->db_file = strdup(db_file);
+    heap_config->db_file = BUFFER_STRDUP(db_file);
     INIT_LOG_PROGRESS("CONFIG", "Database file set to %s", db_file);
   }
   
@@ -474,27 +475,27 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   if (web_root) {
     /* Free previous value if allocated */
     if (heap_config->web_root) {
-      free(heap_config->web_root);
+      BUFFER_FREE(heap_config->web_root);
     }
-    heap_config->web_root = strdup(web_root);
+    heap_config->web_root = BUFFER_STRDUP(web_root);
     INIT_LOG_PROGRESS("CONFIG", "Web root set to %s", web_root);
   }
   
   if (pid_file) {
     /* Free previous value if allocated */
     if (heap_config->pid_file) {
-      free(heap_config->pid_file);
+      BUFFER_FREE(heap_config->pid_file);
     }
-    heap_config->pid_file = strdup(pid_file);
+    heap_config->pid_file = BUFFER_STRDUP(pid_file);
     INIT_LOG_PROGRESS("CONFIG", "PID file set to %s", pid_file);
   }
   
   if (log_file) {
     /* Free previous value if allocated */
     if (heap_config->log_file) {
-      free(heap_config->log_file);
+      BUFFER_FREE(heap_config->log_file);
     }
-    heap_config->log_file = strdup(log_file);
+    heap_config->log_file = BUFFER_STRDUP(log_file);
     INIT_LOG_PROGRESS("CONFIG", "Log file set to %s", log_file);
   }
   
@@ -503,7 +504,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     int port = atoi(port_str);
     if (port <= 0 || port > 65535) {
       INIT_LOG_FAILURE("CONFIG", "Invalid port number '%s'", port_str);
-      free(heap_config);
+      BUFFER_FREE(heap_config);
       return INIT_CONFIG_ERROR;
     }
     heap_config->port = port;
@@ -514,9 +515,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   if (host_str) {
     /* Free previous value if allocated */
     if (heap_config->host) {
-      free(heap_config->host);
+      BUFFER_FREE(heap_config->host);
     }
-    heap_config->host = strdup(host_str);
+    heap_config->host = BUFFER_STRDUP(host_str);
     INIT_LOG_PROGRESS("CONFIG", "Host set to %s", host_str);
   }
   
@@ -543,18 +544,18 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   if (ssl_cert) {
     /* Free previous value if allocated */
     if (heap_config->cert_path) {
-      free(heap_config->cert_path);
+      BUFFER_FREE(heap_config->cert_path);
     }
-    heap_config->cert_path = strdup(ssl_cert);
+    heap_config->cert_path = BUFFER_STRDUP(ssl_cert);
     INIT_LOG_PROGRESS("CONFIG", "SSL certificate set to %s", ssl_cert);
   }
   
   if (ssl_key) {
     /* Free previous value if allocated */
     if (heap_config->key_path) {
-      free(heap_config->key_path);
+      BUFFER_FREE(heap_config->key_path);
     }
-    heap_config->key_path = strdup(ssl_key);
+    heap_config->key_path = BUFFER_STRDUP(ssl_key);
     INIT_LOG_PROGRESS("CONFIG", "SSL private key set to %s", ssl_key);
   }
 
@@ -596,16 +597,16 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   
   if (jwt_secret) {
     if (heap_config->jwt_secret) {
-      free(heap_config->jwt_secret);
+      BUFFER_FREE(heap_config->jwt_secret);
     }
-    heap_config->jwt_secret = strdup(jwt_secret);
+    heap_config->jwt_secret = BUFFER_STRDUP(jwt_secret);
     INIT_LOG_PROGRESS("CONFIG", "JWT secret set via CLI (highest priority)");
   }
   
   /* Create required directories */
   init_status_t status = create_required_directories(heap_config);
   if (status != INIT_OK) {
-    free(heap_config);
+    BUFFER_FREE(heap_config);
     return status;
   }
 
@@ -613,7 +614,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_PROGRESS("CONFIG", "Normalizing paths to absolute");
   if (!normalize_config_paths(heap_config, config_get_binary_dir())) {
     INIT_LOG_FAILURE("CONFIG", "Failed to normalize configuration paths");
-    free(heap_config);
+    BUFFER_FREE(heap_config);
     return INIT_CONFIG_ERROR;
   }
   

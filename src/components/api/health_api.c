@@ -251,17 +251,17 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
   /* Convert JSON to Prometheus format (simplified) */
   json_value_t* root = json_parse(metrics_json);
   if (!root) {
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
   }
   
   /* Create a buffer for the Prometheus format output */
   size_t buffer_size = 10240; /* Start with 10KB buffer */
-  char* prom_buffer = (char*)malloc(buffer_size);
+  char* prom_buffer = (char*)BUFFER_ALLOC(buffer_size);
   if (!prom_buffer) {
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -391,11 +391,11 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
       /* Check for buffer overflow and resize if needed */
       if (buffer_used >= buffer_size - 1024) {
         buffer_size *= 2;
-        char* new_buffer = (char*)realloc(prom_buffer, buffer_size);
+        char* new_buffer = (char*)BUFFER_REALLOC(prom_buffer, buffer_size);
         if (!new_buffer) {
-          free(prom_buffer);
+          BUFFER_FREE(prom_buffer);
           json_free(root);
-          free(metrics_json);
+          BUFFER_FREE(metrics_json);
           return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                        "{\"error\":\"Memory allocation failure\"}", "application/json");
         }
@@ -408,9 +408,9 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
   http_response_t* response = create_http_response(HTTP_OK, prom_buffer, "text/plain");
   
   /* Clean up */
-  free(prom_buffer);
+  BUFFER_FREE(prom_buffer);
   json_free(root);
-  free(metrics_json);
+  BUFFER_FREE(metrics_json);
   
   return response;
 #else
@@ -442,7 +442,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   /* Parse the JSON to extract just the names and types */
   json_value_t* root = json_parse(metrics_json);
   if (!root) {
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to parse metrics JSON\"}", "application/json");
   }
@@ -451,7 +451,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   json_value_t* response_obj = json_create_object();
   if (!response_obj) {
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }
@@ -469,7 +469,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
     if (histograms_array) json_free(histograms_array);
     json_free(response_obj);
     json_free(root);
-    free(metrics_json);
+    BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
   }

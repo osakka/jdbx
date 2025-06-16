@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include "utils/buffer_pool.h"
 
 /* Initialize RBAC system */
 init_status_t init_rbac(server_config_t* config, database_t* database, 
@@ -52,7 +53,7 @@ init_status_t init_rbac(server_config_t* config, database_t* database,
   rbac_refcount_t* rbac_ref = rbac_to_refcount(rbac);
   if (!rbac_ref) {
     INIT_LOG_FAILURE("RBAC", "Failed to create RBAC reference counting wrapper");
-    free(rbac);
+    BUFFER_FREE(rbac);
     return INIT_RBAC_ERROR;
   }
   

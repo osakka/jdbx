@@ -496,7 +496,7 @@ lock_manager_t* lock_manager_create(void) {
   pthread_mutex_init(&manager->lock, NULL);
   
   /* Allocate the lock table */
-  g_lock_manager_impl.lock_table = (lock_table_entry_t**)calloc(g_lock_manager_impl.table_size, sizeof(lock_table_entry_t*));
+  g_lock_manager_impl.lock_table = (lock_table_entry_t**)BUFFER_CALLOC(g_lock_manager_impl.table_size, sizeof(lock_table_entry_t*));
   if (!g_lock_manager_impl.lock_table) {
     pthread_mutex_destroy(&manager->lock);
     BUFFER_FREE(manager);
@@ -997,7 +997,7 @@ static int add_waiting_for(wait_for_node_t* node, transaction_t* waiting_for_tx)
     int new_capacity = node->waiting_capacity * 2;
     if (new_capacity == 0) new_capacity = 4; /* Initial capacity */
     
-    transaction_t** new_array = (transaction_t**)realloc(node->waiting_for, 
+    transaction_t** new_array = (transaction_t**)BUFFER_REALLOC(node->waiting_for, 
                               new_capacity * sizeof(transaction_t*));
     if (!new_array) {
       return 0; /* Memory allocation failed */
@@ -1048,14 +1048,14 @@ static wait_for_node_t* build_wait_for_graph(lock_manager_t* manager, int* node_
   }
   
   /* Allocate nodes array */
-  wait_for_node_t* nodes = (wait_for_node_t*)calloc(max_transactions, sizeof(wait_for_node_t));
+  wait_for_node_t* nodes = (wait_for_node_t*)BUFFER_CALLOC(max_transactions, sizeof(wait_for_node_t));
   if (!nodes) {
     *node_count = 0;
     return NULL;
   }
   
   /* Map of transaction pointers to node indices */
-  transaction_t** tx_to_node = (transaction_t**)calloc(max_transactions, sizeof(transaction_t*));
+  transaction_t** tx_to_node = (transaction_t**)BUFFER_CALLOC(max_transactions, sizeof(transaction_t*));
   if (!tx_to_node) {
     BUFFER_FREE(nodes);
     *node_count = 0;

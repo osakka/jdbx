@@ -30,7 +30,7 @@ void parse_cookies(http_request_t* request) {
     char* equals = strchr(cookie_pair, '=');
     if (equals) {
       /* Create cookie */
-      cookie_t* cookie = (cookie_t*)malloc(sizeof(cookie_t));
+      cookie_t* cookie = (cookie_t*)BUFFER_ALLOC(sizeof(cookie_t));
       if (cookie) {
         /* Get name and value */
         *equals = '\0';
@@ -88,7 +88,7 @@ http_request_t* parse_http_request(const char* request_str) {
     TRACE_NET("HTTP_PARSE: First 200 chars: %.200s", request_str);
   }
   
-  http_request_t* request = (http_request_t*)malloc(sizeof(http_request_t));
+  http_request_t* request = (http_request_t*)BUFFER_ALLOC(sizeof(http_request_t));
   if (!request) {
     return NULL;
   }

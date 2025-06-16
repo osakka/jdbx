@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include "utils/buffer_pool.h"
 
 /* Global variables for cleanup handling */
 static database_t* g_database = NULL;
@@ -88,7 +89,7 @@ void init_cleanup(void) {
   /* 4. First free the regular RBAC reference if it exists */
   if (g_rbac) {
     INIT_LOG_DEBUG("CORE", "Freeing RBAC system");
-    free(g_rbac); /* Just free the struct, not its contents (owned by g_rbac_ref) */
+    BUFFER_FREE(g_rbac); /* Just free the struct, not its contents (owned by g_rbac_ref) */
     g_rbac = NULL;
   }
 

@@ -7,6 +7,7 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include "utils/buffer_pool.h"
 
 /* Library-specific metrics collection name */
 #define LIBRARY_METRICS_SUFFIX "/metrics"
@@ -20,7 +21,7 @@ static char* get_library_metrics_collection(const char* library_name) {
   }
   
   size_t len = strlen(library_name) + strlen(LIBRARY_METRICS_SUFFIX) + 1;
-  char* collection_name = malloc(len);
+  char* collection_name = BUFFER_ALLOC(len);
   if (!collection_name) {
     return NULL;
   }
@@ -46,7 +47,7 @@ int library_metrics_init(database_t* db, const char* library_name) {
   
   LOG_INFO("Creating library metrics collection: %s", collection_name);
   int result = db_create_collection(db, collection_name);
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   if (result != 0 && result != -1) { /* -1 means collection already exists */
     LOG_ERROR("Failed to create library metrics collection");
@@ -89,7 +90,7 @@ int library_metrics_record(database_t* db, const char* library_name,
   /* Insert metric document */
   json_value_t* result = storage_insert_document(db, document);
   json_free(document);
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   if (!result) {
     LOG_ERROR("Failed to insert library metric");
@@ -138,7 +139,7 @@ json_value_t* library_metrics_query(database_t* db, const char* library_name,
     }
   }
   
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   return results;
 }
@@ -230,7 +231,7 @@ int library_metrics_cleanup(database_t* db, const char* library_name, int retent
     json_free(results);
   }
   
-  free(collection_name);
+  BUFFER_FREE(collection_name);
   
   if (deleted_count > 0) {
     LOG_INFO("Cleaned up %d old metrics from library %s", deleted_count, 

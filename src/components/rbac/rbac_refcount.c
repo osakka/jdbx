@@ -2,12 +2,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /**
  * Create a new reference counted RBAC system
  */
 rbac_refcount_t* rbac_refcount_init() {
-  rbac_refcount_t* rbac = (rbac_refcount_t*)malloc(sizeof(rbac_refcount_t));
+  rbac_refcount_t* rbac = (rbac_refcount_t*)BUFFER_ALLOC(sizeof(rbac_refcount_t));
   if (!rbac) {
     return NULL;
   }
@@ -19,7 +20,7 @@ rbac_refcount_t* rbac_refcount_init() {
   if (!users || !roles) {
     if (users) json_free(users);
     if (roles) json_free(roles);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -29,7 +30,7 @@ rbac_refcount_t* rbac_refcount_init() {
   if (!rbac->users || !rbac->roles) {
     if (rbac->users) ref_json_release(rbac->users);
     if (rbac->roles) ref_json_release(rbac->roles);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -54,7 +55,7 @@ void rbac_refcount_free(rbac_refcount_t* rbac) {
   }
   
   /* Free the RBAC structure */
-  free(rbac);
+  BUFFER_FREE(rbac);
 }
 
 /**
@@ -96,14 +97,14 @@ int rbac_refcount_save(rbac_refcount_t* rbac, const char* path) {
   /* Write to file */
   FILE* file = fopen(path, "w");
   if (!file) {
-    free(json_str);
+    BUFFER_FREE(json_str);
     return 0;
   }
   
   fprintf(file, "%s", json_str);
   fclose(file);
   
-  free(json_str);
+  BUFFER_FREE(json_str);
   
   return 1;
 }
@@ -126,7 +127,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   long size = ftell(file);
   fseek(file, 0, SEEK_SET);
   
-  char* json_str = (char*)malloc(size + 1);
+  char* json_str = (char*)BUFFER_ALLOC(size + 1);
   if (!json_str) {
     fclose(file);
     return NULL;
@@ -138,7 +139,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   
   /* Parse the JSON */
   json_value_t* rbac_json = json_parse(json_str);
-  free(json_str);
+  BUFFER_FREE(json_str);
   
   if (!rbac_json || rbac_json->type != JSON_OBJECT) {
     if (rbac_json) json_free(rbac_json);
@@ -156,7 +157,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   }
   
   /* Create a new RBAC system */
-  rbac_refcount_t* rbac = (rbac_refcount_t*)malloc(sizeof(rbac_refcount_t));
+  rbac_refcount_t* rbac = (rbac_refcount_t*)BUFFER_ALLOC(sizeof(rbac_refcount_t));
   if (!rbac) {
     json_free(rbac_json);
     return NULL;
@@ -172,7 +173,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   if (!rbac->users || !rbac->roles) {
     if (rbac->users) ref_json_release(rbac->users);
     if (rbac->roles) ref_json_release(rbac->roles);
-    free(rbac);
+    BUFFER_FREE(rbac);
     return NULL;
   }
   
@@ -206,7 +207,7 @@ rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
     return NULL;
   }
   
-  rbac_refcount_t* ref_rbac = (rbac_refcount_t*)malloc(sizeof(rbac_refcount_t));
+  rbac_refcount_t* ref_rbac = (rbac_refcount_t*)BUFFER_ALLOC(sizeof(rbac_refcount_t));
   if (!ref_rbac) {
     return NULL;
   }
@@ -218,7 +219,7 @@ rbac_refcount_t* rbac_to_refcount(rbac_system_t* rbac) {
   if (!ref_rbac->users || !ref_rbac->roles) {
     if (ref_rbac->users) ref_json_release(ref_rbac->users);
     if (ref_rbac->roles) ref_json_release(ref_rbac->roles);
-    free(ref_rbac);
+    BUFFER_FREE(ref_rbac);
     return NULL;
   }
   
@@ -235,7 +236,7 @@ rbac_system_t* rbac_from_refcount(rbac_refcount_t* rbac) {
     return NULL;
   }
   
-  rbac_system_t* reg_rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
+  rbac_system_t* reg_rbac = (rbac_system_t*)BUFFER_ALLOC(sizeof(rbac_system_t));
   if (!reg_rbac) {
     return NULL;
   }

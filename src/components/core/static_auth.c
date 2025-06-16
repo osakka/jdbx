@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "utils/buffer_pool.h"
 
 /* Generate a token for admin authentication */
 char* generate_static_auth_token(const char* username) {
@@ -16,7 +17,7 @@ char* generate_static_auth_token(const char* username) {
        username, (unsigned long)time(NULL), rand() % 10000);
   
   /* Encode token (simple base64 would be better, but we'll use a basic encoding for now) */
-  char* encoded = (char*)malloc(strlen(token) * 2 + 1);
+  char* encoded = (char*)BUFFER_ALLOC(strlen(token) * 2 + 1);
   if (!encoded) {
     return NULL;
   }

@@ -44,6 +44,15 @@ void buffer_pool_free(void* ptr);
 void* buffer_pool_realloc(void* ptr, size_t new_size);
 
 /**
+ * Allocate zero-initialized memory from buffer pool
+ * 
+ * @param nmemb Number of members
+ * @param size Size of each member
+ * @return Pointer to allocated buffer, or NULL on failure
+ */
+void* buffer_pool_calloc(size_t nmemb, size_t size);
+
+/**
  * Duplicate a string using buffer pool
  * 
  * @param str String to duplicate
@@ -68,12 +77,14 @@ void buffer_pool_reset_stats(void);
 
 /* Production-grade buffer pool macros with comprehensive error handling */
 #define BUFFER_ALLOC(size) buffer_pool_alloc_safe((size), __FILE__, __LINE__, __func__)
+#define BUFFER_CALLOC(nmemb, size) buffer_pool_calloc_safe((nmemb), (size), __FILE__, __LINE__, __func__)
 #define BUFFER_FREE(ptr) buffer_pool_free_safe((ptr), __FILE__, __LINE__, __func__)
 #define BUFFER_REALLOC(ptr, size) buffer_pool_realloc_safe((ptr), (size), __FILE__, __LINE__, __func__)
 #define BUFFER_STRDUP(str) buffer_pool_strdup_safe((str), __FILE__, __LINE__, __func__)
 
 /* Enhanced API with debugging information */
 void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char* func);
+void* buffer_pool_calloc_safe(size_t nmemb, size_t size, const char* file, int line, const char* func);
 void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func);
 void* buffer_pool_realloc_safe(void* ptr, size_t new_size, const char* file, int line, const char* func);
 char* buffer_pool_strdup_safe(const char* str, const char* file, int line, const char* func);

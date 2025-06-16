@@ -1,6 +1,7 @@
 #include "utils/generic_cache.h"
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /* Default hash function */
 static uint32_t default_hash(const void* key, size_t size) {
@@ -23,15 +24,15 @@ static int default_compare(const void* a, const void* b, size_t size) {
 generic_cache_t* generic_cache_create(size_t capacity) {
     if (capacity == 0) return NULL;
     
-    generic_cache_t* cache = calloc(1, sizeof(generic_cache_t));
+    generic_cache_t* cache =BUFFER_CALLOC(1, sizeof(generic_cache_t));
     if (!cache) return NULL;
     
     cache->capacity = capacity;
     cache->bucket_count = capacity * 2; /* Load factor 0.5 */
-    cache->buckets = calloc(cache->bucket_count, sizeof(generic_cache_entry_t*));
+    cache->buckets =BUFFER_CALLOC(cache->bucket_count, sizeof(generic_cache_entry_t*));
     
     if (!cache->buckets) {
-        free(cache);
+        BUFFER_FREE(cache);
         return NULL;
     }
     
@@ -47,9 +48,9 @@ void generic_cache_destroy(generic_cache_t* cache) {
     if (!cache) return;
     
     generic_cache_clear(cache);
-    free(cache->buckets);
+    BUFFER_FREE(cache->buckets);
     pthread_rwlock_destroy(&cache->lock);
-    free(cache);
+    BUFFER_FREE(cache);
 }
 
 /* Find entry in hash table */
@@ -115,9 +116,9 @@ static void evict_lru(generic_cache_t* cache) {
     }
     
     /* Free entry */
-    free(victim->key);
-    free(victim->value);
-    free(victim);
+    BUFFER_FREE(victim->key);
+    BUFFER_FREE(victim->value);
+    BUFFER_FREE(victim);
     
     cache->size--;
     cache->evictions++;
@@ -134,7 +135,7 @@ void* generic_cache_get(generic_cache_t* cache, const void* key, size_t key_size
     
     if (entry) {
         /* Allocate and copy value */
-        result = malloc(entry->value_size);
+        result =BUFFER_ALLOC(entry->value_size);
         if (result) {
             memcpy(result, entry->value, entry->value_size);
             cache->hits++;
@@ -164,14 +165,14 @@ int generic_cache_put(generic_cache_t* cache, const void* key, size_t key_size,
     
     if (entry) {
         /* Update existing entry */
-        void* new_value = malloc(value_size);
+        void* new_value =BUFFER_ALLOC(value_size);
         if (!new_value) {
             pthread_rwlock_unlock(&cache->lock);
             return -1;
         }
         
         memcpy(new_value, value, value_size);
-        free(entry->value);
+        BUFFER_FREE(entry->value);
         entry->value = new_value;
         entry->value_size = value_size;
         
@@ -182,19 +183,19 @@ int generic_cache_put(generic_cache_t* cache, const void* key, size_t key_size,
             evict_lru(cache);
         }
         
-        entry = malloc(sizeof(generic_cache_entry_t));
+        entry =BUFFER_ALLOC(sizeof(generic_cache_entry_t));
         if (!entry) {
             pthread_rwlock_unlock(&cache->lock);
             return -1;
         }
         
-        entry->key = malloc(key_size);
-        entry->value = malloc(value_size);
+        entry->key =BUFFER_ALLOC(key_size);
+        entry->value =BUFFER_ALLOC(value_size);
         
         if (!entry->key || !entry->value) {
-            free(entry->key);
-            free(entry->value);
-            free(entry);
+            BUFFER_FREE(entry->key);
+            BUFFER_FREE(entry->value);
+            BUFFER_FREE(entry);
             pthread_rwlock_unlock(&cache->lock);
             return -1;
         }
@@ -234,9 +235,9 @@ void generic_cache_clear(generic_cache_t* cache) {
     generic_cache_entry_t* entry = cache->head;
     while (entry) {
         generic_cache_entry_t* next = entry->next;
-        free(entry->key);
-        free(entry->value);
-        free(entry);
+        BUFFER_FREE(entry->key);
+        BUFFER_FREE(entry->value);
+        BUFFER_FREE(entry);
         entry = next;
     }
     
@@ -278,9 +279,9 @@ void generic_cache_remove(generic_cache_t* cache, const void* key, size_t key_si
         }
         
         /* Free entry */
-        free(entry->key);
-        free(entry->value);
-        free(entry);
+        BUFFER_FREE(entry->key);
+        BUFFER_FREE(entry->value);
+        BUFFER_FREE(entry);
         
         cache->size--;
     }

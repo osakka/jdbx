@@ -21,6 +21,7 @@ typedef void (*thread_task_func_t)(void*);
 #include <signal.h>
 #include <time.h>
 #include <sys/syscall.h>
+#include "utils/buffer_pool.h"
 
 /* Server state tracking */
 typedef enum {
@@ -342,7 +343,7 @@ static void* accept_loop(void *arg) {
       }
       
       /* Create client connection object */
-      client_conn_t *client_conn = malloc(sizeof(client_conn_t));
+      client_conn_t *client_conn = BUFFER_ALLOC(sizeof(client_conn_t));
       if (!client_conn) {
         fprintf(stderr, "Error: Failed to allocate memory for client connection\n");
         if (g_logger) {

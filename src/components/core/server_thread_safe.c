@@ -9,6 +9,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include "utils/buffer_pool.h"
 
 /* Forward declarations for functions we need */
 extern http_request_t* parse_http_request(const char* request_str);
@@ -139,7 +140,7 @@ void server_accept_loop_thread_safe_direct(server_config_t *config) {
                  inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
         
         /* Create client_conn_t structure for the unified handler */
-        client_conn_t* client = (client_conn_t*)malloc(sizeof(client_conn_t));
+        client_conn_t* client = (client_conn_t*)BUFFER_ALLOC(sizeof(client_conn_t));
         if (!client) {
             LOG_ERROR("Cannot allocate memory for client connection");
             close(client_fd);
@@ -159,7 +160,7 @@ void server_accept_loop_thread_safe_direct(server_config_t *config) {
         if (thread_pool_add_work(config->thread_pool, handle_client, client) != 0) {
             LOG_ERROR("Cannot add connection to thread pool");
             close(client_fd);
-            free(client);
+            BUFFER_FREE(client);
             continue;
         }
         

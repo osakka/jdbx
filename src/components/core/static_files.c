@@ -5,6 +5,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include "utils/buffer_pool.h"
 
 /* Check if path is an admin route */
 int is_admin_route(const char* path) {
@@ -111,7 +112,7 @@ char* read_file_content(const char* filepath, size_t* size) {
   }
   
   /* Allocate buffer */
-  char* buffer = (char*)malloc(file_size);
+  char* buffer = (char*)BUFFER_ALLOC(file_size);
   if (!buffer) {
     fclose(file);
     if (size) *size = 0;
@@ -123,7 +124,7 @@ char* read_file_content(const char* filepath, size_t* size) {
   fclose(file);
   
   if (bytes_read != (size_t)file_size) {
-    free(buffer);
+    BUFFER_FREE(buffer);
     if (size) *size = 0;
     return NULL;
   }
@@ -210,7 +211,7 @@ http_response_t* serve_admin_file(const char* path) {
   http_response_t* response = create_http_response_binary(HTTP_OK, file_content, file_size, content_type);
   
   /* Clean up */
-  free(file_content);
+  BUFFER_FREE(file_content);
   
   return response;
 }

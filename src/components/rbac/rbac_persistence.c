@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /**
  * RBAC database persistence implementation with comprehensive error handling
@@ -29,7 +30,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   if (!status.success) {
     LOG_ERROR("initialize RBAC collections: %s", 
          status.error_message ? status.error_message : "Unknown error");
-    if (status.error_message) free(status.error_message);
+    if (status.error_message) BUFFER_FREE(status.error_message);
     return 0;
   }
   LOG_DEBUG("STAGE 1: Successfully initialized RBAC collections.");

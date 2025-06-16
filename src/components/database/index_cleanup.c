@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "utils/buffer_pool.h"
 
 /* Cleanup thread function */
 static void* index_cleanup_thread(void* arg);
@@ -18,7 +19,7 @@ index_cleanup_t* index_cleanup_init(database_t* db, index_metrics_t* metrics) {
         return NULL;
     }
     
-    index_cleanup_t* cleanup = calloc(1, sizeof(index_cleanup_t));
+    index_cleanup_t* cleanup =BUFFER_CALLOC(1, sizeof(index_cleanup_t));
     if (!cleanup) {
         LOG_ERROR("Cannot allocate index cleanup system.");
         return NULL;
@@ -37,7 +38,7 @@ index_cleanup_t* index_cleanup_init(database_t* db, index_metrics_t* metrics) {
     /* Initialize mutex */
     if (pthread_mutex_init(&cleanup->lock, NULL) != 0) {
         LOG_ERROR("Cannot initialize cleanup mutex.");
-        free(cleanup);
+        BUFFER_FREE(cleanup);
         return NULL;
     }
     
@@ -95,7 +96,7 @@ void index_cleanup_destroy(index_cleanup_t* cleanup) {
     
     index_cleanup_stop(cleanup);
     pthread_mutex_destroy(&cleanup->lock);
-    free(cleanup);
+    BUFFER_FREE(cleanup);
 }
 
 /* Evaluate single index for removal */
@@ -104,7 +105,7 @@ cleanup_decision_t* index_cleanup_evaluate(index_cleanup_t* cleanup,
                                           const char* index_name) {
     if (!cleanup || !collection_name || !index_name) return NULL;
     
-    cleanup_decision_t* decision = calloc(1, sizeof(cleanup_decision_t));
+    cleanup_decision_t* decision =BUFFER_CALLOC(1, sizeof(cleanup_decision_t));
     if (!decision) return NULL;
     
     strncpy(decision->collection_name, collection_name, sizeof(decision->collection_name) - 1);
@@ -198,7 +199,7 @@ int index_cleanup_remove_index(index_cleanup_t* cleanup,
                 }
                 
                 /* Free the info */
-                free(curr);
+                BUFFER_FREE(curr);
                 break;
             }
             
@@ -273,7 +274,7 @@ int index_cleanup_check_all(index_cleanup_t* cleanup) {
                 pthread_mutex_lock(&indexer->indexes_lock);
             }
             
-            free(decision);
+            BUFFER_FREE(decision);
         }
         
         info = next;

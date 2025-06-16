@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 
 /* Memory debugging - always available, controlled dynamically via TRACE_MEMORY */
 
@@ -44,7 +45,7 @@ int memory_debug_enabled(void);
 
 /* Smart wrapper macros - only track when TRACE_MEMORY is enabled */
 #define DEBUG_MALLOC(size) \
-    ({ void* __ptr = malloc(size); \
+    ({ void* __ptr =BUFFER_ALLOC(size); \
        if (logger_trace_enabled(TRACE_MEMORY)) { \
            memory_debug_track_alloc(__ptr, size, __FILE__, __LINE__, __func__, "malloc"); \
        } \
@@ -55,7 +56,7 @@ int memory_debug_enabled(void);
         if (logger_trace_enabled(TRACE_MEMORY)) { \
             memory_debug_track_free(ptr, __FILE__, __LINE__, __func__, "free"); \
         } \
-        free(ptr); \
+        BUFFER_FREE(ptr); \
     } while(0)
 
 #define DEBUG_BUFFER_POOL_ALLOC(size) \
@@ -74,7 +75,7 @@ int memory_debug_enabled(void);
     } while(0)
 
 #define DEBUG_STRDUP(str) \
-    ({ char* __ptr = strdup(str); \
+    ({ char* __ptr = BUFFER_STRDUP(str); \
        if (logger_trace_enabled(TRACE_MEMORY)) { \
            memory_debug_track_alloc(__ptr, strlen(str) + 1, __FILE__, __LINE__, __func__, "strdup"); \
        } \

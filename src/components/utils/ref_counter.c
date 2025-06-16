@@ -1,6 +1,7 @@
 #include "utils/ref_counter.h"
 #include "utils/diagnostics.h"
 #include <stdlib.h>
+#include "utils/buffer_pool.h"
 
 /**
  * Create a new reference counted object
@@ -10,7 +11,7 @@ ref_counted_t* ref_counter_create(void* object, void (*free_fn)(void*)) {
     return NULL;
   }
   
-  ref_counted_t* rc = (ref_counted_t*)malloc(sizeof(ref_counted_t));
+  ref_counted_t* rc = (ref_counted_t*)BUFFER_ALLOC(sizeof(ref_counted_t));
   if (!rc) {
     return NULL;
   }
@@ -63,7 +64,7 @@ size_t ref_counter_release(ref_counted_t* rc) {
     
     DEBUG_PRINT("Freeing reference counter %p", (void*)rc);
     /* Free the reference counted wrapper itself */
-    free(rc);
+    BUFFER_FREE(rc);
     
     /* Free the contained object if we have a free function */
     if (free_fn && object_to_free) {

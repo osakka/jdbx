@@ -6,6 +6,7 @@
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "transaction/transaction.h"
+#include "utils/memory_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

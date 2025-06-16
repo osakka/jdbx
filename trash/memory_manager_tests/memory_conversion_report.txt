@@ -1,0 +1,111 @@
+Memory Call Conversion Report
+=============================
+Date: Mon Jun 16 19:01:43 BST 2025
+
+
+File: /opt/jdbx/src/components/api/health_api.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  realloc -> BUFFER_REALLOC
+
+File: /opt/jdbx/src/components/core/api.c
+  malloc -> BUFFER_ALLOC
+  realloc -> BUFFER_REALLOC
+
+File: /opt/jdbx/src/components/core/client_connection.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/components/core/thread_pool.c
+  malloc -> BUFFER_ALLOC
+  realloc -> BUFFER_REALLOC
+
+File: /opt/jdbx/src/components/database/batch_operations.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/components/database/database.c
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/components/database/index_cleanup.c
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/components/database/lock_manager.c
+  calloc -> BUFFER_CALLOC
+  realloc -> BUFFER_REALLOC
+
+File: /opt/jdbx/src/components/database/versioning_policy.c
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/components/lockfree/hazard_pointer.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/components/storage/jdbx_btree.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/components/storage/jdbx_page_manager.c
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/components/transaction/transaction.c
+  calloc -> BUFFER_CALLOC
+  realloc -> BUFFER_REALLOC
+
+File: /opt/jdbx/src/components/transaction/transaction_log.c
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/components/utils/generic_cache.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  calloc -> BUFFER_CALLOC
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/components/utils/skiplist.c
+  malloc -> BUFFER_ALLOC
+  calloc -> BUFFER_CALLOC
+
+File: /opt/jdbx/src/include/utils/json_helpers.h
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  strdup -> BUFFER_STRDUP
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/include/utils/memory_monitoring.h
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  strdup -> BUFFER_STRDUP
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/initialize/config.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  strdup -> BUFFER_STRDUP
+  Added buffer_pool.h include
+
+File: /opt/jdbx/src/initialize/logger_init.c
+  malloc -> BUFFER_ALLOC
+  free -> BUFFER_FREE
+  strdup -> BUFFER_STRDUP
+  Added buffer_pool.h include
+
+Summary:
+========
+Files processed: 20
+Files converted: 20
+Backup location: /opt/jdbx/backup_memory_20250616_190143
+
+Remaining Direct Calls:
+======================
+None found - conversion complete!

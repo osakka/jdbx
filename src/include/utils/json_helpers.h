@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /**
  * Get all keys from a JSON object and store them in the given array.
@@ -37,14 +38,14 @@ static inline http_response_t* http_response_json_string(const char* json_str, i
         return http_response_error("Invalid JSON string", 500);
     }
     
-    http_response_t* response = (http_response_t*)malloc(sizeof(http_response_t));
+    http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
     if (!response) {
         return NULL;
     }
     
     response->status = status_code;
-    response->body = strdup(json_str);
-    response->content_type = strdup("application/json");
+    response->body = BUFFER_STRDUP(json_str);
+    response->content_type = BUFFER_STRDUP("application/json");
     response->content_length = strlen(json_str);
     response->headers = NULL;
     response->num_headers = 0;
@@ -70,7 +71,7 @@ static inline http_response_t* http_response_from_json_string(char* json_str, in
     /* Parse the JSON string back to a json_value_t */
     json_value_t* json = json_parse(json_str);
     if (!json) {
-        free(json_str);
+        BUFFER_FREE(json_str);
         return http_response_error("Failed to parse JSON", 500);
     }
     
@@ -79,7 +80,7 @@ static inline http_response_t* http_response_from_json_string(char* json_str, in
     
     /* Free temporary objects */
     json_free(json);
-    free(json_str);
+    BUFFER_FREE(json_str);
     
     return response;
 }

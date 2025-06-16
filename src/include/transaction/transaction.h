@@ -3,6 +3,7 @@
 
 #include "database/database.h"
 #include "utils/json.h"
+#include "utils/memory_manager.h"  /* For checkpoint-based memory management */
 #include "core/server.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,6 +76,7 @@ struct transaction {
     isolation_level_t isolation_level; /* Isolation level */
     int timeout_sec;                 /* Transaction timeout in seconds */
     savepoint_t* savepoints;         /* List of savepoints */
+    memory_checkpoint_t* memory_checkpoint; /* Memory checkpoint for automatic cleanup */
     pthread_mutex_t lock;            /* Transaction lock */
 };
 

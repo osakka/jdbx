@@ -1,5 +1,6 @@
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <sys/stat.h>
 #include <errno.h>
 #include <libgen.h> /* For dirname() */
@@ -72,7 +73,7 @@ int logger_init(const char* log_file_path, log_level_t level) {
   }
   
   /* Allocate memory for the logger */
-  g_logger = (logger_config_t*)malloc(sizeof(logger_config_t));
+  g_logger = (logger_config_t*)BUFFER_ALLOC(sizeof(logger_config_t));
   if (!g_logger) {
     fprintf(stderr, "Out of memory");
     return 0; /* Memory allocation failed */
@@ -263,7 +264,7 @@ void logger_close() {
   
   /* Destroy mutex and free memory */
   pthread_mutex_destroy(&g_logger->lock);
-  free(g_logger);
+  BUFFER_FREE(g_logger);
   g_logger = NULL;
 }
 
@@ -287,6 +288,11 @@ void logger_log(log_level_t level, const char* file, int line,
   /* Check if this message should be logged based on level */
   if (level > g_logger->log_level) {
     return;
+  }
+  
+  /* Bypass memory manager for logging to avoid recursion */
+  if (g_logger) {  /* Only bypass if logger is initialized */
+    memory_bypass_checkpoint(1);
   }
   
   pthread_mutex_lock(&g_logger->lock);
@@ -359,6 +365,11 @@ void logger_log(log_level_t level, const char* file, int line,
   fflush(output);
   
   pthread_mutex_unlock(&g_logger->lock);
+  
+  /* Re-enable memory manager checkpoints */
+  if (g_logger) {  /* Only if logger was initialized */
+    memory_bypass_checkpoint(0);
+  }
 }
 
 /* Log a trace message with category */
@@ -368,6 +379,11 @@ void logger_trace(trace_category_t category, const char* file, int line,
   if (!g_logger || g_logger->log_level < LOG_LEVEL_TRACE || 
       (g_logger->trace_mask & category) == 0) {
     return;
+  }
+  
+  /* Bypass memory manager for logging to avoid recursion */
+  if (g_logger) {  /* Only bypass if logger is initialized */
+    memory_bypass_checkpoint(1);
   }
   
   pthread_mutex_lock(&g_logger->lock);
@@ -429,4 +445,9 @@ void logger_trace(trace_category_t category, const char* file, int line,
   fflush(output);
   
   pthread_mutex_unlock(&g_logger->lock);
+  
+  /* Re-enable memory manager checkpoints */
+  if (g_logger) {  /* Only if logger was initialized */
+    memory_bypass_checkpoint(0);
+  }
 }

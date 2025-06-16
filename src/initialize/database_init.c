@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /* Initialize JDBX-only database */
 init_status_t init_database(server_config_t* config, database_t** database_out) {
@@ -41,7 +42,7 @@ init_status_t init_database(server_config_t* config, database_t** database_out) 
     database_t* db = db_init(jdbx_path);
     
     /* Clean up generated path */
-    free(jdbx_path);
+    BUFFER_FREE(jdbx_path);
     if (!db) {
         INIT_LOG_FAILURE("DATABASE", "Failed to initialize JDBX database");
         return INIT_DATABASE_ERROR;

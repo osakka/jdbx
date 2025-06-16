@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "utils/buffer_pool.h"
 
 /* Initialize logger system */
 init_status_t init_logger(server_config_t* config) {
@@ -58,21 +59,21 @@ init_status_t init_logger(server_config_t* config) {
     char* default_log_path = NULL;
     
     if (var_dir) {
-      default_log_path = malloc(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
+      default_log_path =BUFFER_ALLOC(strlen(var_dir) + strlen(DEFAULT_LOG_FILE_BASENAME) + 2);
       if (default_log_path) {
         sprintf(default_log_path, "%s/%s", var_dir, DEFAULT_LOG_FILE_BASENAME);
       }
-      free(var_dir);
+      BUFFER_FREE(var_dir);
     }
     
     if (!default_log_path) {
-      default_log_path = strdup(DEFAULT_LOG_FILE_BASENAME);
+      default_log_path = BUFFER_STRDUP(DEFAULT_LOG_FILE_BASENAME);
     }
     
     if (!logger_init(default_log_path, config->log_level)) {
       fprintf(stderr, "Default logger initialization failed: %s\n",
           default_log_path);
-      free(default_log_path);
+      BUFFER_FREE(default_log_path);
       return INIT_LOGGER_ERROR;
     }
     
@@ -80,7 +81,7 @@ init_status_t init_logger(server_config_t* config) {
       LOG_INFO("Default file logger initialized: %s", default_log_path);
     }
     
-    free(default_log_path);
+    BUFFER_FREE(default_log_path);
   }
 
   /* Now we can use the standardized logging macros */

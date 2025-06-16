@@ -16,6 +16,7 @@
 
 #include "storage/jdbx.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 
 /* CRC32 table for checksums */
 static uint32_t crc32_table[256];
@@ -159,7 +160,7 @@ static int init_new_file(jdbx_page_manager_t* pm, size_t initial_size) {
 
 /* Create a new JDBX file */
 jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
-    jdbx_page_manager_t* pm = calloc(1, sizeof(jdbx_page_manager_t));
+    jdbx_page_manager_t* pm =BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
     if (!pm) {
         jdbx_error("Failed to allocate page manager");
         return NULL;
@@ -169,7 +170,7 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     pm->fd = open(path, O_RDWR | O_CREAT | O_EXCL, 0644);
     if (pm->fd < 0) {
         jdbx_error("Failed to create file %s: %s", path, strerror(errno));
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -177,7 +178,7 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     if (init_new_file(pm, initial_size) != 0) {
         close(pm->fd);
         unlink(path);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -188,13 +189,13 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     
     /* Initialize cache */
     pm->cache_capacity = JDBX_CACHE_SIZE;
-    pm->cache = calloc(pm->cache_capacity, sizeof(cache_entry_t));
+    pm->cache =BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
     if (!pm->cache) {
         jdbx_error("Failed to allocate cache");
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         unlink(path);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -211,11 +212,11 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     pm->wal.fd = open(wal_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
     if (pm->wal.fd < 0) {
         jdbx_error("Failed to create WAL file: %s", strerror(errno));
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         unlink(path);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -225,11 +226,11 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
         jdbx_error("Failed to initialize WAL: %s", strerror(errno));
         close(pm->wal.fd);
         unlink(wal_path);
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         unlink(path);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -241,11 +242,11 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
         jdbx_error("Failed to mmap WAL: %s", strerror(errno));
         close(pm->wal.fd);
         unlink(wal_path);
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         unlink(path);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -255,7 +256,7 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
 
 /* Open existing JDBX file */
 jdbx_page_manager_t* jdbx_open(const char* path) {
-    jdbx_page_manager_t* pm = calloc(1, sizeof(jdbx_page_manager_t));
+    jdbx_page_manager_t* pm =BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
     if (!pm) {
         jdbx_error("Failed to allocate page manager");
         return NULL;
@@ -266,7 +267,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     if (pm->fd < 0) {
         jdbx_error("Failed to open file %s: %s (errno=%d)", path, strerror(errno), errno);
         LOG_ERROR("jdbx_open: Failed to open %s: %s", path, strerror(errno));
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -275,7 +276,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     if (fstat(pm->fd, &st) != 0) {
         jdbx_error("Failed to stat file: %s", strerror(errno));
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -290,7 +291,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     if (pm->mmap_base == MAP_FAILED) {
         jdbx_error("Failed to mmap file: %s", strerror(errno));
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -300,7 +301,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
         jdbx_error("Invalid JDBX file magic");
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -308,7 +309,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
         jdbx_error("Unsupported JDBX version: %u", pm->header->version);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -340,7 +341,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
                    expected_checksum, actual_checksum);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -356,12 +357,12 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     
     /* Initialize cache */
     pm->cache_capacity = JDBX_CACHE_SIZE;
-    pm->cache = calloc(pm->cache_capacity, sizeof(cache_entry_t));
+    pm->cache =BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
     if (!pm->cache) {
         jdbx_error("Failed to allocate cache");
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -378,10 +379,10 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     pm->wal.fd = open(wal_path, O_RDWR | O_CREAT, 0644);
     if (pm->wal.fd < 0) {
         jdbx_error("Failed to open WAL file: %s", strerror(errno));
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -389,10 +390,10 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     if (fstat(pm->wal.fd, &st) != 0) {
         jdbx_error("Failed to stat WAL: %s", strerror(errno));
         close(pm->wal.fd);
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -409,10 +410,10 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     if (pm->wal.mmap_base == MAP_FAILED) {
         jdbx_error("Failed to mmap WAL: %s", strerror(errno));
         close(pm->wal.fd);
-        free(pm->cache);
+        BUFFER_FREE(pm->cache);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
-        free(pm);
+        BUFFER_FREE(pm);
         return NULL;
     }
     
@@ -681,7 +682,7 @@ void jdbx_close(jdbx_page_manager_t* pm) {
     }
     
     /* Clean up cache */
-    free(pm->cache);
+    BUFFER_FREE(pm->cache);
     
     /* Destroy locks */
     pthread_rwlock_destroy(&pm->cache_lock);
@@ -690,5 +691,5 @@ void jdbx_close(jdbx_page_manager_t* pm) {
     
     LOG_INFO("Closed JDBX database");
     
-    free(pm);
+    BUFFER_FREE(pm);
 }

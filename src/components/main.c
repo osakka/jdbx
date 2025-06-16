@@ -27,9 +27,11 @@
 #include "init.h"
 #include "utils/logger.h"
 #include "utils/config_loader.h"
+#include "utils/memory_manager.h"
 #include "core/server_thread_safe.h"
 #include "rbac/jwt_cache.h"
 #include "utils/production_config.h"
+#include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,6 +145,9 @@ int main(int argc, char** argv) {
   api_context_t* api_ctx = NULL;
   init_status_t status;
   
+  /* Initialize memory manager FIRST - before anything else */
+  memory_manager_init();
+  
   /* Display banner */
   display_banner();
   
@@ -158,17 +163,17 @@ int main(int argc, char** argv) {
         printf("Terminating server with PID %d...\n", pid);
         if (kill(pid, SIGTERM) == 0) {
           printf("Server terminated successfully\n");
-          free(config);
+          BUFFER_FREE(config);
           return 0;
         } else {
           fprintf(stderr, "Error: Failed to terminate server (errno=%d: %s)\n", 
               errno, strerror(errno));
-          free(config);
+          BUFFER_FREE(config);
           return 1;
         }
       } else {
         fprintf(stderr, "Error: No running server found\n");
-        free(config);
+        BUFFER_FREE(config);
         return 1;
       }
     }
@@ -202,7 +207,7 @@ int main(int argc, char** argv) {
   status = init_logger(config);
   if (status != INIT_OK) {
     fprintf(stderr, "Failed to initialize logger\n");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -273,13 +278,13 @@ int main(int argc, char** argv) {
     status = init_daemon(config);
     if (status == INIT_DAEMON_ERROR) {
       INIT_LOG_FAILURE("DAEMON", "Failed to initialize daemon process");
-      free(config);
+      BUFFER_FREE(config);
       return 1;
     } else if (status == INIT_DAEMON_PARENT_EXIT) {
       /* Parent process should exit without cleanup */
       INIT_LOG_PROGRESS("DAEMON", "Daemon started, parent process exiting");
       /* Free config before exit to avoid memory leak */
-      free(config);
+      BUFFER_FREE(config);
       return 0;
     }
     
@@ -295,7 +300,7 @@ int main(int argc, char** argv) {
   status = init_socket(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -312,7 +317,7 @@ int main(int argc, char** argv) {
   status = init_database(config, &database);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -331,7 +336,7 @@ int main(int argc, char** argv) {
   status = init_threads(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize thread pool");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -339,7 +344,7 @@ int main(int argc, char** argv) {
   LOG_DEBUG("Initializing thread-safe server components.");
   if (server_init_thread_safe(config) != 0) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize thread-safe server components");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -348,7 +353,7 @@ int main(int argc, char** argv) {
   status = init_metrics(config);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize metrics system");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -357,7 +362,7 @@ int main(int argc, char** argv) {
   status = init_rbac(config, database, &rbac, &rbac_ref);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize RBAC system");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -365,7 +370,7 @@ int main(int argc, char** argv) {
   LOG_INFO("Initializing JWT cache with 10,000 max entries.");
   if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
     INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   LOG_INFO("JWT cache initialized successfully.");
@@ -375,7 +380,7 @@ int main(int argc, char** argv) {
   status = init_api(config, database, rbac, &api_ctx);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize API context");
-    free(config);
+    BUFFER_FREE(config);
     return 1;
   }
   
@@ -411,6 +416,9 @@ int main(int argc, char** argv) {
   INIT_LOG_PROGRESS("MAIN", "Server has shut down, status: %d", status);
   
   /* Cleanup handled by registered atexit handler */
+  
+  /* Shutdown memory manager */
+  memory_manager_shutdown();
   
   return (status == INIT_OK) ? 0 : 1;
 }

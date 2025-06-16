@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "utils/buffer_pool.h"
 
 /* Static flag to detect and prevent recursive database operations */
 static int db_operation_in_progress = 0;
@@ -60,7 +61,7 @@ rbac_system_t* rbac_permissions_init(database_t* db, const char* path) {
       
       /* Free error message if present */
       if (status.error_message) {
-        free(status.error_message);
+        BUFFER_FREE(status.error_message);
       }
       
       /* Reset the flag since we're done with database operations */
@@ -166,7 +167,7 @@ int rbac_permissions_save(database_t* db, rbac_system_t* rbac, const char* path)
            status.error_message ? status.error_message : "Unknown error");
       /* Free error message if present */
       if (status.error_message) {
-        free(status.error_message);
+        BUFFER_FREE(status.error_message);
       }
       
       /* Reset the flag since we're done */

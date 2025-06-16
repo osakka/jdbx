@@ -124,7 +124,7 @@ versioning_policy_t* versioning_policy_get_library(database_t* db, const char* l
         return NULL;
     }
     
-    versioning_policy_t* policy = calloc(1, sizeof(versioning_policy_t));
+    versioning_policy_t* policy =BUFFER_CALLOC(1, sizeof(versioning_policy_t));
     if (!policy) {
         return NULL;
     }
@@ -175,7 +175,7 @@ versioning_policy_t* versioning_policy_get_collection(database_t* db, const char
     if (library_name) {
         policy = versioning_policy_get_library(db, library_name);
     } else {
-        policy = calloc(1, sizeof(versioning_policy_t));
+        policy =BUFFER_CALLOC(1, sizeof(versioning_policy_t));
         if (!policy) return NULL;
         memcpy(policy, &DEFAULT_POLICY, sizeof(versioning_policy_t));
     }
@@ -258,23 +258,23 @@ int versioning_create_version(database_t* db, const char* library_name,
     
     /* Check if versioning is enabled */
     if (!policy->enabled) {
-        free(policy);
+        BUFFER_FREE(policy);
         return 0; /* Success - versioning not enabled */
     }
     
     /* Don't version documents in the versions collection to avoid infinite loop */
     if (strstr(collection_name, "versions") != NULL) {
-        free(policy);
+        BUFFER_FREE(policy);
         return 0; /* Success - skip versioning for version documents */
     }
     
     /* Check if we should version this operation */
     if (strcmp(operation, "update") == 0 && !policy->version_on_update) {
-        free(policy);
+        BUFFER_FREE(policy);
         return 0;
     }
     if (strcmp(operation, "delete") == 0 && !policy->version_on_delete) {
-        free(policy);
+        BUFFER_FREE(policy);
         return 0;
     }
     
@@ -282,7 +282,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     json_value_t* id_val = json_object_get(document, "uuid");
     if (!id_val || id_val->type != JSON_STRING) {
         LOG_ERROR("Document missing uuid field for versioning");
-        free(policy);
+        BUFFER_FREE(policy);
         return -1;
     }
     const char* doc_id = id_val->value.string;
@@ -295,7 +295,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     /* Create version document */
     json_value_t* version_doc = json_create_object();
     if (!version_doc) {
-        free(policy);
+        BUFFER_FREE(policy);
         return -1;
     }
     
@@ -330,7 +330,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     
     if (!result) {
         LOG_ERROR("Failed to create version for document %s", doc_id);
-        free(policy);
+        BUFFER_FREE(policy);
         return -1;
     }
     
@@ -339,7 +339,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     /* Clean up old versions if needed */
     versioning_cleanup_old_versions(db, library_name, collection_name, doc_id, policy);
     
-    free(policy);
+    BUFFER_FREE(policy);
     return 0;
 }
 

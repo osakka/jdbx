@@ -152,7 +152,7 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
   }
   
   /* Create user structure */
-  rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("Cannot allocate memory for user.");
     return NULL;
@@ -196,7 +196,7 @@ static rbac_role_t* role_doc_to_rbac_role(json_value_t* role_doc) {
   }
   
   /* Create role structure */
-  rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
+  rbac_role_t* role = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!role) {
     return NULL;
   }
@@ -238,7 +238,7 @@ rbac_system_t* rbac_db_load(database_t* db) {
   }
   
   /* Create RBAC system */
-  rbac_system_t* rbac = (rbac_system_t*)malloc(sizeof(rbac_system_t));
+  rbac_system_t* rbac = (rbac_system_t*)BUFFER_ALLOC(sizeof(rbac_system_t));
   if (!rbac) {
     return NULL;
   }
@@ -476,7 +476,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   json_free(insert_result);
   
   /* Create user structure */
-  rbac_user_t* user = (rbac_user_t*)malloc(sizeof(rbac_user_t));
+  rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     BUFFER_FREE(id);
     BUFFER_FREE(password_hash);
@@ -717,7 +717,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   json_free(insert_result);
   
   /* Create role structure */
-  rbac_role_t* role = (rbac_role_t*)malloc(sizeof(rbac_role_t));
+  rbac_role_t* role = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!role) {
     BUFFER_FREE(id);
     return NULL;
@@ -1217,7 +1217,7 @@ static char* get_resource_permission_key(rbac_resource_type_t resource_type, con
   }
   
   /* Create key string */
-  char* key = (char*)malloc(strlen(resource_id) + 32);
+  char* key = (char*)BUFFER_ALLOC(strlen(resource_id) + 32);
   if (!key) {
     return NULL;
   }

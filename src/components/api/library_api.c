@@ -693,7 +693,7 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
     char* stats_pos = strstr(path_part, "/stats");
     if (stats_pos) {
       size_t name_len = stats_pos - path_part;
-      char* name_buf = malloc(name_len + 1);
+      char* name_buf = BUFFER_ALLOC(name_len + 1);
       if (!name_buf) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -817,7 +817,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
     char* copy_pos = strstr(path_part, "/copy");
     if (copy_pos) {
       size_t name_len = copy_pos - path_part;
-      char* name_buf = malloc(name_len + 1);
+      char* name_buf = BUFFER_ALLOC(name_len + 1);
       if (!name_buf) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Memory allocation failed\"}", "application/json");
@@ -977,7 +977,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   json_object_set(response, "data_copied", json_create_boolean(should_copy_data));
   
   json_free(body);
-  if (source_library) free((void*)source_library);
+  if (source_library) BUFFER_FREE((void*)source_library);
   
   char* response_str = json_stringify(response);
   json_free(response);

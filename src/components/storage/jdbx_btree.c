@@ -29,7 +29,7 @@ static int default_compare(const void* a, size_t a_len,
 /* Create a new B-tree */
 jdbx_btree_t* jdbx_btree_create(jdbx_page_manager_t* pm, 
                                 int (*compare)(const void*, size_t, const void*, size_t)) {
-    jdbx_btree_t* tree = calloc(1, sizeof(jdbx_btree_t));
+    jdbx_btree_t* tree =BUFFER_CALLOC(1, sizeof(jdbx_btree_t));
     if (!tree) {
         jdbx_error("Failed to allocate B-tree");
         return NULL;
@@ -79,7 +79,7 @@ jdbx_btree_t* jdbx_btree_create(jdbx_page_manager_t* pm,
 /* Open existing B-tree */
 jdbx_btree_t* jdbx_btree_open(jdbx_page_manager_t* pm, uint64_t root_page,
                               int (*compare)(const void*, size_t, const void*, size_t)) {
-    jdbx_btree_t* tree = calloc(1, sizeof(jdbx_btree_t));
+    jdbx_btree_t* tree =BUFFER_CALLOC(1, sizeof(jdbx_btree_t));
     if (!tree) {
         jdbx_error("Failed to allocate B-tree");
         return NULL;
@@ -288,7 +288,7 @@ static void* read_overflow_value(jdbx_btree_t* tree, uint64_t overflow_page, siz
     *value_len = total_size;
     
     /* Allocate buffer for full value */
-    void* value = malloc(total_size);
+    void* value =BUFFER_ALLOC(total_size);
     if (!value) return NULL;
     
     uint8_t* data = (uint8_t*)value;
@@ -443,7 +443,7 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
     
     /* Copy middle key for promotion */
     size_t mid_key_size = mid_entry->key_size;
-    uint8_t* mid_key = malloc(mid_key_size);
+    uint8_t* mid_key =BUFFER_ALLOC(mid_key_size);
     if (!mid_key) {
         jdbx_free_page(tree->pm, sibling_page);
         return -1;
@@ -750,7 +750,7 @@ int jdbx_btree_get(jdbx_btree_t* tree,
             } else {
                 /* Allocate and copy value */
                 *value_len = entry->value_size;
-                *value = malloc(*value_len);
+                *value =BUFFER_ALLOC(*value_len);
                 if (!*value) {
                     return -1;
                 }
@@ -847,7 +847,7 @@ void jdbx_btree_close(jdbx_btree_t* tree) {
              (unsigned long long)tree->stats.num_keys,
              (unsigned long long)tree->stats.num_pages);
     
-    free(tree);
+    BUFFER_FREE(tree);
 }
 
 /* Find leftmost leaf page */
@@ -874,7 +874,7 @@ static uint64_t find_leftmost_leaf(jdbx_btree_t* tree) {
 jdbx_btree_iterator_t* jdbx_btree_iterator_create(jdbx_btree_t* tree) {
     if (!tree) return NULL;
     
-    jdbx_btree_iterator_t* iter = calloc(1, sizeof(jdbx_btree_iterator_t));
+    jdbx_btree_iterator_t* iter =BUFFER_CALLOC(1, sizeof(jdbx_btree_iterator_t));
     if (!iter) {
         jdbx_error("Failed to allocate iterator");
         return NULL;
@@ -908,23 +908,23 @@ int jdbx_btree_iterator_next(jdbx_btree_iterator_t* iter,
             
             /* Extract key */
             *key_len = entry->key_size;
-            *key = malloc(*key_len);
+            *key =BUFFER_ALLOC(*key_len);
             if (!*key) return -1;
             memcpy(*key, entry_ptr + sizeof(btree_entry_t), *key_len);
             
             /* Extract value */
             if (entry->overflow_page == 0) {
                 *value_len = entry->value_size;
-                *value = malloc(*value_len);
+                *value =BUFFER_ALLOC(*value_len);
                 if (!*value) {
-                    free(*key);
+                    BUFFER_FREE(*key);
                     return -1;
                 }
                 memcpy(*value, entry_ptr + sizeof(btree_entry_t) + entry->key_size, *value_len);
             } else {
                 /* TODO: Handle overflow pages */
                 jdbx_error("Overflow pages not supported in iterator");
-                free(*key);
+                BUFFER_FREE(*key);
                 return -1;
             }
             
@@ -950,6 +950,6 @@ int jdbx_btree_iterator_next(jdbx_btree_iterator_t* iter,
 /* Destroy iterator */
 void jdbx_btree_iterator_destroy(jdbx_btree_iterator_t* iter) {
     if (iter) {
-        free(iter);
+        BUFFER_FREE(iter);
     }
 }

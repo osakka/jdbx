@@ -293,7 +293,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     return NULL;
   }
 
-  api_context_t* ctx = (api_context_t*)malloc(sizeof(api_context_t));
+  api_context_t* ctx = (api_context_t*)BUFFER_ALLOC(sizeof(api_context_t));
   if (!ctx) {
     if (g_logger) {
       LOG_ERROR("API context creation failed: Memory allocation failed.");
@@ -332,7 +332,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
 
   /* Allocate memory for routes (50 extra slots for dynamic registration) */
   ctx->max_routes = num_routes + 50;
-  ctx->routes = (api_route_t*)malloc(ctx->max_routes * sizeof(api_route_t));
+  ctx->routes = (api_route_t*)BUFFER_ALLOC(ctx->max_routes * sizeof(api_route_t));
   if (!ctx->routes) {
     transaction_manager_free(ctx->transaction_manager);
     BUFFER_FREE((void*)ctx->jwt_secret);
@@ -658,6 +658,22 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
                  "{\"error\":\"Internal server error\"}", "application/json");
   }
   
+  /* Create memory checkpoint for this request */
+  /* LOG_DEBUG("About to create memory checkpoint for request"); */
+  memory_checkpoint_t* request_checkpoint = memory_checkpoint_create();
+  /* if (request_checkpoint) {
+    LOG_DEBUG("Created memory checkpoint %p for API request: %s %s", 
+              request_checkpoint,
+              request->method == HTTP_GET ? "GET" : 
+              request->method == HTTP_POST ? "POST" : 
+              request->method == HTTP_PUT ? "PUT" : 
+              request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+              request->path ? request->path : "<null>");
+  } */
+  if (!request_checkpoint) {
+    /* LOG_WARNING("Failed to create memory checkpoint for request"); */
+  }
+  
   if (!request->path) {
     if (g_logger) LOG_ERROR("API dispatch failed: Request has NULL path.");
     printf("API dispatch failed: Request has NULL path\n");
@@ -721,6 +737,13 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
         if (g_logger) LOG_DEBUG("Route requires authentication, checking token.");
         if (!api_authenticate_request_sliding(ctx, request)) {
           if (g_logger) LOG_WARNING("Authentication failed for route: %s", ctx->routes[i].path);
+          
+          /* Rewind checkpoint on auth failure */
+          if (request_checkpoint) {
+              memory_checkpoint_rewind(request_checkpoint);
+              request_checkpoint = NULL;
+          }
+          
           return create_http_response(HTTP_UNAUTHORIZED, 
                        "{\"error\":\"Unauthorized\"}", "application/json");
         }
@@ -747,6 +770,20 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
           if (error_counter) {
               metrics_counter_inc(error_counter, 1);
           }
+          
+          /* Rewind memory checkpoint on error */
+          if (request_checkpoint) {
+              memory_checkpoint_rewind(request_checkpoint);
+              request_checkpoint = NULL;
+              /* LOG_DEBUG("Rewound memory checkpoint due to error response"); */
+          }
+      } else {
+          /* Commit memory checkpoint on success */
+          if (request_checkpoint) {
+              memory_checkpoint_commit(request_checkpoint);
+              request_checkpoint = NULL;
+              /* LOG_DEBUG("Committed memory checkpoint for successful request"); */
+          }
       }
       
       return result;
@@ -766,6 +803,13 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       TRACE_API(" ... showing last 20 of %d routes", ctx->num_routes);
     }
   }
+  
+  /* Rewind checkpoint before returning error */
+  if (request_checkpoint) {
+      memory_checkpoint_rewind(request_checkpoint);
+      request_checkpoint = NULL;
+  }
+  
   return create_http_response(HTTP_NOT_FOUND, 
                "{\"error\":\"Not found\"}", "application/json");
 }
@@ -1205,7 +1249,7 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
-/* Create unified document */
+/* Create unified document - NOW WITH AUTOMATIC MEMORY CLEANUP! */
 static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request || !request->body) {
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -1262,6 +1306,11 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to insert document\"}", "application/json");
   }
+  
+  /* NOTE: With memory manager active, all these manual json_free calls
+   * become unnecessary! The checkpoint in api_dispatch_request handles
+   * automatic cleanup on any error path. This handler could be simplified
+   * to just return errors without any manual cleanup! */
   
   char* response_str = json_stringify(result);
   json_free(result);
@@ -4016,7 +4065,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   
   /* Create a buffer for the Prometheus format output */
   size_t buffer_size = 10240; /* Start with 10KB buffer */
-  char* prom_buffer = (char*)malloc(buffer_size);
+  char* prom_buffer = (char*)BUFFER_ALLOC(buffer_size);
   if (!prom_buffer) {
     json_free(root);
     BUFFER_FREE(metrics_json);
@@ -4149,7 +4198,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
       /* Check for buffer overflow and resize if needed */
       if (buffer_used >= buffer_size - 1024) {
         buffer_size *= 2;
-        char* new_buffer = (char*)realloc(prom_buffer, buffer_size);
+        char* new_buffer = (char*)BUFFER_REALLOC(prom_buffer, buffer_size);
         if (!new_buffer) {
           BUFFER_FREE(prom_buffer);
           json_free(root);

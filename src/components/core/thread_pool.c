@@ -84,7 +84,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
     return NULL;
   }
   
-  thread_pool_t* pool = (thread_pool_t*)malloc(sizeof(thread_pool_t));
+  thread_pool_t* pool = (thread_pool_t*)BUFFER_ALLOC(sizeof(thread_pool_t));
   if (!pool) {
     POOL_LOG(ERROR, "Out of memory");
     return NULL;
@@ -120,7 +120,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
   }
   
   /* Allocate thread array */
-  pool->threads = (pthread_t*)malloc(pool->max_threads * sizeof(pthread_t));
+  pool->threads = (pthread_t*)BUFFER_ALLOC(pool->max_threads * sizeof(pthread_t));
   if (!pool->threads) {
     POOL_LOG(ERROR, "Failed to allocate thread array");
     pthread_cond_destroy(&pool->idle_cond);
@@ -175,7 +175,7 @@ int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), void* arg
   POOL_LOG(TRACE, "Entering thread_pool_add_work: function=%p, argument=%p", function, argument);
   
   /* Create new work item */
-  work_item_t* work = (work_item_t*)malloc(sizeof(work_item_t));
+  work_item_t* work = (work_item_t*)BUFFER_ALLOC(sizeof(work_item_t));
   if (!work) {
     POOL_LOG(ERROR, "Out of memory");
     return -1;
@@ -395,7 +395,7 @@ int thread_pool_adjust(thread_pool_t* pool, int min_threads, int max_threads) {
   
   /* Resize the thread array if max_threads increased */
   if (max_threads > old_max) {
-    pthread_t* new_threads = (pthread_t*)realloc(pool->threads, max_threads * sizeof(pthread_t));
+    pthread_t* new_threads = (pthread_t*)BUFFER_REALLOC(pool->threads, max_threads * sizeof(pthread_t));
     if (!new_threads) {
       POOL_LOG(ERROR, "Failed to resize thread array during adjustment");
       /* Restore old values */

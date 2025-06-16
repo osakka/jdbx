@@ -7,6 +7,7 @@
  */
 
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
@@ -14,8 +15,8 @@
 
 /* Global statistics for monitoring */
 static struct {
-    volatile uint64_t total_allocations;
-    volatile uint64_t total_frees;
+    _Alignas(64) volatile uint64_t total_allocations;  /* Align to cache line */
+    _Alignas(64) volatile uint64_t total_frees;        /* Align to cache line */
 } g_stats = {0, 0};
 
 /**
@@ -27,7 +28,8 @@ void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char
         return NULL;
     }
     
-    void* ptr = malloc(size);
+    /* ALWAYS use memory manager for ALL allocations */
+    void* ptr = memory_alloc(size);
     if (ptr) {
         __sync_fetch_and_add(&g_stats.total_allocations, 1);
     }
@@ -40,10 +42,11 @@ void* buffer_pool_alloc_safe(size_t size, const char* file, int line, const char
  */
 void buffer_pool_free_safe(void* ptr, const char* file, int line, const char* func) {
     (void)file; (void)line; (void)func;
-    if (ptr) {
-        free(ptr);
-        __sync_fetch_and_add(&g_stats.total_frees, 1);
-    }
+    if (!ptr) return;
+    
+    /* Try memory manager first - it will handle both managed and unmanaged memory */
+    memory_free(ptr);
+    __sync_fetch_and_add(&g_stats.total_frees, 1);
 }
 
 /**
@@ -59,7 +62,16 @@ void* buffer_pool_realloc_safe(void* ptr, size_t new_size, const char* file, int
         return buffer_pool_alloc_safe(new_size, file, line, func);
     }
     
-    return realloc(ptr, new_size);
+    /* Use memory manager for realloc */
+    return memory_realloc(ptr, new_size);
+}
+
+/**
+ * Allocate zero-initialized memory with debugging information
+ */
+void* buffer_pool_calloc_safe(size_t nmemb, size_t size, const char* file, int line, const char* func) {
+    (void)file; (void)line; (void)func;
+    return memory_calloc(nmemb, size);
 }
 
 /**
@@ -107,6 +119,10 @@ void buffer_pool_free(void* ptr) {
     buffer_pool_free_safe(ptr, "legacy", 0, "buffer_pool_free");
 }
 
+void* buffer_pool_calloc(size_t nmemb, size_t size) {
+    return buffer_pool_calloc_safe(nmemb, size, "legacy", 0, "buffer_pool_calloc");
+}
+
 char* buffer_pool_strdup(const char* str) {
     return buffer_pool_strdup_safe(str, "legacy", 0, "buffer_pool_strdup");
 }
@@ -114,4 +130,3 @@ char* buffer_pool_strdup(const char* str) {
 void* buffer_pool_realloc(void* ptr, size_t new_size) {
     return buffer_pool_realloc_safe(ptr, new_size, "legacy", 0, "buffer_pool_realloc");
 }
-

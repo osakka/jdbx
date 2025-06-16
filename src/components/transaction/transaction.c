@@ -302,7 +302,7 @@ transaction_manager_t* transaction_manager_create(database_t* db, int capacity) 
   manager->tx_hash_size = manager->capacity * 2; /* Size hash table 2x capacity for good distribution */
   LOG_DEBUG("Initializing transaction hash table with %d buckets", manager->tx_hash_size);
 
-  manager->tx_hash_table = (transaction_hash_entry_t**)calloc(
+  manager->tx_hash_table = (transaction_hash_entry_t**)BUFFER_CALLOC(
     manager->tx_hash_size, sizeof(transaction_hash_entry_t*));
 
   if (!manager->tx_hash_table) {
@@ -541,6 +541,12 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
   transaction->operations = NULL;
   transaction->operation_count = 0;
   transaction->savepoints = NULL;
+  
+  /* Create memory checkpoint for automatic cleanup */
+  transaction->memory_checkpoint = memory_checkpoint_create();
+  if (!transaction->memory_checkpoint) {
+    LOG_WARNING("Failed to create memory checkpoint for transaction %s", transaction->id);
+  }
 
   if (pthread_mutex_init(&transaction->lock, NULL) != 0) {
     LOG_ERROR("initialize transaction mutex.");
@@ -563,7 +569,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
     LOG_INFO("Resizing transaction array from %d to %d elements",
         manager->capacity, new_capacity);
 
-    transaction_t** new_array = (transaction_t**)realloc(
+    transaction_t** new_array = (transaction_t**)BUFFER_REALLOC(
       manager->active_transactions, new_capacity * sizeof(transaction_t*));
 
     if (!new_array) {
@@ -582,7 +588,7 @@ transaction_t* transaction_begin(transaction_manager_t* manager, isolation_level
         manager->tx_hash_size, new_hash_size);
 
     transaction_hash_entry_t** new_hash_table = (transaction_hash_entry_t**)
-      calloc(new_hash_size, sizeof(transaction_hash_entry_t*));
+BUFFER_CALLOC(new_hash_size, sizeof(transaction_hash_entry_t*));
 
     if (!new_hash_table) {
       /* Hash table resize failed - continue with the existing hash table */
@@ -682,6 +688,12 @@ int transaction_commit(transaction_manager_t* manager, transaction_t* transactio
   /* Update transaction state */
   transaction->state = TRANSACTION_COMMITTED;
   transaction->commit_time = time(NULL);
+  
+  /* Commit memory checkpoint - all allocations become permanent */
+  if (transaction->memory_checkpoint) {
+    memory_checkpoint_commit(transaction->memory_checkpoint);
+    LOG_DEBUG("Committed memory checkpoint for transaction %s", transaction->id);
+  }
 
   LOG_DEBUG("Transaction %s committed at %ld", transaction->id, transaction->commit_time);
 
@@ -740,6 +752,12 @@ int transaction_rollback(transaction_manager_t* manager, transaction_t* transact
        transaction->operation_count, transaction->id);
   /* This would involve undoing the operations */
   /* For each operation in transaction->operations (in reverse order)... */
+  
+  /* MAGIC: Rewind memory checkpoint - ALL allocations since transaction start are freed! */
+  if (transaction->memory_checkpoint) {
+    memory_checkpoint_rewind(transaction->memory_checkpoint);
+    LOG_DEBUG("Rewound memory checkpoint for transaction %s - all memory automatically cleaned up!", transaction->id);
+  }
 
   /* Update transaction state */
   transaction->state = TRANSACTION_ABORTED;

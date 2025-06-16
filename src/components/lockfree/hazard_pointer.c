@@ -2,6 +2,7 @@
 #include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /* Thread-local storage for retired list */
 static __thread retired_node_t* tls_retired_list = NULL;
@@ -10,7 +11,7 @@ static __thread hp_record_t* tls_hp_record = NULL;
 
 /* Initialize hazard pointer domain */
 hp_domain_t* hp_domain_create(void) {
-    hp_domain_t* domain = calloc(1, sizeof(hp_domain_t));
+    hp_domain_t* domain =BUFFER_CALLOC(1, sizeof(hp_domain_t));
     if (!domain) {
         LOG_ERROR("Cannot allocate hazard pointer domain.");
         return NULL;
@@ -31,13 +32,13 @@ void hp_domain_destroy(hp_domain_t* domain) {
     hp_record_t* curr = domain->head;
     while (curr) {
         hp_record_t* next = curr->next;
-        free(curr);
+        BUFFER_FREE(curr);
         curr = next;
     }
     pthread_mutex_unlock(&domain->list_lock);
     
     pthread_mutex_destroy(&domain->list_lock);
-    free(domain);
+    BUFFER_FREE(domain);
 }
 
 /* Acquire a hazard pointer record for this thread */
@@ -70,7 +71,7 @@ hp_record_t* hp_acquire_record(hp_domain_t* domain) {
     }
     
     /* No inactive record found, create new one */
-    hp_record_t* new_record = calloc(1, sizeof(hp_record_t));
+    hp_record_t* new_record =BUFFER_CALLOC(1, sizeof(hp_record_t));
     if (!new_record) {
         pthread_mutex_unlock(&domain->list_lock);
         LOG_ERROR("Cannot allocate hazard pointer record.");
@@ -149,7 +150,7 @@ static bool is_hazardous(hp_domain_t* domain, void* ptr) {
 void hp_retire(hp_domain_t* domain, void* ptr, void (*free_func)(void*)) {
     if (!domain || !ptr || !free_func) return;
     
-    retired_node_t* node = malloc(sizeof(retired_node_t));
+    retired_node_t* node =BUFFER_ALLOC(sizeof(retired_node_t));
     if (!node) {
         LOG_ERROR("Cannot allocate retired node.");
         /* Emergency: directly free if we can't retire */
@@ -188,7 +189,7 @@ void hp_scan(hp_domain_t* domain) {
             }
             
             curr->free_func(curr->ptr);
-            free(curr);
+            BUFFER_FREE(curr);
             tls_retired_count--;
         } else {
             /* Still hazardous, keep it */

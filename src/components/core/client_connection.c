@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <arpa/inet.h>
+#include "utils/buffer_pool.h"
 
 /* Global connection manager */
 static connection_manager_t *g_connection_manager = NULL;
@@ -70,12 +71,12 @@ static void client_connection_destroy_internal(client_connection_t *conn) {
         
         /* Free buffers */
         if (conn->request_buffer) {
-            free(conn->request_buffer);
+            BUFFER_FREE(conn->request_buffer);
             conn->request_buffer = NULL;
         }
         
         if (conn->response_buffer) {
-            free(conn->response_buffer);
+            BUFFER_FREE(conn->response_buffer);
             conn->response_buffer = NULL;
         }
         
@@ -91,7 +92,7 @@ static void client_connection_destroy_internal(client_connection_t *conn) {
     
     /* Free the connection structure */
     memset(conn, 0, sizeof(client_connection_t)); /* Zero for safety */
-    free(conn);
+    BUFFER_FREE(conn);
     
     TRACE_NET("Connection destruction complete.");
 }
@@ -117,7 +118,7 @@ client_connection_t* client_connection_create(
     
     /* Allocate connection structure */
     TRACE_NET("TRACE_CONN_CREATE: Allocating connection structure...");
-    client_connection_t *conn = calloc(1, sizeof(client_connection_t));
+    client_connection_t *conn =BUFFER_CALLOC(1, sizeof(client_connection_t));
     if (!conn) {
         LOG_ERROR("Failed to allocate memory for client connection");
         return NULL;
@@ -149,7 +150,7 @@ client_connection_t* client_connection_create(
     /* Initialize mutex and condition variable */
     if (pthread_mutex_init(&conn->state_mutex, NULL) != 0) {
         LOG_ERROR("Failed to initialize connection mutex: %s", strerror(errno));
-        free(conn);
+        BUFFER_FREE(conn);
         return NULL;
     }
     
@@ -157,7 +158,7 @@ client_connection_t* client_connection_create(
     if (pthread_cond_init(&conn->cleanup_complete, NULL) != 0) {
         LOG_ERROR("Failed to initialize connection condition variable: %s", strerror(errno));
         pthread_mutex_destroy(&conn->state_mutex);
-        free(conn);
+        BUFFER_FREE(conn);
         return NULL;
     }
     
@@ -182,16 +183,16 @@ client_connection_t* client_connection_create(
         }
         
         TRACE_NET("TRACE_CONN_CREATE: Allocating buffers...");
-        conn->request_buffer = malloc(conn->request_buffer_size);
-        conn->response_buffer = malloc(conn->response_buffer_size);
+        conn->request_buffer =BUFFER_ALLOC(conn->request_buffer_size);
+        conn->response_buffer =BUFFER_ALLOC(conn->response_buffer_size);
         
         if (!conn->request_buffer || !conn->response_buffer) {
             LOG_ERROR("Failed to allocate connection buffers");
-            if (conn->request_buffer) free(conn->request_buffer);
-            if (conn->response_buffer) free(conn->response_buffer);
+            if (conn->request_buffer) BUFFER_FREE(conn->request_buffer);
+            if (conn->response_buffer) BUFFER_FREE(conn->response_buffer);
             pthread_mutex_destroy(&conn->state_mutex);
             pthread_cond_destroy(&conn->cleanup_complete);
-            free(conn);
+            BUFFER_FREE(conn);
             return NULL;
         }
         
@@ -585,7 +586,7 @@ int connection_manager_init(size_t max_connections, size_t max_request_buffer,
     }
     
     TRACE_NET("TRACE_CONNMGR_INIT: Allocating connection manager structure...");
-    g_connection_manager = calloc(1, sizeof(connection_manager_t));
+    g_connection_manager =BUFFER_CALLOC(1, sizeof(connection_manager_t));
     if (!g_connection_manager) {
         LOG_ERROR("Failed to allocate memory for connection manager");
         return -1;
@@ -595,7 +596,7 @@ int connection_manager_init(size_t max_connections, size_t max_request_buffer,
     /* Initialize manager mutex */
     if (pthread_mutex_init(&g_connection_manager->manager_mutex, NULL) != 0) {
         LOG_ERROR("Failed to initialize manager mutex: %s", strerror(errno));
-        free(g_connection_manager);
+        BUFFER_FREE(g_connection_manager);
         g_connection_manager = NULL;
         return -1;
     }
@@ -612,11 +613,11 @@ int connection_manager_init(size_t max_connections, size_t max_request_buffer,
     
     TRACE_NET("TRACE_CONNMGR_INIT: Allocating connection tracking array for %zu connections...", max_connections);
     /* Allocate connection tracking array */
-    g_connection_manager->active_connections = calloc(max_connections, sizeof(client_connection_t*));
+    g_connection_manager->active_connections =BUFFER_CALLOC(max_connections, sizeof(client_connection_t*));
     if (!g_connection_manager->active_connections) {
         LOG_ERROR("Failed to allocate connection tracking array");
         pthread_mutex_destroy(&g_connection_manager->manager_mutex);
-        free(g_connection_manager);
+        BUFFER_FREE(g_connection_manager);
         g_connection_manager = NULL;
         return -1;
     }
@@ -747,9 +748,9 @@ void connection_manager_shutdown(void) {
     pthread_mutex_unlock(&g_connection_manager->manager_mutex);
     
     /* Cleanup manager */
-    free(g_connection_manager->active_connections);
+    BUFFER_FREE(g_connection_manager->active_connections);
     pthread_mutex_destroy(&g_connection_manager->manager_mutex);
-    free(g_connection_manager);
+    BUFFER_FREE(g_connection_manager);
     g_connection_manager = NULL;
     
     LOG_INFO("Connection manager shutdown complete.");

@@ -139,7 +139,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
       /* Update response body */
       char* updated_body = json_stringify(json_response);
       if (updated_body) {
-        free(response->body);
+        BUFFER_FREE(response->body);
         response->body = updated_body;
         response->content_length = strlen(updated_body);
       }
@@ -148,7 +148,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
   }
 
   /* Free token */
-  free(token);
+  BUFFER_FREE(token);
 
   return response;
 }

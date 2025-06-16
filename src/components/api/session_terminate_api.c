@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/buffer_pool.h"
 
 /* External functions */
 extern int rbac_db_invalidate_session(struct database* db, const char* session_id);
@@ -33,7 +34,7 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
     
     if (id_end && id_end > id_start) {
       size_t id_len = id_end - id_start;
-      char* temp_id = malloc(id_len + 1);
+      char* temp_id = BUFFER_ALLOC(id_len + 1);
       if (temp_id) {
         strncpy(temp_id, id_start, id_len);
         temp_id[id_len] = '\0';
@@ -50,17 +51,17 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
   /* Get current user from token */
   char* token = api_extract_token(request);
   if (!token) {
-    free((void*)session_id);
+    BUFFER_FREE((void*)session_id);
     return create_http_response(HTTP_UNAUTHORIZED,
                  "{\"error\":\"Authentication required\"}", "application/json");
   }
   
   /* Validate token and get user info */
   char* user_id = rbac_db_validate_session(ctx->db, token);
-  free(token);
+  BUFFER_FREE(token);
   
   if (!user_id) {
-    free((void*)session_id);
+    BUFFER_FREE((void*)session_id);
     return create_http_response(HTTP_UNAUTHORIZED,
                  "{\"error\":\"Invalid token\"}", "application/json");
   }
@@ -87,8 +88,8 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
   }
   
   if (!has_permission) {
-    free(user_id);
-    free((void*)session_id);
+    BUFFER_FREE(user_id);
+    BUFFER_FREE((void*)session_id);
     return create_http_response(HTTP_FORBIDDEN,
                  "{\"error\":\"Permission denied\"}", "application/json");
   }
@@ -96,15 +97,15 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
   /* Terminate the session */
   if (rbac_db_invalidate_session(ctx->db, session_id)) {
     LOG_INFO("Session %s terminated by user %s", session_id, user_id);
-    free(user_id);
-    free((void*)session_id);
+    BUFFER_FREE(user_id);
+    BUFFER_FREE((void*)session_id);
     
     return create_http_response(HTTP_OK,
                  "{\"success\":true,\"message\":\"Session terminated\"}", 
                  "application/json");
   } else {
-    free(user_id);
-    free((void*)session_id);
+    BUFFER_FREE(user_id);
+    BUFFER_FREE((void*)session_id);
     
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Session not found or already terminated\"}", 

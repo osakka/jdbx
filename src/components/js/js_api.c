@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <limits.h> /* For PATH_MAX */
+#include "utils/buffer_pool.h"
 
 /* Global JavaScript engine */
 js_engine_t *g_js_engine = NULL;
@@ -131,7 +132,7 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */
@@ -205,7 +206,7 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */
@@ -279,7 +280,7 @@ http_response_t* api_handle_js_function_execute(api_context_t* ctx, http_request
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */
@@ -356,7 +357,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */
@@ -433,7 +434,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */
@@ -492,7 +493,7 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
         "{\"error\":\"JavaScript evaluation failed\", \"details\":\"%s\"}",
         error ? error : "Unknown error");
 
-    if (result_str) free(result_str);
+    if (result_str) BUFFER_FREE(result_str);
 
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  error_response, "application/json");
@@ -513,14 +514,14 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
 
   /* Free resources */
   if (result) json_free(result);
-  if (result_str) free(result_str);
+  if (result_str) BUFFER_FREE(result_str);
   json_free(response);
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
 
   /* Free response string */
-  free(response_str);
+  BUFFER_FREE(response_str);
 
   return http_response;
 #else /* JavaScript functionality disabled */

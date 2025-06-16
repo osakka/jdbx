@@ -211,7 +211,7 @@ static library_t* get_or_create_library(const char* name) {
     LOG_DEBUG("Creating library: %s", name);
     
     /* Create new library structure */
-    lib = calloc(1, sizeof(library_t));
+    lib =BUFFER_CALLOC(1, sizeof(library_t));
     if (!lib) {
         pthread_mutex_unlock(&g_library_creation_mutex);
         LOG_ERROR("Memory allocation failed for library '%s'", name);
@@ -268,7 +268,7 @@ static collection_t* get_or_create_collection(const char* library_name, const ch
         }
         
         /* Create the unified documents collection */
-        coll = calloc(1, sizeof(collection_t));
+        coll =BUFFER_CALLOC(1, sizeof(collection_t));
         if (!coll) {
             pthread_rwlock_unlock(&lib->lock);
             return NULL;
@@ -1451,7 +1451,7 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
     pthread_rwlock_unlock(&coll->lock);
     
     /* Create index metadata for compatibility */
-    index_t* idx = calloc(1, sizeof(index_t));
+    index_t* idx =BUFFER_CALLOC(1, sizeof(index_t));
     if (idx) {
         idx->name = BUFFER_STRDUP(name ? name : field_path);
         idx->field_path = BUFFER_STRDUP(field_path);

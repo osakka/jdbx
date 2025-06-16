@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include "utils/buffer_pool.h"
 
 /* Transaction retry state structure */
 struct transaction_retry_state {
@@ -64,7 +65,7 @@ static int calculate_retry_delay(transaction_retry_state_t* retry_state) {
 
 /* Initialize a transaction retry state */
 transaction_retry_state_t* transaction_retry_init(transaction_retry_policy_t* policy) {
-  transaction_retry_state_t* retry_state = (transaction_retry_state_t*)malloc(sizeof(transaction_retry_state_t));
+  transaction_retry_state_t* retry_state = (transaction_retry_state_t*)BUFFER_ALLOC(sizeof(transaction_retry_state_t));
   if (!retry_state) {
     return NULL;
   }
@@ -92,7 +93,7 @@ transaction_retry_state_t* transaction_retry_init(transaction_retry_policy_t* po
 /* Free a transaction retry state */
 void transaction_retry_free(transaction_retry_state_t* retry_state) {
   if (retry_state) {
-    free(retry_state);
+    BUFFER_FREE(retry_state);
   }
 }
 
