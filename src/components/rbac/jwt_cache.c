@@ -167,6 +167,8 @@ void jwt_cache_shutdown(void) {
 
 /* Get cached JWT payload */
 jwt_payload_t* jwt_cache_get(const char* token) {
+    /* TEMPORARY: Disable JWT cache to avoid corruption issues */
+    return NULL;
     
     if (!g_jwt_cache || !token) return NULL;
     
