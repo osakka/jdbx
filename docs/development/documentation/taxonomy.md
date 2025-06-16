@@ -1,404 +1,175 @@
-# JDBX Documentation Taxonomy v2.0
-**Professional Documentation Standards Implementation**
+# JDBX Documentation Taxonomy and Standards
 
-## 🎯 Overview
-
-This document establishes the definitive taxonomy and naming schema for JDBX documentation, implementing industry-standard practices for enterprise software documentation organization.
-
-## 📚 Primary Documentation Categories
-
-### 1. **Getting Started** (`getting-started/`)
-**Purpose**: First-time user onboarding and quick wins  
-**Audience**: New users, evaluators, trial users  
-**Content Type**: Sequential tutorials, installation guides, first steps
+## Directory Structure
 
 ```
-getting-started/
-├── README.md                    # Category overview and navigation
-├── installation.md              # System requirements and installation
-├── quick-start.md               # 5-minute quick start guide
-├── first-database.md            # Create your first database
-├── basic-operations.md          # Essential CRUD operations
-└── next-steps.md               # Path to advanced topics
+docs/
+├── README.md                    # Documentation portal and navigation guide
+├── architecture/               # System design and technical architecture
+│   ├── README.md              # Architecture overview
+│   ├── adr/                   # Architecture Decision Records
+│   ├── core-concepts/         # Fundamental concepts and patterns
+│   ├── performance/           # Performance architecture and optimization
+│   └── security/              # Security architecture and design
+├── getting-started/           # Quick start and initial setup
+│   ├── README.md             # Getting started overview
+│   ├── installation.md       # Installation instructions
+│   ├── quick-start.md        # 5-minute quick start
+│   └── first-app.md          # Building your first JDBX app
+├── tutorials/                 # Step-by-step learning paths
+│   ├── README.md             # Tutorial index
+│   ├── beginner/             # Basic concepts and operations
+│   ├── intermediate/         # Advanced features and patterns
+│   └── advanced/             # Expert-level techniques
+├── how-to/                    # Task-oriented guides
+│   ├── README.md             # How-to index
+│   ├── operations/           # Operational tasks
+│   ├── development/          # Development tasks
+│   └── troubleshooting/      # Problem-solving guides
+├── reference/                 # Technical specifications
+│   ├── README.md             # Reference overview
+│   ├── api/                  # API documentation
+│   ├── configuration/        # Configuration reference
+│   ├── query-language/       # Query syntax reference
+│   └── specifications/       # Technical specifications
+├── deployment/                # Production deployment
+│   ├── README.md             # Deployment overview
+│   ├── production/           # Production setup
+│   ├── platforms/            # Platform-specific guides
+│   └── operations/           # Operational procedures
+├── development/               # For contributors
+│   ├── README.md             # Development overview
+│   ├── contributing/         # Contribution guidelines
+│   ├── building/             # Build instructions
+│   ├── testing/              # Testing procedures
+│   ├── documentation/        # Documentation standards
+│   └── changelog.md          # Version history
+├── security/                  # Security documentation
+│   ├── README.md             # Security overview
+│   ├── guidelines/           # Security best practices
+│   ├── compliance/           # Compliance guides
+│   └── threat-modeling/      # Security assessments
+└── examples/                  # Code examples
+    ├── README.md             # Examples overview
+    ├── basic/                # Basic usage examples
+    ├── advanced/             # Advanced patterns
+    └── templates/            # Project templates
 ```
 
-### 2. **Tutorials** (`tutorials/`)
-**Purpose**: Step-by-step learning paths for specific workflows  
-**Audience**: Users learning new features, integration scenarios  
-**Content Type**: Hands-on walkthroughs with concrete examples
+## Naming Standards
 
-```
-tutorials/
-├── README.md                    # Learning path index
-├── beginner/
-│   ├── data-modeling.md         # How to structure your data
-│   ├── user-authentication.md   # Setting up authentication
-│   └── basic-queries.md         # Query fundamentals
-├── intermediate/
-│   ├── rbac-setup.md           # Role-based access control
-│   ├── javascript-functions.md # Custom JS functions
-│   └── performance-tuning.md   # Optimization techniques
-└── advanced/
-    ├── custom-indexing.md      # Advanced indexing strategies
-    ├── clustering.md           # Multi-node deployment
-    └── integration-patterns.md # Enterprise integration
-```
-
-### 3. **How-To Guides** (`how-to/`)
-**Purpose**: Problem-solving guides for specific tasks  
-**Audience**: Users with specific problems to solve  
-**Content Type**: Task-oriented solutions, troubleshooting
-
-```
-how-to/
-├── README.md                   # Problem-solving index
-├── operations/
-│   ├── backup-restore.md       # Data backup and recovery
-│   ├── monitoring-setup.md     # Production monitoring
-│   ├── ssl-configuration.md    # SSL/TLS setup
-│   └── performance-tuning.md   # Optimization techniques
-├── development/
-│   ├── custom-validators.md    # Creating validators
-│   ├── javascript-debugging.md # JS function debugging
-│   └── schema-migration.md     # Data migration strategies
-└── troubleshooting/
-    ├── common-errors.md        # Frequent issues and solutions
-    ├── performance-issues.md   # Performance diagnostics
-    └── connection-problems.md  # Network troubleshooting
-```
-
-### 4. **Reference** (`reference/`)
-**Purpose**: Comprehensive technical specifications and API documentation  
-**Audience**: Developers, integrators, power users  
-**Content Type**: Complete specifications, API docs, configuration options
-
-```
-reference/
-├── README.md                   # Reference documentation index
-├── api/
-│   ├── README.md              # API overview and authentication
-│   ├── documents.md           # Document operations API
-│   ├── collections.md         # Collection management API
-│   ├── users-roles.md         # RBAC API endpoints
-│   ├── javascript.md          # JavaScript functions API
-│   ├── metrics.md             # Metrics and monitoring API
-│   └── transactions.md        # Transaction management API
-├── configuration/
-│   ├── README.md              # Configuration overview
-│   ├── server-config.md       # Server configuration options
-│   ├── database-config.md     # Database settings
-│   ├── security-config.md     # Security configuration
-│   └── environment-vars.md    # Environment variables
-├── query-language/
-│   ├── README.md              # Query language overview
-│   ├── syntax.md              # Query syntax specification
-│   ├── operators.md           # Query operators reference
-│   ├── functions.md           # Built-in functions
-│   └── examples.md            # Query examples
-└── specifications/
-    ├── error-codes.md         # Complete error code reference
-    ├── data-types.md          # Supported data types
-    ├── performance-specs.md   # Performance characteristics
-    └── compatibility.md       # Version compatibility matrix
-```
-
-### 5. **Architecture** (`architecture/`)
-**Purpose**: System design, technical architecture, engineering decisions  
-**Audience**: Architects, senior developers, contributors  
-**Content Type**: High-level design, technical deep-dives, ADRs
-
-```
-architecture/
-├── README.md                   # Architecture overview
-├── core-concepts/
-│   ├── unified-documents.md   # Unified documents architecture
-│   ├── buffer-pool.md         # Buffer pool memory management
-│   ├── storage-engine.md      # JDBX storage implementation
-│   └── threading-model.md     # Concurrency and threading
-├── security/
-│   ├── rbac-design.md         # Role-based access control design
-│   ├── authentication.md      # Authentication architecture
-│   ├── field-level-security.md # Field-level permissions
-│   └── jwt-implementation.md   # JWT token handling
-├── performance/
-│   ├── indexing-strategy.md   # Indexing architecture
-│   ├── caching-layers.md      # Multi-level caching
-│   ├── query-optimization.md  # Query execution optimization
-│   └── memory-management.md   # Memory allocation strategies
-└── design-decisions/
-    ├── README.md              # ADR (Architecture Decision Records) index
-    ├── adr-001-unified-storage.md     # Why unified documents
-    ├── adr-002-buffer-pool.md         # Buffer pool decision
-    ├── adr-003-javascript-engine.md   # QuickJS integration
-    └── adr-004-rbac-implementation.md # RBAC design choices
-```
-
-### 6. **Development** (`development/`)
-**Purpose**: Contributor documentation, development processes, coding standards  
-**Audience**: Contributors, maintainers, internal developers  
-**Content Type**: Process docs, coding standards, development workflows
-
-```
-development/
-├── README.md                   # Development overview
-├── contributing/
-│   ├── contributing.md         # How to contribute
-│   ├── code-standards.md       # Coding conventions
-│   ├── git-workflow.md         # Git workflow and branching
-│   └── pull-request-guide.md   # PR guidelines
-├── building/
-│   ├── build-instructions.md   # How to build from source
-│   ├── testing.md             # Testing procedures
-│   ├── debugging.md           # Debugging techniques
-│   └── profiling.md           # Performance profiling
-├── documentation/
-│   ├── writing-guide.md        # Documentation writing standards
-│   ├── style-guide.md          # Style and formatting rules
-│   ├── review-process.md       # Documentation review process
-│   └── maintenance.md          # Documentation maintenance
-└── processes/
-    ├── release-process.md      # Release management
-    ├── issue-triage.md         # Issue management
-    ├── code-review.md          # Code review standards
-    └── security-process.md     # Security issue handling
-```
-
-### 7. **Deployment** (`deployment/`)
-**Purpose**: Production deployment, operations, scaling  
-**Audience**: DevOps engineers, system administrators, SREs  
-**Content Type**: Deployment guides, operational procedures
-
-```
-deployment/
-├── README.md                   # Deployment overview
-├── production/
-│   ├── production-checklist.md # Pre-production checklist
-│   ├── system-requirements.md  # Hardware and OS requirements
-│   ├── security-hardening.md   # Production security setup
-│   └── monitoring-setup.md     # Production monitoring
-├── platforms/
-│   ├── docker.md              # Docker deployment
-│   ├── kubernetes.md          # Kubernetes deployment
-│   ├── systemd.md             # systemd service setup
-│   └── cloud-platforms.md     # Cloud-specific guides
-├── scaling/
-│   ├── horizontal-scaling.md   # Scale-out strategies
-│   ├── vertical-scaling.md     # Scale-up guidelines
-│   ├── load-balancing.md       # Load balancer configuration
-│   └── clustering.md           # Multi-node clustering
-└── operations/
-    ├── backup-strategies.md    # Backup and recovery
-    ├── log-management.md       # Log aggregation and analysis
-    ├── alerting.md             # Alerting and notification setup
-    └── disaster-recovery.md    # DR procedures
-```
-
-### 8. **Security** (`security/`)
-**Purpose**: Security guidelines, best practices, compliance  
-**Audience**: Security engineers, compliance officers, architects  
-**Content Type**: Security procedures, compliance guides, threat models
-
-```
-security/
-├── README.md                   # Security overview
-├── guidelines/
-│   ├── security-best-practices.md # General security guidelines
-│   ├── access-control.md          # Access control policies
-│   ├── data-protection.md         # Data protection measures
-│   └── network-security.md        # Network security configuration
-├── compliance/
-│   ├── gdpr-compliance.md         # GDPR compliance guide
-│   ├── sox-compliance.md          # SOX compliance considerations
-│   └── audit-procedures.md        # Security audit procedures
-└── threat-modeling/
-    ├── threat-assessment.md       # Security threat assessment
-    ├── attack-vectors.md          # Known attack vectors
-    └── mitigation-strategies.md   # Security mitigation strategies
-```
-
-### 9. **Examples** (`examples/`)
-**Purpose**: Code examples, templates, sample configurations  
-**Audience**: Developers, integrators, users implementing specific features  
-**Content Type**: Working code examples, configuration templates
-
-```
-examples/
-├── README.md                   # Examples overview and index
-├── basic/
-│   ├── crud-operations.md      # Basic CRUD examples
-│   ├── authentication.md       # Authentication examples
-│   └── simple-queries.md       # Basic query examples
-├── advanced/
-│   ├── complex-queries.md      # Advanced query patterns
-│   ├── javascript-functions.md # JS function examples
-│   ├── custom-validators.md    # Validation examples
-│   └── integration-patterns.md # Integration examples
-├── templates/
-│   ├── configuration/         # Configuration file templates
-│   ├── docker/                # Docker configuration templates
-│   └── deployment/            # Deployment script templates
-└── integrations/
-    ├── python-client.md       # Python integration examples
-    ├── nodejs-client.md       # Node.js integration examples
-    ├── java-client.md         # Java integration examples
-    └── rest-api-examples.md   # REST API usage examples
-```
-
-## 🏷️ File Naming Schema
-
-### Primary Naming Conventions
-
-#### 1. **Kebab-Case Standard**
-- **Format**: `lowercase-with-hyphens.md`
-- **Examples**: 
-  - ✅ `user-authentication.md`
-  - ✅ `performance-tuning.md`
-  - ✅ `rbac-setup-guide.md`
-  - ❌ `User_Authentication.md`
-  - ❌ `PERFORMANCE_TUNING.md`
-
-#### 2. **Descriptive and Specific**
-- **Principle**: File names should clearly indicate content and purpose
+### File Naming Convention
+- **Format**: `kebab-case.md`
+- **Language**: English, descriptive, action-oriented
 - **Examples**:
-  - ✅ `javascript-development-guide.md` (specific)
-  - ✅ `ssl-configuration-howto.md` (descriptive)
-  - ❌ `guide.md` (too generic)
-  - ❌ `config.md` (not specific enough)
+  - ✅ `installation-guide.md`
+  - ✅ `query-optimization.md`
+  - ✅ `ssl-configuration.md`
+  - ❌ `install.md` (too brief)
+  - ❌ `SSL_Config.md` (wrong case)
+  - ❌ `guide-to-installation.md` (redundant)
 
-#### 3. **Hierarchical Prefixes (When Appropriate)**
-- **Use Case**: When logical grouping within directory is beneficial
-- **Format**: `category-specific-topic.md`
-- **Examples**:
-  - `api-authentication.md`
-  - `config-database-settings.md`
-  - `security-rbac-design.md`
+### Document Types and Prefixes
+- **Guides**: Action-oriented (`configuring-ssl.md`)
+- **References**: Noun-based (`api-reference.md`)
+- **Concepts**: Descriptive (`unified-documents.md`)
+- **Tutorials**: Progressive (`01-basic-queries.md`)
 
-#### 4. **Avoid Redundant Prefixes**
-- **Principle**: Don't repeat directory name in filename
-- **Examples**:
-  - ✅ In `/reference/api/`: `authentication.md`
-  - ❌ In `/reference/api/`: `api-authentication.md`
-  - ✅ In `/tutorials/`: `user-management.md`
-  - ❌ In `/tutorials/`: `tutorial-user-management.md`
+## Content Standards
 
-### Special File Types
+### Document Structure
+1. **Title** (H1): Clear, descriptive
+2. **Overview**: Brief introduction (2-3 sentences)
+3. **Prerequisites**: Required knowledge/setup
+4. **Content**: Logical progression
+5. **Summary**: Key takeaways
+6. **Related**: Links to related docs
 
-#### 1. **Category Index Files**
-- **Name**: `README.md` (always)
-- **Purpose**: Category overview, navigation, quick links
-- **Required**: Every category directory must have README.md
+### Writing Style
+- **Voice**: Active, second person ("you")
+- **Tense**: Present tense
+- **Clarity**: Short sentences, clear language
+- **Examples**: Code examples for every concept
+- **Accuracy**: Verified against codebase
 
-#### 2. **Architecture Decision Records (ADRs)**
-- **Format**: `adr-NNN-short-title.md`
-- **Examples**: 
-  - `adr-001-unified-storage.md`
-  - `adr-002-javascript-engine-choice.md`
-  - `adr-003-authentication-strategy.md`
+## Documentation Categories
 
-#### 3. **Version-Specific Documents**
-- **Format**: `topic-vMAJOR.MINOR.md` (only when necessary)
-- **Examples**:
-  - `migration-guide-v6.md`
-  - `api-changes-v6.2.md`
-  - **Note**: Avoid versioned docs unless absolutely necessary
+### 1. Architecture (`/architecture`)
+**Purpose**: Technical design and decisions
+**Audience**: Architects, senior developers
+**Content**: ADRs, system design, patterns
 
-#### 4. **Template Files**
-- **Format**: `topic-template.ext`
-- **Examples**:
-  - `docker-compose-template.yml`
-  - `configuration-template.json`
-  - `deployment-template.sh`
+### 2. Getting Started (`/getting-started`)
+**Purpose**: Onboarding new users
+**Audience**: First-time users
+**Content**: Installation, quick start, basics
 
-## 🔗 Cross-Reference and Linking Standards
+### 3. Tutorials (`/tutorials`)
+**Purpose**: Learning paths
+**Audience**: Developers learning JDBX
+**Content**: Progressive, hands-on guides
 
-### 1. **Internal Link Format**
-```markdown
-[Link Text](../category/filename.md)
-[Section Link](../category/filename.md#section-anchor)
-```
+### 4. How-To Guides (`/how-to`)
+**Purpose**: Specific task completion
+**Audience**: Users with specific goals
+**Content**: Step-by-step instructions
 
-### 2. **Cross-Reference Conventions**
-- **Always use relative paths** from current document location
-- **Include descriptive link text** (not "click here" or "see this")
-- **Link to specific sections** using anchors when helpful
+### 5. Reference (`/reference`)
+**Purpose**: Technical specifications
+**Audience**: Developers needing details
+**Content**: APIs, configs, specifications
 
-### 3. **Navigation Aids**
-- **Breadcrumbs**: Include navigation context in complex documents
-- **"See Also" sections**: Related documents and external resources
-- **Index pages**: Category-level navigation and topic finding
+### 6. Deployment (`/deployment`)
+**Purpose**: Production deployment
+**Audience**: DevOps, administrators
+**Content**: Setup, configuration, operations
 
-## 📊 Content Quality Standards
+### 7. Development (`/development`)
+**Purpose**: Contributing to JDBX
+**Audience**: Contributors, maintainers
+**Content**: Build, test, contribute
 
-### 1. **Document Structure**
-```markdown
-# Document Title
+### 8. Security (`/security`)
+**Purpose**: Security documentation
+**Audience**: Security teams, auditors
+**Content**: Best practices, compliance
 
-Brief description of document purpose and audience.
+### 9. Examples (`/examples`)
+**Purpose**: Working code samples
+**Audience**: Developers
+**Content**: Code examples, templates
 
-## Overview
-High-level summary and context
+## Cross-Reference System
 
-## Prerequisites
-Required knowledge, tools, or setup
+### Internal Links
+- Use relative paths: `[API Reference](../reference/api/)`
+- Link to sections: `[Authentication](#authentication)`
+- Verify all links work
 
-## Main Content
-Structured content with clear headings
+### External Links
+- Mark clearly: `[External: Docker Docs]`
+- Use HTTPS always
+- Check link validity
 
-## Examples
-Practical examples and code samples
+## Version Management
 
-## See Also
-Related documentation and external links
+### Documentation Versioning
+- Match software version
+- Tag documentation releases
+- Maintain version history
 
-## Changelog
-Document revision history (for major documents)
-```
+### Change Tracking
+- Update changelog.md
+- Note breaking changes
+- Document deprecations
 
-### 2. **Writing Style**
-- **Clear and concise**: Technical accuracy without unnecessary complexity
-- **Action-oriented**: Use active voice and imperative mood
-- **Consistent terminology**: Use established terms consistently
-- **User-focused**: Address user needs and common questions
+## Quality Checklist
 
-### 3. **Code Examples**
-- **Complete and runnable**: Examples should work as written
-- **Commented**: Explain non-obvious parts
-- **Current**: Keep examples up-to-date with latest version
-
-## 🔄 Maintenance and Review Process
-
-### 1. **Regular Review Schedule**
-- **Quarterly**: Review all documentation for accuracy
-- **Release-driven**: Update documentation with each version release
-- **Issue-driven**: Update documentation when issues are reported
-
-### 2. **Ownership and Responsibility**
-- **Technical Writers**: Overall documentation quality and organization
-- **Product Team**: Feature documentation accuracy
-- **Engineering Team**: Technical accuracy and architectural documentation
-
-### 3. **Version Control**
-- **All documentation in version control** with source code
-- **Meaningful commit messages** for documentation changes
-- **Documentation reviews** as part of feature development process
-
-## 📈 Success Metrics
-
-### 1. **Discoverability**
-- **Search success rate**: Users find relevant docs within 3 clicks
-- **Navigation efficiency**: Clear path from overview to specific information
-- **Reduced support tickets**: Common questions answered in documentation
-
-### 2. **Usability**
-- **Task completion rate**: Users successfully complete documented procedures
-- **Time to value**: New users productive within documented timeframes
-- **User satisfaction**: Positive feedback on documentation quality
-
-### 3. **Maintenance Efficiency**
-- **Update frequency**: Documentation stays current with product changes
-- **Review completion**: Regular review cycles completed on schedule
-- **Issue resolution**: Documentation issues resolved promptly
-
----
-
-**This taxonomy implements industry-standard documentation organization principles while specifically addressing JDBX's technical architecture and user needs. It provides a scalable framework for maintaining high-quality documentation as the project grows.**
+- [ ] Accurate against codebase
+- [ ] No duplicate content
+- [ ] Proper categorization
+- [ ] Working cross-references
+- [ ] Consistent formatting
+- [ ] Clear navigation
+- [ ] Updated changelog
+- [ ] Version consistency

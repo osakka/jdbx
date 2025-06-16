@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 6.2.0  
-**Last Updated**: June 15, 2025  
+**Version**: 6.3.0  
+**Last Updated**: June 16, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v4.6.0 with enterprise-grade security and collection ownership protection.
+Complete REST API documentation for JDBX v6.3.0 with enterprise-grade security, collection ownership protection, and revolutionary memory management.
 
 ## Authentication
 
@@ -42,7 +42,7 @@ Include JWT token in all authenticated requests:
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-## 🔒 Security Model (v4.6.0)
+## 🔒 Security Model
 
 JDBX implements enterprise-grade collection and document ownership security:
 
