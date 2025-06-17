@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 16, 2025 (v6.4.0 - RBAC Database Single Source of Truth)
+**Last Updated**: June 17, 2025 (v6.3.0 - REVOLUTIONARY MEMORY MANAGER with Checkpoint-Based Allocation)
 
 ## Core Principles
 
