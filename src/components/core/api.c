@@ -91,6 +91,7 @@ api_route_t routes[] = {
   {"/api/auth/session", HTTP_GET, api_handle_get_current_session, 1},
   {"/api/auth/library", HTTP_GET, api_handle_get_library_context, 1},
   {"/api/auth/library/", HTTP_POST, api_handle_switch_library, 1},
+  {"/api/auth/password", HTTP_PUT, api_handle_change_password, 1},
   
   /* Session management routes */
   {"/api/sessions", HTTP_GET, api_handle_get_sessions, 1},

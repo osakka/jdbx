@@ -1,9 +1,9 @@
 # Installation Guide
 
-**Version**: 3.3.0  
-**Last Updated**: June 12, 2025
+**Version**: 6.5.0  
+**Last Updated**: June 17, 2025
 
-This guide covers installing JDBX v3.3.0 with its lock-free JDBX architecture.
+This guide covers installing JDBX v6.5.0 with revolutionary memory management, authentication security excellence, and unified documents architecture.
 
 ## System Requirements
 

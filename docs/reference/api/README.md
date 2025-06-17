@@ -1,7 +1,7 @@
 # JDBX API Documentation
 
-**Version**: 6.3.0  
-**Last Updated**: June 16, 2025
+**Version**: 6.5.0  
+**Last Updated**: June 17, 2025
 
 > Complete reference for all JDBX APIs and interfaces with unified documents architecture
 

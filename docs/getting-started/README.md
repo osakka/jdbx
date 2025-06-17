@@ -5,7 +5,7 @@
 ## Quick Navigation
 
 - **[Installation Guide](installation.md)** - System requirements and installation steps
-- **[Quick Start Tutorial](quick-start.md)** - Get up and running in 5 minutes
+- **[Quick Start Tutorial](../tutorials/beginner/quick-start.md)** - Get up and running in 5 minutes
 - **[Configuration Basics](configuration.md)** - Essential configuration options
 - **[First Application](first-app.md)** - Build your first JDBX application
 

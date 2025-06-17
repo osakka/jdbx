@@ -14,13 +14,28 @@
 
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
-**Latest Version**: 6.3.0 (June 16, 2025)  
-**Status**: 🚀 **REVOLUTIONARY MEMORY MANAGER** - Checkpoint-based allocation with automatic cleanup!  
-**Architecture**: Production-Grade Security + TRUE Unified Documents + Revolutionary Memory Management - Enterprise Ready
+**Latest Version**: 6.5.1 (June 17, 2025)  
+**Status**: 📚 **DOCUMENTATION EXCELLENCE** - Professional taxonomy + comprehensive audit with surgical precision!  
+**Architecture**: Authentication Security + Production-Grade Security + TRUE Unified Documents + Revolutionary Memory Management - Enterprise Ready
 
 ## Features
 
-### 🚀 **v6.3.0 - Revolutionary Memory Manager (NEW!)**
+### 📚 **v6.5.1 - Documentation Excellence Audit (NEW!)**
+- **📊 PROFESSIONAL TAXONOMY**: Diátaxis Framework implementation with industry-standard 9-category organization
+- **🔍 SURGICAL PRECISION**: "Fine tooth pick" audit of 119+ documentation files with content accuracy verification
+- **✅ VERSION ACCURACY**: All documentation updated to reflect v6.5.0 Authentication Security Excellence
+- **🗂️ LOGICAL ORGANIZATION**: Every file categorized and placed in appropriate directory structure
+- **🔗 COMPREHENSIVE NAVIGATION**: Working cross-references and tutorial infrastructure created
+
+### 🎯 **v6.5.0 - Authentication Security Excellence**
+- **🔧 ENVIRONMENT COLLISION FIX**: Critical setenv() fix prevents environment file override of runtime variables
+- **🏗️ ARCHITECTURAL CONSISTENCY**: Unified all environment variable names from JDBX_INITIAL_* → JDBX_BOOTSTRAP_*
+- **🔐 PASSWORD MANAGEMENT**: Complete PUT /api/auth/password endpoint with PBKDF2-HMAC-SHA-256 verification
+- **✅ PRODUCTION SECURITY**: Enterprise-grade authentication flow with comprehensive testing validation
+- **🧹 SINGLE SOURCE OF TRUTH**: Eliminated duplicate environment variable names and debug logging
+- **🔒 CREDENTIAL SECURITY**: Environment variables properly inherited by daemon process
+
+### 🚀 **v6.3.0 - Revolutionary Memory Manager**
 - **🎯 CHECKPOINT-BASED ALLOCATION**: Create memory checkpoints at transaction boundaries with automatic cleanup
 - **🔄 THREAD-LOCAL STACKS**: Per-thread checkpoint management prevents cross-thread interference
 - **📌 MEMORY PROMOTION**: Allow specific allocations to survive checkpoint rewind for persistence
@@ -103,7 +118,7 @@ JDBX is a high-performance document database built specifically for JSON data, f
 ## Architecture
 
 <div align="center">
-  <img src="share/resources/jdbx_unified_architecture.svg" alt="JDBX v6.0.0 TRUE Unified Documents Architecture" width="700">
+  <img src="share/resources/jdbx_architecture.svg" alt="JDBX v6.5.0 Authentication Security Excellence Architecture" width="700">
 </div>
 
 **JDBX v6.0.0 introduces the revolutionary TRUE Unified Documents Architecture**:

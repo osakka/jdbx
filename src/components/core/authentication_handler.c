@@ -10,6 +10,7 @@
 #include "rbac/rbac.h"
 #include "utils/config_loader.h"
 #include "rbac/rbac_db.h"
+#include "rbac/rbac_database.h"
 #include "rbac/jwt.h"
 #include "utils/json.h"
 #include "utils/logger.h"

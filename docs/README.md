@@ -7,20 +7,20 @@
 **New to JDBX?** Start here for the fastest path to productivity:
 
 1. **[Installation & Quick Start](getting-started/README.md)** - Get JDBX running in 5 minutes
-2. **[Basic Tutorial](tutorials/beginner/README.md)** - Learn essential operations
-3. **[API Overview](reference/api/README.md)** - Understand the REST API
+2. **[Quick Start Tutorial](tutorials/beginner/quick-start.md)** - Learn essential operations
+3. **[API Reference](reference/api/rest-api.md)** - Complete REST API documentation
 
 ## 📚 Documentation Categories
 
 ### 🎯 **Getting Started**
 Perfect for first-time users and evaluators
 - **[Installation Guide](getting-started/installation.md)** - System requirements and installation steps
-- **[Quick Start](getting-started/quick-start.md)** - 5-minute setup and first operations *(Coming Soon)*
+- **[Quick Start Tutorial](tutorials/beginner/quick-start.md)** - 5-minute setup and first operations
 - **[Basic Operations](getting-started/basic-operations.md)** - Essential CRUD operations *(Coming Soon)*
 
 ### 📖 **Tutorials**
 Step-by-step learning paths for different skill levels
-- **[Beginner Tutorials](tutorials/beginner/README.md)** - Data modeling, authentication, basic queries *(Coming Soon)*
+- **[Beginner Tutorials](tutorials/README.md)** - Data modeling, authentication, basic queries
 - **[Intermediate Tutorials](tutorials/intermediate/README.md)** - RBAC, JavaScript functions, performance tuning *(Coming Soon)*
 - **[Advanced Tutorials](tutorials/advanced/README.md)** - Custom indexing, clustering, enterprise integration *(Coming Soon)*
 
@@ -76,11 +76,11 @@ Working code examples and templates
 ## 🔍 **Popular Topics**
 
 ### Most Accessed Documentation:
-- [REST API Authentication](reference/api/README.md#authentication)
+- [Authentication & Security Guide](guides/authentication-guide.md)
+- [REST API Reference](reference/api/rest-api.md)
 - [JavaScript Functions Guide](guides/javascript-development-guide.md)
 - [RBAC Setup Guide](guides/rbac-setup.md)
-- [Unified Documents Architecture](architecture/core-concepts/unified-documents.md)
-- [Performance Optimization](architecture/performance/optimization-guide.md)
+- [Storage vs Virtual Layers](architecture/core-concepts/storage-vs-virtual-layers.md)
 
 ### Common Use Cases:
 - **[User Authentication Setup](tutorials/beginner/user-authentication.md)** *(Coming Soon)*
@@ -91,13 +91,15 @@ Working code examples and templates
 
 ## 🏷️ **Documentation by Version**
 
-- **v6.3.0** (Current) - Revolutionary Memory Manager with Checkpoint-Based Allocation
+- **v6.5.0** (Current) - Authentication Security Excellence with Environment Variable Management
+- **v6.4.0** - RBAC Database Single Source of Truth Complete
+- **v6.3.0** - Revolutionary Memory Manager with Checkpoint-Based Allocation
 - **v6.2.1** - Documentation Excellence with Professional Standards
 - **v6.2.0** - Enterprise Configuration Security Complete
 - **v6.1.0** - Buffer Pool Memory Architecture
 - **v6.0.0** - TRUE Unified Documents Architecture
 
-See [Changelog](development/changelog.md) for detailed version history.
+See [Changelog](../../CHANGELOG.md) for detailed version history.
 
 ## 🔗 **External Resources**
 
@@ -121,6 +123,6 @@ Help improve this documentation:
 
 ---
 
-**Documentation Version**: 6.3.0  
-**Last Updated**: June 16, 2025  
+**Documentation Version**: 6.5.0  
+**Last Updated**: June 17, 2025  
 **Contributors**: Technical Writing Team, JDBX Maintainers
