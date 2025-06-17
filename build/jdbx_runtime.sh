@@ -15,9 +15,25 @@ ENV_FILE="${JDBX_ENV_FILE:-$VAR_DIR/jdbx.env}"
 
 # Security: Load admin credentials from environment file or require manual configuration
 load_admin_credentials() {
+    # Save command-line environment variables before loading file
+    CMDLINE_USER="$JDBX_BOOTSTRAP_ADMIN_USER"
+    CMDLINE_PASS="$JDBX_BOOTSTRAP_ADMIN_PASS"
+    CMDLINE_EMAIL="$JDBX_DEFAULT_ADMIN_EMAIL"
+    
     # Load from environment file if it exists
     if [ -f "$ENV_FILE" ]; then
         source "$ENV_FILE"
+    fi
+    
+    # Command-line variables take precedence over environment file
+    if [ -n "$CMDLINE_USER" ]; then
+        JDBX_BOOTSTRAP_ADMIN_USER="$CMDLINE_USER"
+    fi
+    if [ -n "$CMDLINE_PASS" ]; then
+        JDBX_BOOTSTRAP_ADMIN_PASS="$CMDLINE_PASS"
+    fi
+    if [ -n "$CMDLINE_EMAIL" ]; then
+        JDBX_DEFAULT_ADMIN_EMAIL="$CMDLINE_EMAIL"
     fi
     
     # Check if admin credentials are configured
@@ -57,6 +73,7 @@ case "$1" in
         fi
         
         echo "✅ Admin credentials loaded: User=$JDBX_BOOTSTRAP_ADMIN_USER"
+        echo "🔐 Admin password loaded: Pass=$JDBX_BOOTSTRAP_ADMIN_PASS (length=${#JDBX_BOOTSTRAP_ADMIN_PASS})"
         
         # Force kill any existing processes first
         pkill -f jdbxd 2>/dev/null || true
@@ -68,6 +85,9 @@ case "$1" in
         
         # Start server with secure credentials from environment
         echo "🚀 Starting JDBX server with secure configuration..."
+        JDBX_BOOTSTRAP_ADMIN_USER="$JDBX_BOOTSTRAP_ADMIN_USER" \
+        JDBX_BOOTSTRAP_ADMIN_PASS="$JDBX_BOOTSTRAP_ADMIN_PASS" \
+        JDBX_DEFAULT_ADMIN_EMAIL="$JDBX_DEFAULT_ADMIN_EMAIL" \
         "$DAEMON" --daemon
         ;;
     stop)

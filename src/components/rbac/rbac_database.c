@@ -364,13 +364,13 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   TRACE_RBAC("Using admin role ID: %s", admin_role_id);
   
   /* Check for initial admin configuration from environment */
-  const char* initial_admin_user = getenv("JDBX_INITIAL_ADMIN_USER");
-  const char* initial_admin_pass = getenv("JDBX_INITIAL_ADMIN_PASSWORD");
-  const char* initial_admin_email = getenv("JDBX_INITIAL_ADMIN_EMAIL");
+  const char* initial_admin_user = getenv("JDBX_BOOTSTRAP_ADMIN_USER");
+  const char* initial_admin_pass = getenv("JDBX_BOOTSTRAP_ADMIN_PASS");
+  const char* initial_admin_email = getenv("JDBX_DEFAULT_ADMIN_EMAIL");
   
   if (!initial_admin_user || !initial_admin_pass) {
     LOG_INFO("No initial admin configured. Database will require manual admin setup.");
-    LOG_INFO("Set JDBX_INITIAL_ADMIN_USER and JDBX_INITIAL_ADMIN_PASSWORD environment variables to create initial admin.");
+    LOG_INFO("Set JDBX_BOOTSTRAP_ADMIN_USER and JDBX_BOOTSTRAP_ADMIN_PASS environment variables to create initial admin.");
     return 1;  /* Not an error - just no initial admin */
   }
   

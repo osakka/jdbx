@@ -234,7 +234,7 @@ int rbac_db_migrate_from_file(struct database* db, rbac_system_t* rbac);
 
 /* Bootstrap functions for admin setup */
 int create_default_admin_role(struct database* db, char** admin_role_id_out);
-int create_default_admin_user(struct database* db, const char* admin_role_id);
+/* NOTE: create_default_admin_user is declared in rbac_database.h - single source of truth */
 
 /* Session management functions */
 char* rbac_db_create_session(struct database* db, const char* user_id, const char* token,

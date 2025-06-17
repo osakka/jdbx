@@ -19,4 +19,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
 /* Terminate a specific session */
 http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t* request);
 
+/* Change user password */
+http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* request);
+
 #endif /* AUTH_SESSION_API_H */

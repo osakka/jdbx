@@ -4,6 +4,7 @@
 #include "database/virtual_layer.h"
 #include "rbac/jwt.h"
 #include "rbac/rbac_database.h"
+#include "rbac/rbac.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -319,6 +320,172 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     json_object_set(response, "message", json_create_string("Library context switched successfully"));
     
     BUFFER_FREE(new_token);
+    
+    /* Wrap in standard envelope */
+    json_value_t* envelope = json_create_object();
+    json_object_set(envelope, "data", response);
+    
+    char* response_str = json_stringify(envelope);
+    json_free(envelope);
+    
+    return create_http_response(HTTP_OK, response_str, "application/json");
+}
+
+/**
+ * Change user password
+ * PUT /api/auth/password
+ */
+http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* request) {
+    if (!ctx || !ctx->db || !request || !request->body) {
+        return create_http_response(HTTP_BAD_REQUEST,
+                     "{\"error\":\"Invalid request - body required\"}", "application/json");
+    }
+    
+    /* Extract token */
+    char* token = api_extract_token(request);
+    if (!token) {
+        return create_http_response(HTTP_UNAUTHORIZED,
+                     "{\"error\":\"No authorization token\"}", "application/json");
+    }
+    
+    /* Decode JWT */
+    jwt_token_t* jwt = jwt_decode(token);
+    BUFFER_FREE(token);
+    
+    if (!jwt || !jwt->payload || !jwt->payload->sub) {
+        if (jwt) jwt_free(jwt);
+        return create_http_response(HTTP_UNAUTHORIZED,
+                     "{\"error\":\"Invalid token\"}", "application/json");
+    }
+    
+    const char* user_uuid = jwt->payload->sub;
+    
+    /* Extract username from JWT claims */
+    char username[256] = {0};
+    if (jwt->payload->claims) {
+        json_value_t* username_val = json_object_get(jwt->payload->claims, "username");
+        if (username_val && username_val->type == JSON_STRING) {
+            strncpy(username, username_val->value.string, sizeof(username) - 1);
+        }
+    }
+    
+    /* Parse request body */
+    json_value_t* body = json_parse(request->body);
+    if (!body || body->type != JSON_OBJECT) {
+        jwt_free(jwt);
+        if (body) json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                     "{\"error\":\"Invalid JSON body\"}", "application/json");
+    }
+    
+    /* Extract current and new passwords */
+    json_value_t* current_password_val = json_object_get(body, "current_password");
+    json_value_t* new_password_val = json_object_get(body, "new_password");
+    
+    if (!current_password_val || current_password_val->type != JSON_STRING ||
+        !new_password_val || new_password_val->type != JSON_STRING) {
+        jwt_free(jwt);
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                     "{\"error\":\"Current password and new password required\"}", "application/json");
+    }
+    
+    const char* current_password = current_password_val->value.string;
+    const char* new_password = new_password_val->value.string;
+    
+    /* Validate new password length */
+    if (strlen(new_password) < 12) {
+        jwt_free(jwt);
+        json_free(body);
+        return create_http_response(HTTP_BAD_REQUEST,
+                     "{\"error\":\"New password must be at least 12 characters\"}", "application/json");
+    }
+    
+    /* Get user document to verify current password */
+    json_value_t* user_doc = virtual_get(ctx->db, user_uuid);
+    if (!user_doc) {
+        jwt_free(jwt);
+        json_free(body);
+        return create_http_response(HTTP_NOT_FOUND,
+                     "{\"error\":\"User not found\"}", "application/json");
+    }
+    
+    /* Verify current password */
+    json_value_t* stored_password_hash = json_object_get(user_doc, "password_hash");
+    if (!stored_password_hash || stored_password_hash->type != JSON_STRING) {
+        jwt_free(jwt);
+        json_free(body);
+        json_free(user_doc);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                     "{\"error\":\"User password data corrupted\"}", "application/json");
+    }
+    
+    /* Verify current password using PBKDF2 */
+    if (!verify_password(current_password, stored_password_hash->value.string)) {
+        jwt_free(jwt);
+        json_free(body);
+        json_free(user_doc);
+        return create_http_response(HTTP_UNAUTHORIZED,
+                     "{\"error\":\"Current password is incorrect\"}", "application/json");
+    }
+    
+    /* Hash new password using PBKDF2 */
+    char* new_password_hash = hash_password(new_password);
+    if (!new_password_hash) {
+        jwt_free(jwt);
+        json_free(body);
+        json_free(user_doc);
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                     "{\"error\":\"Failed to hash new password\"}", "application/json");
+    }
+    
+    /* Update user document with new password hash */
+    json_value_t* update_doc = json_create_object();
+    json_object_set(update_doc, "password_hash", json_create_string(new_password_hash));
+    
+    /* Add modified timestamp */
+    time_t now = time(NULL);
+    char timestamp[32];
+    snprintf(timestamp, sizeof(timestamp), "%ld", now);
+    json_object_set(update_doc, "modified_at", json_create_string(timestamp));
+    
+    /* Preserve required fields from existing document */
+    json_value_t* owner_val = json_object_get(user_doc, "owner");
+    if (owner_val && owner_val->type == JSON_STRING) {
+        json_object_set(update_doc, "owner", json_create_string(owner_val->value.string));
+    }
+    
+    json_value_t* type_val = json_object_get(user_doc, "type");
+    if (type_val && type_val->type == JSON_STRING) {
+        json_object_set(update_doc, "type", json_create_string(type_val->value.string));
+    }
+    
+    json_value_t* library_val = json_object_get(user_doc, "library");
+    if (library_val && library_val->type == JSON_STRING) {
+        json_object_set(update_doc, "library", json_create_string(library_val->value.string));
+    }
+    
+    /* Update the user document using virtual layer */
+    json_value_t* updated_doc = virtual_update(ctx->db, user_uuid, update_doc);
+    
+    BUFFER_FREE(new_password_hash);
+    json_free(update_doc);
+    json_free(user_doc);
+    jwt_free(jwt);
+    json_free(body);
+    
+    if (!updated_doc) {
+        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
+                     "{\"error\":\"Failed to update password\"}", "application/json");
+    }
+    
+    json_free(updated_doc);
+    
+    /* Build success response */
+    json_value_t* response = json_create_object();
+    json_object_set(response, "message", json_create_string("Password changed successfully"));
+    json_object_set(response, "username", json_create_string(username));
+    json_object_set(response, "changed_at", json_create_string(timestamp));
     
     /* Wrap in standard envelope */
     json_value_t* envelope = json_create_object();

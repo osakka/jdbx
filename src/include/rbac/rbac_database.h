@@ -76,14 +76,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
  */
 int rbac_db_add_user_to_role(struct database* db, const char* user_id, const char* role_id);
 
-/**
- * Create new role
- * @param db Database instance
- * @param name Role name
- * @param description Role description
- * @return Role ID on success, NULL on failure
- */
-char* rbac_db_create_role(struct database* db, const char* name, const char* description);
+/* NOTE: rbac_db_create_role is declared in rbac_db.h - single source of truth */
 
 /**
  * Grant permission to role on collection

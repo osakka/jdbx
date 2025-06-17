@@ -71,8 +71,8 @@ static int load_env_file(const char* filename) {
       if (end_quote) *end_quote = '\0';
     }
     
-    /* Set environment variable */
-    if (setenv(key, value, 1) != 0) {
+    /* Set environment variable (do not overwrite existing) */
+    if (setenv(key, value, 0) != 0) {
       fprintf(stderr, "Warning: Failed to set environment variable '%s' from '%s'\n", 
               key, filename);
       success = 0;
