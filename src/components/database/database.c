@@ -1678,16 +1678,37 @@ int storage_delete_document(database_t* db, const char* uuid) {
     
     // Extract and free both JSON object and buffer pool allocation
     json_value_t** doc_ptr = (json_value_t**)raw_data;
+    
+    // DEFENSIVE CHECK: Ensure doc_ptr is valid before dereferencing
+    if (!doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("Storage: Invalid document pointer for UUID '%s'", uuid);
+        return 0;
+    }
+    
     json_value_t* doc = *doc_ptr;
     
-    // Remove from skiplist and free both JSON object and buffer pool allocation
+    // DEFENSIVE CHECK: Ensure doc is valid before freeing
+    if (!doc) {
+        pthread_rwlock_unlock(&coll->lock);
+        LOG_ERROR("Storage: NULL document for UUID '%s'", uuid);
+        return 0;
+    }
+    
+    // Remove from skiplist first to prevent race conditions
+    int result = skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
+    
+    // Free both JSON object and buffer pool allocation AFTER removal
     json_free(doc);
     BUFFER_FREE(doc_ptr);
-    int result = skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
     
     pthread_rwlock_unlock(&coll->lock);
     
-    LOG_INFO("Storage: Deleted document '%s' directly from unified collection", uuid);
+    if (result) {
+        LOG_INFO("Storage: Deleted document '%s' directly from unified collection", uuid);
+    } else {
+        LOG_ERROR("Storage: Failed to delete document '%s' from skiplist", uuid);
+    }
     
     return result;
 }

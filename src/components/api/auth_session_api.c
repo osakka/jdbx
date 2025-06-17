@@ -418,6 +418,13 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
     }
     
     json_value_t* session = json_array_get(documents, 0);
+    if (!session) {
+        json_free(results);
+        jwt_free(jwt);
+        return create_http_response(HTTP_NOT_FOUND,
+                     "{\"error\":\"Session data corrupted\"}", "application/json");
+    }
+    
     json_value_t* session_user = json_object_get(session, "user_id");
     
     /* Check if user owns this session or is admin */
@@ -443,7 +450,7 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
     
     /* Delete the session */
     int result = storage_delete_document(ctx->db, session_id);
-    if (result != 0) {
+    if (result == 0) {  /* storage_delete_document returns 1 for success, 0 for failure */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to terminate session\"}", "application/json");
     }
