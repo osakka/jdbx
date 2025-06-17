@@ -242,9 +242,20 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     
     pthread_rwlock_wrlock(&g_jwt_cache->lock);
     
-    /* Check if entry already exists */
+    /* Check if entry already exists - traverse safely to prevent corruption */
     jwt_cache_entry_t* existing = g_jwt_cache->buckets[bucket];
+    jwt_cache_entry_t* prev = NULL;
     while (existing) {
+        /* Validate entry structure to prevent memory corruption crashes */
+        if ((uintptr_t)existing < 0x1000 || !existing->token_hash) {
+            LOG_ERROR("JWT cache detected corrupted entry pointer 0x%lx, removing from chain", (uintptr_t)existing);
+            if (prev) {
+                prev->next = NULL; /* Terminate chain at safe point */
+            } else {
+                g_jwt_cache->buckets[bucket] = NULL; /* Clear corrupted bucket */
+            }
+            break;
+        }
         if (strcmp(existing->token_hash, token_hash) == 0) {
             /* Update existing entry */
             existing->cached_at = now;
@@ -253,6 +264,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
             LOG_INFO("JWT cache updated for user: %s", username);
             return;
         }
+        prev = existing;
         existing = existing->next;
     }
     

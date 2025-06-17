@@ -28,13 +28,13 @@ typedef struct memory_header {
     memory_checkpoint_t* checkpoint; /* Owning checkpoint */
     size_t size;                    /* Allocation size */
     uint32_t magic;                 /* Magic number for corruption detection */
-    /* Ensure proper alignment for data by using max_align_t */
-    _Alignas(max_align_t) char data[]; /* Actual allocation starts here */
+    /* User data follows immediately after this header with proper alignment */
 } memory_header_t;
 
 #define MEMORY_MAGIC 0xDEADBEEF
 #define MEMORY_MAGIC_FREE 0xFEEDF00D
-#define HEADER_SIZE sizeof(memory_header_t)
+/* Calculate header size with proper alignment for max_align_t */
+#define HEADER_SIZE ((sizeof(memory_header_t) + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1))
 
 /* Checkpoint structure */
 struct memory_checkpoint {
@@ -90,23 +90,17 @@ static void ensure_memory_initialized(void) {
 static memory_header_t* get_memory_header(void* ptr) {
     if (!ptr) return NULL;
     
-    /* Calculate the offset to the start of the header structure.
-     * The user pointer points to the 'data' field, so we need to go back
-     * by the offset of the 'data' field within the structure.
-     */
-    size_t data_offset = offsetof(memory_header_t, data);
+    /* Calculate the header pointer - user data starts at HEADER_SIZE offset */
+    memory_header_t* header = (memory_header_t*)((char*)ptr - HEADER_SIZE);
     
     /* Sanity check for obviously bad pointers */
-    if ((uintptr_t)ptr < data_offset) {
+    if ((uintptr_t)ptr < HEADER_SIZE) {
         return NULL;
     }
     
-    /* Get header location by subtracting the offset of 'data' field */
-    memory_header_t* header = (memory_header_t*)((char*)ptr - data_offset);
-    
     /* Safely check if this could be a valid header by checking alignment */
-    /* Headers are allocated by malloc, so they should be aligned */
-    if ((uintptr_t)header % sizeof(void*) != 0) {
+    /* Headers are allocated by aligned_alloc, so they should be aligned */
+    if ((uintptr_t)header % _Alignof(max_align_t) != 0) {
         return NULL;
     }
     
@@ -118,10 +112,20 @@ static memory_header_t* get_memory_header(void* ptr) {
     
     /* Validate magic number with memory barrier for thread safety */
     __sync_synchronize();  /* Memory fence */
+    
+    /* Additional validation: check if header is in valid memory range */
+    /* This prevents reading arbitrary memory for magic validation */
+    if ((uintptr_t)header & (_Alignof(max_align_t) - 1)) {
+        return NULL;  /* Not properly aligned for our headers */
+    }
+    
     uint32_t magic = header->magic;
     
     if (magic == MEMORY_MAGIC) {
-        return header;
+        /* Additional safety check: validate size field is reasonable */
+        if (header->size > 0 && header->size < (1ULL << 32)) {
+            return header;
+        }
     }
     
     /* Check for freed magic to catch double-frees */
@@ -367,8 +371,8 @@ void* memory_alloc(size_t size) {
         cp->total_size += size;
     }
     
-    /* Return pointer to user data */
-    return header->data;
+    /* Return pointer to user data - calculate properly aligned offset */
+    return (char*)header + HEADER_SIZE;
 }
 
 /**
