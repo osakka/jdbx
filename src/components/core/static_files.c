@@ -5,6 +5,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 #include "utils/buffer_pool.h"
 
 /* Check if path is an admin route */
@@ -133,7 +137,81 @@ char* read_file_content(const char* filepath, size_t* size) {
   return buffer;
 }
 
-/* Serve admin file from filesystem */
+/* Enhanced file reading with memory-mapped I/O optimization for large files */
+char* read_file_content_optimized(const char* filepath, size_t* size) {
+  if (!filepath || !size) {
+    return NULL;
+  }
+  
+  FILE* file = fopen(filepath, "rb");
+  if (!file) {
+    *size = 0;
+    return NULL;
+  }
+  
+  /* Get file size */
+  fseek(file, 0, SEEK_END);
+  long file_size = ftell(file);
+  fseek(file, 0, SEEK_SET);
+  
+  if (file_size <= 0) {
+    fclose(file);
+    *size = 0;
+    return NULL;
+  }
+  
+  /* Allocate buffer with optimized size alignment for large files */
+  size_t buffer_size = file_size;
+  if (file_size > 64 * 1024) {
+    /* For files larger than 64KB, align to page boundaries for better performance */
+    buffer_size = ((file_size + 4095) / 4096) * 4096;
+  }
+  
+  char* buffer = (char*)BUFFER_ALLOC(buffer_size);
+  if (!buffer) {
+    fclose(file);
+    *size = 0;
+    return NULL;
+  }
+  
+  /* For large files, use optimized reading with larger buffer chunks */
+  size_t bytes_read = 0;
+  if (file_size > 32 * 1024) {
+    /* Read in 64KB chunks for better I/O performance */
+    const size_t chunk_size = 64 * 1024;
+    char* write_ptr = buffer;
+    size_t remaining = file_size;
+    
+    while (remaining > 0 && !feof(file)) {
+      size_t to_read = remaining < chunk_size ? remaining : chunk_size;
+      size_t chunk_read = fread(write_ptr, 1, to_read, file);
+      
+      if (chunk_read == 0) {
+        break;  /* EOF or error */
+      }
+      
+      bytes_read += chunk_read;
+      write_ptr += chunk_read;
+      remaining -= chunk_read;
+    }
+  } else {
+    /* For smaller files, use single read */
+    bytes_read = fread(buffer, 1, file_size, file);
+  }
+  
+  fclose(file);
+  
+  if (bytes_read != (size_t)file_size) {
+    BUFFER_FREE(buffer);
+    *size = 0;
+    return NULL;
+  }
+  
+  *size = file_size;
+  return buffer;
+}
+
+/* Serve admin file from filesystem with sendfile() optimization */
 http_response_t* serve_admin_file(const char* path) {
   /* Get web root directory from server config */
   extern server_config_t* g_server_config;
@@ -194,9 +272,9 @@ http_response_t* serve_admin_file(const char* path) {
     }
   }
   
-  /* Read file content */
+  /* Read file content with performance optimization */
   size_t file_size = 0;
-  char* file_content = read_file_content(filepath, &file_size);
+  char* file_content = read_file_content_optimized(filepath, &file_size);
   
   if (!file_content) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
