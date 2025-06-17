@@ -35,6 +35,7 @@
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "api/session_api.h"
+#include "api/auth_session_api.h"
 #include "api/library_api.h"
 #include "api/library_metrics_api.h"
 #include "api/virtual_collections_api.h"
@@ -86,12 +87,15 @@ api_route_t routes[] = {
   {"/api/auth/register", HTTP_POST, api_handle_register, 0},
   {"/api/auth/refresh", HTTP_POST, api_handle_token_refresh, 0},
   {"/api/auth/logout", HTTP_POST, api_handle_logout, 1},
+  {"/api/auth/session", HTTP_GET, api_handle_get_current_session, 1},
+  {"/api/auth/library", HTTP_GET, api_handle_get_library_context, 1},
+  {"/api/auth/library/", HTTP_POST, api_handle_switch_library, 1},
   
   /* Session management routes */
   {"/api/sessions", HTTP_GET, api_handle_get_sessions, 1},
   {"/api/sessions/active", HTTP_GET, api_handle_get_active_sessions, 1},
   {"/api/sessions/", HTTP_POST, api_handle_session_terminate, 1},
-  {"/api/session/library", HTTP_POST, api_handle_switch_library, 1},
+  {"/api/sessions/", HTTP_DELETE, api_handle_terminate_session, 1},
   
   /* Library management routes */
   {"/api/libraries", HTTP_GET, api_handle_get_libraries, 1},

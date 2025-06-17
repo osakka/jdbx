@@ -235,7 +235,8 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
                "{\"error\":\"Failed to invalidate session\"}", "application/json");
 }
 
-/* Handle library switching */
+/* Handle library switching - REMOVED: Moved to auth_session_api.c with enhanced JWT handling */
+#if 0
 http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !ctx->db || !request) {
     return create_http_response(HTTP_BAD_REQUEST,
@@ -367,4 +368,5 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
+#endif
 
