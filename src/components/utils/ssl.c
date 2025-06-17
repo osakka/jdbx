@@ -40,10 +40,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/select.h>
+#include <pthread.h>
 
 /* OpenSSL structures wrapped by our opaque types */
 struct ssl_context_t {
   SSL_CTX *ssl_ctx;
+  pthread_mutex_t ssl_new_mutex; /* Protects SSL_new() calls for thread safety */
 };
 
 struct ssl_connection_t {
@@ -205,6 +207,14 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     return SSL_ERROR_MEMORY;
   }
   
+  /* Initialize mutex for thread-safe SSL_new() operations */
+  if (pthread_mutex_init(&new_ctx->ssl_new_mutex, NULL) != 0) {
+    LOG_ERROR("initialize SSL context mutex.");
+    BUFFER_FREE(new_ctx);
+    SSL_CTX_free(ssl_ctx);
+    return SSL_ERROR_INIT;
+  }
+  
   new_ctx->ssl_ctx = ssl_ctx;
   *ctx = new_ctx;
   
@@ -222,6 +232,9 @@ void ssl_context_free(ssl_context_t *ctx) {
     SSL_CTX_free(ctx->ssl_ctx);
   }
   
+  /* Destroy the mutex */
+  pthread_mutex_destroy(&ctx->ssl_new_mutex);
+  
   BUFFER_FREE(ctx);
 }
 
@@ -234,8 +247,11 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
   
   *conn = NULL;
   
-  /* Create a new SSL connection */
+  /* Create a new SSL connection - protect with mutex for thread safety */
+  pthread_mutex_lock(&ctx->ssl_new_mutex);
   SSL *ssl = SSL_new(ctx->ssl_ctx);
+  pthread_mutex_unlock(&ctx->ssl_new_mutex);
+  
   if (!ssl) {
     char *error = get_openssl_error();
     LOG_ERROR("create SSL connection: %s", error ? error : "Unknown error");
