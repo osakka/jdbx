@@ -3,6 +3,7 @@
 #include "js/js_native_storage.h"
 #include "js/js_engine.h"
 #include "utils/logger.h"
+#include "utils/buffer_pool.h"
 #include "rbac/rbac_db.h"
 #include <string.h>
 
@@ -65,7 +66,7 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
     const char *collection_part = collection_name;
     if (slash_pos) {
         size_t lib_len = slash_pos - collection_name;
-        char *library_copy = malloc(lib_len + 1);
+        char *library_copy = BUFFER_ALLOC(lib_len + 1);
         strncpy(library_copy, collection_name, lib_len);
         library_copy[lib_len] = '\0';
         library_part = library_copy;
@@ -82,7 +83,7 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
     
     /* Clean up library copy if allocated */
     if (slash_pos) {
-        free((void*)library_part);
+        BUFFER_FREE((void*)library_part);
     }
     
     /* 4. Clean up transformed document if it's different from original */
