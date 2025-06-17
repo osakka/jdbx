@@ -10,6 +10,7 @@
 #include "utils/logger.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 /* Maximum recursion depth to prevent stack overflow */
 #define MAX_RECURSION_DEPTH 100
@@ -100,6 +101,19 @@ static json_value_t* copy_object_safe(json_value_t* value, int depth) {
 /* Internal recursive deep copy function with safety checks */
 static json_value_t* json_deep_copy_internal_safe(json_value_t* value, int depth) {
     if (!value) return NULL;
+    
+    /* Validate memory pointer before accessing */
+    if ((uintptr_t)value < 0x1000) {
+        LOG_ERROR("JSON deep copy: Invalid value pointer %p", (void*)value);
+        return json_create_null();
+    }
+    
+    /* Validate JSON type to detect memory corruption */
+    if (value->type < JSON_NULL || value->type > JSON_OBJECT) {
+        LOG_ERROR("JSON deep copy: Corrupted JSON type %d (valid range: %d-%d)", 
+                  value->type, JSON_NULL, JSON_OBJECT);
+        return json_create_null();
+    }
     
     /* Check for excessive recursion depth */
     if (depth > MAX_RECURSION_DEPTH) {

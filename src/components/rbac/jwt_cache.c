@@ -452,19 +452,20 @@ void jwt_cache_cleanup(void) {
         jwt_cache_entry_t* entry = g_jwt_cache->buckets[i];
         
         while (entry) {
+            jwt_cache_entry_t* next_entry = entry->next; /* Save next before any modifications */
+            
             if (now >= entry->expiry || now >= entry->cached_at + CACHE_TTL_SECONDS) {
                 /* Remove expired entry */
                 *prev = entry->next;
                 lru_remove(g_jwt_cache, entry);
-                jwt_cache_entry_t* to_free = entry;
-                entry = entry->next;
-                free_cache_entry(to_free);
+                free_cache_entry(entry);
                 g_jwt_cache->current_entries--;
                 g_jwt_cache->expired_evictions++;
                 cleaned++;
+                entry = next_entry; /* Use saved next pointer */
             } else {
                 prev = &entry->next;
-                entry = entry->next;
+                entry = next_entry; /* Use saved next pointer */
             }
         }
     }
