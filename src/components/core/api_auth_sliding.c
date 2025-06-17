@@ -244,7 +244,6 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_value_t* session_query = json_create_object();
   json_object_set(session_query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
   json_object_set(session_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
-  json_object_set(session_query, "collection", json_create_string(RBAC_SESSIONS_COLLECTION_NAME));
   json_object_set(session_query, "token", json_create_string(token));
   json_object_set(session_query, "active", json_create_boolean(1));
   
