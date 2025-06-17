@@ -1321,11 +1321,25 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
     LOG_DEBUG("Document functions resolved for unified document");
   }
   
-  /* Validate document structure */
+  /* 🚀 DEVELOPER EXPERIENCE ENHANCEMENT: Auto-populate required fields */
+  
+  /* Auto-populate type field with default 'document' if missing - SAFE approach */
+  if (!json_object_get(doc, "type")) {
+    json_object_set(doc, "type", json_create_string("document"));
+    LOG_DEBUG("Auto-populated type field with default 'document'");
+  }
+  
+  /* Auto-populate owner field with default 'user' if missing - SAFE approach */
+  if (!json_object_get(doc, "owner")) {
+    json_object_set(doc, "owner", json_create_string("user"));
+    LOG_DEBUG("Auto-populated owner field with default 'user'");
+  }
+  
+  /* Validate document structure (now with auto-populated fields) */
   if (!validate_document_structure(doc)) {
     json_free(doc);
     return create_http_response(HTTP_BAD_REQUEST, 
-                 "{\"error\":\"Document missing required fields (type, owner)\"}", "application/json");
+                 "{\"error\":\"Document validation failed - please check required fields\"}", "application/json");
   }
   
   /* Insert document */
