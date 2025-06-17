@@ -624,6 +624,16 @@ void handle_client(void* client_data) {
       BUFFER_FREE(response_str);
     }
 
+    /* Apply keep-alive to static file responses (for consistency) */
+    if (request && request->keep_alive) {
+      if (response) {
+        response->keep_alive = 0; /* Static files default to connection close for simplicity */
+      }
+      if (g_logger) {
+        LOG_DEBUG("Static file served, connection will be closed (keep-alive not implemented for static files)");
+      }
+    }
+
     /* Cleanup */
     free_http_response(response);
     free_http_request(request);
@@ -641,74 +651,201 @@ void handle_client(void* client_data) {
     goto cleanup;
   }
   
-  /* Dispatch request to API handler */
-  if (g_logger) {
-    TRACE_NET("API_DISPATCH: Dispatching %s %s to API handler", 
-        request->method == HTTP_GET ? "GET" :
-        request->method == HTTP_POST ? "POST" :
-        request->method == HTTP_PUT ? "PUT" :
-        request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
-        request->path ? request->path : "NULL");
-  }
+  /* HTTP Keep-Alive Connection Loop - Handle multiple requests on same connection */
+  int keep_alive_enabled = 0;
+  int requests_processed = 0;
+  const int max_keep_alive_requests = 10; /* Limit requests per connection for safety */
+  http_response_t* response = NULL;  /* Declare at loop level for proper cleanup */
   
-  http_response_t* response = api_dispatch_request(client->api_ctx, request);
-  
-  if (g_logger) {
-    TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
-        (void*)response, response ? (int)response->status : -1);
-  }
-  
-  /* If no response from API handler, return 404 */
-  if (!response) {
+  /* Keep-alive loop for processing multiple requests */
+  do {
+    /* Dispatch request to API handler */
     if (g_logger) {
-      TRACE_NET("API_DISPATCH: No response from API handler, returning 404.");
+      TRACE_NET("API_DISPATCH: Dispatching %s %s to API handler (request #%d)", 
+          request->method == HTTP_GET ? "GET" :
+          request->method == HTTP_POST ? "POST" :
+          request->method == HTTP_PUT ? "PUT" :
+          request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+          request->path ? request->path : "NULL",
+          requests_processed + 1);
     }
-    response = create_http_response(HTTP_NOT_FOUND, 
-      "{\"error\":\"Not found\"}", "application/json");
-  }
-  
-  /* Apply CORS headers to response */
-  extern server_config_t* g_server_config;
-  if (g_server_config) {
-    response = apply_cors_headers(response, &g_server_config->cors, request->origin);
-  }
-  
-  /* Serialize and send response */
-  size_t response_len = 0;
-  char* response_str = serialize_http_response_with_length(response, &response_len);
-  if (response_str) {
-    /* Send response, handling partial writes and errors */
-    size_t bytes_sent = 0;
-    while (bytes_sent < response_len) {
-      ssize_t result = client_write_data(client, response_str + bytes_sent, response_len - bytes_sent);
-      if (result < 0) {
-        if (errno == EINTR) {
-          /* Interrupted by signal, retry */
-          continue;
-        } else if (errno == EPIPE || errno == ECONNRESET) {
-          /* Connection closed by client */
-          LOG_DEBUG("Client closed connection during write.");
-          break;
-        } else {
-          /* Other error */
-          LOG_ERROR("Write operation failed: %s", strerror(errno));
-          break;
-        }
-      } else if (result == 0) {
-        /* No bytes written, connection may be closed */
-        break;
-      } else {
-        bytes_sent += result;
+    
+    response = api_dispatch_request(client->api_ctx, request);
+    
+    if (g_logger) {
+      TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
+          (void*)response, response ? (int)response->status : -1);
+    }
+    
+    /* If no response from API handler, return 404 */
+    if (!response) {
+      if (g_logger) {
+        TRACE_NET("API_DISPATCH: No response from API handler, returning 404.");
+      }
+      response = create_http_response(HTTP_NOT_FOUND, 
+        "{\"error\":\"Not found\"}", "application/json");
+    }
+    
+    /* Apply keep-alive logic: honor client's request preference */
+    if (request->keep_alive && requests_processed < max_keep_alive_requests) {
+      response->keep_alive = 1;
+      keep_alive_enabled = 1;
+      if (g_logger) {
+        LOG_DEBUG("HTTP Keep-Alive: Connection will be reused (request #%d)", requests_processed + 1);
+      }
+    } else {
+      response->keep_alive = 0;
+      keep_alive_enabled = 0;
+      if (g_logger) {
+        LOG_DEBUG("HTTP Keep-Alive: Connection will be closed after response (request #%d)", requests_processed + 1);
       }
     }
-    BUFFER_FREE(response_str);
-  }
+    
+    /* Apply CORS headers to response */
+    extern server_config_t* g_server_config;
+    if (g_server_config) {
+      response = apply_cors_headers(response, &g_server_config->cors, request->origin);
+    }
+    
+    /* Serialize and send response */
+    size_t response_len = 0;
+    char* response_str = serialize_http_response_with_length(response, &response_len);
+    if (response_str) {
+      /* Send response, handling partial writes and errors */
+      size_t bytes_sent = 0;
+      while (bytes_sent < response_len) {
+        ssize_t result = client_write_data(client, response_str + bytes_sent, response_len - bytes_sent);
+        if (result < 0) {
+          if (errno == EINTR) {
+            /* Interrupted by signal, retry */
+            continue;
+          } else if (errno == EPIPE || errno == ECONNRESET) {
+            /* Connection closed by client */
+            LOG_DEBUG("Client closed connection during write.");
+            keep_alive_enabled = 0; /* Force connection close */
+            break;
+          } else {
+            /* Other error */
+            LOG_ERROR("Write operation failed: %s", strerror(errno));
+            keep_alive_enabled = 0; /* Force connection close */
+            break;
+          }
+        } else if (result == 0) {
+          /* No bytes written, connection may be closed */
+          keep_alive_enabled = 0; /* Force connection close */
+          break;
+        } else {
+          bytes_sent += result;
+        }
+      }
+      BUFFER_FREE(response_str);
+    } else {
+      /* Response serialization failed */
+      keep_alive_enabled = 0;
+    }
 
-  /* Cleanup */
-  free_http_response(response);
-  free_http_request(request);
+    /* CRITICAL MEMORY SAFETY: Safe cleanup with NULL checks */
+    if (response) {
+      free_http_response(response);
+      response = NULL;
+    }
+    if (request) {
+      free_http_request(request);
+      request = NULL;
+    }
+    requests_processed++;
+    
+    /* If keep-alive is enabled, try to read the next request */
+    if (keep_alive_enabled) {
+      if (g_logger) {
+        LOG_DEBUG("HTTP Keep-Alive: Waiting for next request on fd=%d", client_fd);
+      }
+      
+      /* Set shorter timeout for keep-alive requests */
+      struct timeval keep_alive_timeout;
+      keep_alive_timeout.tv_sec = 5; /* 5 seconds for keep-alive */
+      keep_alive_timeout.tv_usec = 0;
+      if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&keep_alive_timeout, sizeof keep_alive_timeout) < 0) {
+        if (g_logger) {
+          LOG_DEBUG("Failed to set keep-alive timeout, closing connection");
+        }
+        keep_alive_enabled = 0;
+        break;
+      }
+      
+      /* Clear buffer for next request */
+      memset(buffer, 0, BUFFER_SIZE);
+      
+      /* Read next request with comprehensive error handling */
+      int bytes_read = client_read_data(client, buffer, BUFFER_SIZE);
+      if (bytes_read <= 0) {
+        if (g_logger) {
+          LOG_DEBUG("HTTP Keep-Alive: No more data or connection closed by client (fd=%d)", client_fd);
+        }
+        keep_alive_enabled = 0;
+        break;
+      }
+      
+      /* Null-terminate and parse next request with safety checks */
+      buffer[bytes_read] = '\0';
+      request = parse_http_request(buffer);
+      if (!request) {
+        if (g_logger) {
+          LOG_DEBUG("HTTP Keep-Alive: Invalid request received, closing connection");
+        }
+        keep_alive_enabled = 0;
+        break;
+      }
+      
+      /* CRITICAL SAFETY: Validate request structure before use */
+      if (!request->path) {
+        if (g_logger) {
+          LOG_ERROR("HTTP Keep-Alive: Request has NULL path, closing connection");
+        }
+        free_http_request(request);
+        request = NULL;
+        keep_alive_enabled = 0;
+        break;
+      }
+      
+      /* Set client IP for the new request with safety checks */
+      if (client && request) {
+        char ip_str[INET_ADDRSTRLEN];
+        if (inet_ntop(AF_INET, &(client->address.sin_addr), ip_str, INET_ADDRSTRLEN)) {
+          request->remote_addr = BUFFER_STRDUP(ip_str);
+        }
+      }
+      
+      if (g_logger) {
+        LOG_DEBUG("HTTP Keep-Alive: Processing next request: %s %s (request #%d)", 
+            request->method == HTTP_GET ? "GET" :
+            request->method == HTTP_POST ? "POST" :
+            request->method == HTTP_PUT ? "PUT" :
+            request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
+            request->path ? request->path : "NULL",
+            requests_processed + 1);
+      }
+    }
+    
+  } while (keep_alive_enabled && requests_processed < max_keep_alive_requests);
   
-  /* Clean up SSL connection if needed */
+  /* CRITICAL SAFETY: Final cleanup of any remaining request/response */
+  if (response) {
+    free_http_response(response);
+    response = NULL;
+  }
+  if (request) {
+    free_http_request(request);
+    request = NULL;
+  }
+  
+  /* Log keep-alive session summary */
+  if (g_logger) {
+    LOG_INFO("HTTP Keep-Alive session completed: %d requests processed on fd=%d", 
+        requests_processed, client_fd);
+  }
+  
+  /* Connection cleanup - always close after keep-alive session ends */
   if (client->use_ssl) {
     client_cleanup_ssl(client);
   }

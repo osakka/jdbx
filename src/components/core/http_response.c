@@ -189,7 +189,9 @@ char* serialize_http_response(http_response_t* response) {
   written += n;
   remaining -= n;
 
-  n = snprintf(response_str + written, remaining, "Connection: close\r\n");
+  /* HTTP keep-alive optimization: respect request connection preference */
+  const char* connection_header = response->keep_alive ? "Connection: keep-alive\r\n" : "Connection: close\r\n";
+  n = snprintf(response_str + written, remaining, "%s", connection_header);
   if (n < 0 || (size_t)n >= remaining) {
     BUFFER_FREE(response_str);
     return NULL;
@@ -294,7 +296,9 @@ char* serialize_http_response_with_length(http_response_t* response, size_t* len
   written += n;
   remaining -= n;
 
-  n = snprintf(response_str + written, remaining, "Connection: close\r\n");
+  /* HTTP keep-alive optimization: respect request connection preference */
+  const char* connection_header = response->keep_alive ? "Connection: keep-alive\r\n" : "Connection: close\r\n";
+  n = snprintf(response_str + written, remaining, "%s", connection_header);
   if (n < 0 || (size_t)n >= remaining) {
     BUFFER_FREE(response_str);
     return NULL;
