@@ -35,6 +35,9 @@
 #include <regex.h>
 #include <time.h>
 
+/* CRITICAL: Understand the storage vs virtual layer distinction! */
+#include "database/VIRTUAL_VS_STORAGE_CRITICAL.h"
+
 /* Persistence configuration constants */
 #define PERSISTENCE_BUFFER_OPS_THRESHOLD 50      /* Save after 50 operations */
 #define PERSISTENCE_BUFFER_SIZE_THRESHOLD (1024 * 1024)  /* Save after 1MB of changes */

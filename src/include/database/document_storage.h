@@ -4,6 +4,21 @@
 #include "utils/json.h"
 #include "database/database.h"
 
+/**
+ * ⚠️ ARCHITECTURAL CRITICAL POINT ⚠️
+ * 
+ * This file defines the STORAGE LAYER interface for JDBX's unified documents.
+ * 
+ * UNDERSTAND THIS BEFORE PROCEEDING:
+ * - ALL documents are stored in ONE physical collection: "default/documents"
+ * - Document types (users, roles, etc.) are distinguished by the "type" field
+ * - There are NO physical collections like "system/users" or "app/roles"
+ * - Virtual collections are a LOGICAL concept implemented via type discrimination
+ * 
+ * If you're looking for user/role operations, use the virtual_*() functions
+ * in the appropriate headers. This file is for STORAGE operations only.
+ */
+
 /* Document types */
 typedef enum {
     DOC_TYPE_UNKNOWN = 0,

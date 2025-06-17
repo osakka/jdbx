@@ -1246,6 +1246,20 @@ int db_delete_document(database_t* db, const char* library, const char* collecti
 json_value_t* db_query_documents(database_t* db, const char* library, const char* collection, json_value_t* query) {
     (void)db; // Use global database
     
+    /* ⚠️ ARCHITECTURAL WARNING ⚠️
+     * If library/collection is NOT "default/documents", you're probably doing it WRONG!
+     * 
+     * JDBX uses unified storage - ALL documents are in "default/documents".
+     * Use the "type" field in your query to filter for specific document types.
+     * 
+     * Example - Getting all users:
+     * ❌ WRONG: db_query_documents(db, "system", "users", {})
+     * ✅ RIGHT: db_query_documents(db, "default", "documents", {"type": "user", "library": "system"})
+     */
+    if (strcmp(library, "default") != 0 || strcmp(collection, "documents") != 0) {
+        LOG_WARNING("Query to non-unified collection %s/%s - this is probably wrong! Use type discrimination instead.", library, collection);
+    }
+    
     // UNIFIED DOCUMENTS: Query directly from single unified collection
     LOG_DEBUG("Querying unified documents for library='%s', collection='%s'", library, collection);
     

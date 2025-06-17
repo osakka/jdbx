@@ -248,7 +248,17 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
-  /* Query all users - filter by type="user" in unified storage */
+  /* Query all users - filter by type="user" in unified storage 
+   * 
+   * CRITICAL ARCHITECTURAL POINT:
+   * We are using the VIRTUAL layer concept here - "users" are documents with type="user"
+   * stored in the physical unified collection "default/documents".
+   * 
+   * DO NOT use: db_query_documents(ctx->db, "system", "users", query) ❌
+   * DO use: type discrimination in the unified storage ✅
+   * 
+   * The STORAGE_LIBRARY and STORAGE_COLLECTION constants point to "default/documents"
+   */
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("user"));
   json_object_set(query, "library", json_create_string("system"));
