@@ -2,6 +2,7 @@
 #include "rbac/rbac_db.h"
 #include "database/database.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/logger.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,8 +43,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   
   /* Check if we need to create a default admin user */
   json_value_t* query = json_create_object();
-  json_object_set(query, "type", json_create_string("user"));
-  json_value_t* users_result = storage_query_documents(db, query);
+  json_value_t* users_result = virtual_query(db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -66,7 +66,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
     json_object_set(admin_user, "roles", roles_array);
     
     /* Insert admin user */
-    json_value_t* result = storage_insert_document(db, admin_user);
+    json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, admin_user, SYSTEM_USER_ADMIN);
     if (!result) {
       LOG_ERROR("Failed to create default admin user.");
     } else {

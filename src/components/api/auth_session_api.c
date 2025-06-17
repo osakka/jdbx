@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "database/database.h"
+#include "database/virtual_layer.h"
 #include "rbac/jwt.h"
 #include "rbac/rbac_database.h"
 #include "utils/json.h"
@@ -67,33 +68,11 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
     }
     
     /* Query the session document */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
-    json_object_set(query, "library", json_create_string("system"));
-    json_object_set(query, "token", json_create_string(token));
-    
-    json_value_t* results = storage_query_documents(ctx->db, query);
-    json_free(query);
+    /* Use virtual layer to get session by token - single source of truth */
+    json_value_t* session_doc = virtual_get_session_by_token(ctx->db, token);
     BUFFER_FREE(token);
     
-    if (!results) {
-        jwt_free(jwt);
-        return create_http_response(HTTP_NOT_FOUND,
-                     "{\"error\":\"Session not found\"}", "application/json");
-    }
-    
-    /* Extract session from results */
-    json_value_t* documents = json_object_get(results, "documents");
-    if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-        json_free(results);
-        jwt_free(jwt);
-        return create_http_response(HTTP_NOT_FOUND,
-                     "{\"error\":\"Session not found\"}", "application/json");
-    }
-    
-    json_value_t* session = json_array_get(documents, 0);
-    if (!session) {
-        json_free(results);
+    if (!session_doc) {
         jwt_free(jwt);
         return create_http_response(HTTP_NOT_FOUND,
                      "{\"error\":\"Session not found\"}", "application/json");
@@ -107,8 +86,8 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
     json_object_set(response, "library", json_create_string(library));
     
     /* Add session timestamps */
-    json_value_t* created_at = json_object_get(session, "created_at");
-    json_value_t* expires_at = json_object_get(session, "expires_at");
+    json_value_t* created_at = json_object_get(session_doc, "created_at");
+    json_value_t* expires_at = json_object_get(session_doc, "expires_at");
     if (created_at) {
         json_object_set(response, "created_at", json_clone(created_at));
     }
@@ -117,8 +96,8 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
     }
     
     /* Add session metadata */
-    json_value_t* ip_address = json_object_get(session, "ip_address");
-    json_value_t* user_agent = json_object_get(session, "user_agent");
+    json_value_t* ip_address = json_object_get(session_doc, "ip_address");
+    json_value_t* user_agent = json_object_get(session_doc, "user_agent");
     if (ip_address) {
         json_object_set(response, "ip_address", json_clone(ip_address));
     }
@@ -126,7 +105,7 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
         json_object_set(response, "user_agent", json_clone(user_agent));
     }
     
-    json_free(results);
+    json_free(session_doc);
     jwt_free(jwt);
     
     /* Wrap in standard envelope */
@@ -287,12 +266,11 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
         
         /* Also check if library exists */
         if (has_access) {
-            json_value_t* query = json_create_object();
-            json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_LIBRARY));
-            json_object_set(query, "name", json_create_string(target_library));
-            
-            json_value_t* results = storage_query_documents(ctx->db, query);
-            json_free(query);
+            /* Use virtual layer to query libraries - single source of truth */
+            json_value_t* filters = json_create_object();
+            json_object_set(filters, "name", json_create_string(target_library));
+            json_value_t* results = virtual_query(ctx->db, "library", "system", "libraries", filters);
+            json_free(filters);
             
             if (results) {
                 json_value_t* documents = json_object_get(results, "documents");
@@ -395,37 +373,16 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
     
     const char* user_uuid = jwt->payload->sub;
     
-    /* Query the session */
-    json_value_t* query = json_create_object();
-    json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
-    json_object_set(query, "uuid", json_create_string(session_id));
+    /* Get the session using virtual layer - single source of truth */
+    json_value_t* session_doc = virtual_get(ctx->db, session_id);
     
-    json_value_t* results = storage_query_documents(ctx->db, query);
-    json_free(query);
-    
-    if (!results) {
+    if (!session_doc) {
         jwt_free(jwt);
         return create_http_response(HTTP_NOT_FOUND,
                      "{\"error\":\"Session not found\"}", "application/json");
     }
     
-    json_value_t* documents = json_object_get(results, "documents");
-    if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-        json_free(results);
-        jwt_free(jwt);
-        return create_http_response(HTTP_NOT_FOUND,
-                     "{\"error\":\"Session not found\"}", "application/json");
-    }
-    
-    json_value_t* session = json_array_get(documents, 0);
-    if (!session) {
-        json_free(results);
-        jwt_free(jwt);
-        return create_http_response(HTTP_NOT_FOUND,
-                     "{\"error\":\"Session data corrupted\"}", "application/json");
-    }
-    
-    json_value_t* session_user = json_object_get(session, "user_id");
+    json_value_t* session_user = json_object_get(session_doc, "user_id");
     
     /* Check if user owns this session or is admin */
     int can_terminate = 0;
@@ -440,7 +397,7 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
         }
     }
     
-    json_free(results);
+    json_free(session_doc);
     jwt_free(jwt);
     
     if (!can_terminate) {
@@ -448,9 +405,9 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
                      "{\"error\":\"Permission denied\"}", "application/json");
     }
     
-    /* Delete the session */
-    int result = storage_delete_document(ctx->db, session_id);
-    if (result == 0) {  /* storage_delete_document returns 1 for success, 0 for failure */
+    /* Delete the session using virtual layer - single source of truth */
+    int result = virtual_delete(ctx->db, session_id);
+    if (result == 0) {  /* virtual_delete returns 1 for success, 0 for failure */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to terminate session\"}", "application/json");
     }

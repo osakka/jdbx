@@ -2,6 +2,7 @@
 #include "utils/buffer_pool.h"
 #include "database/document_storage.h"
 #include "database/database.h"
+#include "database/virtual_layer.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include <time.h>
@@ -330,14 +331,14 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
     document_to_save = new_doc;
   }
   
-  /* Save the document */
+  /* Save the document using virtual layer - single source of truth */
   json_value_t* result = NULL;
   if (existing && metric_id) {
     /* Update existing document */
-    result = storage_update_document(mp->db, metric_id, document_to_save);
+    result = virtual_update(mp->db, metric_id, document_to_save);
   } else {
     /* Insert new document */
-    result = storage_insert_document(mp->db, document_to_save);
+    result = virtual_insert(mp->db, DOC_TYPE_NAME_METRIC, "system", VIRTUAL_COLLECTION_METRICS, document_to_save, "system");
     if (result && !*metric_id_ptr) {
       /* Get and store the generated ID */
       json_value_t* id_val = json_object_get(result, "uuid");
@@ -511,7 +512,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
         
         if (id && id->type == JSON_STRING) {
           const char* id_str = json_get_string(id);
-          if (storage_delete_document(mp->db, id_str)) {
+          if (virtual_delete(mp->db, id_str)) {
             deleted_count++;
           }
         }

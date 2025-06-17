@@ -1,4 +1,5 @@
 #include "api/api.h"
+#include "database/virtual_layer.h"
 #include "database/document_storage.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
@@ -32,13 +33,15 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   
   if (g_logger) LOG_DEBUG("Attempting to extend session for token: %.30s...", token);
   
-  /* Query for the session by token */
+  /* Query for the session by token - UNIFIED DOCUMENTS */
   json_value_t* query = json_create_object();
+  json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
+  json_object_set(query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
   if (g_logger) LOG_DEBUG("Querying sessions for token: %.30s...", token);
-  json_value_t* results = db_query_documents(ctx->db, RBAC_SYSTEM_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, RBAC_SYSTEM_LIBRARY, VIRTUAL_COLLECTION_SESSIONS, query);
   json_free(query);
   
   if (!results) {
@@ -89,8 +92,8 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   strftime(expire_time, sizeof(expire_time), "%Y-%m-%dT%H:%M:%SZ", gmtime(&new_expiry));
   json_object_set(full_session, "expires_at", json_create_string(expire_time));
   
-  /* Update the session document with all fields */
-  json_value_t* update_result = db_update_document(ctx->db, RBAC_SYSTEM_LIBRARY, STORAGE_COLLECTION, session_id, full_session);
+  /* Update the session document using virtual layer - UNIFIED DOCUMENTS */
+  json_value_t* update_result = virtual_update(ctx->db, session_id, full_session);
   
   if (update_result) {
     if (g_logger) {
@@ -245,7 +248,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_object_set(session_query, "token", json_create_string(token));
   json_object_set(session_query, "active", json_create_boolean(1));
   
-  json_value_t* session_results = storage_query_documents(ctx->db, session_query);
+  json_value_t* session_results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, RBAC_SYSTEM_LIBRARY, VIRTUAL_COLLECTION_SESSIONS, session_query);
   json_free(session_query);
   
   int session_found = 0;

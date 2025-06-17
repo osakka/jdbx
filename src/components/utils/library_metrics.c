@@ -1,6 +1,7 @@
 #include "utils/metrics.h"
 #include "database/database.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include "utils/json_deep_copy.h"
@@ -87,8 +88,8 @@ int library_metrics_record(database_t* db, const char* library_name,
   json_object_set(document, "timestamp", json_create_string(iso_time));
   json_object_set(document, "data", json_deep_copy(metric_data));
   
-  /* Insert metric document */
-  json_value_t* result = storage_insert_document(db, document);
+  /* Insert metric document using virtual layer - single source of truth */
+  json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_METRIC, library_name ? library_name : "default", VIRTUAL_COLLECTION_METRICS, document, SYSTEM_USER_METRICS);
   json_free(document);
   BUFFER_FREE(collection_name);
   

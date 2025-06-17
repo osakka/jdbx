@@ -1456,9 +1456,8 @@ async function deleteSpecificLibrary(libraryName) {
 async function switchLibrary(libraryName) {
     try {
         // First, make API call to switch library on server side
-        await apiRequest('/api/session/library', {
-            method: 'POST',
-            body: JSON.stringify({ library: libraryName })
+        await apiRequest(`/api/auth/library/${libraryName}`, {
+            method: 'POST'
         });
         
         // Update local state only after successful server switch

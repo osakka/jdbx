@@ -48,6 +48,7 @@ typedef enum {
 #define SYSTEM_USER_PERSISTENCE    "system-persistence"
 #define SYSTEM_USER_CACHE          "system-cache"
 #define SYSTEM_USER_AUDIT          "system-audit"
+#define SYSTEM_USER_JS              "system-js"
 
 /* Human users (bootstrap defaults) */
 #define DEFAULT_ADMIN_USERNAME      "admin"
@@ -76,11 +77,13 @@ typedef enum {
 #define DOC_TYPE_NAME_SCHEMA        "schema"
 #define DOC_TYPE_NAME_VERSION       "version"
 #define DOC_TYPE_NAME_AUDIT         "audit"
+#define DOC_TYPE_NAME_DOCUMENT      "document"
 
 /* Virtual Collection Names (used in 'collection' field) */
 #define VIRTUAL_COLLECTION_USERS       "users"
 #define VIRTUAL_COLLECTION_ROLES       "roles"
 #define VIRTUAL_COLLECTION_LIBRARIES   "libraries"
+#define VIRTUAL_COLLECTION_COLLECTIONS "collections"
 #define VIRTUAL_COLLECTION_SESSIONS    "sessions"
 #define VIRTUAL_COLLECTION_FUNCTIONS   "functions"
 #define VIRTUAL_COLLECTION_VALIDATORS  "validators"
@@ -89,6 +92,7 @@ typedef enum {
 #define VIRTUAL_COLLECTION_CONFIGS     "configs"
 #define VIRTUAL_COLLECTION_INDEXES     "indexes"
 #define VIRTUAL_COLLECTION_SCHEMAS     "schemas"
+#define VIRTUAL_COLLECTION_VERSIONS    "versions"
 
 /* Virtual Library Names (used in 'library' field) */
 #define VIRTUAL_LIBRARY_SYSTEM      "system"

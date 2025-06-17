@@ -26,12 +26,10 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* Query library documents from unified documents */
-  json_value_t* query = json_create_object();
-  json_object_set(query, "type", json_create_string("library"));
-  
-  json_value_t* results = storage_query_documents(ctx->db, query);
-  json_free(query);
+  /* Query library documents using virtual layer - single source of truth */
+  json_value_t* filters = json_create_object();
+  json_value_t* results = virtual_query(ctx->db, "library", "system", "libraries", filters);
+  json_free(filters);
   
   if (!results) {
     /* If no documents collection, return empty list */
@@ -104,12 +102,11 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   }
   
   /* Check if library already exists using unified documents */
-  json_value_t* exists_query = json_create_object();
-  json_object_set(exists_query, "type", json_create_string("library"));
-  json_object_set(exists_query, "name", json_create_string(library_name));
-  
-  json_value_t* exists_results = storage_query_documents(ctx->db, exists_query);
-  json_free(exists_query);
+  /* Check if library already exists using virtual layer - single source of truth */
+  json_value_t* filters = json_create_object();
+  json_object_set(filters, "name", json_create_string(library_name));
+  json_value_t* exists_results = virtual_query(ctx->db, "library", "system", "libraries", filters);
+  json_free(filters);
   
   if (exists_results) {
     json_value_t* existing_docs = json_object_get(exists_results, "documents");
@@ -131,13 +128,11 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   json_value_t* template_collections = NULL;
   json_value_t* template_settings = NULL;
   
-  /* Query for the template in unified documents */
-  json_value_t* template_query = json_create_object();
-  json_object_set(template_query, "type", json_create_string("library_template"));
-  json_object_set(template_query, "name", json_create_string(template_name));
-  
-  json_value_t* template_results = storage_query_documents(ctx->db, template_query);
-  json_free(template_query);
+  /* Query for the template using virtual layer - single source of truth */
+  json_value_t* template_filters = json_create_object();
+  json_object_set(template_filters, "name", json_create_string(template_name));
+  json_value_t* template_results = virtual_query(ctx->db, "library_template", "system", "templates", template_filters);
+  json_free(template_filters);
   
   if (template_results) {
     json_value_t* templates = json_object_get(template_results, "documents");
@@ -199,7 +194,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
       json_object_set(col_doc, "created_at", json_create_string(timestamp));
       json_object_set(col_doc, "modified_at", json_create_string(timestamp));
       
-      json_value_t* col_result = storage_insert_document(ctx->db, col_doc);
+      json_value_t* col_result = virtual_insert(ctx->db, "collection", library_name, "collections", col_doc, "system");
       if (col_result) {
         json_free(col_result);
       } else {
@@ -238,7 +233,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
           json_object_set(col_doc, "schema", json_clone(schema));
         }
         
-        json_value_t* col_result = storage_insert_document(ctx->db, col_doc);
+        json_value_t* col_result = virtual_insert(ctx->db, "collection", library_name, "collections", col_doc, "system");
         if (col_result) {
           json_free(col_result);
         } else {
@@ -272,8 +267,8 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
     json_object_set(lib_doc, "settings", template_settings);
   }
   
-  /* Save library document to unified storage */
-  json_value_t* result = storage_insert_document(ctx->db, lib_doc);
+  /* Save library document using virtual layer - single source of truth */
+  json_value_t* result = virtual_insert(ctx->db, "library", "system", "libraries", lib_doc, "system");
   if (!result) {
     json_free(lib_doc);
     json_free(body);
@@ -367,8 +362,8 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
         json_value_t* coll_name = json_object_get(coll_doc, "name");
         
         if (coll_uuid && coll_uuid->type == JSON_STRING) {
-          /* Delete collection document */
-          if (storage_delete_document(ctx->db, coll_uuid->value.string)) {
+          /* Delete collection document using virtual layer - single source of truth */
+          if (virtual_delete(ctx->db, coll_uuid->value.string)) {
             if (coll_name && coll_name->type == JSON_STRING) {
               json_array_append(collections, json_create_string(coll_name->value.string));
             }
@@ -394,7 +389,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
         json_value_t* data_uuid = json_object_get(data_doc, "uuid");
         
         if (data_uuid && data_uuid->type == JSON_STRING) {
-          storage_delete_document(ctx->db, data_uuid->value.string);
+          virtual_delete(ctx->db, data_uuid->value.string);
         }
       }
     }
@@ -403,7 +398,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   
   /* Delete the library document itself */
   if (library_uuid) {
-    if (!storage_delete_document(ctx->db, library_uuid)) {
+    if (!virtual_delete(ctx->db, library_uuid)) {
       json_free(collections);
       return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                    "{\"error\":\"Failed to delete library document\"}", "application/json");
@@ -659,8 +654,8 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
-  /* Update in database */
-  json_value_t* update_result = storage_update_document(ctx->db, lib_id->value.string, update_doc);
+  /* Update in database using virtual layer - single source of truth */
+  json_value_t* update_result = virtual_update(ctx->db, lib_id->value.string, update_doc);
   
   json_free(update_doc);
   json_free(results);
@@ -901,7 +896,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   
   /* Save library metadata */
   if (db_collection_exists(ctx->db, "documents")) {
-    json_value_t* result = storage_insert_document(ctx->db, lib_doc);
+    json_value_t* result = virtual_insert(ctx->db, "library", "system", "libraries", lib_doc, "system");
     if (result) {
       json_free(result);
     }
@@ -951,7 +946,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
                       json_value_t* doc_copy = json_clone(doc);
                       /* Remove uuid to generate new one */
                       json_object_remove(doc_copy, "uuid");
-                      storage_insert_document(ctx->db, doc_copy);
+                      virtual_insert(ctx->db, "document", source_library, "documents", doc_copy, "system");
                       json_free(doc_copy);
                     }
                   }

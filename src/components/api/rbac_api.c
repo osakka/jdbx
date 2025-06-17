@@ -8,6 +8,7 @@
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -588,8 +589,8 @@ http_response_t* api_handle_rbac_update_user(api_context_t* ctx, http_request_t*
     return create_error_response("No fields to update", HTTP_BAD_REQUEST);
   }
   
-  /* Update user document using actual document ID */
-  json_value_t* result = storage_update_document(ctx->db, actual_doc_id, user_doc);
+  /* Update user document using virtual layer - single source of truth */
+  json_value_t* result = virtual_update(ctx->db, actual_doc_id, user_doc);
   if (!result) {
     json_free(user_doc);
     BUFFER_FREE(user_id);

@@ -1,6 +1,7 @@
 #include "database/database.h"
 #include "utils/buffer_pool.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include <string.h>
@@ -47,7 +48,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
   json_object_set(query, "collection", json_create_string(collection_name));
   
   /* Query for existing schema */
-  json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* existing = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, query);
   if (existing) {
     /* Extract documents array */
     json_value_t* docs = json_object_get(existing, "documents");
@@ -56,7 +57,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
       json_value_t* old_doc = json_array_get(docs, 0);
     json_value_t* id_val = json_object_get(old_doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
-      storage_delete_document(db, id_val->value.string);
+      virtual_delete(db, id_val->value.string);
     }
     }
   }
@@ -65,7 +66,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
   json_free(query);
   
   /* Insert new schema */
-  json_value_t* result = storage_insert_document(db, schema_doc);
+  json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, schema_doc, SYSTEM_USER_ADMIN);
   json_free(schema_doc);
   
   if (!result) {
@@ -88,7 +89,7 @@ json_value_t* db_get_json_schema(database_t* db, const char* collection_name) {
   json_value_t* query = json_create_object();
   json_object_set(query, "collection", json_create_string(collection_name));
   
-  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, query);
   json_free(query);
   
   if (!results) {
@@ -123,7 +124,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
   json_value_t* query = json_create_object();
   json_object_set(query, "collection", json_create_string(collection_name));
   
-  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, query);
   json_free(query);
   
   if (!results) {
@@ -167,7 +168,7 @@ json_value_t* db_list_json_schemas(database_t* db) {
   
   /* Get all schemas */
   json_value_t* empty_query = json_create_object();
-  json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, empty_query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, empty_query);
   json_free(empty_query);
   
   if (!results) {

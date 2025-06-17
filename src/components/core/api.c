@@ -34,6 +34,7 @@
 
 #include "api/api.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "api/session_api.h"
 #include "api/auth_session_api.h"
 #include "api/library_api.h"
@@ -1198,8 +1199,8 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
     json_object_set(coll_doc, "settings", json_create_object());
   }
   
-  /* Insert collection metadata */
-  json_value_t* result = storage_insert_document(ctx->db, coll_doc);
+  /* Insert collection metadata using virtual layer - single source of truth */
+  json_value_t* result = virtual_insert(ctx->db, "collection", library, "collections", coll_doc, "system");
   json_free(coll_doc);
   
   if (!result) {
@@ -1254,8 +1255,8 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
     query = parse_url_query_to_json(request->query);
   }
   
-  /* Query documents from unified collection using STORAGE LAYER */
-  json_value_t* documents = storage_query_documents(ctx->db, query);
+  /* Query documents from unified collection using virtual layer - single source of truth */
+  json_value_t* documents = virtual_query(ctx->db, "document", "default", "documents", query);
   if (query) {
     json_free(query);
   }
@@ -1371,8 +1372,8 @@ static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http
                  "{\"error\":\"Document ID required\"}", "application/json");
   }
   
-  /* Get document from unified documents collection */
-  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
+  /* Get document using virtual layer - single source of truth */
+  json_value_t* document = virtual_get(ctx->db, doc_id);
   
   if (!document) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -1417,8 +1418,8 @@ static http_response_t* api_handle_unified_document_update(api_context_t* ctx, h
                  "{\"error\":\"Invalid JSON body\"}", "application/json");
   }
   
-  /* Update document in unified documents collection */
-  json_value_t* result = storage_update_document(ctx->db, doc_id, update_doc);
+  /* Update document using virtual layer - single source of truth */
+  json_value_t* result = virtual_update(ctx->db, doc_id, update_doc);
   json_free(update_doc);
   
   if (!result) {
@@ -1457,16 +1458,16 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
                  "{\"error\":\"Document ID required\"}", "application/json");
   }
   
-  /* Check if document exists first */
-  json_value_t* existing = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
+  /* Check if document exists and delete using virtual layer - single source of truth */
+  json_value_t* existing = virtual_get(ctx->db, doc_id);
   if (!existing) {
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found\"}", "application/json");
   }
   json_free(existing);
   
-  /* Delete document from unified documents collection */
-  if (storage_delete_document(ctx->db, doc_id) != 0) {
+  /* Delete document using virtual layer */
+  if (virtual_delete(ctx->db, doc_id) != 1) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to delete document\"}", "application/json");
   }
@@ -1737,8 +1738,8 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   LOG_DEBUG("Field access: collection_path='%s', doc_id='%s', field='%s'", 
             collection_path, doc_id_copy, field_path_copy);
   
-  /* Get the document */
-  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id_copy);
+  /* Get the document using virtual layer - single source of truth */
+  json_value_t* document = virtual_get(ctx->db, doc_id_copy);
   
   if (!document) {
     BUFFER_FREE(path_copy);
@@ -1850,8 +1851,8 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   LOG_DEBUG("Library field access: library='%s', collection='%s', doc_id='%s', field='%s', collection_path='%s'", 
             library, collection, doc_id, field_path, collection_path);
   
-  /* Get the document */
-  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
+  /* Get the document using virtual layer - single source of truth */
+  json_value_t* document = virtual_get(ctx->db, doc_id);
   
   if (!document) {
     BUFFER_FREE(path_copy);
@@ -1938,8 +1939,8 @@ http_response_t* api_handle_document_get(api_context_t* ctx, http_request_t* req
   char* collection_name = strndup(path, slash - path);
   const char* document_id = slash + 11;
   
-  /* Get document */
-  json_value_t* document = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, document_id);
+  /* Get document using virtual layer - single source of truth */
+  json_value_t* document = virtual_get(ctx->db, document_id);
   BUFFER_FREE(collection_name);
   
   if (!document) {
@@ -2121,12 +2122,12 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     /* Document has uuid/id, check if it exists and update */
     const char* doc_id = id_field->value.string;
     
-    /* Try to get existing document */
-    json_value_t* existing = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
+    /* Try to get existing document using virtual layer - single source of truth */
+    json_value_t* existing = virtual_get(ctx->db, doc_id);
     if (existing) {
       /* Document exists, update it */
       json_free(existing);
-      result = storage_update_document(ctx->db, doc_id, document);
+      result = virtual_update(ctx->db, doc_id, document);
       
       if (!result) {
         BUFFER_FREE(collection_name);
@@ -2134,8 +2135,8 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
                      "{\"error\":\"Failed to update document\"}", "application/json");
       }
     } else {
-      /* Document doesn't exist, insert it */
-      result = storage_insert_document(ctx->db, document);
+      /* Document doesn't exist, insert it using virtual layer - single source of truth */
+      result = virtual_insert(ctx->db, "document", "default", "documents", document, "system");
     }
   } else {
     /* No uuid or _id field, just insert */
@@ -2270,8 +2271,8 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
     LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
   
-  /* Update document */
-  json_value_t* result = storage_update_document(ctx->db, document_id, document);
+  /* Update document using virtual layer - single source of truth */
+  json_value_t* result = virtual_update(ctx->db, document_id, document);
   
   if (!result) {
     /* Check if collection exists */
@@ -2377,8 +2378,8 @@ http_response_t* api_handle_document_delete(api_context_t* ctx, http_request_t* 
     }
   }
   
-  /* Delete document */
-  int result = storage_delete_document(ctx->db, document_id);
+  /* Delete document using virtual layer - single source of truth */
+  int result = virtual_delete(ctx->db, document_id);
   BUFFER_FREE(collection_name);
   
   if (!result) {
@@ -2433,12 +2434,12 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   
   jwt_free(jwt);
   
-  /* SINGLE SOURCE OF TRUTH: Query users directly from database */
+  /* SINGLE SOURCE OF TRUTH: Query users using virtual layer */
   json_value_t* users_query = json_create_object();
-  json_object_set(users_query, "type", json_create_string("user"));
+  json_object_set(users_query, "type", json_create_string(DOC_TYPE_NAME_USER));
   json_object_set(users_query, "library", json_create_string("system"));
   
-  json_value_t* users_results = storage_query_documents(ctx->db, users_query);
+  json_value_t* users_results = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, users_query);
   json_free(users_query);
   
   if (!users_results) {
@@ -2849,13 +2850,13 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   json_value_t* password_val = json_object_get(body, "password");
   json_value_t* roles_val = json_object_get(body, "roles");
   
-  /* Get the actual JSON user object from the database */
+  /* Get the actual JSON user object using virtual layer */
   json_value_t* user_query = json_create_object();
-  json_object_set(user_query, "type", json_create_string("user"));
+  json_object_set(user_query, "type", json_create_string(DOC_TYPE_NAME_USER));
   json_object_set(user_query, "uuid", json_create_string(target_user_id));
   json_object_set(user_query, "library", json_create_string("system"));
   
-  json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+  json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
   json_free(user_query);
   
   if (!user_result) {
@@ -2975,13 +2976,13 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
       if (role_id_val && role_id_val->type == JSON_STRING) {
         const char* role_id = role_id_val->value.string;
         
-        /* Get role from database */
+        /* Get role using virtual layer */
         json_value_t* role_query = json_create_object();
-        json_object_set(role_query, "type", json_create_string("role"));
+        json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
         json_object_set(role_query, "uuid", json_create_string(role_id));
         json_object_set(role_query, "library", json_create_string("system"));
         
-        json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+        json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
         json_free(role_query);
         
         if (role_result) {
@@ -3005,10 +3006,10 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
                     break;
                   }
                 }
-                /* Update role document in database */
+                /* Update role document using virtual layer */
                 const char* role_uuid = json_object_get_string(role_obj, "uuid");
                 if (role_uuid) {
-                  storage_update_document(ctx->db, role_uuid, role_obj);
+                  virtual_update(ctx->db, role_uuid, role_obj);
                 }
               }
             }
@@ -3027,13 +3028,13 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
       if (role_id_val && role_id_val->type == JSON_STRING) {
         const char* role_id = role_id_val->value.string;
         
-        /* Verify that role exists in database */
+        /* Verify that role exists using virtual layer */
         json_value_t* role_query = json_create_object();
-        json_object_set(role_query, "type", json_create_string("role"));
+        json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
         json_object_set(role_query, "uuid", json_create_string(role_id));
         json_object_set(role_query, "library", json_create_string("system"));
         
-        json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+        json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
         json_free(role_query);
         
         if (role_result) {
@@ -3068,10 +3069,10 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
                 json_array_append(users, json_create_string(target_user_id));
               }
               
-              /* Update role document in database */
+              /* Update role document using virtual layer */
               const char* role_uuid = json_object_get_string(role_obj, "uuid");
               if (role_uuid) {
-                storage_update_document(ctx->db, role_uuid, role_obj);
+                virtual_update(ctx->db, role_uuid, role_obj);
               }
             }
           }
@@ -3107,10 +3108,10 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   /* Serialize response */
   char* response_str = json_stringify(response);
   
-  /* Update the user document in the database */
+  /* Update the user document using virtual layer */
   const char* user_uuid = json_object_get_string(user_obj, "uuid");
   if (user_uuid) {
-    storage_update_document(ctx->db, user_uuid, user_obj);
+    virtual_update(ctx->db, user_uuid, user_obj);
   }
   
   /* Free resources */
@@ -3182,13 +3183,13 @@ http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* requ
   
   jwt_free(jwt);
   
-  /* Check if user exists in database */
+  /* Check if user exists using virtual layer */
   json_value_t* user_query = json_create_object();
-  json_object_set(user_query, "type", json_create_string("user"));
+  json_object_set(user_query, "type", json_create_string(DOC_TYPE_NAME_USER));
   json_object_set(user_query, "uuid", json_create_string(target_user_id));
   json_object_set(user_query, "library", json_create_string("system"));
   
-  json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+  json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
   json_free(user_query);
   
   if (!user_result) {
@@ -3255,12 +3256,12 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   
   jwt_free(jwt);
   
-  /* SINGLE SOURCE OF TRUTH: Query roles directly from database */
+  /* SINGLE SOURCE OF TRUTH: Query roles using virtual layer */
   json_value_t* roles_query = json_create_object();
-  json_object_set(roles_query, "type", json_create_string("role"));
+  json_object_set(roles_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
   json_object_set(roles_query, "library", json_create_string("system"));
   
-  json_value_t* roles_results = storage_query_documents(ctx->db, roles_query);
+  json_value_t* roles_results = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, roles_query);
   json_free(roles_query);
   
   if (!roles_results) {
@@ -3442,13 +3443,13 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
   /* Add users array */
   json_value_t* users_array = json_create_array();
   
-  /* Get role users from database */
+  /* Get role users using virtual layer */
   json_value_t* role_query = json_create_object();
-  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
   json_object_set(role_query, "uuid", json_create_string(role_id));
   json_object_set(role_query, "library", json_create_string("system"));
   
-  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
   json_free(role_query);
   
   if (role_result) {
@@ -3467,11 +3468,11 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
               /* Optionally, add user details from database */
               const char* user_id_str = user_id_val->value.string;
               json_value_t* user_query = json_create_object();
-              json_object_set(user_query, "type", json_create_string("user"));
+              json_object_set(user_query, "type", json_create_string(DOC_TYPE_NAME_USER));
               json_object_set(user_query, "uuid", json_create_string(user_id_str));
               json_object_set(user_query, "library", json_create_string("system"));
               
-              json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+              json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
               json_free(user_query);
               
               if (user_result) {
@@ -3586,11 +3587,11 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   
   /* Check if role name already exists in database */
   json_value_t* role_query = json_create_object();
-  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
   json_object_set(role_query, "library", json_create_string("system"));
   json_object_set(role_query, "name", json_create_string(name));
   
-  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
   json_free(role_query);
   
   if (role_result) {
@@ -3776,11 +3777,11 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   
   /* Check if role exists in database */
   json_value_t* role_query = json_create_object();
-  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
   json_object_set(role_query, "uuid", json_create_string(role_id));
   json_object_set(role_query, "library", json_create_string("system"));
   
-  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
   json_free(role_query);
   
   if (!role_result) {
@@ -3826,13 +3827,13 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
                    "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
     }
     
-    /* Check if name is already taken by another role in database */
+    /* Check if name is already taken by another role using virtual layer */
     json_value_t* name_query = json_create_object();
-    json_object_set(name_query, "type", json_create_string("role"));
+    json_object_set(name_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
     json_object_set(name_query, "library", json_create_string("system"));
     json_object_set(name_query, "name", json_create_string(new_name));
     
-    json_value_t* name_result = storage_query_documents(ctx->db, name_query);
+    json_value_t* name_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, name_query);
     json_free(name_query);
     
     if (name_result) {
@@ -3936,11 +3937,11 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
         
         /* Get user from database */
         json_value_t* user_query = json_create_object();
-        json_object_set(user_query, "type", json_create_string("user"));
+        json_object_set(user_query, "type", json_create_string(DOC_TYPE_NAME_USER));
         json_object_set(user_query, "uuid", json_create_string(user_id_str));
         json_object_set(user_query, "library", json_create_string("system"));
         
-        json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+        json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
         json_free(user_query);
         
         if (user_result) {
@@ -3966,7 +3967,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
                 /* Update user document in database */
                 const char* user_uuid = json_object_get_string(user_obj, "uuid");
                 if (user_uuid) {
-                  storage_update_document(ctx->db, user_uuid, user_obj);
+                  virtual_update(ctx->db, user_uuid, user_obj);
                 }
               }
             }
@@ -3997,11 +3998,11 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
       if (user_id_str) {
         /* Check if user exists in database */
         json_value_t* user_query = json_create_object();
-        json_object_set(user_query, "type", json_create_string("user"));
+        json_object_set(user_query, "type", json_create_string(DOC_TYPE_NAME_USER));
         json_object_set(user_query, "uuid", json_create_string(user_id_str));
         json_object_set(user_query, "library", json_create_string("system"));
         
-        json_value_t* user_result = storage_query_documents(ctx->db, user_query);
+        json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
         json_free(user_query);
         
         if (user_result) {
@@ -4038,7 +4039,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
               /* Update user document in database */
               const char* user_uuid = json_object_get_string(user_obj, "uuid");
               if (user_uuid) {
-                storage_update_document(ctx->db, user_uuid, user_obj);
+                virtual_update(ctx->db, user_uuid, user_obj);
               }
             }
           }
@@ -4102,7 +4103,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   /* Update the role document in the database */
   const char* role_uuid = json_object_get_string(role_json, "uuid");
   if (role_uuid) {
-    storage_update_document(ctx->db, role_uuid, role_json);
+    virtual_update(ctx->db, role_uuid, role_json);
   }
   
   /* Free resources */
@@ -4168,11 +4169,11 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   
   /* Check if role exists in database */
   json_value_t* role_query = json_create_object();
-  json_object_set(role_query, "type", json_create_string("role"));
+  json_object_set(role_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
   json_object_set(role_query, "uuid", json_create_string(role_id));
   json_object_set(role_query, "library", json_create_string("system"));
   
-  json_value_t* role_result = storage_query_documents(ctx->db, role_query);
+  json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
   json_free(role_query);
   
   if (!role_result) {
@@ -4821,8 +4822,8 @@ static char* get_session_library(api_context_t* ctx, http_request_t* request) {
   char* session_id = BUFFER_STRDUP(jwt->payload->jti);
   jwt_free(jwt);
   
-  /* Query the session from database */
-  json_value_t* session = db_get_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_id);
+  /* Query the session from database using virtual layer - single source of truth */
+  json_value_t* session = virtual_get(ctx->db, session_id);
   BUFFER_FREE(session_id);
   
   if (!session) {

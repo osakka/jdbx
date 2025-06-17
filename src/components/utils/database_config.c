@@ -9,6 +9,7 @@
 #include "utils/buffer_pool.h"
 #include "database/database.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include <string.h>
@@ -113,12 +114,12 @@ int config_save_to_database(database_t* db, json_value_t* config) {
     json_value_t* result = NULL;
     
     if (existing) {
-        /* Update existing */
+        /* Update existing using virtual layer */
         json_free(existing);
-        result = storage_update_document(db, CONFIG_DOCUMENT_ID, doc);
+        result = virtual_update(db, CONFIG_DOCUMENT_ID, doc);
     } else {
-        /* Insert new */
-        result = storage_insert_document(db, doc);
+        /* Insert new using virtual layer */
+        result = virtual_insert(db, DOC_TYPE_NAME_CONFIG, "system", VIRTUAL_COLLECTION_CONFIGS, doc, "system");
     }
     
     json_free(doc);

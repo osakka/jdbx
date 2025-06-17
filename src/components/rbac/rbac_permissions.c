@@ -97,19 +97,9 @@ rbac_system_t* rbac_permissions_init(database_t* db, const char* path) {
     }
   }
   
-  /* THIRD FIX: Only save to database if we created a new RBAC system and are not in a recursive call */
+  /* RBAC data is now stored directly via virtual layer - no persistence needed */
   if (!db_load_success && rbac) {
-    /* Try to save the new RBAC system to the database */
-    LOG_INFO("Saving new RBAC system to database.");
-    
-    /* Use fixed implementation to avoid hanging */
-    int save_result = rbac_database_persist(db, rbac);
-    
-    if (save_result) {
-      LOG_INFO("saved RBAC to database.");
-    } else {
-      LOG_ERROR("save RBAC to database, continuing with memory-only RBAC.");
-    }
+    LOG_INFO("RBAC system ready - using virtual layer for all operations.");
   }
   
   /* Reset the flag since we're done with database operations */
@@ -176,14 +166,9 @@ int rbac_permissions_save(database_t* db, rbac_system_t* rbac, const char* path)
     }
   }
   
-  /* Try to save RBAC to database using the enhanced fixed implementation */
-  int result = rbac_database_persist(db, rbac);
-  
-  if (result) {
-    LOG_INFO("saved RBAC to database using fixed implementation.");
-  } else {
-    LOG_ERROR("save RBAC to database using fixed implementation.");
-  }
+  /* RBAC data is now stored directly via virtual layer - no persistence needed */
+  LOG_INFO("RBAC save - using virtual layer for all operations, no separate persistence needed.");
+  int result = 1; /* Always succeed since RBAC uses virtual layer directly */
   
   /* Reset the flag since we're done */
   save_in_progress = 0;

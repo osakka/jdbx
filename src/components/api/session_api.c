@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "database/database.h"
+#include "database/virtual_layer.h"
 #include "rbac/rbac_database.h"
 #include "utils/json.h"
 #include "utils/logger.h"
@@ -17,12 +18,12 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* Query all sessions - filter by type and collection */
+  /* Query all sessions using virtual layer - single source of truth */
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
   json_object_set(query, "library", json_create_string("system"));
   json_object_set(query, "collection", json_create_string("sessions"));
-  json_value_t* results = storage_query_documents(ctx->db, query);
+  json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
   json_free(query);
   
   if (!results) {
@@ -98,14 +99,14 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
   
-  /* Query active sessions */
+  /* Query active sessions using virtual layer - single source of truth */
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string(DOC_TYPE_NAME_SESSION));
   json_object_set(query, "library", json_create_string("system"));
   json_object_set(query, "collection", json_create_string("sessions"));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = storage_query_documents(ctx->db, query);
+  json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
   json_free(query);
   
   if (!results) {
@@ -193,12 +194,12 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
     token = auth_header + 7;
   }
   
-  /* Find session by token */
+  /* Find session by token using virtual layer - single source of truth */
   json_value_t* query = json_create_object();
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = storage_query_documents(ctx->db, query);
+  json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
   json_free(query);
   
   if (!results) {

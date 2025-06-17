@@ -1,6 +1,7 @@
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "database/database.h"
+#include "database/virtual_layer.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -75,7 +76,8 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
         json_object_set(query, "library", json_create_string(target_library));
     }
     
-    json_value_t* results = storage_query_documents(ctx->db, query);
+    /* Use virtual layer to query collection documents - single source of truth */
+    json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, target_library ? target_library : "default", "configs", query);
     json_free(query);
     
     json_value_t* response = json_create_object();
@@ -111,7 +113,8 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
                     json_object_set(count_query, "type", json_create_string(doc_type));
                     json_object_set(count_query, "library", json_create_string(virtual_library));
                     
-                    json_value_t* count_results = storage_query_documents(ctx->db, count_query);
+                    /* Use virtual layer to count documents - single source of truth */
+                    json_value_t* count_results = virtual_query(ctx->db, doc_type, virtual_library, coll_name, count_query);
                     size_t doc_count = 0;
                     if (count_results) {
                         json_value_t* docs = json_object_get(count_results, "documents");
@@ -178,7 +181,8 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
             json_object_set(count_query, "type", json_create_string(doc_type));
             json_object_set(count_query, "library", json_create_string(show_library));
             
-            json_value_t* count_results = storage_query_documents(ctx->db, count_query);
+            /* Use virtual layer to count documents - single source of truth */
+            json_value_t* count_results = virtual_query(ctx->db, doc_type, show_library, default_collections[i], count_query);
             size_t doc_count = 0;
             if (count_results) {
                 json_value_t* docs = json_object_get(count_results, "documents");
@@ -252,7 +256,8 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     json_object_set(exists_query, "name", json_create_string(collection_name));
     json_object_set(exists_query, "library", json_create_string(virtual_library));
     
-    json_value_t* exists_results = storage_query_documents(ctx->db, exists_query);
+    /* Use virtual layer to check if collection exists - single source of truth */
+    json_value_t* exists_results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", exists_query);
     json_free(exists_query);
     
     if (exists_results) {
@@ -288,8 +293,8 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
         json_object_set(coll_doc, "schema", json_clone(schema_val));
     }
     
-    /* Insert virtual collection document into unified storage */
-    json_value_t* result = storage_insert_document(ctx->db, coll_doc);
+    /* Insert virtual collection document using virtual layer - single source of truth */
+    json_value_t* result = virtual_insert(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", coll_doc, "admin");
     json_free(coll_doc);
     json_free(body);
     
@@ -358,7 +363,8 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     json_object_set(find_query, "name", json_create_string(collection_name));
     json_object_set(find_query, "library", json_create_string(virtual_library));
     
-    json_value_t* find_results = storage_query_documents(ctx->db, find_query);
+    /* Use virtual layer to find collection document - single source of truth */
+    json_value_t* find_results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", find_query);
     json_free(find_query);
     
     if (!find_results) {
@@ -385,8 +391,8 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     const char* collection_uuid = uuid_val->value.string;
     json_free(find_results);
     
-    /* Delete the virtual collection document */
-    if (!storage_delete_document(ctx->db, collection_uuid)) {
+    /* Delete the virtual collection document using virtual layer - single source of truth */
+    if (!virtual_delete(ctx->db, collection_uuid)) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to delete virtual collection\"}", "application/json");
     }

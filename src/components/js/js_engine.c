@@ -1,5 +1,6 @@
 #include "js/js_engine.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/logger.h"
 #include "utils/js_file_utils.h"
 #include "utils/buffer_pool.h"
@@ -650,8 +651,8 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
   /* Convert document to JSON */
   json_value_t *document = js_to_json(ctx, argv[1]);
   
-  /* Insert document */
-  json_value_t *result = storage_insert_document(engine->db, document);
+  /* Insert document - use virtual layer with proper constants */
+  json_value_t *result = virtual_insert(engine->db, DOC_TYPE_NAME_DOCUMENT, VIRTUAL_LIBRARY_DEFAULT, collection_name, document, SYSTEM_USER_JS);
   
   /* Free resources */
   json_free(document);
@@ -696,7 +697,7 @@ static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *document = js_to_json(ctx, argv[2]);
   
   /* Update document */
-  json_value_t *result = db_update_document(engine->db, STORAGE_LIBRARY, collection_name, document_id, document);
+  json_value_t *result = virtual_update(engine->db, document_id, document);
   
   /* Free resources */
   json_free(document);
@@ -739,7 +740,7 @@ static JSValue js_db_delete_document(JSContext *ctx, JSValueConst this_val, int 
   const char *document_id = JS_ToCString(ctx, argv[1]);
   
   /* Delete document */
-  int result = db_delete_document(engine->db, STORAGE_LIBRARY, collection_name, document_id);
+  int result = virtual_delete(engine->db, document_id);
   
   /* Free resources */
   JS_FreeCString(ctx, collection_name);

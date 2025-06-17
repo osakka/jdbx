@@ -1,5 +1,6 @@
 #include "rbac/rbac.h"
 #include "rbac/rbac_db.h"
+#include "rbac/rbac_unified_documents.h"
 #include "database/database.h"
 #include "database/document_storage.h"
 #include "utils/logger.h"
@@ -83,12 +84,9 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   /* Skip duplicate checking during bootstrap mode */
   if (!db->is_bootstrap_mode) {
     /* Check if any role with name "admin" exists using unified documents approach */
-    json_value_t* unified_query = json_create_object();
-    json_object_set(unified_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
-    json_object_set(unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
-    json_object_set(unified_query, "collection", json_create_string(RBAC_ROLES_COLLECTION_NAME));
+    json_value_t* unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
-    json_value_t* results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, unified_query);
+    json_value_t* results = storage_query_documents(db, unified_query);
     json_free(unified_query);
     
     if (results) {
@@ -204,9 +202,9 @@ int create_default_user_role(struct database* db) {
   TRACE_RBAC("Creating default user role.");
   
   /* Check if any role with name "user" exists to prevent duplicates */
-  json_value_t* query = json_create_object();
+  json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string("user"));
-  json_value_t* results = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, query);
+  json_value_t* results = storage_query_documents(db, query);
   json_free(query);
   
   if (results) {
@@ -287,12 +285,9 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   /* Skip duplicate checking during bootstrap mode */
   if (!db->is_bootstrap_mode) {
     /* Check if any user with username "admin" exists using unified documents approach */
-    json_value_t* unified_query = json_create_object();
-    json_object_set(unified_query, "type", json_create_string(DOC_TYPE_NAME_USER));
-    json_object_set(unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
-    json_object_set(unified_query, "collection", json_create_string(RBAC_USERS_COLLECTION_NAME));
+    json_value_t* unified_query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
-    json_value_t* results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, unified_query);
+    json_value_t* results = storage_query_documents(db, unified_query);
     json_free(unified_query);
     
     if (results) {
@@ -325,12 +320,9 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
           LOG_INFO("Fixing admin user roles - replacing 'admin' with role ID.");
           
           /* Get admin role ID using unified documents approach */
-          json_value_t* role_unified_query = json_create_object();
-          json_object_set(role_unified_query, "type", json_create_string(DOC_TYPE_NAME_ROLE));
-          json_object_set(role_unified_query, "library", json_create_string(RBAC_SYSTEM_LIBRARY));
-          json_object_set(role_unified_query, "collection", json_create_string(RBAC_ROLES_COLLECTION_NAME));
+          json_value_t* role_unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
           json_object_set(role_unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
-          json_value_t* role_results = db_query_documents(db, PHYSICAL_STORAGE_LIBRARY, PHYSICAL_STORAGE_COLLECTION, role_unified_query);
+          json_value_t* role_results = storage_query_documents(db, role_unified_query);
           json_free(role_unified_query);
           
           if (role_results) {
@@ -441,11 +433,11 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
     return NULL;
   }
   
-  /* Query for user in hierarchical system/users collection */
-  json_value_t* query = json_create_object();
+  /* Query for user in unified documents */
+  json_value_t* query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "username", json_create_string(username));
   
-  json_value_t* result = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, query);
+  json_value_t* result = storage_query_documents(db, query);
   json_free(query);
   
   if (!result) {
@@ -583,9 +575,9 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   }
   
   /* Check if role already exists by name */
-  json_value_t* query = json_create_object();
+  json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string(rolename));
-  json_value_t* results = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_ROLES_COLLECTION_NAME, query);
+  json_value_t* results = storage_query_documents(db, query);
   json_free(query);
   
   if (results) {
@@ -682,9 +674,11 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   snprintf(cache_key, sizeof(cache_key), "%s:%s:%s", user_id, resource_type_str, resource_id);
   
   json_value_t* cache_query = json_create_object();
+  json_object_set(cache_query, "type", json_create_string("permission_cache"));
+  json_object_set(cache_query, "library", json_create_string(RBAC_LIBRARY_SYSTEM));
   json_object_set(cache_query, "uuid", json_create_string(cache_key));
   
-  json_value_t* cache_result = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_PERMISSION_CACHE_COLLECTION_NAME, cache_query);
+  json_value_t* cache_result = storage_query_documents(db, cache_query);
   json_free(cache_query);
   
   if (cache_result) {
@@ -728,12 +722,12 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   
   /* TODO: Implement full permission resolution algorithm */
   /* For now, just check if user has admin role */
-  json_value_t* user_query = json_create_object();
+  json_value_t* user_query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(user_query, "uuid", json_create_string(user_id));
   
   TRACE_RBAC("Querying user with _id: %s", user_id);
   
-  json_value_t* user_result = db_query_documents(db, RBAC_SYSTEM_LIBRARY, RBAC_USERS_COLLECTION_NAME, user_query);
+  json_value_t* user_result = storage_query_documents(db, user_query);
   json_free(user_query);
   
   if (!user_result) {
