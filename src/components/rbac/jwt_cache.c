@@ -43,8 +43,19 @@ static unsigned int get_bucket_index(const char* token_hash) {
 
 /* Move entry to head of LRU list */
 static void lru_move_to_head(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
-    /* Remove from current position */
+    /* Validate entry integrity before manipulation */
+    if (!entry || (uintptr_t)entry < 0x1000 || !entry->token_hash) {
+        LOG_ERROR("Invalid entry in lru_move_to_head: %p", (void*)entry);
+        return;
+    }
+    
+    /* Remove from current position with integrity checks */
     if (entry->lru_prev) {
+        /* Validate previous entry before dereferencing */
+        if ((uintptr_t)entry->lru_prev < 0x1000) {
+            LOG_ERROR("Corrupted lru_prev pointer: %p", (void*)entry->lru_prev);
+            return;
+        }
         entry->lru_prev->lru_next = entry->lru_next;
     } else {
         /* Already at head */
@@ -52,16 +63,21 @@ static void lru_move_to_head(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
     }
     
     if (entry->lru_next) {
+        /* Validate next entry before dereferencing */
+        if ((uintptr_t)entry->lru_next < 0x1000) {
+            LOG_ERROR("Corrupted lru_next pointer: %p", (void*)entry->lru_next);
+            return;
+        }
         entry->lru_next->lru_prev = entry->lru_prev;
     } else {
         /* Was tail */
         cache->lru_tail = entry->lru_prev;
     }
     
-    /* Insert at head */
+    /* Insert at head with atomic-style operations */
     entry->lru_prev = NULL;
     entry->lru_next = cache->lru_head;
-    if (cache->lru_head) {
+    if (cache->lru_head && (uintptr_t)cache->lru_head >= 0x1000) {
         cache->lru_head->lru_prev = entry;
     }
     cache->lru_head = entry;
@@ -73,13 +89,29 @@ static void lru_move_to_head(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
 
 /* Remove entry from LRU list */
 static void lru_remove(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
+    /* Validate entry integrity before manipulation */
+    if (!entry || (uintptr_t)entry < 0x1000) {
+        LOG_ERROR("Invalid entry in lru_remove: %p", (void*)entry);
+        return;
+    }
+    
     if (entry->lru_prev) {
+        /* Validate previous entry before dereferencing */
+        if ((uintptr_t)entry->lru_prev < 0x1000) {
+            LOG_ERROR("Corrupted lru_prev in remove: %p", (void*)entry->lru_prev);
+            return;
+        }
         entry->lru_prev->lru_next = entry->lru_next;
     } else {
         cache->lru_head = entry->lru_next;
     }
     
     if (entry->lru_next) {
+        /* Validate next entry before dereferencing */
+        if ((uintptr_t)entry->lru_next < 0x1000) {
+            LOG_ERROR("Corrupted lru_next in remove: %p", (void*)entry->lru_next);
+            return;
+        }
         entry->lru_next->lru_prev = entry->lru_prev;
     } else {
         cache->lru_tail = entry->lru_prev;
@@ -113,13 +145,16 @@ int jwt_cache_init(size_t max_entries) {
     }
     
     g_jwt_cache->bucket_count = CACHE_BUCKET_COUNT;
-    g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*));
+    g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
     if (!g_jwt_cache->buckets) {
         BUFFER_FREE(g_jwt_cache);
         g_jwt_cache = NULL;
         LOG_ERROR("Cannot allocate JWT cache buckets.");
         return -1;
     }
+    
+    /* Initialize all bucket pointers to NULL */
+    memset(g_jwt_cache->buckets, 0, sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
     
     g_jwt_cache->max_entries = max_entries;
     g_jwt_cache->current_entries = 0;
@@ -167,8 +202,6 @@ void jwt_cache_shutdown(void) {
 
 /* Get cached JWT payload */
 jwt_payload_t* jwt_cache_get(const char* token) {
-    /* TEMPORARY: Disable JWT cache to avoid corruption issues */
-    return NULL;
     
     if (!g_jwt_cache || !token) return NULL;
     
@@ -245,10 +278,20 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     /* Check if entry already exists - traverse safely to prevent corruption */
     jwt_cache_entry_t* existing = g_jwt_cache->buckets[bucket];
     jwt_cache_entry_t* prev = NULL;
+    
+    /* Validate bucket head pointer before traversing */
+    if (existing && (uintptr_t)existing < 0x1000) {
+        LOG_ERROR("JWT cache bucket[%u] has corrupted head pointer 0x%lx, clearing bucket", bucket, (uintptr_t)existing);
+        g_jwt_cache->buckets[bucket] = NULL;
+        existing = NULL;
+    }
+    
     while (existing) {
-        /* Validate entry structure to prevent memory corruption crashes */
-        if ((uintptr_t)existing < 0x1000 || !existing->token_hash) {
-            LOG_ERROR("JWT cache detected corrupted entry pointer 0x%lx, removing from chain", (uintptr_t)existing);
+        /* Validate entry structure before any operations */
+        if ((uintptr_t)existing < 0x1000 || !existing->token_hash || 
+            (existing->next && (uintptr_t)existing->next < 0x1000)) {
+            LOG_ERROR("JWT cache detected corrupted entry pointer 0x%lx (next: 0x%lx), terminating chain", 
+                     (uintptr_t)existing, (uintptr_t)(existing->next ? existing->next : 0));
             if (prev) {
                 prev->next = NULL; /* Terminate chain at safe point */
             } else {
@@ -304,7 +347,21 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     /* Initialize all fields to prevent uninitialized memory access */
     memset(new_entry, 0, sizeof(jwt_cache_entry_t));
     
+    /* Validate memory manager allocation */
+    if ((uintptr_t)new_entry < 0x1000) {
+        LOG_ERROR("JWT cache received invalid allocation from memory manager: 0x%lx", (uintptr_t)new_entry);
+        pthread_rwlock_unlock(&g_jwt_cache->lock);
+        return;
+    }
+    
     new_entry->token_hash = BUFFER_STRDUP(token_hash);
+    if (!new_entry->token_hash) {
+        LOG_ERROR("JWT cache failed to allocate token_hash string");
+        BUFFER_FREE(new_entry);
+        pthread_rwlock_unlock(&g_jwt_cache->lock);
+        return;
+    }
+    
     new_entry->claims = claims;  /* Cache takes ownership */
     new_entry->username = username ? BUFFER_STRDUP(username) : NULL;
     new_entry->user_id = user_id ? BUFFER_STRDUP(user_id) : NULL;
