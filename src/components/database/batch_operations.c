@@ -118,7 +118,13 @@ static int batch_insert_jdbx(
             continue;
         }
         
-        json_value_t* insert_result = storage_insert_document(db, parsed_doc);
+        /* Determine document type from collection_name */
+        const char* doc_type = collection_name;
+        if (strcmp(collection_name, "users") == 0) doc_type = "user";
+        else if (strcmp(collection_name, "roles") == 0) doc_type = "role";
+        else if (strcmp(collection_name, "sessions") == 0) doc_type = "session";
+        
+        json_value_t* insert_result = virtual_insert(db, doc_type, "default", collection_name, parsed_doc, "batch-system");
         int success = (insert_result != NULL);
         
         if (success) {

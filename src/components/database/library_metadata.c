@@ -280,9 +280,9 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
     
     if (existing) {
         json_free(existing);
-        result = storage_update_document(db, library_name, lib_doc);
+        result = virtual_update(db, library_name, lib_doc);
     } else {
-        result = storage_insert_document(db, lib_doc);
+        result = virtual_insert(db, "library", "system", "libraries", lib_doc, "system-admin");
     }
     
     json_free(lib_doc);

@@ -166,7 +166,7 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     }
     json_object_set(coll, "settings", settings);
     
-    json_value_t* result = storage_insert_document(db, coll);
+    json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_COLLECTION, library, "collections", coll, owner);
     json_free(coll);
     
     if (result) {
@@ -228,7 +228,7 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     /* Add timestamps */
     add_document_system_fields(lib, "library", "system", "libraries", owner);
     
-    json_value_t* result = storage_insert_document(db, lib);
+    json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_LIBRARY, "system", "libraries", lib, owner);
     json_free(lib);
     
     if (result) {
@@ -562,21 +562,21 @@ int create_library_templates(database_t* db) {
     add_document_system_fields(cms_template, "library_template", "system", "templates", SYSTEM_USER_ADMIN);
     
     /* Insert templates into database */
-    json_value_t* result = storage_insert_document(db, ecommerce_template);
+    json_value_t* result = virtual_insert(db, "library_template", "system", "templates", ecommerce_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created e-commerce library template");
         json_free(result);
     }
     json_free(ecommerce_template);
     
-    result = storage_insert_document(db, wiki_template);
+    result = virtual_insert(db, "library_template", "system", "templates", wiki_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created wiki library template");
         json_free(result);
     }
     json_free(wiki_template);
     
-    result = storage_insert_document(db, cms_template);
+    result = virtual_insert(db, "library_template", "system", "templates", cms_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created CMS library template");
         json_free(result);
@@ -658,7 +658,7 @@ int unified_documents_init(database_t* db) {
         json_object_set(permissions, "*/*", all_perms);
         json_object_set(admin_role, "permissions", permissions);
         
-        json_value_t* result = storage_insert_document(db, admin_role);
+        json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, "system", "roles", admin_role, SYSTEM_USER_ADMIN);
         if (result) {
             json_value_t* id_val = json_object_get(result, "uuid");
             if (id_val && id_val->type == JSON_STRING) {
@@ -727,7 +727,7 @@ int unified_documents_init(database_t* db) {
         /* Add system fields for unified documents */
         add_document_system_fields(admin_user, "user", "system", "users", SYSTEM_USER_ADMIN);
         
-        json_value_t* result = storage_insert_document(db, admin_user);
+        json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, "system", "users", admin_user, SYSTEM_USER_ADMIN);
         if (result) {
             LOG_INFO("Created admin user with password 'admin' in documents collection");
             json_free(result);
@@ -835,7 +835,7 @@ json_value_t* create_typed_document(database_t* db, const char* type,
     add_document_system_fields(doc, type, NULL, NULL, owner_id);
     
     /* Insert document */
-    return storage_insert_document(db, doc);
+    return virtual_insert(db, type, "default", NULL, doc, owner_id);
 }
 
 /* Validate document has required fields */

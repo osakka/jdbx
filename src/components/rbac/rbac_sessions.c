@@ -1,6 +1,7 @@
 #include "rbac/rbac_database.h"
 #include "database/database.h"
 #include "database/document_storage.h"
+#include "database/virtual_layer.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
@@ -38,17 +39,24 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_object_set(session_doc, "user_id", json_create_string(user_id));
   json_object_set(session_doc, "token", json_create_string(token));
   
-  /* Add username to session */
-  LOG_DEBUG("Looking up username for user_id: %s", user_id);
-  json_value_t* user_doc = storage_get_document(db, user_id);
-  if (user_doc) {
-    LOG_DEBUG("Found user document");
-    json_value_t* username_val = json_object_get(user_doc, "username");
-    if (username_val && username_val->type == JSON_STRING) {
-      json_object_set(session_doc, "username", json_create_string(username_val->value.string));
-      LOG_DEBUG("Added username to session: %s", username_val->value.string);
+  /* Add username to session - use virtual layer for user lookup */
+  LOG_DEBUG("Looking up username for user_id via virtual layer: %s", user_id);
+  json_value_t* user_query = json_create_object();
+  json_object_set(user_query, "uuid", json_create_string(user_id));
+  json_value_t* user_results = virtual_query(db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
+  json_free(user_query);
+  
+  if (user_results) {
+    json_value_t* documents = json_object_get(user_results, "documents");
+    if (documents && documents->type == JSON_ARRAY && documents->value.array.size > 0) {
+      json_value_t* user_doc = json_array_get(documents, 0);
+      json_value_t* username_val = json_object_get(user_doc, "username");
+      if (username_val && username_val->type == JSON_STRING) {
+        json_object_set(session_doc, "username", json_create_string(username_val->value.string));
+        LOG_DEBUG("Added username to session: %s", username_val->value.string);
+      }
     }
-    json_free(user_doc);
+    json_free(user_results);
   } else {
     LOG_DEBUG("User document not found for ID: %s", user_id);
     /* Default to "admin" if user not found */
@@ -78,9 +86,9 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   /* Set active status */
   json_object_set(session_doc, "active", json_create_boolean(1));
   
-  /* Insert session */
-  LOG_DEBUG("Inserting session into %s", SESSIONS_COLLECTION);
-  json_value_t* result = storage_insert_document(db, session_doc);
+  /* Insert session using VIRTUAL LAYER (unified documents architecture) */
+  LOG_DEBUG("Inserting session via virtual layer into unified documents");
+  json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_SESSION, "system", "sessions", session_doc, "system");
   json_free(session_doc);
   
   if (!result) {
@@ -118,12 +126,12 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
     return NULL;
   }
   
-  /* Query for session by token */
+  /* Query for session by token using virtual layer */
   json_value_t* query = json_create_object();
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = storage_query_documents(db, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
   json_free(query);
   
   if (!results) {
@@ -165,14 +173,14 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
     if (session_id_val && session_id_val->type == JSON_STRING) {
       const char* session_id = session_id_val->value.string;
       
-      /* Update last_seen timestamp */
+      /* Update last_seen timestamp using virtual layer */
       json_value_t* update = json_create_object();
       time_t now = time(NULL);
       char timestamp[64];
       strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
       json_object_set(update, "last_seen", json_create_string(timestamp));
       
-      storage_update_document(db, session_id, update);
+      virtual_update(db, session_id, update);
       json_free(update);
     }
   }
@@ -205,12 +213,12 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
     return json_create_array();
   }
   
-  /* Query for user's active sessions */
+  /* Query for user's active sessions using virtual layer */
   json_value_t* query = json_create_object();
   json_object_set(query, "user_id", json_create_string(user_id));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = storage_query_documents(db, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
   json_free(query);
   
   if (!results) {
@@ -239,7 +247,7 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
     return 0;
   }
   
-  /* Update session to inactive */
+  /* Update session to inactive using virtual layer */
   json_value_t* update = json_create_object();
   json_object_set(update, "active", json_create_boolean(0));
   
@@ -248,7 +256,7 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
   json_object_set(update, "invalidated_at", json_create_string(timestamp));
   
-  int result = storage_update_document(db, session_id, update) != NULL;
+  int result = virtual_update(db, session_id, update) != NULL;
   json_free(update);
   
   return result;

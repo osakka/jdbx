@@ -305,8 +305,11 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
         return 0;
     }
 
-    /* Insert into database */
-    json_value_t *result = storage_insert_document(db, script_doc);
+    /* Insert into database using virtual layer */
+    const char *script_type = js_script_type_to_string(metadata->type);
+    const char *collection_part = strrchr(collection_name, '/');
+    const char *actual_collection = collection_part ? collection_part + 1 : collection_name;
+    json_value_t *result = virtual_insert(db, script_type, "system", actual_collection, script_doc, user_id);
     json_free(script_doc);
 
     if (!result) {
@@ -506,8 +509,8 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
         }
     }
 
-    /* Insert metrics document */
-    json_value_t *result = storage_insert_document(db, metrics_doc);
+    /* Insert metrics document using virtual layer */
+    json_value_t *result = virtual_insert(db, "metric", "system", "metrics", metrics_doc, "system-metrics");
     json_free(metrics_doc);
 
     if (!result) {
@@ -1043,8 +1046,8 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
         return 0;
     }
 
-    /* Update in database */
-    json_value_t *result = storage_update_document(db, script_id, script_doc);
+    /* Update in database using virtual layer */
+    json_value_t *result = virtual_update(db, script_id, script_doc);
     json_free(script_doc);
 
     if (!result) {
@@ -1091,8 +1094,8 @@ int js_native_delete_script(database_t *db, const char *user_id, const char *scr
 
     js_native_free_script_metadata(existing);
 
-    /* Delete from database */
-    int result = storage_delete_document(db, script_id);
+    /* Delete from database using virtual layer */
+    int result = virtual_delete(db, script_id);
     if (!result) {
         LOG_ERROR("Cannot delete JavaScript script from database.");
         return 0;

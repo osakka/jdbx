@@ -358,7 +358,7 @@ static void ensure_virtual_collection_exists(const char* virtual_library, const 
     json_object_set(collection_doc, "owner", json_create_string("system"));
     
     /* Insert collection document */
-    json_value_t* inserted = storage_insert_document(&g_db.facade, collection_doc);
+    json_value_t* inserted = virtual_insert(&g_db.facade, DOC_TYPE_NAME_COLLECTION, virtual_library, "collections", collection_doc, "system");
     
     if (inserted) {
         LOG_INFO("Created virtual collection document: %s/%s", virtual_library, collection_name);
@@ -615,8 +615,15 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr_data, &value_len)) {
         if (!doc_ptr_data || value_len != sizeof(json_value_t*)) continue;
         
-        json_value_t* doc = *(json_value_t**)doc_ptr_data;
-        if (!doc || doc->type != JSON_OBJECT) continue;
+        /* CRITICAL SAFETY: Validate pointer before dereferencing to prevent segfaults */
+        json_value_t* doc = NULL;
+        if (doc_ptr_data) {
+            doc = *(json_value_t**)doc_ptr_data;
+        }
+        if (!doc || doc->type != JSON_OBJECT) {
+            LOG_DEBUG("Skipping invalid or corrupted document in storage iteration");
+            continue;
+        }
         
         // Apply query filter if provided
         bool matches_query = true;
@@ -653,8 +660,16 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
         }
         
         if (matches_query) {
-            json_array_append(filtered_docs, json_clone(doc));
-            count++;
+            /* CRITICAL SAFETY: Validate document before cloning to prevent corruption */
+            if (doc && doc->type == JSON_OBJECT) {
+                json_value_t* doc_copy = json_clone(doc);
+                if (doc_copy) {
+                    json_array_append(filtered_docs, doc_copy);
+                    count++;
+                } else {
+                    LOG_WARNING("Failed to clone document during storage query - skipping corrupted document");
+                }
+            }
         }
         
         // Reference counting handles memory lifecycle automatically
@@ -1303,8 +1318,15 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
     while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&ref_data, &value_len)) {
         if (!ref_data || value_len != sizeof(json_value_t*)) continue;
         
-        json_value_t* doc = *(json_value_t**)ref_data;
-        if (!doc || doc->type != JSON_OBJECT) continue;
+        /* CRITICAL SAFETY: Validate pointer before dereferencing to prevent segfaults */
+        json_value_t* doc = NULL;
+        if (ref_data) {
+            doc = *(json_value_t**)ref_data;
+        }
+        if (!doc || doc->type != JSON_OBJECT) {
+            LOG_DEBUG("Skipping invalid or corrupted document in iteration");
+            continue;
+        }
         
         // Filter by library
         json_value_t* doc_library = json_object_get(doc, "library");
@@ -1349,8 +1371,16 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
         }
         
         if (matches_query) {
-            json_array_append(filtered_docs, json_deep_copy(doc));
-            count++;
+            /* CRITICAL SAFETY: Validate document before deep copy to prevent corruption */
+            if (doc && doc->type == JSON_OBJECT) {
+                json_value_t* doc_copy = json_deep_copy(doc);
+                if (doc_copy) {
+                    json_array_append(filtered_docs, doc_copy);
+                    count++;
+                } else {
+                    LOG_WARNING("Failed to copy document during query - skipping corrupted document");
+                }
+            }
         }
     }
     

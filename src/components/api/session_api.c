@@ -278,7 +278,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_value_t* library_query = json_create_object();
   json_object_set(library_query, "type", json_create_string("library"));
   json_object_set(library_query, "name", json_create_string(library_name));
-  json_value_t* library_results = storage_query_documents(ctx->db, library_query);
+  json_value_t* library_results = virtual_query(ctx->db, DOC_TYPE_NAME_LIBRARY, "system", VIRTUAL_COLLECTION_LIBRARIES, library_query);
   json_free(library_query);
   
   int library_exists = 0;
@@ -301,7 +301,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "token", json_create_string(token));
   json_object_set(query, "active", json_create_boolean(1));
   
-  json_value_t* results = storage_query_documents(ctx->db, query);
+  json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
   json_free(query);
   
   if (!results) {
@@ -344,7 +344,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(update_doc, "updated_at", json_create_string(timestamp));
   
   /* Update session in database */
-  json_value_t* update_result = storage_update_document(ctx->db, session_id, update_doc);
+  json_value_t* update_result = virtual_update(ctx->db, session_id, update_doc);
   json_free(update_doc);
   
   if (!update_result) {

@@ -116,13 +116,16 @@ static memory_header_t* get_memory_header(void* ptr) {
         return NULL;
     }
     
-    /* Validate magic number */
-    if (header->magic == MEMORY_MAGIC) {
+    /* Validate magic number with memory barrier for thread safety */
+    __sync_synchronize();  /* Memory fence */
+    uint32_t magic = header->magic;
+    
+    if (magic == MEMORY_MAGIC) {
         return header;
     }
     
     /* Check for freed magic to catch double-frees */
-    if (header->magic == MEMORY_MAGIC_FREE) {
+    if (magic == MEMORY_MAGIC_FREE) {
         return header;  /* Return it so we can detect double-free */
     }
     
@@ -192,7 +195,7 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
         memory_header_t* header = cp->first_alloc;
         while (header) {
             memory_header_t* next = header->next;
-            header->magic = 0;  /* Clear magic to prevent double-free */
+            header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
             free(header);
             freed_count++;
             header = next;

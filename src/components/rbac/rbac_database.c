@@ -86,7 +86,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
     /* Check if any role with name "admin" exists using unified documents approach */
     json_value_t* unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
-    json_value_t* results = storage_query_documents(db, unified_query);
+    json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, unified_query);
     json_free(unified_query);
     
     if (results) {
@@ -169,7 +169,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   /* Insert role using UNIFIED DOCUMENTS ARCHITECTURE */
   json_value_t* result = NULL;
   TRACE_RBAC("Inserting admin role into unified documents storage (default/documents)");
-  result = storage_insert_document(db, admin_role);
+  result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, admin_role, "system-admin");
   json_free(admin_role);
   
   if (!result) {
@@ -204,7 +204,7 @@ int create_default_user_role(struct database* db) {
   /* Check if any role with name "user" exists to prevent duplicates */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string("user"));
-  json_value_t* results = storage_query_documents(db, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   if (results) {
@@ -252,7 +252,7 @@ int create_default_user_role(struct database* db) {
   json_object_set(user_role, "updated_at", json_create_string(timestamp));
   
   /* Insert role */
-  json_value_t* result = storage_insert_document(db, user_role);
+  json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, user_role, "system-admin");
   json_free(user_role);
   
   if (!result) {
@@ -287,7 +287,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
     /* Check if any user with username "admin" exists using unified documents approach */
     json_value_t* unified_query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
-    json_value_t* results = storage_query_documents(db, unified_query);
+    json_value_t* results = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, unified_query);
     json_free(unified_query);
     
     if (results) {
@@ -322,7 +322,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
           /* Get admin role ID using unified documents approach */
           json_value_t* role_unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
           json_object_set(role_unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
-          json_value_t* role_results = storage_query_documents(db, role_unified_query);
+          json_value_t* role_results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, role_unified_query);
           json_free(role_unified_query);
           
           if (role_results) {
@@ -341,7 +341,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
                 json_object_set(updated_user, "roles", new_roles);
                 
                 /* Update the user document in unified storage */
-                storage_update_document(db, user_id, updated_user);
+                virtual_update(db, user_id, updated_user);
                 json_free(updated_user);
                 
                 LOG_INFO("Admin user roles updated with role ID: %s", admin_role_id);
@@ -437,7 +437,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_value_t* query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "username", json_create_string(username));
   
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   if (!result) {
@@ -527,7 +527,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   json_object_set(user_doc, "updated_at", json_create_string(timestamp));
   
   /* Insert user */
-  json_value_t* insert_result = storage_insert_document(db, user_doc);
+  json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_doc, "system-admin");
   json_free(user_doc);
   
   if (!insert_result) {
@@ -577,7 +577,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   /* Check if role already exists by name */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string(rolename));
-  json_value_t* results = storage_query_documents(db, query);
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   if (results) {
@@ -605,7 +605,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   json_object_set(role_doc, "updated_at", json_create_string(timestamp));
   
   /* Insert role */
-  json_value_t* insert_result = storage_insert_document(db, role_doc);
+  json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, role_doc, "system-admin");
   json_free(role_doc);
   
   if (!insert_result) {
@@ -678,7 +678,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   json_object_set(cache_query, "library", json_create_string(RBAC_LIBRARY_SYSTEM));
   json_object_set(cache_query, "uuid", json_create_string(cache_key));
   
-  json_value_t* cache_result = storage_query_documents(db, cache_query);
+  json_value_t* cache_result = virtual_query(db, "permission_cache", RBAC_LIBRARY_SYSTEM, "cache", cache_query);
   json_free(cache_query);
   
   if (cache_result) {
@@ -727,7 +727,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   
   TRACE_RBAC("Querying user with _id: %s", user_id);
   
-  json_value_t* user_result = storage_query_documents(db, user_query);
+  json_value_t* user_result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_query);
   json_free(user_query);
   
   if (!user_result) {

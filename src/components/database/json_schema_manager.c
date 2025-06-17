@@ -144,7 +144,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
     json_value_t* doc = json_array_get(documents, i);
     json_value_t* id_val = json_object_get(doc, "uuid");
     if (id_val && id_val->type == JSON_STRING) {
-      if (!storage_delete_document(db, id_val->value.string)) {
+      if (!virtual_delete(db, id_val->value.string)) {
         success = 0;
       }
     }

@@ -58,8 +58,32 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
         }
     }
 
-    /* 3. Perform the actual database insertion */
-    json_value_t *result = storage_insert_document(db, transformed_document);
+    /* 3. Perform the actual database insertion using virtual layer */
+    /* Parse collection_name to extract library and collection */
+    const char *slash_pos = strrchr(collection_name, '/');
+    const char *library_part = "default";
+    const char *collection_part = collection_name;
+    if (slash_pos) {
+        size_t lib_len = slash_pos - collection_name;
+        char *library_copy = malloc(lib_len + 1);
+        strncpy(library_copy, collection_name, lib_len);
+        library_copy[lib_len] = '\0';
+        library_part = library_copy;
+        collection_part = slash_pos + 1;
+    }
+    
+    /* Determine document type from collection */
+    const char *doc_type = collection_part;
+    if (strcmp(collection_part, "users") == 0) doc_type = "user";
+    else if (strcmp(collection_part, "roles") == 0) doc_type = "role";
+    else if (strcmp(collection_part, "sessions") == 0) doc_type = "session";
+    
+    json_value_t *result = virtual_insert(db, doc_type, library_part, collection_part, transformed_document, user_id);
+    
+    /* Clean up library copy if allocated */
+    if (slash_pos) {
+        free((void*)library_part);
+    }
     
     /* 4. Clean up transformed document if it's different from original */
     if (transformed_document != document) {
@@ -147,8 +171,8 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
         }
     }
 
-    /* 5. Perform the actual database update */
-    json_value_t *result = storage_update_document(db, document_id, transformed_document);
+    /* 5. Perform the actual database update using virtual layer */
+    json_value_t *result = virtual_update(db, document_id, transformed_document);
     
     /* 6. Clean up */
     if (transformed_document != merged_doc) {
@@ -189,8 +213,8 @@ int db_delete_document_with_js(database_t* db, const char* collection_name,
         }
     }
 
-    /* 2. Perform the actual database deletion */
-    int result = storage_delete_document(db, document_id);
+    /* 2. Perform the actual database deletion using virtual layer */
+    int result = virtual_delete(db, document_id);
     
     /* 3. Clean up */
     if (document) {

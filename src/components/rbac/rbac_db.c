@@ -67,7 +67,7 @@ int rbac_db_exists(database_t* db) {
    * The presence of at least one user indicates RBAC is initialized.
    */
   json_value_t* query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -247,7 +247,7 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   /* Check if username already exists */
   json_value_t* query = json_create_object();
   json_object_set(query, "username", json_create_string(username));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -287,8 +287,8 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
   json_object_set(user_doc, "password_hash", json_create_string(password_hash));
   json_object_set(user_doc, "roles", json_create_array());
   
-  /* Insert user document */
-  json_value_t* insert_result = storage_insert_document(db, user_doc);
+  /* Insert user document using virtual layer */
+  json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_doc, "system-admin");
   if (!insert_result) {
     LOG_ERROR("insert user document into database.");
     BUFFER_FREE(id);
@@ -321,8 +321,20 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     return 0;
   }
   
-  /* Get user document - first try as document ID */
-  json_value_t* user_doc = storage_get_document(db, user_id);
+  /* Get user document using virtual layer */
+  json_value_t* user_query = json_create_object();
+  json_object_set(user_query, "uuid", json_create_string(user_id));
+  json_value_t* user_results = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_query);
+  json_free(user_query);
+  
+  json_value_t* user_doc = NULL;
+  if (user_results) {
+    json_value_t* documents = json_object_get(user_results, "documents");
+    if (documents && documents->type == JSON_ARRAY && documents->value.array.size > 0) {
+      user_doc = json_clone(json_array_get(documents, 0));
+    }
+    json_free(user_results);
+  }
   char* actual_doc_id = NULL;
   
   /* If not found, try as UUID */
@@ -355,7 +367,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
         /* Get role by UUID - need to query since virtual expects name not UUID */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   json_value_t* role_doc = NULL;
@@ -381,7 +393,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
             
             /* Update role document */
             json_object_set(role_doc, "users", updated_users);
-            json_value_t* update_result = storage_update_document(db, role_id, role_doc);
+            json_value_t* update_result = virtual_update(db, role_id, role_doc);
             if (update_result) {
               json_free(update_result);
             }
@@ -401,7 +413,7 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     return 0;
   }
   
-  int result = storage_delete_document(db, actual_doc_id);
+  int result = virtual_delete(db, actual_doc_id);
   BUFFER_FREE(actual_doc_id);
   
   return result;
@@ -413,8 +425,20 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
     return NULL;
   }
   
-  /* First try as document ID */
-  json_value_t* user_doc = storage_get_document(db, user_id);
+  /* Get user document using virtual layer */
+  json_value_t* user_query = json_create_object();
+  json_object_set(user_query, "uuid", json_create_string(user_id));
+  json_value_t* user_results = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_query);
+  json_free(user_query);
+  
+  json_value_t* user_doc = NULL;
+  if (user_results) {
+    json_value_t* documents = json_object_get(user_results, "documents");
+    if (documents && documents->type == JSON_ARRAY && documents->value.array.size > 0) {
+      user_doc = json_clone(json_array_get(documents, 0));
+    }
+    json_free(user_results);
+  }
   
   /* If not found, try as UUID */
   if (!user_doc) {
@@ -445,7 +469,7 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   json_object_set(query, "username", json_create_string(username));
   
   /* Query user document */
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -510,7 +534,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   /* Check if role with same name already exists */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string(name));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   /* Extract documents array from response object */
@@ -543,7 +567,7 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
   json_object_set(role_doc, "users", json_create_array());
   
   /* Insert role document */
-  json_value_t* insert_result = storage_insert_document(db, role_doc);
+  json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, role_doc, "system-admin");
   if (!insert_result) {
     LOG_ERROR("insert role document into database.");
     BUFFER_FREE(id);
@@ -577,7 +601,7 @@ static json_value_t* find_role_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -608,7 +632,7 @@ static json_value_t* find_user_by_uuid(database_t* db, const char* uuid) {
   json_value_t* query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(uuid));
   
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
   json_free(query);
   
   if (!result || result->type != JSON_OBJECT) {
@@ -635,8 +659,8 @@ int rbac_db_delete_role(database_t* db, const char* role_id) {
     return 0;
   }
   
-  /* For now, simple implementation - use virtual layer later */
-  return storage_delete_document(db, role_id);
+  /* Delete role using virtual layer */
+  return virtual_delete(db, role_id);
 }
 
 /* Update a role in the database */
@@ -649,7 +673,7 @@ int rbac_db_update_role(database_t* db, const char* role_id, const char* name, j
   /* Get role by UUID - need to query since virtual expects name not UUID */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   json_value_t* role_doc = NULL;
@@ -720,7 +744,7 @@ rbac_role_t* rbac_db_get_role(database_t* db, const char* role_id) {
   /* Get role by UUID - need to query since virtual expects name not UUID */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   json_value_t* role_doc = NULL;
@@ -775,7 +799,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   rbac_free_role(role);
   
   /* Get user document using actual ID */
-  json_value_t* user_doc = storage_get_document(db, actual_user_id);
+  json_value_t* user_doc = virtual_get_user_by_uuid(db, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
     BUFFER_FREE(actual_user_id);
@@ -784,7 +808,7 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
   }
   
   /* Get role document using actual ID */
-  json_value_t* role_doc = storage_get_document(db, actual_role_id);
+  json_value_t* role_doc = virtual_get_role_by_uuid(db, actual_role_id);
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
@@ -901,7 +925,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   rbac_free_role(role);
   
   /* Get user document using actual ID */
-  json_value_t* user_doc = storage_get_document(db, actual_user_id);
+  json_value_t* user_doc = virtual_get_user_by_uuid(db, actual_user_id);
   if (!user_doc) {
     LOG_ERROR("User document %s not found", actual_user_id);
     BUFFER_FREE(actual_user_id);
@@ -910,7 +934,7 @@ int rbac_db_remove_user_from_role(database_t* db, const char* user_id, const cha
   }
   
   /* Get role document using actual ID */
-  json_value_t* role_doc = storage_get_document(db, actual_role_id);
+  json_value_t* role_doc = virtual_get_role_by_uuid(db, actual_role_id);
   if (!role_doc) {
     LOG_ERROR("Role document %s not found", actual_role_id);
     json_free(user_doc);
@@ -1032,7 +1056,7 @@ int rbac_db_grant_permission(database_t* db, const char* role_id, rbac_resource_
   /* Get role by UUID - need to query since virtual expects name not UUID */
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
+  json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
   json_free(query);
   
   json_value_t* role_doc = NULL;
@@ -1098,21 +1122,8 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
     return 0;
   }
   
-  /* Get role document */
-  /* Get role by UUID - need to query since virtual expects name not UUID */
-  json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
-  json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
-  json_free(query);
-  
-  json_value_t* role_doc = NULL;
-  if (result) {
-    json_value_t* docs = json_object_get(result, "documents");
-    if (docs && docs->type == JSON_ARRAY && docs->value.array.size > 0) {
-      role_doc = json_clone(docs->value.array.items[0]);
-    }
-    json_free(result);
-  }
+  /* Get role document using virtual layer */
+  json_value_t* role_doc = virtual_get_role_by_uuid(db, role_id);
   if (!role_doc) {
     LOG_ERROR("Role %s not found", role_id);
     return 0;
@@ -1182,7 +1193,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
   }
   
   /* Get user document */
-  json_value_t* user_doc = storage_get_document(db, user_id);
+  json_value_t* user_doc = virtual_get_user_by_uuid(db, user_id);
   if (!user_doc) {
     LOG_ERROR("User %s not found", user_id);
     return 0;
@@ -1227,21 +1238,8 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     
     const char* role_id = role_id_val->value.string;
     
-    /* Get role document */
-    /* Get role by UUID - need to query since virtual expects name not UUID */
-  json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
-  json_object_set(query, "uuid", json_create_string(role_id));
-  json_value_t* result = storage_query_documents(db, query);
-  json_free(query);
-  
-  json_value_t* role_doc = NULL;
-  if (result) {
-    json_value_t* docs = json_object_get(result, "documents");
-    if (docs && docs->type == JSON_ARRAY && docs->value.array.size > 0) {
-      role_doc = json_clone(docs->value.array.items[0]);
-    }
-    json_free(result);
-  }
+    /* Get role document using virtual layer */
+    json_value_t* role_doc = virtual_get_role_by_uuid(db, role_id);
     if (!role_doc || role_doc->type != JSON_OBJECT) {
       TRACE_RBAC("RBAC_DB: Role %s not found or invalid", role_id);
       continue;
