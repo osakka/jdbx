@@ -521,7 +521,7 @@ json_value_t* virtual_insert(database_t* db, const char* type, const char* libra
     
     if (result) {
         const char* doc_id = json_get_string(json_object_get(result, "uuid"));
-        LOG_INFO("Virtual: Document created successfully type='%s' id='%s'", type, doc_id);
+        TRACE_DB("Virtual: Document created successfully type='%s' id='%s'", type, doc_id);
     } else {
         LOG_ERROR("Virtual: Failed to create document type='%s'", type);
     }
@@ -566,7 +566,7 @@ json_value_t* virtual_update(database_t* db, const char* uuid, json_value_t* doc
     json_free(doc_copy);
     
     if (result) {
-        LOG_INFO("Virtual: Document updated successfully uuid='%s'", uuid);
+        TRACE_DB("Virtual: Document updated successfully uuid='%s'", uuid);
     } else {
         LOG_ERROR("Virtual: Failed to update document uuid='%s'", uuid);
     }
@@ -600,7 +600,7 @@ int virtual_delete(database_t* db, const char* uuid) {
     int result = storage_delete_document(db, uuid);
     
     if (result == 0) {
-        LOG_INFO("Virtual: Document deleted successfully uuid='%s'", uuid);
+        TRACE_DB("Virtual: Document deleted successfully uuid='%s'", uuid);
     } else {
         LOG_ERROR("Virtual: Failed to delete document uuid='%s'", uuid);
     }

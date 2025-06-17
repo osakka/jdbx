@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize daemon process if in daemon mode */
-  LOG_INFO("Initializing daemon process");
+  LOG_DEBUG("Initializing daemon process");
   if (!config->verbose_mode) {
     /* Using our enhanced daemon initialization with proper logging */
     if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {
@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
   if (!config_level) {
     config_level = "development";  /* Default to development */
   }
-  LOG_INFO("Initializing production configuration: %s", config_level);
+  LOG_DEBUG("Initializing production configuration: %s", config_level);
   production_config_init(config_level);
   
   /* Now that we have a socket and proper daemon context, initialize the database */
@@ -322,13 +322,13 @@ int main(int argc, char** argv) {
   }
   
   /* Apply database configuration (highest priority) */
-  LOG_INFO("Applying database configuration settings.");
+  LOG_DEBUG("Applying database configuration settings.");
   if (config_apply_database_settings(config, database) != 0) {
     LOG_WARNING("No database configuration found or failed to apply - using defaults.");
   }
   
   /* Enable thread-safe mode with comprehensive tracing */
-  LOG_INFO("Enabling thread-safe connection management for enhanced stability.");
+  LOG_DEBUG("Enabling thread-safe connection management for enhanced stability.");
   server_enable_thread_safe_mode();
   
   /* Initialize thread pool before other initialization */
@@ -367,16 +367,16 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize JWT cache for performance */
-  LOG_INFO("Initializing JWT cache with 10,000 max entries.");
+  LOG_DEBUG("Initializing JWT cache with 10,000 max entries.");
   if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
     INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
     BUFFER_FREE(config);
     return 1;
   }
-  LOG_INFO("JWT cache initialized successfully.");
+  LOG_DEBUG("JWT cache initialized successfully.");
   
   /* Initialize API context with properly initialized RBAC */
-  LOG_INFO("Initializing API context.");
+  LOG_DEBUG("Initializing API context.");
   status = init_api(config, database, rbac, &api_ctx);
   if (status != INIT_OK) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize API context");
@@ -395,7 +395,7 @@ int main(int argc, char** argv) {
     /* This is not fatal - we can continue without automatic persistence */
   }
   
-  LOG_INFO("All components initialized in the correct sequence.");
+  LOG_DEBUG("All components initialized in the correct sequence.");
   
   /* Verify API context before running server */
   if (!config->api_ctx) {

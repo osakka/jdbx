@@ -245,7 +245,7 @@ void handle_client(void* client_data) {
 
   /* Comprehensive connection lifecycle logging */
   if (g_logger) {
-    LOG_INFO("Connection started - fd=%d, thread=%lu, tid=%d, client=%s:%d, ssl=%s", 
+    TRACE_NET("Connection started - fd=%d, thread=%lu, tid=%d, client=%s:%d, ssl=%s", 
         client_fd, (unsigned long)tid, system_tid, client_ip, client_port,
         client->use_ssl ? "enabled" : "disabled");
     TRACE_NET("CONNECTION_DETAILS: api_ctx=%p, client_struct=%p", 
@@ -296,7 +296,7 @@ void handle_client(void* client_data) {
     }
     
     if (g_logger) {
-      LOG_INFO("SSL connection established for client fd=%d", client_fd);
+      TRACE_NET("SSL connection established for client fd=%d", client_fd);
     }
   }
 
@@ -775,7 +775,7 @@ cleanup:
                               (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
   
   if (g_logger) {
-    LOG_INFO("Connection ended - fd=%d, thread=%lu, tid=%d, client=%s:%d, duration=%.3fs", 
+    TRACE_NET("Connection ended - fd=%d, thread=%lu, tid=%d, client=%s:%d, duration=%.3fs", 
         client_fd, (unsigned long)tid, system_tid, client_ip, client_port, connection_duration);
     
     /* Log detailed connection state for debugging */
