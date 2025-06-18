@@ -1,7 +1,7 @@
 # JDBX Architecture Decision Records (ADR)
 
-**Last Updated**: June 16, 2025  
-**Current Version**: v6.3.0
+**Last Updated**: June 18, 2025  
+**Current Version**: v6.5.6
 
 ## Overview
 
@@ -40,13 +40,9 @@ This directory contains Architecture Decision Records (ADRs) - documents that ca
 - [ADR-020: Zero Hardcoded Values](020-zero-hardcoded.md)
 - [ADR-021: Enterprise CLI](021-enterprise-cli.md)
 
-### Revolutionary Memory Management (v6.3.0)
+### Revolutionary Memory Management (v6.3.0-v6.5.6)
 - [ADR-022: Checkpoint-Based Memory Management](022-checkpoint-memory-management.md)
-- [ADR-023: Thread-Local Checkpoint Stacks](023-thread-local-checkpoints.md)
-- [ADR-024: Memory Promotion API](024-memory-promotion.md)
-- [ADR-025: 100% Memory Manager Migration](025-complete-migration.md)
-- [ADR-026: Aligned Memory Allocation](026-aligned-memory.md)
-- [ADR-027: Memory Manager as Primary System](027-memory-manager-primary.md)
+- [ADR-023: JSON Memory Management Checkpoint Integration](023-json-checkpoint-integration.md) - **NEW: v6.5.6**
 
 ### Supporting Decisions
 - [ADR-028: Atomic Naming Standards](028-atomic-naming.md)
