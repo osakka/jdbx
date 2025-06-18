@@ -112,7 +112,7 @@
   <text x="360" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">Authentication</text>
   
   <rect x="450" y="360" width="140" height="25" rx="5" ry="5" fill="#C8E6C9" stroke="#4CAF50" stroke-width="1"/>
-  <text x="520" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">RBAC &amp; Security</text>
+  <text x="520" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">RBAC Security</text>
   
   <rect x="610" y="360" width="140" height="25" rx="5" ry="5" fill="#C8E6C9" stroke="#4CAF50" stroke-width="1"/>
   <text x="680" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">JavaScript Engine</text>
@@ -121,7 +121,7 @@
   <text x="840" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">Virtual Collections</text>
   
   <rect x="930" y="360" width="140" height="25" rx="5" ry="5" fill="#C8E6C9" stroke="#4CAF50" stroke-width="1"/>
-  <text x="1000" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">Health &amp; Metrics</text>
+  <text x="1000" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">Health Metrics</text>
   
   <rect x="1090" y="360" width="140" height="25" rx="5" ry="5" fill="#C8E6C9" stroke="#4CAF50" stroke-width="1"/>
   <text x="1160" y="377" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#1B5E20">Configuration</text>
@@ -236,7 +236,7 @@
   
   <!-- File System -->
   <rect x="100" y="880" width="1200" height="70" rx="10" ry="10" fill="#F5F5F5" stroke="#757575" stroke-width="2"/>
-  <text x="700" y="905" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#424242">File System &amp; Operating System</text>
+  <text x="700" y="905" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#424242">File System and Operating System</text>
   
   <!-- File system modules -->
   <rect x="200" y="920" width="160" height="25" rx="5" ry="5" fill="#E0E0E0" stroke="#757575" stroke-width="1"/>
