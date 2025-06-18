@@ -5,6 +5,45 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.12] - 2025-06-18
+
+### Fixed
+- **CRITICAL**: HTTP N-1 byte buffer handling issue completely resolved
+- Server was treating HTTP content as C strings, reserving 1 byte for null terminator during reads
+- Removed "- 1" from all buffer read calculations in handle_client.c
+- Fixed "Incomplete request body" errors for all HTTP clients (curl, Python requests, etc.)
+- Restored 100% compatibility with OpenSSL 3.x clients without requiring workarounds
+
+### Added
+- Comprehensive N-1 byte test suite validating all document sizes and buffer boundaries
+- ADR-028 documenting the HTTP buffer fix implementation and rationale
+
+### Changed
+- HTTP content now properly treated as binary data, not null-terminated strings
+- Null termination added AFTER reading data when needed for string processing
+
+### Technical Details
+- Root cause: Buffer read calculations were subtracting 1 to reserve null terminator space
+- Solution: Removed all "- 1" from `buffer_size - total_bytes_read` calculations
+- Impact: 100% client compatibility restored with zero regressions
+- Testing: Comprehensive test suite covers 100B to 1MB+ documents, edge cases, and HTTPS
+
+## [6.5.11] - 2025-06-18
+
+### Fixed
+- SSL context duplication issue - reuse context from socket initialization
+- Improved SSL_OP_IGNORE_UNEXPECTED_EOF configuration handling
+
+### Added
+- Environment variable support for SSL_IGNORE_UNEXPECTED_EOF option
+
+## [6.5.10] - 2025-06-17
+
+### Fixed
+- **CRITICAL**: Use-after-close file descriptor bug eliminated
+- General protection faults under rapid connection load resolved
+- File descriptors no longer used after closure
+
 ## [6.5.1] - 2025-06-17
 
 ### Added
