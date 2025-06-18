@@ -28,7 +28,7 @@ char* jdbx_generate_wal_path(const char* basename);
 /* Server configuration */
 #define DEFAULT_PORT 5000
 #define MAX_CONNECTIONS 100
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 65536  /* 🔧 FIX: Increased from 4KB to 64KB for reasonable document sizes */
 /* ADMIN_FILES_DIR is now dynamically determined from web_root config */
 
 /* Server status codes */

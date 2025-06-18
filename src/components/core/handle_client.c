@@ -269,7 +269,18 @@ void handle_client(void* client_data) {
     goto cleanup;
   }
 
-  char buffer[BUFFER_SIZE] = {0};
+  /* 🔧 FIX: Use dynamic buffer allocation instead of fixed size */
+  size_t buffer_size = 4096;  /* Start with 4KB */
+  char* buffer = (char*)BUFFER_ALLOC(buffer_size);
+  if (!buffer) {
+    if (g_logger) {
+      LOG_ERROR("Failed to allocate initial buffer");
+    }
+    close(client_fd);
+    client->client_fd = 0;
+    goto cleanup;
+  }
+  memset(buffer, 0, buffer_size);
   
   /* Set up SSL connection if needed */
   if (client->use_ssl) {
@@ -348,8 +359,8 @@ void handle_client(void* client_data) {
 
   /* Read request with enhanced error tracking */
   if (g_logger) {
-    TRACE_NET("CONNECTION_READ_START: fd=%d, attempting to read %d bytes", 
-        client_fd, BUFFER_SIZE);
+    TRACE_NET("CONNECTION_READ_START: fd=%d, attempting to read %zu bytes", 
+        client_fd, buffer_size);
   }
   
   /* 🔧 FIX: Complete HTTP request reading with Content-Length support */
@@ -362,9 +373,10 @@ void handle_client(void* client_data) {
   /* 🔧 FIX: Add maximum request handling time to prevent thread exhaustion */
   time_t request_start_time = time(NULL);
   const int MAX_REQUEST_TIME = 5; /* 🔧 FIX: Reduced from 30 to 5 seconds to fail faster on hanging connections */
+  const size_t MAX_REQUEST_SIZE = 10 * 1024 * 1024; /* 🔧 FIX: 10MB max request size */
   
   /* Read until we have complete headers */
-  while (total_bytes_read < BUFFER_SIZE - 1) {
+  while (total_bytes_read < buffer_size - 1) {
     /* Check if we've exceeded maximum request time */
     if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
       if (g_logger) {
@@ -381,7 +393,7 @@ void handle_client(void* client_data) {
       client->client_fd = 0;
       goto cleanup;
     }
-    bytes_read = client_read_data(client, buffer + total_bytes_read, BUFFER_SIZE - total_bytes_read - 1);
+    bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
     
     if (bytes_read <= 0) {
       /* Handle non-blocking socket would-block case */
@@ -463,11 +475,14 @@ void handle_client(void* client_data) {
       if (content_length > 0 && body_received < content_length) {
         size_t remaining = content_length - body_received;
         
-        /* 🔧 CRITICAL FIX: Prevent buffer overflow for large requests */
-        if (content_length + headers_size > BUFFER_SIZE - 1) {
+        /* 🔧 FIX: Dynamic buffer reallocation for large requests */
+        size_t required_size = content_length + headers_size + 1;
+        
+        /* Check against maximum allowed request size */
+        if (required_size > MAX_REQUEST_SIZE) {
           if (g_logger) {
-            LOG_ERROR("Request too large: %zu bytes (max: %d)", 
-                      content_length + headers_size, BUFFER_SIZE - 1);
+            LOG_ERROR("Request too large: %zu bytes (max: %zu)", 
+                      required_size, MAX_REQUEST_SIZE);
           }
           
           /* Send 413 Request Entity Too Large */
@@ -483,15 +498,46 @@ void handle_client(void* client_data) {
           goto cleanup;
         }
         
+        /* Reallocate buffer if needed */
+        if (required_size > buffer_size) {
+          if (g_logger) {
+            LOG_DEBUG("Reallocating buffer from %zu to %zu bytes", buffer_size, required_size);
+          }
+          
+          char* new_buffer = (char*)BUFFER_ALLOC(required_size);
+          if (!new_buffer) {
+            if (g_logger) {
+              LOG_ERROR("Failed to allocate larger buffer (%zu bytes)", required_size);
+            }
+            /* Send 500 Internal Server Error */
+            const char* response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                  "Content-Type: text/plain\r\n"
+                                  "Content-Length: 21\r\n"
+                                  "Connection: close\r\n"
+                                  "\r\n"
+                                  "Memory allocation failed";
+            client_write_data(client, response, strlen(response));
+            close(client_fd);
+            client->client_fd = 0;
+            goto cleanup;
+          }
+          
+          /* Copy existing data and free old buffer */
+          memcpy(new_buffer, buffer, total_bytes_read);
+          BUFFER_FREE(buffer);
+          buffer = new_buffer;
+          buffer_size = required_size;
+        }
+        
         if (g_logger) {
           LOG_DEBUG("Need to read %zu more bytes of body (have %zu, need %zu)", 
                     remaining, body_received, content_length);
         }
         
         /* Continue reading until we have the complete body */
-        while (body_received < content_length && total_bytes_read < BUFFER_SIZE - 1) {
+        while (body_received < content_length && total_bytes_read < buffer_size - 1) {
           int body_bytes = client_read_data(client, buffer + total_bytes_read, 
-                                          BUFFER_SIZE - total_bytes_read - 1);
+                                          buffer_size - total_bytes_read - 1);
           if (body_bytes <= 0) {
             if (g_logger) {
               LOG_ERROR("Failed to read complete request body");
@@ -936,7 +982,7 @@ void handle_client(void* client_data) {
       }
       
       /* Clear buffer for next request */
-      memset(buffer, 0, BUFFER_SIZE);
+      memset(buffer, 0, buffer_size);
       
       /* 🔧 FIX: Read complete HTTP request for keep-alive */
       total_bytes_read = 0;
@@ -946,8 +992,8 @@ void handle_client(void* client_data) {
       header_end = NULL;
       
       /* Read until we have complete headers */
-      while (total_bytes_read < BUFFER_SIZE - 1) {
-        bytes_read = client_read_data(client, buffer + total_bytes_read, BUFFER_SIZE - total_bytes_read - 1);
+      while (total_bytes_read < buffer_size - 1) {
+        bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
         
         if (bytes_read <= 0) {
           if (g_logger) {
@@ -980,10 +1026,12 @@ void handle_client(void* client_data) {
           
           /* Check if we need to read more body data */
           if (content_length > 0 && body_received < content_length) {
-            /* 🔧 CRITICAL FIX: Prevent buffer overflow in keep-alive loop */
-            if (content_length + headers_size > BUFFER_SIZE - 1) {
-              LOG_ERROR("Keep-alive request too large: %zu bytes (max: %d)", 
-                        content_length + headers_size, BUFFER_SIZE - 1);
+            /* 🔧 FIX: Dynamic buffer reallocation in keep-alive loop */
+            size_t required_size = content_length + headers_size + 1;
+            
+            if (required_size > MAX_REQUEST_SIZE) {
+              LOG_ERROR("Keep-alive request too large: %zu bytes (max: %zu)", 
+                        required_size, MAX_REQUEST_SIZE);
               
               /* Send 413 and close connection */
               const char* error_response = "HTTP/1.1 413 Request Entity Too Large\r\n"
@@ -997,10 +1045,24 @@ void handle_client(void* client_data) {
               break;
             }
             
+            /* Reallocate buffer if needed */
+            if (required_size > buffer_size) {
+              char* new_buffer = (char*)BUFFER_ALLOC(required_size);
+              if (!new_buffer) {
+                LOG_ERROR("Failed to allocate buffer for keep-alive request");
+                keep_alive_enabled = 0;
+                break;
+              }
+              memcpy(new_buffer, buffer, total_bytes_read);
+              BUFFER_FREE(buffer);
+              buffer = new_buffer;
+              buffer_size = required_size;
+            }
+            
             /* Continue reading until we have the complete body */
-            while (body_received < content_length && total_bytes_read < BUFFER_SIZE - 1) {
+            while (body_received < content_length && total_bytes_read < buffer_size - 1) {
               int body_bytes = client_read_data(client, buffer + total_bytes_read, 
-                                              BUFFER_SIZE - total_bytes_read - 1);
+                                              buffer_size - total_bytes_read - 1);
               if (body_bytes <= 0) {
                 keep_alive_enabled = 0;
                 break;
@@ -1139,6 +1201,12 @@ void handle_client(void* client_data) {
   }
   
 cleanup:
+  /* 🔧 FIX: Free dynamically allocated buffer */
+  if (buffer) {
+    BUFFER_FREE(buffer);
+    buffer = NULL;
+  }
+  
   /* Enhanced connection cleanup with comprehensive tracking */
   clock_gettime(CLOCK_MONOTONIC, &end_time);
   double connection_duration = (end_time.tv_sec - start_time.tv_sec) + 
