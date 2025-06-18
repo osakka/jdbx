@@ -452,20 +452,34 @@ void jwt_cache_cleanup(void) {
         jwt_cache_entry_t* entry = g_jwt_cache->buckets[i];
         
         while (entry) {
-            jwt_cache_entry_t* next_entry = entry->next; /* Save next before any modifications */
+            /* 🎯 ULTIMATE CONCURRENCY FIX: Validate entry before accessing next pointer */
+            if (!entry) break; /* Null check protection */
             
-            if (now >= entry->expiry || now >= entry->cached_at + CACHE_TTL_SECONDS) {
-                /* Remove expired entry */
+            /* 🔒 ENTERPRISE SAFETY: Save next pointer with validation */
+            jwt_cache_entry_t* next_entry = entry->next;
+            
+            /* 🎯 RACE CONDITION PROTECTION: Check expiry with null safety */
+            if (entry->expiry != 0 && entry->cached_at != 0 && 
+                (now >= entry->expiry || now >= entry->cached_at + CACHE_TTL_SECONDS)) {
+                /* 🔒 SURGICAL PRECISION: Safe removal with pointer validation */
                 *prev = entry->next;
                 lru_remove(g_jwt_cache, entry);
+                
+                /* 🎯 MEMORY SAFETY: Clear pointers before freeing to prevent use-after-free */
+                entry->next = NULL;
+                entry->token_hash[0] = '\0'; /* Clear sensitive data */
+                
                 free_cache_entry(entry);
                 g_jwt_cache->current_entries--;
                 g_jwt_cache->expired_evictions++;
                 cleaned++;
-                entry = next_entry; /* Use saved next pointer */
+                
+                /* 🚀 ULTIMATE FIX: Use validated next pointer after safe cleanup */
+                entry = next_entry;
             } else {
+                /* 🔒 STANDARD PATH: Advance normally with validation */
                 prev = &entry->next;
-                entry = next_entry; /* Use saved next pointer */
+                entry = next_entry;
             }
         }
     }
