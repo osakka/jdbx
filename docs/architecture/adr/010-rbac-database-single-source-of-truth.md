@@ -1,4 +1,4 @@
-# ADR-009: RBAC Database as Single Source of Truth
+# ADR-010: RBAC Database as Single Source of Truth
 
 **Date**: June 16, 2025  
 **Status**: Implemented  

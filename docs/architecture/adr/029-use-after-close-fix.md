@@ -1,4 +1,4 @@
-# ADR-028: Use-After-Close File Descriptor Fix
+# ADR-029: Use-After-Close File Descriptor Fix
 
 **Status**: Accepted  
 **Date**: 2025-06-18  

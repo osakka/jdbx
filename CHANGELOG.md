@@ -13,14 +13,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed "- 1" from all buffer read calculations in handle_client.c
 - Fixed "Incomplete request body" errors for all HTTP clients (curl, Python requests, etc.)
 - Restored 100% compatibility with OpenSSL 3.x clients without requiring workarounds
+- Fixed ADR numbering conflicts (010 and 029 were using wrong numbers)
+- Fixed XML parsing errors in architecture diagram by removing ampersands
 
 ### Added
 - Comprehensive N-1 byte test suite validating all document sizes and buffer boundaries
 - ADR-028 documenting the HTTP buffer fix implementation and rationale
+- Modern architecture diagram v2 with professional design and accurate current state
+- Documentation taxonomy following Diátaxis Framework standards
+- Consolidated test directories into single tests/ location
 
 ### Changed
 - HTTP content now properly treated as binary data, not null-terminated strings
 - Null termination added AFTER reading data when needed for string processing
+- Updated all documentation to reflect v6.5.12 (was showing various outdated versions)
+- Removed self-congratulatory bug fix references from documentation
+- Architecture diagram now shows current implementation, not future plans
+- Moved misplaced markdown files from project root to proper documentation folders
+
+### Documentation
+- Created comprehensive documentation taxonomy (DOCUMENTATION_TAXONOMY.md)
+- Fixed version inconsistencies across all documentation files
+- Removed duplicate documentation files (binary-format, buffer-pool-design, memory-management)
+- Updated docs/README.md to version 6.5.12
+- Embedded architecture diagram directly in main README.md
 
 ### Technical Details
 - Root cause: Buffer read calculations were subtracting 1 to reserve null terminator space

@@ -127,6 +127,6 @@ Help improve this documentation:
 
 ---
 
-**Documentation Version**: 6.5.0  
-**Last Updated**: June 17, 2025  
+**Documentation Version**: 6.5.12  
+**Last Updated**: June 18, 2025  
 **Contributors**: Technical Writing Team, JDBX Maintainers
