@@ -631,7 +631,8 @@ void handle_client(void* client_data) {
                 size_t bytes_to_read = bytes_missing - recovered_bytes;
                 if (bytes_to_read > 8) bytes_to_read = 8; /* Read in small chunks for SSL reliability */
                 
-                int read_result = client_read_data(client, buffer + total_bytes_read + recovered_bytes, bytes_to_read + 1);
+                /* 🎯 ULTIMATE BUFFER SAFETY: Read exact bytes needed, no overflow risk */
+                int read_result = client_read_data(client, buffer + total_bytes_read + recovered_bytes, bytes_to_read);
                 
                 if (read_result > 0) {
                   /* ✅ SUCCESS: Got some trailing bytes */
@@ -645,7 +646,10 @@ void handle_client(void* client_data) {
                     /* 🎉 COMPLETE SUCCESS: All missing bytes recovered! */
                     total_bytes_read += recovered_bytes;
                     body_received += recovered_bytes;
-                    buffer[total_bytes_read] = '\0';
+                    /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
+                    if (total_bytes_read < buffer_size - 1) {
+                      buffer[total_bytes_read] = '\0';
+                    }
                     if (g_logger) {
                       LOG_INFO("ULTIMATE SUCCESS: Recovered all %zu trailing bytes!", bytes_missing);
                     }
@@ -667,7 +671,10 @@ void handle_client(void* client_data) {
                 /* Partial recovery - update counters and continue processing */
                 total_bytes_read += recovered_bytes;
                 body_received += recovered_bytes;
-                buffer[total_bytes_read] = '\0';
+                /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
+                if (total_bytes_read < buffer_size - 1) {
+                  buffer[total_bytes_read] = '\0';
+                }
                 if (g_logger) {
                   LOG_WARNING("PARTIAL RECOVERY: Recovered %zu of %zu missing bytes", 
                              recovered_bytes, bytes_missing);
