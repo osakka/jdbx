@@ -125,13 +125,7 @@ JDBX is a high-performance document database built specifically for JSON data, f
 - **Caching System**: Intelligent query and document caching with invalidation
 - **Metrics & Monitoring**: Time-series metrics with append-and-trim O(1) updates
 
-## Architecture
-
-<div align="center">
-  <img src="share/resources/jdbx_architecture.svg" alt="JDBX v6.5.0 Authentication Security Excellence Architecture" width="700">
-</div>
-
-**JDBX v6.0.0 introduces the revolutionary TRUE Unified Documents Architecture**:
+**JDBX v6.0.0 introduced the revolutionary TRUE Unified Documents Architecture**:
 
 ### **🎯 Unified Documents Core**
 - **Single Physical Collection**: ALL entities stored in `default/documents` collection
