@@ -15,8 +15,13 @@
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
 **Latest Version**: 6.5.12 (June 18, 2025)  
-**Status**: 🚀 **Production Ready** - Enterprise-grade document database with unified architecture  
-**Architecture**: See our [modern architecture diagram](share/resources/jdbx_architecture_v2.svg) for a complete overview
+**Status**: 🚀 **Production Ready** - Enterprise-grade document database with unified architecture
+
+## Architecture
+
+<div align="center">
+  <img src="share/resources/jdbx_architecture_v2.svg" alt="JDBX Architecture" width="100%">
+</div>
 
 ## Features
 
