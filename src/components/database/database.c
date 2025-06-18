@@ -48,6 +48,7 @@
 #include "utils/generic_cache.h"
 #include "utils/skiplist.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include "rbac/rbac_db.h"
 
 /**
@@ -547,28 +548,39 @@ json_value_t* virtual_update(database_t* db, const char* uuid, json_value_t* doc
     
     LOG_DEBUG("Virtual: Updating document uuid='%s'", uuid);
     
+    /* CHECKPOINT FIX: Create checkpoint for this operation to handle cleanup automatically */
+    memory_checkpoint_t* checkpoint = memory_checkpoint_create();
+    if (!checkpoint) {
+        LOG_ERROR("Virtual update: Failed to create memory checkpoint");
+        return NULL;
+    }
+    
     // Create document copy for update
     json_value_t* doc_copy = json_deep_copy(document);
+    if (!doc_copy) {
+        LOG_ERROR("Virtual update: Failed to copy document");
+        memory_checkpoint_rewind(checkpoint);
+        return NULL;
+    }
     
     // Add audit trail - updated_at timestamp  
     time_t now = time(NULL);
     json_object_set(doc_copy, "updated_at", json_create_integer(now));
     
-    // Validate owner is present (should not be changed in updates)
-    if (!json_object_get(doc_copy, "owner")) {
-        LOG_ERROR("Virtual update: Document missing required 'owner' field");
-        /* CHECKPOINT: json_free(doc_copy); */
-        return NULL;
-    }
+    // Note: Do NOT validate required fields here - storage_update_document will merge 
+    // the update fields with the existing document, preserving required fields like 'owner'
     
     // STORAGE LAYER: Update with proper fields
     json_value_t* result = storage_update_document(db, uuid, doc_copy);
-    /* CHECKPOINT: json_free(doc_copy); */
     
     if (result) {
         TRACE_DB("Virtual: Document updated successfully uuid='%s'", uuid);
+        /* CHECKPOINT: Promote result to survive checkpoint cleanup */
+        memory_promote(result);
+        memory_checkpoint_commit(checkpoint);
     } else {
         LOG_ERROR("Virtual: Failed to update document uuid='%s'", uuid);
+        memory_checkpoint_rewind(checkpoint);
     }
     
     return result;
