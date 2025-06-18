@@ -18,6 +18,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdalign.h>
+#include <pthread.h>
 
 /* Memory managers should not depend on logging */
 
@@ -38,6 +39,7 @@ typedef struct memory_header {
 
 /* Checkpoint structure */
 struct memory_checkpoint {
+    pthread_spinlock_t lock;          /* Spinlock for thread-safe list operations */
     struct memory_checkpoint* parent;  /* Parent checkpoint for nesting */
     memory_header_t* first_alloc;     /* First allocation in this checkpoint */
     memory_header_t* last_alloc;      /* Last allocation for O(1) append */
@@ -148,6 +150,12 @@ memory_checkpoint_t* memory_checkpoint_create(void) {
         return NULL;
     }
     
+    /* Initialize spinlock */
+    if (pthread_spin_init(&checkpoint->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+        free(checkpoint);
+        return NULL;
+    }
+    
     /* Initialize checkpoint */
     checkpoint->parent = tls_memory.current_checkpoint;
     checkpoint->first_alloc = NULL;
@@ -195,6 +203,9 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
     cp = tls_memory.current_checkpoint;
     
     while (cp && cp != checkpoint) {
+        /* Lock the checkpoint we're about to rewind */
+        pthread_spin_lock(&cp->lock);
+        
         /* Free all allocations in this checkpoint */
         memory_header_t* header = cp->first_alloc;
         while (header) {
@@ -205,8 +216,16 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
             header = next;
         }
         
+        /* Clear the list pointers */
+        cp->first_alloc = NULL;
+        cp->last_alloc = NULL;
+        
+        /* Unlock before destroying */
+        pthread_spin_unlock(&cp->lock);
+        
         /* Move to parent and free the checkpoint */
         memory_checkpoint_t* parent = cp->parent;
+        pthread_spin_destroy(&cp->lock);  /* Cleanup spinlock */
         free(cp);
         cp = parent;
     }
@@ -215,6 +234,8 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
     tls_memory.current_checkpoint = checkpoint;
     
     /* Free the target checkpoint's allocations too */
+    pthread_spin_lock(&checkpoint->lock);
+    
     memory_header_t* header = checkpoint->first_alloc;
     while (header) {
         memory_header_t* next = header->next;
@@ -230,6 +251,8 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
     checkpoint->allocation_count = 0;
     checkpoint->total_size = 0;
     
+    pthread_spin_unlock(&checkpoint->lock);
+    
     __sync_fetch_and_add(&g_memory_stats.rewinds_performed, 1);
     __sync_fetch_and_add(&g_memory_stats.allocations_freed_by_rewind, freed_count);
     
@@ -244,6 +267,9 @@ void memory_checkpoint_commit(memory_checkpoint_t* checkpoint) {
     
     ensure_memory_initialized();
     
+    /* Lock checkpoint for modification */
+    pthread_spin_lock(&checkpoint->lock);
+    
     /* Clear checkpoint association from all allocations */
     memory_header_t* header = checkpoint->first_alloc;
     while (header) {
@@ -254,12 +280,16 @@ void memory_checkpoint_commit(memory_checkpoint_t* checkpoint) {
     /* Mark as committed */
     checkpoint->committed = 1;
     
+    /* Unlock before potential destruction */
+    pthread_spin_unlock(&checkpoint->lock);
+    
     /* If this is the current checkpoint, clear it */
     if (tls_memory.current_checkpoint == checkpoint) {
         tls_memory.current_checkpoint = checkpoint->parent;
     }
     
-    /* Free the checkpoint structure itself */
+    /* Destroy spinlock and free the checkpoint structure */
+    pthread_spin_destroy(&checkpoint->lock);
     free(checkpoint);
 }
 
@@ -276,21 +306,29 @@ void* memory_promote(void* ptr) {
     }
     
     /* Remove from checkpoint tracking */
-    if (header->prev) {
-        header->prev->next = header->next;
-    } else if (header->checkpoint) {
-        header->checkpoint->first_alloc = header->next;
-    }
-    
-    if (header->next) {
-        header->next->prev = header->prev;
-    } else if (header->checkpoint) {
-        header->checkpoint->last_alloc = header->prev;
-    }
-    
     if (header->checkpoint) {
-        header->checkpoint->allocation_count--;
-        header->checkpoint->total_size -= header->size;
+        memory_checkpoint_t* cp = header->checkpoint;
+        
+        /* Lock checkpoint for list modification */
+        pthread_spin_lock(&cp->lock);
+        
+        if (header->prev) {
+            header->prev->next = header->next;
+        } else {
+            cp->first_alloc = header->next;
+        }
+        
+        if (header->next) {
+            header->next->prev = header->prev;
+        } else {
+            cp->last_alloc = header->prev;
+        }
+        
+        cp->allocation_count--;
+        cp->total_size -= header->size;
+        
+        /* Unlock checkpoint */
+        pthread_spin_unlock(&cp->lock);
     }
     
     /* Clear checkpoint association */
@@ -355,6 +393,9 @@ void* memory_alloc(size_t size) {
     if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && !tls_memory.bypass_checkpoint) {
         memory_checkpoint_t* cp = tls_memory.current_checkpoint;
         
+        /* Lock checkpoint for list modification */
+        pthread_spin_lock(&cp->lock);
+        
         /* Link into checkpoint's allocation list */
         header->checkpoint = cp;
         header->prev = cp->last_alloc;
@@ -369,6 +410,9 @@ void* memory_alloc(size_t size) {
         /* Update checkpoint stats */
         cp->allocation_count++;
         cp->total_size += size;
+        
+        /* Unlock checkpoint */
+        pthread_spin_unlock(&cp->lock);
     }
     
     /* Return pointer to user data - calculate properly aligned offset */
@@ -406,20 +450,28 @@ void memory_free(void* ptr) {
     
     /* Unlink from checkpoint if not committed */
     if (header->checkpoint && !header->checkpoint->committed) {
+        memory_checkpoint_t* cp = header->checkpoint;
+        
+        /* Lock checkpoint for list modification */
+        pthread_spin_lock(&cp->lock);
+        
         if (header->prev) {
             header->prev->next = header->next;
         } else {
-            header->checkpoint->first_alloc = header->next;
+            cp->first_alloc = header->next;
         }
         
         if (header->next) {
             header->next->prev = header->prev;
         } else {
-            header->checkpoint->last_alloc = header->prev;
+            cp->last_alloc = header->prev;
         }
         
-        header->checkpoint->allocation_count--;
-        header->checkpoint->total_size -= header->size;
+        cp->allocation_count--;
+        cp->total_size -= header->size;
+        
+        /* Unlock checkpoint */
+        pthread_spin_unlock(&cp->lock);
     }
     
     /* Mark as freed to detect double-free */

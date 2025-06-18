@@ -427,7 +427,7 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
         LOG_ERROR("SSL read failed with EOF");
         /* 🚀 SURGICAL PRECISION: Don't mark connection as dead on EOF - client may have finished sending but connection still valid for response */
         /* conn->connected = 0;  // REMOVED: This was causing premature connection death */
-        return SSL_ERROR_IO;  /* Return error but keep connection alive for writing response */
+        return SSL_ERROR_EOF;  /* Return EOF error but keep connection alive for writing response */
       }
     }
     
@@ -536,13 +536,17 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
         case SSL_ERROR_SYSCALL:
           if (errno != 0) {
             LOG_ERROR("SSL write system error: %s", strerror(errno));
+            /* Mark connection as disconnected to prevent further operations */
+            conn->connected = 0;
+            *bytes_written = total_written;
+            return SSL_ERROR_IO;
           } else {
             LOG_ERROR("SSL write failed with EOF");
+            /* Mark connection as disconnected to prevent further operations */
+            conn->connected = 0;
+            *bytes_written = total_written;
+            return SSL_ERROR_EOF;
           }
-          /* Mark connection as disconnected to prevent further operations */
-          conn->connected = 0;
-          *bytes_written = total_written;
-          return SSL_ERROR_IO;
           
         default: {
           char *error_str = get_openssl_error();
@@ -584,6 +588,8 @@ const char *ssl_error_string(ssl_error_t error) {
       return "Handshake error";
     case SSL_ERROR_IO:
       return "I/O error";
+    case SSL_ERROR_EOF:
+      return "End of file (connection closed by peer)";
     case SSL_ERROR_MEMORY:
       return "Memory allocation error";
     case SSL_ERROR_VERIFICATION:

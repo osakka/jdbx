@@ -83,6 +83,14 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
         continue;
       }
       
+      if (error == SSL_ERROR_EOF) {
+        /* 🎯 ULTIMATE EOF HANDLING: Immediate termination for closed connections */
+        if (g_logger) {
+          LOG_INFO("SSL connection closed by client (EOF) - terminating read gracefully");
+        }
+        return 0;  /* Return 0 bytes read (standard EOF behavior) */
+      }
+      
       /* ❌ REAL ERROR: Not a retry case */
       if (g_logger) {
         LOG_ERROR("SSL read failed: %s (attempt %d)", ssl_error_string(error), retries + 1);
@@ -390,6 +398,7 @@ void handle_client(void* client_data) {
   int headers_complete = 0;
   size_t content_length = 0;
   char* header_end = NULL;
+  size_t body_received = 0;  /* 🎯 ULTIMATE FIX: Move to outer scope for 1-byte fix access */
   
   /* 🔧 FIX: Add maximum request handling time to prevent thread exhaustion */
   time_t request_start_time = time(NULL);
@@ -496,7 +505,7 @@ void handle_client(void* client_data) {
       
       /* Calculate how much body we need */
       size_t headers_size = (header_end - buffer) + 4; /* +4 for \r\n\r\n */
-      size_t body_received = total_bytes_read - headers_size;
+      body_received = total_bytes_read - headers_size;
       
       /* Check if we need to read more body data */
       if (content_length > 0 && body_received < content_length) {
@@ -682,35 +691,53 @@ void handle_client(void* client_data) {
               }
             }
             
-            /* 🎯 ULTIMATE GRACEFUL DEGRADATION: Intelligent partial content handling */
-            if (body_received >= content_length * 0.95) {
-              /* 🚀 ENTERPRISE TOLERANCE: >95% of body received - attempt graceful processing */
-              if (g_logger) {
-                LOG_WARNING("GRACEFUL DEGRADATION: Processing partial body (%zu of %zu bytes, %.1f%% complete)",
-                           body_received, content_length, (double)body_received / content_length * 100.0);
-              }
-              /* Continue processing with partial content - better than complete failure */
-              break;
-            } else {
-              /* ❌ INSUFFICIENT DATA: Less than 95% received, must abort */
-              if (g_logger) {
-                LOG_ERROR("CRITICAL FAILURE: Insufficient request body (received %zu of %zu bytes, %.1f%% complete)", 
-                          body_received, content_length, (double)body_received / content_length * 100.0);
-              }
-              close(client_fd);
-              client->client_fd = 0;
-              goto cleanup;
+            /* 🎯 ULTIMATE PROTOCOL COMPLIANCE: No partial body processing - incomplete requests are errors */
+            if (g_logger) {
+              LOG_ERROR("INCOMPLETE REQUEST: Client disconnected after sending %zu of %zu bytes (%.1f%% complete)", 
+                        body_received, content_length, (double)body_received / content_length * 100.0);
             }
+            /* Let the main incomplete request handler deal with this properly */
+            break;
           }
           
           total_bytes_read += body_bytes;
           body_received += body_bytes;
-          buffer[total_bytes_read] = '\0';
+          
+          /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
+          if (total_bytes_read < buffer_size - 1) {
+            buffer[total_bytes_read] = '\0';
+          } else {
+            /* Buffer full - null terminate at last valid position */
+            buffer[buffer_size - 1] = '\0';
+            total_bytes_read = buffer_size - 1;
+          }
         }
+        
       }
       
       break; /* Headers complete and body read */
     }
+  }
+  
+  /* 🎯 ULTIMATE PROTOCOL COMPLIANCE: Properly handle incomplete request bodies */
+  if (headers_complete && content_length > 0 && body_received < content_length) {
+    /* 🚀 ENTERPRISE GRADE: Client sent incomplete request - this is a client error */
+    if (g_logger) {
+      LOG_ERROR("INCOMPLETE REQUEST: Client sent %zu bytes but Content-Length specified %zu bytes (%.1f%% complete)", 
+                body_received, content_length, (double)body_received / content_length * 100.0);
+    }
+    
+    /* Return proper HTTP error for incomplete request */
+    const char* response = "HTTP/1.1 400 Bad Request\r\n"
+                          "Content-Type: text/plain\r\n"
+                          "Content-Length: 51\r\n"
+                          "Connection: close\r\n"
+                          "\r\n"
+                          "Incomplete request body - connection closed early";
+    client_write_data(client, response, strlen(response));
+    close(client_fd);
+    client->client_fd = 0;
+    goto cleanup;
   }
   
   if (!headers_complete) {

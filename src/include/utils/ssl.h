@@ -31,6 +31,7 @@ typedef enum {
     SSL_ERROR_KEY,            /**< Private key error */
     SSL_ERROR_HANDSHAKE,      /**< Handshake error */
     SSL_ERROR_IO,             /**< I/O error */
+    SSL_ERROR_EOF,            /**< End of file (connection closed by peer) */
     SSL_ERROR_MEMORY,         /**< Memory allocation error */
     SSL_ERROR_VERIFICATION,   /**< Certificate verification error */
     SSL_ERROR_INVALID_PARAM,  /**< Invalid parameter */
