@@ -27,7 +27,7 @@
   
   <!-- Title and Version -->
   <text x="700" y="40" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#00539C">JDBX Database Architecture v6.5.12</text>
-  <text x="700" y="70" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#666666">Dual-layered document database: Virtual abstraction over logical storage partitions</text>
+  <text x="700" y="70" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#666666">High-performance document database with unified storage and virtual collections</text>
   
   <!-- Achievement Badges -->
   <rect x="50" y="15" width="280" height="60" rx="30" ry="30" fill="url(#http_gradient)" opacity="0.9"/>
@@ -185,30 +185,15 @@
   
   <!-- Logical Storage Layer -->
   <rect x="100" y="660" width="1200" height="90" rx="10" ry="10" fill="#FFF8E1" stroke="#FF9800" stroke-width="2"/>
-  <text x="700" y="685" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#EF6C00">Logical Storage Partitions</text>
-  <text x="700" y="710" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#BF360C">Separate logical areas: Documents, JS Scripts, JS Bytecode, Versions, Configurations</text>
+  <text x="700" y="685" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#EF6C00">Current Storage Architecture</text>
+  <text x="700" y="710" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#BF360C">Single unified documents collection stores all entity types (users, roles, configs, metrics)</text>
   
-  <!-- Logical partition modules -->
-  <rect x="120" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="190" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Documents Partition</text>
+  <!-- Current storage reality -->
+  <rect x="400" y="720" width="200" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
+  <text x="500" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Unified Documents Collection</text>
   
-  <rect x="280" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="350" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">JS Scripts Partition</text>
-  
-  <rect x="440" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="510" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">JS Bytecode Partition</text>
-  
-  <rect x="600" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="670" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Versions Partition</text>
-  
-  <rect x="760" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="830" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Config Partition</text>
-  
-  <rect x="920" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="990" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Metrics Partition</text>
-  
-  <rect x="1080" y="720" width="140" height="25" rx="5" ry="5" fill="#FFECB3" stroke="#FF9800" stroke-width="1"/>
-  <text x="1150" y="737" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#BF360C">Future Extensions</text>
+  <rect x="620" y="720" width="200" height="25" rx="5" ry="5" fill="#FFE0B2" stroke="#FF9800" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="720" y="737" font-family="Arial, sans-serif" font-size="11" font-style="italic" text-anchor="middle" fill="#BF360C">Future: Logical Partitions</text>
 
   <!-- Physical Storage Engine -->
   <rect x="100" y="770" width="1200" height="90" rx="10" ry="10" fill="#FFFDE7" stroke="#FFC107" stroke-width="2"/>
