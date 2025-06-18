@@ -46,7 +46,7 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     /* SSL read with retry handling for non-blocking sockets */
     size_t bytes_read = 0;
     int retries = 0;
-    const int max_retries = 150;  /* 150 * 100ms = 15 seconds max */
+    const int max_retries = 20;  /* 🔧 FIX: Reduced from 150 to 20 (2 seconds max) to prevent thread exhaustion */
     
     while (retries < max_retries) {
       ssl_error_t error = ssl_read(ssl_conn, buffer, buffer_size - 1, &bytes_read);
@@ -59,8 +59,8 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
       if (error == SSL_ERROR_IO && errno == EAGAIN) {
         /* SSL needs to retry - use progressive delays to reduce CPU usage */
         retries++;
-        /* Progressive delay: 50ms for first 10 retries, then 100ms, then 200ms */
-        int delay_ms = (retries <= 10) ? 50 : (retries <= 50) ? 100 : 200;
+        /* 🔧 FIX: Shorter delays to fail faster on hanging connections */
+        int delay_ms = (retries <= 5) ? 50 : 100;  /* Max 100ms delay */
         usleep(delay_ms * 1000);
         continue;
       }
@@ -300,6 +300,25 @@ void handle_client(void* client_data) {
     }
   }
 
+  /* 🔧 FIX: Set socket timeouts to prevent thread pool exhaustion */
+  struct timeval read_timeout;
+  read_timeout.tv_sec = 30;  /* 30 second timeout */
+  read_timeout.tv_usec = 0;
+  
+  /* Set receive timeout (works even with non-blocking sockets) */
+  if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout)) < 0) {
+    if (g_logger) {
+      LOG_WARNING("Failed to set receive timeout: %s", strerror(errno));
+    }
+  }
+  
+  /* Set send timeout */
+  if (setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &read_timeout, sizeof(read_timeout)) < 0) {
+    if (g_logger) {
+      LOG_WARNING("Failed to set send timeout: %s", strerror(errno));
+    }
+  }
+
   /* Set socket to non-blocking */
   int flags = fcntl(client_fd, F_GETFL);
   if (flags < 0) {
@@ -333,39 +352,182 @@ void handle_client(void* client_data) {
         client_fd, BUFFER_SIZE);
   }
   
-  int bytes_read = client_read_data(client, buffer, BUFFER_SIZE);
-  if (bytes_read <= 0) {
-    const char* error_reason = "unknown";
-    if (bytes_read == 0) {
-      error_reason = "connection_closed_by_client";
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      error_reason = "timeout_or_would_block";
-    } else if (errno == ECONNRESET) {
-      error_reason = "connection_reset";
-    } else if (errno == EPIPE) {
-      error_reason = "broken_pipe";
-    } else {
-      error_reason = "read_error";
+  /* 🔧 FIX: Complete HTTP request reading with Content-Length support */
+  int total_bytes_read = 0;
+  int bytes_read = 0;
+  int headers_complete = 0;
+  size_t content_length = 0;
+  char* header_end = NULL;
+  
+  /* 🔧 FIX: Add maximum request handling time to prevent thread exhaustion */
+  time_t request_start_time = time(NULL);
+  const int MAX_REQUEST_TIME = 5; /* 🔧 FIX: Reduced from 30 to 5 seconds to fail faster on hanging connections */
+  
+  /* Read until we have complete headers */
+  while (total_bytes_read < BUFFER_SIZE - 1) {
+    /* Check if we've exceeded maximum request time */
+    if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
+      if (g_logger) {
+        LOG_ERROR("Request exceeded maximum handling time of %d seconds", MAX_REQUEST_TIME);
+      }
+      const char* timeout_response = "HTTP/1.1 408 Request Timeout\r\n"
+                                   "Content-Type: text/plain\r\n"
+                                   "Content-Length: 15\r\n"
+                                   "Connection: close\r\n"
+                                   "\r\n"
+                                   "Request timeout";
+      client_write_data(client, timeout_response, strlen(timeout_response));
+      close(client_fd);
+      client->client_fd = 0;
+      goto cleanup;
+    }
+    bytes_read = client_read_data(client, buffer + total_bytes_read, BUFFER_SIZE - total_bytes_read - 1);
+    
+    if (bytes_read <= 0) {
+      /* Handle non-blocking socket would-block case */
+      if (bytes_read < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        /* 🔧 FIX: Use select() to wait for data instead of busy-waiting */
+        fd_set readfds;
+        struct timeval select_tv;
+        select_tv.tv_sec = 1;  /* 1 second timeout for select */
+        select_tv.tv_usec = 0;
+        
+        FD_ZERO(&readfds);
+        FD_SET(client_fd, &readfds);
+        
+        int select_result = select(client_fd + 1, &readfds, NULL, NULL, &select_tv);
+        if (select_result > 0) {
+          /* Data is available, continue the loop */
+          continue;
+        } else if (select_result == 0) {
+          /* Timeout - check total time and continue */
+          if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
+            if (g_logger) {
+              LOG_DEBUG("Client taking too long to send data - timing out");
+            }
+            close(client_fd);
+            client->client_fd = 0;
+            goto cleanup;
+          }
+          continue;
+        }
+        /* select error - fall through to error handling */
+      }
+      
+      const char* error_reason = "unknown";
+      if (bytes_read == 0) {
+        error_reason = "connection_closed_by_client";
+      } else if (errno == ECONNRESET) {
+        error_reason = "connection_reset";
+      } else if (errno == EPIPE) {
+        error_reason = "broken_pipe";
+      } else {
+        error_reason = "read_error";
+      }
+      
+      if (g_logger) {
+        LOG_DEBUG("Connection read failed - fd=%d, bytes=%d, errno=%d, reason=%s, client=%s:%d", 
+            client_fd, bytes_read, errno, error_reason, client_ip, client_port);
+      }
+      
+      close(client_fd);
+      client->client_fd = 0;
+      goto cleanup;
     }
     
+    total_bytes_read += bytes_read;
+    buffer[total_bytes_read] = '\0';
+    
+    /* Check if headers are complete */
+    header_end = strstr(buffer, "\r\n\r\n");
+    if (header_end) {
+      headers_complete = 1;
+      
+      /* Parse Content-Length from headers */
+      char* content_length_header = strstr(buffer, "Content-Length:");
+      if (!content_length_header) {
+        content_length_header = strstr(buffer, "content-length:");
+      }
+      if (content_length_header) {
+        content_length = atoi(content_length_header + 15);
+        if (g_logger) {
+          LOG_DEBUG("Content-Length header found: %zu", content_length);
+        }
+      }
+      
+      /* Calculate how much body we need */
+      size_t headers_size = (header_end - buffer) + 4; /* +4 for \r\n\r\n */
+      size_t body_received = total_bytes_read - headers_size;
+      
+      /* Check if we need to read more body data */
+      if (content_length > 0 && body_received < content_length) {
+        size_t remaining = content_length - body_received;
+        
+        /* 🔧 CRITICAL FIX: Prevent buffer overflow for large requests */
+        if (content_length + headers_size > BUFFER_SIZE - 1) {
+          if (g_logger) {
+            LOG_ERROR("Request too large: %zu bytes (max: %d)", 
+                      content_length + headers_size, BUFFER_SIZE - 1);
+          }
+          
+          /* Send 413 Request Entity Too Large */
+          const char* response = "HTTP/1.1 413 Request Entity Too Large\r\n"
+                                "Content-Type: text/plain\r\n"
+                                "Content-Length: 29\r\n"
+                                "Connection: close\r\n"
+                                "\r\n"
+                                "Request body exceeds limit\r\n";
+          client_write_data(client, response, strlen(response));
+          close(client_fd);
+          client->client_fd = 0;
+          goto cleanup;
+        }
+        
+        if (g_logger) {
+          LOG_DEBUG("Need to read %zu more bytes of body (have %zu, need %zu)", 
+                    remaining, body_received, content_length);
+        }
+        
+        /* Continue reading until we have the complete body */
+        while (body_received < content_length && total_bytes_read < BUFFER_SIZE - 1) {
+          int body_bytes = client_read_data(client, buffer + total_bytes_read, 
+                                          BUFFER_SIZE - total_bytes_read - 1);
+          if (body_bytes <= 0) {
+            if (g_logger) {
+              LOG_ERROR("Failed to read complete request body");
+            }
+            close(client_fd);
+            client->client_fd = 0;
+            goto cleanup;
+          }
+          
+          total_bytes_read += body_bytes;
+          body_received += body_bytes;
+          buffer[total_bytes_read] = '\0';
+        }
+      }
+      
+      break; /* Headers complete and body read */
+    }
+  }
+  
+  if (!headers_complete) {
     if (g_logger) {
-      LOG_DEBUG("Connection read failed - fd=%d, bytes=%d, errno=%d, reason=%s, client=%s:%d", 
-          client_fd, bytes_read, errno, error_reason, client_ip, client_port);
-    } else {
-      perror("read failed");
+      LOG_ERROR("HTTP headers too large or malformed");
     }
-    
     close(client_fd);
     client->client_fd = 0;
     goto cleanup;
   }
   
   if (g_logger) {
-    TRACE_NET("CONNECTION_READ_SUCCESS: fd=%d, bytes_read=%d", client_fd, bytes_read);
+    TRACE_NET("CONNECTION_READ_SUCCESS: fd=%d, total_bytes_read=%d", client_fd, total_bytes_read);
   }
 
-  /* Null-terminate buffer */
-  buffer[bytes_read] = '\0';
+  /* DEBUG: Log complete buffer content */
+  if (g_logger) {
+    LOG_DEBUG("COMPLETE HTTP REQUEST (%d bytes): [%.500s...]", total_bytes_read, buffer);
+  }
 
   /* Parse HTTP request */
   http_request_t* request = parse_http_request(buffer);
@@ -776,18 +938,89 @@ void handle_client(void* client_data) {
       /* Clear buffer for next request */
       memset(buffer, 0, BUFFER_SIZE);
       
-      /* Read next request with comprehensive error handling */
-      int bytes_read = client_read_data(client, buffer, BUFFER_SIZE);
-      if (bytes_read <= 0) {
-        if (g_logger) {
-          LOG_DEBUG("HTTP Keep-Alive: No more data or connection closed by client (fd=%d)", client_fd);
+      /* 🔧 FIX: Read complete HTTP request for keep-alive */
+      total_bytes_read = 0;
+      bytes_read = 0;
+      headers_complete = 0;
+      content_length = 0;
+      header_end = NULL;
+      
+      /* Read until we have complete headers */
+      while (total_bytes_read < BUFFER_SIZE - 1) {
+        bytes_read = client_read_data(client, buffer + total_bytes_read, BUFFER_SIZE - total_bytes_read - 1);
+        
+        if (bytes_read <= 0) {
+          if (g_logger) {
+            LOG_DEBUG("HTTP Keep-Alive: No more data or connection closed by client (fd=%d)", client_fd);
+          }
+          keep_alive_enabled = 0;
+          break;
         }
-        keep_alive_enabled = 0;
+        
+        total_bytes_read += bytes_read;
+        buffer[total_bytes_read] = '\0';
+        
+        /* Check if headers are complete */
+        header_end = strstr(buffer, "\r\n\r\n");
+        if (header_end) {
+          headers_complete = 1;
+          
+          /* Parse Content-Length from headers */
+          char* content_length_header = strstr(buffer, "Content-Length:");
+          if (!content_length_header) {
+            content_length_header = strstr(buffer, "content-length:");
+          }
+          if (content_length_header) {
+            content_length = atoi(content_length_header + 15);
+          }
+          
+          /* Calculate how much body we need */
+          size_t headers_size = (header_end - buffer) + 4;
+          size_t body_received = total_bytes_read - headers_size;
+          
+          /* Check if we need to read more body data */
+          if (content_length > 0 && body_received < content_length) {
+            /* 🔧 CRITICAL FIX: Prevent buffer overflow in keep-alive loop */
+            if (content_length + headers_size > BUFFER_SIZE - 1) {
+              LOG_ERROR("Keep-alive request too large: %zu bytes (max: %d)", 
+                        content_length + headers_size, BUFFER_SIZE - 1);
+              
+              /* Send 413 and close connection */
+              const char* error_response = "HTTP/1.1 413 Request Entity Too Large\r\n"
+                                         "Content-Type: text/plain\r\n"
+                                         "Content-Length: 29\r\n"
+                                         "Connection: close\r\n"
+                                         "\r\n"
+                                         "Request body exceeds limit\r\n";
+              client_write_data(client, error_response, strlen(error_response));
+              keep_alive_enabled = 0;
+              break;
+            }
+            
+            /* Continue reading until we have the complete body */
+            while (body_received < content_length && total_bytes_read < BUFFER_SIZE - 1) {
+              int body_bytes = client_read_data(client, buffer + total_bytes_read, 
+                                              BUFFER_SIZE - total_bytes_read - 1);
+              if (body_bytes <= 0) {
+                keep_alive_enabled = 0;
+                break;
+              }
+              
+              total_bytes_read += body_bytes;
+              body_received += body_bytes;
+              buffer[total_bytes_read] = '\0';
+            }
+          }
+          
+          break; /* Headers complete and body read */
+        }
+      }
+      
+      if (!headers_complete || keep_alive_enabled == 0) {
         break;
       }
       
-      /* Null-terminate and parse next request with safety checks */
-      buffer[bytes_read] = '\0';
+      /* Parse the complete request */
       request = parse_http_request(buffer);
       if (!request) {
         if (g_logger) {

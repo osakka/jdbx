@@ -12,6 +12,7 @@
 /* RBAC constants for unified documents */
 #define RBAC_SYSTEM_LIBRARY "system"
 #define RBAC_SESSIONS_COLLECTION_NAME "sessions"
+#define _GNU_SOURCE  /* For timegm */
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@ extern logger_config_t* g_logger;
 /* Session extension settings */
 #define SESSION_EXTENSION_SECONDS (30 * 60)  /* 30 minutes */
 #define MIN_TIME_BEFORE_EXTENSION (5 * 60)   /* Only extend if less than 5 minutes left */
+#define MIN_TIME_BETWEEN_UPDATES (30)        /* Only update session once per 30 seconds */
 
 /* Update session expiration time for sliding sessions */
 static void extend_session_expiration(api_context_t* ctx, const char* token) {
@@ -70,11 +72,41 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   
   const char* session_id = session_id_val->value.string;
   
-  /* Check if we need to extend the session */
-  /* For simplicity, we'll always extend on activity */
+  /* 🔒 SECURITY FIX: Rate limit session updates to prevent DoS attacks */
+  
+  /* Check last_seen timestamp to avoid rapid updates that can crash the server */
+  json_value_t* last_seen_val = json_object_get(session, "last_seen");
+  if (last_seen_val && last_seen_val->type == JSON_STRING) {
+    /* Parse the ISO timestamp to compare times */
+    struct tm last_tm = {0};
+    const char* last_seen_str = last_seen_val->value.string;
+    
+    /* Simple parsing of ISO format: YYYY-MM-DDTHH:MM:SSZ */
+    if (sscanf(last_seen_str, "%d-%d-%dT%d:%d:%d", 
+               &last_tm.tm_year, &last_tm.tm_mon, &last_tm.tm_mday,
+               &last_tm.tm_hour, &last_tm.tm_min, &last_tm.tm_sec) == 6) {
+      
+      last_tm.tm_year -= 1900;  /* tm_year is years since 1900 */
+      last_tm.tm_mon -= 1;       /* tm_mon is 0-11 */
+      last_tm.tm_isdst = 0;      /* UTC has no DST */
+      
+      time_t last_update = timegm(&last_tm);
+      time_t now = time(NULL);
+      
+      /* Skip update if last update was less than MIN_TIME_BETWEEN_UPDATES seconds ago */
+      if (now - last_update < MIN_TIME_BETWEEN_UPDATES) {
+        if (g_logger) {
+          LOG_DEBUG("Rate limiting: Skipping session update for %s (last updated %ld seconds ago)",
+                    session_id, now - last_update);
+        }
+        json_free(results);
+        return;
+      }
+    }
+  }
   
   /* Get the full session document first to preserve all fields */
-  json_value_t* full_session = json_clone(session);
+  json_value_t* full_session = json_deep_copy(session);
   if (!full_session) {
     json_free(results);
     return;
