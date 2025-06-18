@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200" version="1.1">
+  <!-- Modern gradient background -->
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bg_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FAFBFC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F3F4F6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Client gradient -->
+    <linearGradient id="client_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Network gradient -->
+    <linearGradient id="network_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#34D399;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- API gradient -->
+    <linearGradient id="api_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A78BFA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Core gradient -->
+    <linearGradient id="core_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D97706;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Storage gradient -->
+    <linearGradient id="storage_gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#EF4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#DC2626;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadows -->
+    <filter id="dropshadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.2"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <rect width="1600" height="1200" fill="url(#bg_gradient)"/>
+  
+  <!-- Title -->
+  <text x="800" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="700" text-anchor="middle" fill="#111827">JDBX v6.5.12</text>
+  <text x="800" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#6B7280">Enterprise Document Database with 100% HTTP Compliance</text>
+  
+  <!-- Client Layer -->
+  <g transform="translate(0, 120)">
+    <rect x="100" y="0" width="1400" height="100" rx="8" fill="url(#client_gradient)" filter="url(#dropshadow)"/>
+    <text x="800" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" text-anchor="middle" fill="#FFFFFF">Client Applications</text>
+    
+    <!-- Client boxes -->
+    <rect x="200" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="270" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">curl / wget</text>
+    
+    <rect x="360" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="430" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">Python / Node.js</text>
+    
+    <rect x="520" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="590" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">Web Browsers</text>
+    
+    <rect x="680" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="750" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">Mobile Apps</text>
+    
+    <rect x="840" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="910" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">Admin UI</text>
+    
+    <rect x="1000" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1070" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">CLI Tools</text>
+    
+    <rect x="1160" y="45" width="140" height="40" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1230" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" text-anchor="middle" fill="#FFFFFF">REST APIs</text>
+  </g>
+  
+  <!-- Network Layer -->
+  <g transform="translate(0, 250)">
+    <rect x="100" y="0" width="1400" height="120" rx="8" fill="url(#network_gradient)" filter="url(#dropshadow)"/>
+    <text x="800" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" text-anchor="middle" fill="#FFFFFF">Network Protocol Layer</text>
+    
+    <!-- Key achievements -->
+    <rect x="250" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="375" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">HTTP/1.1 Compliant</text>
+    <text x="375" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">N-1 byte issue fixed</text>
+    
+    <rect x="520" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="645" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">SSL/TLS Security</text>
+    <text x="645" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">OpenSSL 3.x compatible</text>
+    
+    <rect x="790" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="915" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Keep-Alive Support</text>
+    <text x="915" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Connection pooling</text>
+    
+    <rect x="1060" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1185" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Thread Pool</text>
+    <text x="1185" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Concurrent handling</text>
+  </g>
+  
+  <!-- API Layer -->
+  <g transform="translate(0, 400)">
+    <rect x="100" y="0" width="1400" height="120" rx="8" fill="url(#api_gradient)" filter="url(#dropshadow)"/>
+    <text x="800" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" text-anchor="middle" fill="#FFFFFF">RESTful API Layer</text>
+    
+    <!-- API endpoints -->
+    <rect x="200" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="290" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/documents</text>
+    <text x="290" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">CRUD operations</text>
+    
+    <rect x="400" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="490" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/auth</text>
+    <text x="490" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">JWT authentication</text>
+    
+    <rect x="600" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="690" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/collections</text>
+    <text x="690" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Virtual collections</text>
+    
+    <rect x="800" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="890" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/libraries</text>
+    <text x="890" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Multi-tenancy</text>
+    
+    <rect x="1000" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1090" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/js</text>
+    <text x="1090" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">JavaScript engine</text>
+    
+    <rect x="1200" y="50" width="180" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1290" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">/api/metrics</text>
+    <text x="1290" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">System health</text>
+  </g>
+  
+  <!-- Core Engine -->
+  <g transform="translate(0, 550)">
+    <rect x="100" y="0" width="1400" height="200" rx="8" fill="url(#core_gradient)" filter="url(#dropshadow)"/>
+    <text x="800" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" text-anchor="middle" fill="#FFFFFF">JDBX Core Engine</text>
+    
+    <!-- Core components in 2 rows -->
+    <!-- Row 1 -->
+    <rect x="200" y="50" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="300" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Virtual Layer</text>
+    <text x="300" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Type-based routing</text>
+    
+    <rect x="420" y="50" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="520" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">RBAC Security</text>
+    <text x="520" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Field-level control</text>
+    
+    <rect x="640" y="50" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="740" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Memory Manager</text>
+    <text x="740" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Checkpoint-based</text>
+    
+    <rect x="860" y="50" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="960" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Query Engine</text>
+    <text x="960" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">JSON path queries</text>
+    
+    <rect x="1080" y="50" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1180" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">JavaScript Runtime</text>
+    <text x="1180" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">QuickJS engine</text>
+    
+    <!-- Row 2 -->
+    <rect x="310" y="125" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="410" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Adaptive Indexing</text>
+    <text x="410" y="170" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Auto optimization</text>
+    
+    <rect x="530" y="125" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="630" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Transaction System</text>
+    <text x="630" y="170" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">ACID compliance</text>
+    
+    <rect x="750" y="125" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="850" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Versioning</text>
+    <text x="850" y="170" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">History tracking</text>
+    
+    <rect x="970" y="125" width="200" height="60" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="1070" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">Configuration</text>
+    <text x="1070" y="170" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Three-tier system</text>
+  </g>
+  
+  <!-- Storage Layer -->
+  <g transform="translate(0, 780)">
+    <rect x="100" y="0" width="1400" height="140" rx="8" fill="url(#storage_gradient)" filter="url(#dropshadow)"/>
+    <text x="800" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" text-anchor="middle" fill="#FFFFFF">Storage Layer</text>
+    
+    <!-- Current state -->
+    <rect x="300" y="50" width="400" height="70" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="500" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#FFFFFF">Unified Documents Collection</text>
+    <text x="500" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="400" text-anchor="middle" fill="#FFFFFF">All entities stored as documents</text>
+    <text x="500" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Type field discrimination</text>
+    
+    <!-- Physical storage -->
+    <rect x="750" y="50" width="350" height="70" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="925" y="75" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#FFFFFF">JDBX Binary Format</text>
+    <text x="925" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="400" text-anchor="middle" fill="#FFFFFF">Skip-list indexing</text>
+    <text x="925" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">WAL + CRC32 integrity</text>
+  </g>
+  
+  <!-- Data flow indicators -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280" fill-opacity="0.6"/>
+    </marker>
+  </defs>
+  
+  <!-- Vertical flow arrows -->
+  <line x1="800" y1="220" x2="800" y2="250" stroke="#6B7280" stroke-width="2" marker-end="url(#arrow)" opacity="0.6"/>
+  <line x1="800" y1="370" x2="800" y2="400" stroke="#6B7280" stroke-width="2" marker-end="url(#arrow)" opacity="0.6"/>
+  <line x1="800" y1="520" x2="800" y2="550" stroke="#6B7280" stroke-width="2" marker-end="url(#arrow)" opacity="0.6"/>
+  <line x1="800" y1="750" x2="800" y2="780" stroke="#6B7280" stroke-width="2" marker-end="url(#arrow)" opacity="0.6"/>
+  
+  <!-- Key Features badges -->
+  <g transform="translate(100, 950)">
+    <text x="0" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#111827">Key Features:</text>
+    
+    <rect x="150" y="0" width="150" height="30" rx="15" fill="#10B981"/>
+    <text x="225" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">100% HTTP Compliant</text>
+    
+    <rect x="320" y="0" width="150" height="30" rx="15" fill="#8B5CF6"/>
+    <text x="395" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">Unified Documents</text>
+    
+    <rect x="490" y="0" width="150" height="30" rx="15" fill="#3B82F6"/>
+    <text x="565" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">Virtual Collections</text>
+    
+    <rect x="660" y="0" width="150" height="30" rx="15" fill="#F59E0B"/>
+    <text x="735" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">Memory Checkpoints</text>
+    
+    <rect x="830" y="0" width="150" height="30" rx="15" fill="#EF4444"/>
+    <text x="905" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">Enterprise Security</text>
+    
+    <rect x="1000" y="0" width="150" height="30" rx="15" fill="#10B981"/>
+    <text x="1075" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">JavaScript Engine</text>
+    
+    <rect x="1170" y="0" width="150" height="30" rx="15" fill="#8B5CF6"/>
+    <text x="1245" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">SSL/TLS Security</text>
+  </g>
+  
+  <!-- Performance metrics -->
+  <g transform="translate(100, 1020)">
+    <text x="0" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#111827">Performance:</text>
+    <text x="150" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">50+ concurrent connections</text>
+    <text x="400" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">Sub-10ms response times</text>
+    <text x="650" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">Zero memory leaks</text>
+    <text x="850" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">100% crash-free under load</text>
+  </g>
+  
+  <!-- Footer -->
+  <text x="100" y="1150" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" fill="#9CA3AF">© 2025 JDBX Project</text>
+  <text x="1500" y="1150" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="end" fill="#9CA3AF">Updated: June 18, 2025</text>
+</svg>
