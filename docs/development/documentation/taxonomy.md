@@ -1,175 +1,290 @@
-# JDBX Documentation Taxonomy and Standards
+# JDBX Documentation Taxonomy
 
-## Directory Structure
+**Professional Documentation Organization Schema v1.0**
 
+## Industry Standards Compliance
+
+This taxonomy follows the **Diátaxis Framework** - the industry-standard documentation architecture used by Django, Kubernetes, and other enterprise software projects.
+
+### Four Documentation Types (Diátaxis Framework)
+
+| Type | Purpose | User Goal | Content Format |
+|------|---------|-----------|----------------|
+| **Tutorials** | Learning-oriented | "I want to learn" | Step-by-step lessons |
+| **How-To Guides** | Problem-oriented | "I want to solve X" | Goal-oriented recipes |
+| **Reference** | Information-oriented | "I want to look up X" | Technical specifications |
+| **Explanation** | Understanding-oriented | "I want to understand" | Concepts and context |
+
+## JDBX Documentation Categories
+
+### 1. **Getting Started** (`/getting-started/`)
+**Type**: Tutorial (Learning-oriented)
+**Purpose**: First-time user onboarding and initial setup
+
+**Files**:
+- `README.md` - Category overview and quick navigation
+- `installation.md` - System requirements and installation
+- `quick-start.md` - 5-minute setup and first operations
+- `basic-operations.md` - Essential CRUD operations
+
+### 2. **Tutorials** (`/tutorials/`)
+**Type**: Tutorial (Learning-oriented)
+**Purpose**: Progressive skill-building courses
+
+**Structure**:
 ```
-docs/
-├── README.md                    # Documentation portal and navigation guide
-├── architecture/               # System design and technical architecture
-│   ├── README.md              # Architecture overview
-│   ├── adr/                   # Architecture Decision Records
-│   ├── core-concepts/         # Fundamental concepts and patterns
-│   ├── performance/           # Performance architecture and optimization
-│   └── security/              # Security architecture and design
-├── getting-started/           # Quick start and initial setup
-│   ├── README.md             # Getting started overview
-│   ├── installation.md       # Installation instructions
-│   ├── quick-start.md        # 5-minute quick start
-│   └── first-app.md          # Building your first JDBX app
-├── tutorials/                 # Step-by-step learning paths
-│   ├── README.md             # Tutorial index
-│   ├── beginner/             # Basic concepts and operations
-│   ├── intermediate/         # Advanced features and patterns
-│   └── advanced/             # Expert-level techniques
-├── how-to/                    # Task-oriented guides
-│   ├── README.md             # How-to index
-│   ├── operations/           # Operational tasks
-│   ├── development/          # Development tasks
-│   └── troubleshooting/      # Problem-solving guides
-├── reference/                 # Technical specifications
-│   ├── README.md             # Reference overview
-│   ├── api/                  # API documentation
-│   ├── configuration/        # Configuration reference
-│   ├── query-language/       # Query syntax reference
-│   └── specifications/       # Technical specifications
-├── deployment/                # Production deployment
-│   ├── README.md             # Deployment overview
-│   ├── production/           # Production setup
-│   ├── platforms/            # Platform-specific guides
-│   └── operations/           # Operational procedures
-├── development/               # For contributors
-│   ├── README.md             # Development overview
-│   ├── contributing/         # Contribution guidelines
-│   ├── building/             # Build instructions
-│   ├── testing/              # Testing procedures
-│   ├── documentation/        # Documentation standards
-│   └── changelog.md          # Version history
-├── security/                  # Security documentation
-│   ├── README.md             # Security overview
-│   ├── guidelines/           # Security best practices
-│   ├── compliance/           # Compliance guides
-│   └── threat-modeling/      # Security assessments
-└── examples/                  # Code examples
-    ├── README.md             # Examples overview
-    ├── basic/                # Basic usage examples
-    ├── advanced/             # Advanced patterns
-    └── templates/            # Project templates
+tutorials/
+├── README.md
+├── beginner/
+│   ├── README.md
+│   ├── data-modeling.md
+│   ├── user-authentication.md
+│   └── basic-queries.md
+├── intermediate/
+│   ├── README.md
+│   ├── rbac-setup.md
+│   ├── javascript-functions.md
+│   └── performance-tuning.md
+└── advanced/
+    ├── README.md
+    ├── custom-indexing.md
+    ├── clustering.md
+    └── enterprise-integration.md
 ```
 
-## Naming Standards
+### 3. **How-To Guides** (`/how-to/`)
+**Type**: How-To (Problem-oriented)
+**Purpose**: Solution-focused guides for specific tasks
 
-### File Naming Convention
-- **Format**: `kebab-case.md`
-- **Language**: English, descriptive, action-oriented
-- **Examples**:
-  - ✅ `installation-guide.md`
-  - ✅ `query-optimization.md`
-  - ✅ `ssl-configuration.md`
-  - ❌ `install.md` (too brief)
-  - ❌ `SSL_Config.md` (wrong case)
-  - ❌ `guide-to-installation.md` (redundant)
+**Structure**:
+```
+how-to/
+├── README.md
+├── operations/
+│   ├── README.md
+│   ├── backup-restore.md
+│   ├── monitoring-setup.md
+│   └── ssl-configuration.md
+├── development/
+│   ├── README.md
+│   ├── custom-validators.md
+│   ├── debugging.md
+│   └── migrations.md
+└── troubleshooting/
+    ├── README.md
+    ├── common-issues.md
+    └── performance-problems.md
+```
 
-### Document Types and Prefixes
-- **Guides**: Action-oriented (`configuring-ssl.md`)
-- **References**: Noun-based (`api-reference.md`)
-- **Concepts**: Descriptive (`unified-documents.md`)
-- **Tutorials**: Progressive (`01-basic-queries.md`)
+### 4. **Reference** (`/reference/`)
+**Type**: Reference (Information-oriented)
+**Purpose**: Technical specifications and API documentation
 
-## Content Standards
+**Structure**:
+```
+reference/
+├── README.md
+├── api/
+│   ├── README.md
+│   ├── rest-api.md
+│   ├── javascript.md
+│   ├── authentication.md
+│   └── error-codes.md
+├── configuration/
+│   ├── README.md
+│   ├── server-config.md
+│   └── database-config.md
+├── query-language/
+│   ├── README.md
+│   ├── syntax.md
+│   └── operators.md
+└── specifications/
+    ├── README.md
+    ├── performance-specs.md
+    └── compatibility.md
+```
 
-### Document Structure
-1. **Title** (H1): Clear, descriptive
-2. **Overview**: Brief introduction (2-3 sentences)
-3. **Prerequisites**: Required knowledge/setup
-4. **Content**: Logical progression
-5. **Summary**: Key takeaways
-6. **Related**: Links to related docs
+### 5. **Architecture** (`/architecture/`)
+**Type**: Explanation (Understanding-oriented)
+**Purpose**: System design and technical deep-dives
 
-### Writing Style
-- **Voice**: Active, second person ("you")
-- **Tense**: Present tense
-- **Clarity**: Short sentences, clear language
-- **Examples**: Code examples for every concept
-- **Accuracy**: Verified against codebase
+**Structure**:
+```
+architecture/
+├── README.md
+├── core-concepts/
+│   ├── README.md
+│   ├── unified-documents.md
+│   ├── memory-management.md
+│   └── threading-model.md
+├── security/
+│   ├── README.md
+│   ├── rbac-design.md
+│   └── authentication.md
+├── performance/
+│   ├── README.md
+│   ├── optimization-guide.md
+│   └── scaling-strategies.md
+└── design-decisions/
+    ├── README.md
+    └── architectural-decisions/
+        ├── README.md
+        ├── 001-javascript-integration.md
+        └── timeline.md
+```
 
-## Documentation Categories
+### 6. **Deployment** (`/deployment/`)
+**Type**: How-To (Problem-oriented)
+**Purpose**: Production deployment and operations
 
-### 1. Architecture (`/architecture`)
-**Purpose**: Technical design and decisions
-**Audience**: Architects, senior developers
-**Content**: ADRs, system design, patterns
+**Structure**:
+```
+deployment/
+├── README.md
+├── production/
+│   ├── README.md
+│   ├── production-checklist.md
+│   └── security-hardening.md
+├── platforms/
+│   ├── README.md
+│   ├── docker.md
+│   ├── kubernetes.md
+│   └── cloud-platforms.md
+├── scaling/
+│   ├── README.md
+│   ├── horizontal-scaling.md
+│   └── vertical-scaling.md
+└── operations/
+    ├── README.md
+    ├── backup-strategy.md
+    ├── monitoring.md
+    └── disaster-recovery.md
+```
 
-### 2. Getting Started (`/getting-started`)
-**Purpose**: Onboarding new users
-**Audience**: First-time users
-**Content**: Installation, quick start, basics
+### 7. **Security** (`/security/`)
+**Type**: Reference + How-To
+**Purpose**: Security guidelines and compliance
 
-### 3. Tutorials (`/tutorials`)
-**Purpose**: Learning paths
-**Audience**: Developers learning JDBX
-**Content**: Progressive, hands-on guides
+**Structure**:
+```
+security/
+├── README.md
+├── guidelines/
+│   ├── README.md
+│   ├── security-best-practices.md
+│   └── access-control.md
+├── compliance/
+│   ├── README.md
+│   ├── gdpr.md
+│   └── sox.md
+└── threat-modeling/
+    ├── README.md
+    └── security-assessments.md
+```
 
-### 4. How-To Guides (`/how-to`)
-**Purpose**: Specific task completion
-**Audience**: Users with specific goals
-**Content**: Step-by-step instructions
+### 8. **Development** (`/development/`)
+**Type**: How-To + Reference
+**Purpose**: For contributors and maintainers
 
-### 5. Reference (`/reference`)
-**Purpose**: Technical specifications
-**Audience**: Developers needing details
-**Content**: APIs, configs, specifications
+**Structure**:
+```
+development/
+├── README.md
+├── contributing/
+│   ├── README.md
+│   ├── contributing.md
+│   └── git-workflow.md
+├── building/
+│   ├── README.md
+│   ├── build-instructions.md
+│   └── testing-procedures.md
+├── documentation/
+│   ├── README.md
+│   ├── writing-guide.md
+│   ├── style-guide.md
+│   └── taxonomy.md
+└── processes/
+    ├── README.md
+    ├── release-management.md
+    └── todo-tracking.md
+```
 
-### 6. Deployment (`/deployment`)
-**Purpose**: Production deployment
-**Audience**: DevOps, administrators
-**Content**: Setup, configuration, operations
+### 9. **Examples** (`/examples/`)
+**Type**: Tutorial + Reference
+**Purpose**: Working code examples and templates
 
-### 7. Development (`/development`)
-**Purpose**: Contributing to JDBX
-**Audience**: Contributors, maintainers
-**Content**: Build, test, contribute
+**Structure**:
+```
+examples/
+├── README.md
+├── basic/
+│   ├── README.md
+│   ├── crud-operations.json
+│   └── simple-queries.js
+├── advanced/
+│   ├── README.md
+│   ├── function-embedding.json
+│   └── complex-patterns.js
+├── templates/
+│   ├── README.md
+│   ├── configuration/
+│   └── deployment/
+└── integrations/
+    ├── README.md
+    ├── client-libraries/
+    └── rest-api-usage/
+```
 
-### 8. Security (`/security`)
-**Purpose**: Security documentation
-**Audience**: Security teams, auditors
-**Content**: Best practices, compliance
+## Naming Conventions
 
-### 9. Examples (`/examples`)
-**Purpose**: Working code samples
-**Audience**: Developers
-**Content**: Code examples, templates
+### File Naming Standards
+- **Kebab-case**: All files use lowercase with hyphens (`performance-tuning.md`)
+- **Descriptive Names**: Clear, unambiguous file names
+- **No Abbreviations**: Full words unless industry standard (API, REST, RBAC)
 
-## Cross-Reference System
+### Directory Naming Standards
+- **Lowercase**: All directories use lowercase
+- **Plural Nouns**: Categories use plural form (`tutorials/`, `examples/`)
+- **Descriptive**: Clear purpose indication
 
-### Internal Links
-- Use relative paths: `[API Reference](../reference/api/)`
-- Link to sections: `[Authentication](#authentication)`
-- Verify all links work
+### Document Titles
+- **Title Case**: All document titles use proper title case
+- **Action-Oriented**: How-to guides start with verbs ("Configure SSL", "Debug Performance")
+- **Noun-Based**: Reference docs use noun phrases ("API Reference", "Query Language")
 
-### External Links
-- Mark clearly: `[External: Docker Docs]`
-- Use HTTPS always
-- Check link validity
+## Navigation Standards
 
-## Version Management
+### README Files
+- Every directory MUST have a `README.md` file
+- README serves as category index and navigation hub
+- Include overview, quick links, and sub-category descriptions
 
-### Documentation Versioning
-- Match software version
-- Tag documentation releases
-- Maintain version history
+### Cross-References
+- Use relative links within documentation
+- Include "See also" sections for related content
+- Maintain bidirectional links where appropriate
 
-### Change Tracking
-- Update changelog.md
-- Note breaking changes
-- Document deprecations
+### Version Compliance
+- All documents must reflect current codebase version (v6.5.0)
+- Include "Last Updated" dates in major documents
+- Maintain version history in changelog references
 
-## Quality Checklist
+## Quality Standards
 
-- [ ] Accurate against codebase
-- [ ] No duplicate content
-- [ ] Proper categorization
-- [ ] Working cross-references
-- [ ] Consistent formatting
-- [ ] Clear navigation
-- [ ] Updated changelog
-- [ ] Version consistency
+### Content Requirements
+- **Accuracy**: All technical details verified against codebase
+- **Completeness**: No placeholder content in production docs
+- **Professional Tone**: Consistent voice and terminology
+- **Code Examples**: All examples must be tested and functional
+
+### Maintenance Process
+- Monthly accuracy audits against codebase changes
+- Quarterly taxonomy review and optimization
+- Immediate updates for breaking changes
+- Version tags for all major documentation releases
+
+---
+
+**Taxonomy Version**: 1.0  
+**Created**: June 17, 2025  
+**Compliance**: Diátaxis Framework, Industry Best Practices

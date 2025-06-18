@@ -2,6 +2,8 @@
 
 **Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
+**Version**: 6.5.12 | **Status**: Production Ready with HTTP Protocol Compliance
+
 ## 🚀 Quick Start
 
 **New to JDBX?** Start here for the fastest path to productivity:
@@ -42,7 +44,7 @@ System design and technical deep-dives
 - **[Core Concepts](architecture/core-concepts/)** - Unified documents, buffer pool, threading model
 - **[Security Architecture](architecture/security/)** - RBAC design, authentication, field-level security
 - **[Performance Architecture](architecture/performance/)** - Memory management, optimization strategies
-- **[Architectural Decisions](architecture/ARCHITECTURAL_DECISIONS.md)** - Complete Architecture Decision Records (ADRs)
+- **[Architecture Decision Records](architecture/adr/)** - Complete ADRs documenting all major decisions
 - **[Design Decisions](architecture/design-decisions/)** - Implementation patterns and choices
 
 ### 🔒 **Security**

@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 6.5.0  
-**Last Updated**: June 17, 2025  
+**Version**: 6.5.12  
+**Last Updated**: June 18, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v6.5.0 with enterprise-grade authentication security excellence, collection ownership protection, and revolutionary memory management.
+Complete REST API documentation for JDBX v6.5.12 with HTTP protocol compliance, enterprise-grade authentication security excellence, collection ownership protection, and revolutionary memory management.
 
 ## Authentication
 
