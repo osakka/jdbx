@@ -28,6 +28,20 @@ This directory contains all tests for the JDBX project, organized by component a
 - **database/**: Database component tests
   - Database initialization tests
   - CRUD operation tests
+
+- **discovery/**: System discovery and edge case tests
+  - Next improvement opportunity identification
+  - Edge case discovery tests
+
+## Recent Test Additions
+
+### HTTP Protocol Compliance Tests
+- **test_n1_comprehensive.py**: Comprehensive N-1 byte buffer fix validation
+- **test_n1_fix.py**: Focused N-1 byte issue testing
+- **test_curl_n1.sh**: Curl-specific N-1 byte testing
+
+### Discovery Tests
+- **discovery/next_discovery_test.sh**: Automated discovery of next improvement opportunities
   - Query execution tests
   - Database locking tests
 
