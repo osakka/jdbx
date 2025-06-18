@@ -656,7 +656,7 @@ void handle_client(void* client_data) {
                     total_bytes_read += recovered_bytes;
                     body_received += recovered_bytes;
                     /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
-                    if (total_bytes_read < buffer_size - 1) {
+                    if (total_bytes_read < (int)(buffer_size - 1)) {
                       buffer[total_bytes_read] = '\0';
                     }
                     if (g_logger) {
@@ -681,7 +681,7 @@ void handle_client(void* client_data) {
                 total_bytes_read += recovered_bytes;
                 body_received += recovered_bytes;
                 /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
-                if (total_bytes_read < buffer_size - 1) {
+                if (total_bytes_read < (int)(buffer_size - 1)) {
                   buffer[total_bytes_read] = '\0';
                 }
                 if (g_logger) {
@@ -704,7 +704,7 @@ void handle_client(void* client_data) {
           body_received += body_bytes;
           
           /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
-          if (total_bytes_read < buffer_size - 1) {
+          if (total_bytes_read < (int)(buffer_size - 1)) {
             buffer[total_bytes_read] = '\0';
           } else {
             /* Buffer full - null terminate at last valid position */
@@ -737,6 +737,7 @@ void handle_client(void* client_data) {
     client_write_data(client, response, strlen(response));
     close(client_fd);
     client->client_fd = 0;
+    client_fd = 0;  /* 🎯 CRITICAL FIX: Update local variable to prevent use-after-close */
     goto cleanup;
   }
   
@@ -1147,7 +1148,7 @@ void handle_client(void* client_data) {
     requests_processed++;
     
     /* If keep-alive is enabled, try to read the next request */
-    if (keep_alive_enabled) {
+    if (keep_alive_enabled && client_fd > 0) {
       if (g_logger) {
         LOG_DEBUG("HTTP Keep-Alive: Waiting for next request on fd=%d", client_fd);
       }
@@ -1329,8 +1330,10 @@ void handle_client(void* client_data) {
   }
   
   /* Ensure all data is sent before closing */
-  shutdown(client_fd, SHUT_WR);
-  close(client_fd);
+  if (client_fd > 0) {
+    shutdown(client_fd, SHUT_WR);
+    close(client_fd);
+  }
   
   /* Mark file descriptor as closed to prevent double-close */
   if (client) {
