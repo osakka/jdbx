@@ -69,6 +69,8 @@ Incomplete request body - connection closed early
 - Proper HTTP 400 errors returned for all incomplete bodies
 - Discovery tests show improved stability with no segfaults
 - Several previously failing tests now pass
+- Identified that curl has a known issue with sending N-1 bytes on large payloads
+- Server correctly rejects these incomplete requests per HTTP standards
 
 ## Future Considerations
 1. **Chunked Transfer Encoding**: Future support for Transfer-Encoding: chunked
