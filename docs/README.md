@@ -45,6 +45,7 @@ System design and technical deep-dives
 - **[Security Architecture](architecture/security/)** - RBAC design, authentication, field-level security
 - **[Performance Architecture](architecture/performance/)** - Memory management, optimization strategies
 - **[Architecture Decision Records](architecture/adr/)** - Complete ADRs documenting all major decisions
+- **[Technical Reports](architecture/reports/)** - Achievement reports and implementation milestones
 - **[Design Decisions](architecture/design-decisions/)** - Implementation patterns and choices
 
 ### 🔒 **Security**
@@ -65,6 +66,7 @@ For contributors and maintainers
 - **[Contributing](development/contributing/)** - How to contribute to JDBX
 - **[Building & Testing](development/building/)** - Build instructions and testing procedures *(Coming Soon)*
 - **[Documentation](development/documentation/)** - Documentation writing and maintenance standards
+- **[Development Reports](development/reports/)** - Build quality, process improvements, and assessments
 - **[Processes](development/processes/)** - Development workflows and release management *(Coming Soon)*
 - **[Changelog](development/changelog.md)** - Complete version history and release notes
 
