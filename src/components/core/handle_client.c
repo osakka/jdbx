@@ -50,7 +50,7 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     
     /* 🎯 SINGLE SOURCE OF TRUTH: One definitive retry loop for all SSL scenarios */
     while (retries < max_retries) {
-      ssl_error_t error = ssl_read(ssl_conn, buffer, buffer_size - 1, &bytes_read);
+      ssl_error_t error = ssl_read(ssl_conn, buffer, buffer_size, &bytes_read);
       
       if (error == SSL_SUCCESS) {
         /* ✅ SUCCESS: Got data or clean connection close */
@@ -106,7 +106,7 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     return -1;
   } else {
     /* 📡 PLAIN SOCKET: Direct read for non-SSL connections */
-    return read(client->client_fd, buffer, buffer_size - 1);
+    return read(client->client_fd, buffer, buffer_size);
   }
 }
 
@@ -406,7 +406,7 @@ void handle_client(void* client_data) {
   const size_t MAX_REQUEST_SIZE = 10 * 1024 * 1024; /* 🔧 FIX: 10MB max request size */
   
   /* Read until we have complete headers */
-  while (total_bytes_read < (int)(buffer_size - 1)) {
+  while (total_bytes_read < (int)buffer_size) {
     /* Check if we've exceeded maximum request time */
     if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
       if (g_logger) {
@@ -424,7 +424,7 @@ void handle_client(void* client_data) {
       goto cleanup;
     }
     /* 🔧 FIX: Limit read size for SSL compatibility */
-    size_t read_size = buffer_size - total_bytes_read - 1;
+    size_t read_size = buffer_size - total_bytes_read;
     const size_t SSL_MAX_READ = 16384;  /* SSL typical buffer limit */
     if (read_size > SSL_MAX_READ) {
       read_size = SSL_MAX_READ;
@@ -508,6 +508,13 @@ void handle_client(void* client_data) {
       body_received = total_bytes_read - headers_size;
       
       if (g_logger) {
+        LOG_DEBUG("CRITICAL: header_end position=%ld, buffer position=%ld, headers_size=%zu", 
+                  (long)(header_end - buffer), (long)buffer, headers_size);
+        LOG_DEBUG("CRITICAL: total_bytes_read=%d, calculated body_received=%zu", 
+                  total_bytes_read, body_received);
+      }
+      
+      if (g_logger) {
         LOG_DEBUG("Headers complete: headers_size=%zu, total_bytes_read=%d, body_received=%zu, content_length=%zu",
                   headers_size, total_bytes_read, body_received, content_length);
       }
@@ -576,11 +583,82 @@ void handle_client(void* client_data) {
         }
         
         /* Continue reading until we have the complete body */
-        while (body_received < content_length && total_bytes_read < (int)(buffer_size - 1)) {
-          /* 🔧 FIX: Limit read size for SSL compatibility (16KB max) */
-          /* Calculate available space - the while condition already ensures space for null terminator */
-          size_t bytes_to_read = buffer_size - total_bytes_read - 1;
+        while (body_received < content_length) {
+          /* Check if we need to reallocate buffer */
+          /* Calculate how many more bytes we need to read */
           size_t bytes_remaining = content_length - body_received;
+          
+          /* Check if we need more space than the buffer provides (including null terminator) */
+          if (total_bytes_read + bytes_remaining + 1 > buffer_size) {
+            if (g_logger) {
+              LOG_DEBUG("Buffer is full: total_bytes_read=%d, buffer_size=%zu, body_received=%zu, content_length=%zu",
+                       total_bytes_read, buffer_size, body_received, content_length);
+            }
+            /* Buffer is full, need to reallocate */
+            size_t new_size = buffer_size * 2;
+            if (new_size > MAX_REQUEST_SIZE) {
+              new_size = MAX_REQUEST_SIZE;
+            }
+            
+            if (new_size <= buffer_size) {
+              /* Cannot grow buffer further */
+              if (g_logger) {
+                LOG_ERROR("Buffer full and cannot grow beyond %zu bytes (MAX_REQUEST_SIZE: %zu)", 
+                         buffer_size, MAX_REQUEST_SIZE);
+              }
+              /* Send 413 Request Entity Too Large */
+              const char* response = "HTTP/1.1 413 Request Entity Too Large\r\n"
+                                    "Content-Type: text/plain\r\n"
+                                    "Content-Length: 29\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n"
+                                    "Request body exceeds limit\r\n";
+              client_write_data(client, response, strlen(response));
+              close(client_fd);
+              client->client_fd = 0;
+              goto cleanup;
+            }
+            
+            if (g_logger) {
+              LOG_DEBUG("Reallocating buffer inside read loop from %zu to %zu bytes", buffer_size, new_size);
+            }
+            
+            char* new_buffer = (char*)BUFFER_ALLOC(new_size);
+            if (!new_buffer) {
+              if (g_logger) {
+                LOG_ERROR("Failed to allocate larger buffer (%zu bytes) inside read loop", new_size);
+              }
+              /* Send 500 Internal Server Error */
+              const char* response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                    "Content-Type: text/plain\r\n"
+                                    "Content-Length: 21\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n"
+                                    "Memory allocation failed";
+              client_write_data(client, response, strlen(response));
+              close(client_fd);
+              client->client_fd = 0;
+              goto cleanup;
+            }
+            
+            /* Copy existing data and free old buffer */
+            memcpy(new_buffer, buffer, total_bytes_read);
+            BUFFER_FREE(buffer);
+            buffer = new_buffer;
+            buffer_size = new_size;
+          }
+          /* 🔧 FIX: Limit read size for SSL compatibility (16KB max) */
+          /* Calculate available space */
+          size_t bytes_to_read = buffer_size - total_bytes_read;
+          
+          if (bytes_to_read == 0) {
+            if (g_logger) {
+              LOG_ERROR("BUG: bytes_to_read is 0! buffer_size=%zu, total_bytes_read=%d, need %zu more bytes",
+                       buffer_size, total_bytes_read, bytes_remaining);
+            }
+            /* Force buffer reallocation */
+            continue;
+          }
           /* Only read what we actually need */
           if (bytes_to_read > bytes_remaining) {
             bytes_to_read = bytes_remaining;
@@ -594,11 +672,16 @@ void handle_client(void* client_data) {
           int body_bytes = client_read_data(client, buffer + total_bytes_read, bytes_to_read);
           
           if (g_logger) {
-            LOG_DEBUG("Body read attempt: requested %zu bytes, got %d bytes (total: %d/%zu, body: %zu/%zu)",
-                     bytes_to_read, body_bytes, total_bytes_read, buffer_size, body_received, content_length);
+            LOG_DEBUG("Body read attempt: requested %zu bytes, got %d bytes (total: %d/%zu, body: %zu/%zu, space left: %zu)",
+                     bytes_to_read, body_bytes, total_bytes_read, buffer_size, body_received, content_length,
+                     buffer_size - total_bytes_read);
           }
           
           if (body_bytes <= 0) {
+            if (g_logger) {
+              LOG_DEBUG("Read returned %d, errno=%d, bytes_missing=%zu", 
+                       body_bytes, errno, content_length - body_received);
+            }
             /* Handle non-blocking socket would-block case */
             if (body_bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
               /* Use select() to wait for data */
@@ -709,14 +792,8 @@ void handle_client(void* client_data) {
           body_received += body_bytes;
           
           /* 🔒 ULTIMATE BUFFER SAFETY: Safe null termination with bounds check */
-          if (total_bytes_read < (int)(buffer_size - 1)) {
-            buffer[total_bytes_read] = '\0';
-          } else {
-            /* Buffer full - null terminate at last valid position */
-            /* 🎯 CRITICAL FIX: Don't modify total_bytes_read - it's the actual count! */
-            buffer[buffer_size - 1] = '\0';
-            /* total_bytes_read remains unchanged - we read what we read */
-          }
+          /* We already reserved space for null terminator in our read calculations */
+          buffer[total_bytes_read] = '\0';
         }
         
       }
@@ -727,40 +804,24 @@ void handle_client(void* client_data) {
   
   /* 🎯 ULTIMATE PROTOCOL COMPLIANCE: Properly handle incomplete request bodies */
   if (headers_complete && content_length > 0 && body_received < content_length) {
-    size_t bytes_missing = content_length - body_received;
-    
-    /* 🔧 OpenSSL 3.x COMPATIBILITY: Handle N-1 byte issue */
-    if (bytes_missing == 1 && client->use_ssl) {
-      /* This is the known OpenSSL 3.x client issue where curl/requests send N-1 bytes */
-      if (g_logger) {
-        LOG_INFO("OpenSSL 3.x N-1 byte issue detected: accepting request missing 1 byte (received %zu of %zu)", 
-                 body_received, content_length);
-      }
-      /* Pad the buffer with a space to complete the JSON (usually the closing }) */
-      buffer[total_bytes_read] = '}';
-      buffer[total_bytes_read + 1] = '\0';
-      total_bytes_read++;
-      body_received++;
-    } else {
-      /* 🚀 ENTERPRISE GRADE: Client sent incomplete request - this is a client error */
-      if (g_logger) {
-        LOG_ERROR("INCOMPLETE REQUEST: Client sent %zu bytes but Content-Length specified %zu bytes (%.1f%% complete)", 
-                  body_received, content_length, (double)body_received / content_length * 100.0);
-      }
-      
-      /* Return proper HTTP error for incomplete request */
-      const char* response = "HTTP/1.1 400 Bad Request\r\n"
-                            "Content-Type: text/plain\r\n"
-                            "Content-Length: 51\r\n"
-                            "Connection: close\r\n"
-                            "\r\n"
-                            "Incomplete request body - connection closed early";
-      client_write_data(client, response, strlen(response));
-      close(client_fd);
-      client->client_fd = 0;
-      client_fd = 0;  /* 🎯 CRITICAL FIX: Update local variable to prevent use-after-close */
-      goto cleanup;
+    /* 🚀 ENTERPRISE GRADE: Client sent incomplete request - this is a client error */
+    if (g_logger) {
+      LOG_ERROR("INCOMPLETE REQUEST: Client sent %zu bytes but Content-Length specified %zu bytes (%.1f%% complete)", 
+                body_received, content_length, (double)body_received / content_length * 100.0);
     }
+    
+    /* Return proper HTTP error for incomplete request */
+    const char* response = "HTTP/1.1 400 Bad Request\r\n"
+                          "Content-Type: text/plain\r\n"
+                          "Content-Length: 51\r\n"
+                          "Connection: close\r\n"
+                          "\r\n"
+                          "Incomplete request body - connection closed early";
+    client_write_data(client, response, strlen(response));
+    close(client_fd);
+    client->client_fd = 0;
+    client_fd = 0;  /* 🎯 CRITICAL FIX: Update local variable to prevent use-after-close */
+    goto cleanup;
   }
   
   if (!headers_complete) {
@@ -1198,8 +1259,8 @@ void handle_client(void* client_data) {
       header_end = NULL;
       
       /* Read until we have complete headers */
-      while (total_bytes_read < (int)(buffer_size - 1)) {
-        bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
+      while (total_bytes_read < (int)buffer_size) {
+        bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read);
         
         if (bytes_read <= 0) {
           if (g_logger) {
@@ -1266,9 +1327,9 @@ void handle_client(void* client_data) {
             }
             
             /* Continue reading until we have the complete body */
-            while (body_received < content_length && total_bytes_read < (int)(buffer_size - 1)) {
+            while (body_received < content_length && total_bytes_read < (int)buffer_size) {
               int body_bytes = client_read_data(client, buffer + total_bytes_read, 
-                                              buffer_size - total_bytes_read - 1);
+                                              buffer_size - total_bytes_read);
               if (body_bytes <= 0) {
                 keep_alive_enabled = 0;
                 break;
