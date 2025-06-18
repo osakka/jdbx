@@ -37,7 +37,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   json_value_t* body = json_parse(request->body);
   LOG_DEBUG("JSON parsing completed.");
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    /* CHECKPOINT: if (body) json_free(body); - Let checkpoint handle cleanup */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -49,7 +49,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); - Let checkpoint handle cleanup */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username and password required\"}", "application/json");
   }
@@ -120,11 +120,11 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                 if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
                   LOG_INFO("Created system library document: %s", system_lib_id_val->value.string);
                 }
-                json_free(system_lib_result);
+                /* CHECKPOINT: json_free(system_lib_result); */
               } else {
                 LOG_WARNING("Failed to create system library document");
               }
-              json_free(system_lib_doc);
+              /* CHECKPOINT: json_free(system_lib_doc); */
               
               /* Create default library document */
               json_value_t* default_lib_doc = json_create_object();
@@ -143,11 +143,11 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                 if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
                   LOG_INFO("Created default library document: %s", default_lib_id_val->value.string);
                 }
-                json_free(default_lib_result);
+                /* CHECKPOINT: json_free(default_lib_result); */
               } else {
                 LOG_WARNING("Failed to create default library document");
               }
-              json_free(default_lib_doc);
+              /* CHECKPOINT: json_free(default_lib_doc); */
               
               /* Create system actors (system-admin, system-metrics, etc.) */
               extern int create_system_actors(database_t* db);
@@ -188,7 +188,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                 json_object_set(bootstrap_query, "username", json_create_string("admin"));
                 
                 json_value_t* bootstrap_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, bootstrap_query);
-                json_free(bootstrap_query);
+                /* CHECKPOINT: json_free(bootstrap_query); */
                 
                 if (bootstrap_results) {
                   json_value_t* documents = json_object_get(bootstrap_results, "documents");
@@ -204,19 +204,19 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                       char* bootstrap_response_str = jwt_create_token_pair(ctx->jwt_secret, admin_user_id, "admin", &bootstrap_response_obj);
                       
                       if (bootstrap_response_str) {
-                        json_free(bootstrap_results);
-                        json_free(body);
+                        /* CHECKPOINT: json_free(bootstrap_results); */
+                        /* CHECKPOINT: json_free(body); */
                         
                         http_response_t* response = create_http_response(HTTP_OK, bootstrap_response_str, "application/json");
                         BUFFER_FREE(bootstrap_response_str);
-                        json_free(bootstrap_response_obj);
+                        /* CHECKPOINT: json_free(bootstrap_response_obj); */
                         
                         LOG_INFO("Bootstrap admin login successful - returning immediate response");
                         return response;
                       }
                     }
                   }
-                  json_free(bootstrap_results);
+                  /* CHECKPOINT: json_free(bootstrap_results); */
                 }
               }
             }
@@ -245,8 +245,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!ctx->db) {
     LOG_ERROR("Database context is NULL!");
-    json_free(username_filter);
-    json_free(body);
+    /* CHECKPOINT: json_free(username_filter); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
@@ -254,10 +254,10 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   /* Use clear virtual function for user query */
   json_value_t* query_results = virtual_query_users(ctx->db, RBAC_SYSTEM_LIBRARY, username_filter);
   
-  json_free(username_filter);
+  /* CHECKPOINT: json_free(username_filter); */
     
   if (!query_results) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query user\"}", "application/json");
   }
@@ -265,8 +265,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   /* Extract documents array from response object */
   json_value_t* results = json_object_get(query_results, "documents");
   if (!results || results->type != JSON_ARRAY || json_array_size(results) == 0) {
-    json_free(query_results);
-    json_free(body);
+    /* CHECKPOINT: json_free(query_results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
   }
@@ -277,8 +277,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!id_val || id_val->type != JSON_STRING || 
       !password_hash_val || password_hash_val->type != JSON_STRING) {
-    json_free(query_results);
-    json_free(body);
+    /* CHECKPOINT: json_free(query_results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"User data corrupted\"}", "application/json");
   }
@@ -290,8 +290,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   extern int verify_password(const char* password, const char* hash);
   
   if (!verify_password(password, stored_hash)) {
-    json_free(query_results);
-    json_free(body);
+    /* CHECKPOINT: json_free(query_results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
   }
@@ -309,9 +309,9 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   
   if (!response_str || !response_obj) {
     LOG_ERROR("Failed to create token response.");
-    json_free(query_results);
-    json_free(body);
-    if (response_obj) json_free(response_obj);
+    /* CHECKPOINT: json_free(query_results); */
+    /* CHECKPOINT: json_free(body); */
+    /* CHECKPOINT: if (response_obj) json_free(response_obj); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create response\"}", "application/json");
   }
@@ -338,7 +338,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         
         /* Query system/sessions collection in JDBX architecture */
         json_value_t* existing_sessions_response = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, session_query);
-        json_free(session_query);
+        /* CHECKPOINT: json_free(session_query); */
         
         if (existing_sessions_response) {
           /* Extract documents array from response object */
@@ -358,7 +358,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               }
             }
           }
-          json_free(existing_sessions_response);
+          /* CHECKPOINT: json_free(existing_sessions_response); */
         }
         
         /* Extract client info from request */
@@ -372,7 +372,8 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
         
         if (session_id) {
           LOG_INFO("New session created with ID: %s", session_id);
-          buffer_pool_free(session_id);
+          /* CHECKPOINT: buffer_pool_free(session_id); - Let checkpoint handle cleanup */
+          BUFFER_FREE(session_id);
         } else {
           LOG_ERROR("Failed to create session for user: %s", username);
         }
@@ -384,15 +385,15 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     response_str = json_stringify(response_obj);
     
     /* Clean up and return response */
-    json_free(query_results);
-    json_free(body);
+    /* CHECKPOINT: json_free(query_results); */
+    /* CHECKPOINT: json_free(body); */
     
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
     LOG_DEBUG("Returning successful login response with library context: %s", user_lib);
     
     /* Clean up response string */
     BUFFER_FREE(response_str);
-    json_free(response_obj);
+    /* CHECKPOINT: json_free(response_obj); */
     
     return response;
 }

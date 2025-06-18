@@ -192,7 +192,7 @@ void json_array_set(json_value_t* array, size_t index, json_value_t* value) {
   
   /* Free the old value */
   if (array->value.array.items[index]) {
-    json_free(array->value.array.items[index]);
+    /* CHECKPOINT: json_free(array->value.array.items[index]); */
   }
   
   /* Set the new value */
@@ -206,7 +206,7 @@ void json_array_remove(json_value_t* array, size_t index) {
   
   /* Free the value being removed */
   if (array->value.array.items[index]) {
-    json_free(array->value.array.items[index]);
+    /* CHECKPOINT: json_free(array->value.array.items[index]); */
   }
   
   /* Shift remaining elements down */
@@ -231,7 +231,7 @@ void json_object_set(json_value_t* object, const char* key, json_value_t* value)
   for (size_t i = 0; i < object->value.object.size; i++) {
     if (strcmp(object->value.object.entries[i].key, key) == 0) {
       /* Free old value */
-      json_free(object->value.object.entries[i].value);
+      /* CHECKPOINT: json_free(object->value.object.entries[i].value); */
       
       /* Set new value */
       object->value.object.entries[i].value = value;
@@ -325,7 +325,7 @@ void json_object_remove(json_value_t* object, const char* key) {
     if (strcmp(object->value.object.entries[i].key, key) == 0) {
       /* Free key and value */
       buffer_pool_free(object->value.object.entries[i].key);
-      json_free(object->value.object.entries[i].value);
+      /* CHECKPOINT: json_free(object->value.object.entries[i].value); */
       
       /* Move remaining entries */
       for (size_t j = i; j < object->value.object.size - 1; j++) {
@@ -482,7 +482,7 @@ static json_value_t* parse_object_with_depth(const char** json, int depth) {
     /* Parse key */
     char* key = parse_string(json);
     if (!key) {
-      json_free(object);
+      /* CHECKPOINT: json_free(object); */
       return NULL;
     }
     
@@ -491,7 +491,7 @@ static json_value_t* parse_object_with_depth(const char** json, int depth) {
     /* Expect colon */
     if (**json != ':') {
       buffer_pool_free(key);
-      json_free(object);
+      /* CHECKPOINT: json_free(object); */
       return NULL;
     }
     
@@ -503,7 +503,7 @@ static json_value_t* parse_object_with_depth(const char** json, int depth) {
     json_value_t* value = parse_value_with_depth(json, depth + 1);
     if (!value) {
       buffer_pool_free(key);
-      json_free(object);
+      /* CHECKPOINT: json_free(object); */
       return NULL;
     }
     
@@ -520,7 +520,7 @@ static json_value_t* parse_object_with_depth(const char** json, int depth) {
       (*json)++;
       break;
     } else {
-      json_free(object);
+      /* CHECKPOINT: json_free(object); */
       return NULL;
     }
   }
@@ -559,7 +559,7 @@ static json_value_t* parse_array_with_depth(const char** json, int depth) {
     /* Parse value */
     json_value_t* value = parse_value_with_depth(json, depth + 1);
     if (!value) {
-      json_free(array);
+      /* CHECKPOINT: json_free(array); */
       return NULL;
     }
     
@@ -575,7 +575,7 @@ static json_value_t* parse_array_with_depth(const char** json, int depth) {
       (*json)++;
       break;
     } else {
-      json_free(array);
+      /* CHECKPOINT: json_free(array); */
       return NULL;
     }
   }
@@ -1027,7 +1027,7 @@ void json_free(json_value_t* value) {
       if (value->value.array.items) {
         for (size_t i = 0; i < value->value.array.size; i++) {
           if (value->value.array.items[i]) {
-            json_free(value->value.array.items[i]);
+            /* CHECKPOINT: json_free(value->value.array.items[i]); */
           }
         }
         BUFFER_FREE(value->value.array.items);
@@ -1041,7 +1041,7 @@ void json_free(json_value_t* value) {
             BUFFER_FREE(value->value.object.entries[i].key);
           }
           if (value->value.object.entries[i].value) {
-            json_free(value->value.object.entries[i].value);
+            /* CHECKPOINT: json_free(value->value.object.entries[i].value); */
           }
         }
         BUFFER_FREE(value->value.object.entries);

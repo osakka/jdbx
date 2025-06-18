@@ -115,6 +115,7 @@ api_route_t routes[] = {
   /* Unified documents routes */
   {"/api/documents", HTTP_GET, api_handle_unified_documents_query, 1},
   {"/api/documents", HTTP_POST, api_handle_unified_documents_create, 1},
+  {"/api/documents/query", HTTP_POST, api_handle_unified_documents_query, 1},
   {"/api/documents/", HTTP_GET, api_handle_unified_document_get, 1},
   {"/api/documents/", HTTP_PUT, api_handle_unified_document_update, 1},
   {"/api/documents/", HTTP_DELETE, api_handle_unified_document_delete, 1},
@@ -433,7 +434,7 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
   /* Create a copy of the query string to work with */
   char* query_copy = BUFFER_STRDUP(query_string);
   if (!query_copy) {
-    json_free(obj);
+    /* CHECKPOINT: json_free(obj); */
     return NULL;
   }
   
@@ -689,24 +690,29 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   }
   
   /* Create memory checkpoint for this request */
-  /* LOG_DEBUG("About to create memory checkpoint for request"); */
-  memory_checkpoint_t* request_checkpoint = NULL; /* DISABLED - causing memory corruption with CORS headers */
-  /* if (request_checkpoint) {
-    LOG_DEBUG("Created memory checkpoint %p for API request: %s %s", 
+  memory_checkpoint_t* request_checkpoint = memory_checkpoint_create();
+  if (request_checkpoint) {
+    if (g_logger) LOG_DEBUG("Created memory checkpoint %p for API request: %s %s", 
               request_checkpoint,
               request->method == HTTP_GET ? "GET" : 
               request->method == HTTP_POST ? "POST" : 
               request->method == HTTP_PUT ? "PUT" : 
               request->method == HTTP_DELETE ? "DELETE" : "UNKNOWN",
               request->path ? request->path : "<null>");
-  } */
-  if (!request_checkpoint) {
-    /* LOG_WARNING("Failed to create memory checkpoint for request"); */
+  } else {
+    if (g_logger) LOG_WARNING("Failed to create memory checkpoint for request");
   }
   
   if (!request->path) {
     if (g_logger) LOG_ERROR("API dispatch failed: Request has NULL path.");
     printf("API dispatch failed: Request has NULL path\n");
+    
+    /* Rewind checkpoint before returning error */
+    if (request_checkpoint) {
+        memory_checkpoint_rewind(request_checkpoint);
+        request_checkpoint = NULL;
+    }
+    
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Internal server error\"}", "application/json");
   }
@@ -734,6 +740,12 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
     add_response_header(response, "Access-Control-Allow-Headers: Content-Type, Authorization");
     add_response_header(response, "Access-Control-Allow-Credentials: true");
     add_response_header(response, "Access-Control-Max-Age: 86400");
+    
+    /* Commit checkpoint for successful OPTIONS response */
+    if (request_checkpoint) {
+        memory_checkpoint_commit(request_checkpoint);
+        request_checkpoint = NULL;
+    }
     
     return response;
   }
@@ -858,7 +870,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -866,7 +878,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   /* Extract refresh token */
   json_value_t* refresh_token_val = json_object_get(body, "refresh_token");
   if (!refresh_token_val || refresh_token_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Refresh token required\"}", "application/json");
   }
@@ -879,13 +891,13 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
     if (g_logger) {
       LOG_ERROR("Invalid refresh token or token expired.");
     }
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_UNAUTHORIZED,
                  "{\"error\":\"Invalid or expired refresh token\"}", "application/json");
   }
   
   if (!user_id) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to extract user ID from token\"}", "application/json");
   }
@@ -894,7 +906,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   rbac_user_t* user = rbac_get_user(ctx->rbac, user_id);
   if (!user) {
     BUFFER_FREE(user_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"User not found\"}", "application/json");
   }
@@ -914,7 +926,7 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
     if (g_logger) {
       LOG_ERROR("create new token pair.");
     }
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to create tokens\"}", "application/json");
   }
@@ -925,11 +937,11 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   
   /* Free resources */
   BUFFER_FREE(response_str); /* We'll stringify again below */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   /* Generate the final response string */
   response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -953,7 +965,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     LOG_ERROR("Failed to parse body or body not object.");
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -969,7 +981,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
     LOG_ERROR("Missing or invalid username/password.");
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username and password required\"}", "application/json");
   }
@@ -983,7 +995,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   /* Check if user already exists */
   if (rbac_get_user_by_username(ctx->rbac, username)) {
     TRACE_API("User already exists.");
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username already exists\"}", "application/json");
   }
@@ -998,7 +1010,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   
   if (!user) {
     LOG_ERROR("Failed to create user.");
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create user\"}", "application/json");
   }
@@ -1011,8 +1023,8 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_object_set(response, "username", json_create_string(user->username));
   
   char* response_str = json_stringify(response);
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   
   TRACE_API("Registration successful, returning response.");
   
@@ -1103,7 +1115,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -1111,7 +1123,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   /* Extract collection name */
   json_value_t* name_val = json_object_get(body, "name");
   if (!name_val || name_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Collection name required\"}", "application/json");
   }
@@ -1135,7 +1147,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   /* 1. Check if trying to create in system library - admin only */
   if (library && strcmp(library, "system") == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       if (session_library) BUFFER_FREE(session_library);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system library\"}", "application/json");
@@ -1148,7 +1160,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
     if (strcmp(library, "default") != 0 && strcmp(library, username) != 0) {
       /* Check if user has explicit permission for this library */
       if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, library, RBAC_WRITE)) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         if (session_library) BUFFER_FREE(session_library);
         return create_http_response(HTTP_FORBIDDEN, 
                      "{\"error\":\"Can only create collections in 'default' library or your username library\"}", "application/json");
@@ -1159,7 +1171,7 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   /* 3. Check collection name - prevent system collection names */
   if (strncmp(name, "system_", 7) == 0 || strncmp(name, "_system", 7) == 0) {
     if (!rbac_db_check_permission(ctx->db, user_id, RBAC_COLLECTION, "system", RBAC_ADMIN)) {
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       if (session_library) BUFFER_FREE(session_library);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Admin permission required for system collection names\"}", "application/json");
@@ -1202,10 +1214,10 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   
   /* Insert collection metadata using virtual layer - single source of truth */
   json_value_t* result = virtual_insert(ctx->db, "collection", library, "collections", coll_doc, "system");
-  json_free(coll_doc);
+  /* CHECKPOINT: json_free(coll_doc); */
   
   if (!result) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create collection metadata\"}", "application/json");
   }
@@ -1219,8 +1231,8 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   }
   
   char* response_str = json_stringify(result);
-  json_free(result);
-  json_free(body);
+  /* CHECKPOINT: json_free(result); */
+  /* CHECKPOINT: json_free(body); */
   
   /* Free session library if allocated */
   if (session_library) {
@@ -1248,7 +1260,7 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
   if (request->body && strlen(request->body) > 0) {
     query = json_parse(request->body);
     if (query && query->type != JSON_OBJECT) {
-      json_free(query);
+      /* CHECKPOINT: json_free(query); */
       query = NULL;
     }
   } else if (request->query) {
@@ -1259,7 +1271,7 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
   /* Query documents from unified collection using virtual layer - single source of truth */
   json_value_t* documents = virtual_query(ctx->db, "document", "default", "documents", query);
   if (query) {
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
   }
   
   if (!documents) {
@@ -1269,7 +1281,7 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
   
   /* db_query_documents returns a complete response object, use it directly */
   char* response_str = json_stringify(documents);
-  json_free(documents);
+  /* CHECKPOINT: json_free(documents); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1289,7 +1301,7 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   /* Parse request body */
   json_value_t* parsed = json_parse(request->body);
   if (!parsed || parsed->type != JSON_OBJECT) {
-    if (parsed) json_free(parsed);
+    if (parsed) /* CHECKPOINT: json_free(parsed); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -1300,9 +1312,9 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   if (nested_doc) {
     /* Extract document from nested structure */
     doc = json_deep_copy(nested_doc);
-    json_free(parsed);
+    /* CHECKPOINT: json_free(parsed); */
     if (!doc || doc->type != JSON_OBJECT) {
-      if (doc) json_free(doc);
+      if (doc) /* CHECKPOINT: json_free(doc); */
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Invalid document in nested structure\"}", "application/json");
     }
@@ -1316,7 +1328,7 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   /* Resolve JavaScript functions in document */
   json_value_t* resolved_doc = js_resolve_document_functions(ctx->db, doc);
   if (resolved_doc) {
-    json_free(doc);
+    /* CHECKPOINT: json_free(doc); */
     doc = resolved_doc;
     LOG_DEBUG("Document functions resolved for unified document");
   }
@@ -1337,14 +1349,14 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   
   /* Validate document structure (now with auto-populated fields) */
   if (!validate_document_structure(doc)) {
-    json_free(doc);
+    /* CHECKPOINT: json_free(doc); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Document validation failed - please check required fields\"}", "application/json");
   }
   
   /* Insert document */
   json_value_t* result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc);
-  json_free(doc);
+  /* CHECKPOINT: json_free(doc); */
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1357,7 +1369,7 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
    * to just return errors without any manual cleanup! */
   
   char* response_str = json_stringify(result);
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1396,7 +1408,7 @@ static http_response_t* api_handle_unified_document_get(api_context_t* ctx, http
   }
   
   char* response_str = json_stringify(document);
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1435,7 +1447,7 @@ static http_response_t* api_handle_unified_document_update(api_context_t* ctx, h
   
   /* Update document using virtual layer - single source of truth */
   json_value_t* result = virtual_update(ctx->db, doc_id, update_doc);
-  json_free(update_doc);
+  /* CHECKPOINT: json_free(update_doc); */
   
   if (!result) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -1443,7 +1455,7 @@ static http_response_t* api_handle_unified_document_update(api_context_t* ctx, h
   }
   
   char* response_str = json_stringify(result);
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1479,7 +1491,7 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Document not found\"}", "application/json");
   }
-  json_free(existing);
+  /* CHECKPOINT: json_free(existing); */
   
   /* Delete document using virtual layer */
   if (virtual_delete(ctx->db, doc_id) != 1) {
@@ -1494,7 +1506,7 @@ static http_response_t* api_handle_unified_document_delete(api_context_t* ctx, h
   json_object_set(response, "id", json_create_string(doc_id));
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1581,7 +1593,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   if (request->body && strlen(request->body) > 0) {
     query = json_parse(request->body);
     if (query && query->type != JSON_OBJECT) {
-      json_free(query);
+      /* CHECKPOINT: json_free(query); */
       query = NULL;
     }
   } else if (request->query) {
@@ -1633,7 +1645,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
           }
         }
       }
-      json_free(keys);
+      /* CHECKPOINT: json_free(keys); */
     }
   }
   
@@ -1641,10 +1653,10 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   
   /* Query the unified documents collection - single source of truth */
   documents = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, unified_query);
-  json_free(unified_query);
+  /* CHECKPOINT: json_free(unified_query); */
   
   if (query) {
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
   }
   
   BUFFER_FREE(library_name);
@@ -1657,7 +1669,7 @@ http_response_t* api_handle_documents_query(api_context_t* ctx, http_request_t* 
   
   /* db_query_documents returns a complete response object, use it directly */
   char* response_str = json_stringify(documents);
-  json_free(documents);
+  /* CHECKPOINT: json_free(documents); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1794,7 +1806,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   BUFFER_FREE(field_copy);
   
   if (!field_value) {
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Field not found\"}", "application/json");
   }
@@ -1802,7 +1814,7 @@ http_response_t* api_handle_document_field_access(api_context_t* ctx, http_reque
   LOG_DEBUG("Field access: found field value, creating response");
   
   /* Just return a simple success message for now to test if the crash is in json handling */
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   
   char response_buffer[512];
   snprintf(response_buffer, sizeof(response_buffer), 
@@ -1903,7 +1915,7 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   BUFFER_FREE(path_copy);
   
   if (!field_value) {
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Field not found\"}", "application/json");
   }
@@ -1914,8 +1926,8 @@ http_response_t* api_handle_library_document_field_access(api_context_t* ctx, ht
   json_object_set(response, "value", json_clone(field_value));
   
   char* response_str = json_stringify(response);
-  json_free(response);
-  json_free(document);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(document); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -1965,7 +1977,7 @@ http_response_t* api_handle_document_get(api_context_t* ctx, http_request_t* req
   
   /* Create response */
   char* response_str = json_stringify(document);
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -2098,7 +2110,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   /* Parse document */
   json_value_t* document = json_parse(request->body);
   if (!document || document->type != JSON_OBJECT) {
-    if (document) json_free(document);
+    if (document) /* CHECKPOINT: json_free(document); */
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document\"}", "application/json");
@@ -2107,7 +2119,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   /* Resolve JavaScript functions in document */
   json_value_t* resolved_document = js_resolve_document_functions(ctx->db, document);
   if (resolved_document) {
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
     document = resolved_document;
     LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
@@ -2141,7 +2153,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
     json_value_t* existing = virtual_get(ctx->db, doc_id);
     if (existing) {
       /* Document exists, update it */
-      json_free(existing);
+      /* CHECKPOINT: json_free(existing); */
       result = virtual_update(ctx->db, doc_id, document);
       
       if (!result) {
@@ -2167,7 +2179,7 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   
   /* Create response */
   char* response_str = json_stringify(result);
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -2272,7 +2284,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
                  "{\"error\":\"Invalid JSON: Failed to parse request body\"}", "application/json");
   }
   if (document->type != JSON_OBJECT) {
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document: Expected JSON object, got array or primitive value\"}", "application/json");
@@ -2281,7 +2293,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   /* Resolve JavaScript functions in document */
   json_value_t* resolved_document = js_resolve_document_functions(ctx->db, document);
   if (resolved_document) {
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
     document = resolved_document;
     LOG_DEBUG("Document functions resolved for collection '%s'", collection_name);
   }
@@ -2305,7 +2317,7 @@ http_response_t* api_handle_document_update(api_context_t* ctx, http_request_t* 
   
   /* Create response */
   char* response_str = json_stringify(result);
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -2455,7 +2467,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   json_object_set(users_query, "library", json_create_string("system"));
   
   json_value_t* users_results = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, users_query);
-  json_free(users_query);
+  /* CHECKPOINT: json_free(users_query); */
   
   if (!users_results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -2464,7 +2476,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   
   json_value_t* users_docs = json_object_get(users_results, "documents");
   if (!users_docs || users_docs->type != JSON_ARRAY) {
-    json_free(users_results);
+    /* CHECKPOINT: json_free(users_results); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Invalid users response\"}", "application/json");
   }
@@ -2472,7 +2484,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   /* Create a JSON array of users */
   json_value_t* users_array = json_create_array();
   if (!users_array) {
-    json_free(users_results);
+    /* CHECKPOINT: json_free(users_results); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create users array\"}", "application/json");
   }
@@ -2515,7 +2527,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
     }
   }
   
-  json_free(users_results);
+  /* CHECKPOINT: json_free(users_results); */
   
   /* Create response object */
   json_value_t* response = json_create_object();
@@ -2525,7 +2537,7 @@ http_response_t* api_handle_users_list(api_context_t* ctx, http_request_t* reque
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -2644,7 +2656,7 @@ http_response_t* api_handle_user_get(api_context_t* ctx, http_request_t* request
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   rbac_free_user(user);
   
   /* Create and return response */
@@ -2695,7 +2707,7 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -2707,7 +2719,7 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   
   if (!username_val || username_val->type != JSON_STRING || 
     !password_val || password_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username and password are required\"}", "application/json");
   }
@@ -2717,20 +2729,20 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   
   /* Validate input */
   if (strlen(username) < 3) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username must be at least 3 characters long\"}", "application/json");
   }
   
   if (strlen(password) < 8) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Password must be at least 8 characters long\"}", "application/json");
   }
   
   /* Check if username already exists */
   if (rbac_get_user_by_username(ctx->rbac, username)) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_CONFLICT, 
                  "{\"error\":\"Username already exists\"}", "application/json");
   }
@@ -2738,7 +2750,7 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   /* Create user */
   rbac_user_t* user = rbac_create_user(ctx->rbac, username, password);
   if (!user) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create user\"}", "application/json");
   }
@@ -2779,8 +2791,8 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   rbac_free_user(user);
   
   /* Create and return response */
@@ -2845,7 +2857,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     jwt_free(jwt);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -2854,7 +2866,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   /* Check if user exists */
   rbac_user_t* user = rbac_get_user(ctx->rbac, target_user_id);
   if (!user) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     jwt_free(jwt);
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"User not found\"}", "application/json");
@@ -2872,11 +2884,11 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   json_object_set(user_query, "library", json_create_string("system"));
   
   json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-  json_free(user_query);
+  /* CHECKPOINT: json_free(user_query); */
   
   if (!user_result) {
     rbac_free_user(user);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     jwt_free(jwt);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query user from database\"}", "application/json");
@@ -2885,9 +2897,9 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   json_value_t* user_docs = json_object_get(user_result, "documents");
   if (!user_docs || user_docs->type != JSON_ARRAY || user_docs->value.array.size == 0) {
     rbac_free_user(user);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     jwt_free(jwt);
-    json_free(user_result);
+    /* CHECKPOINT: json_free(user_result); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to find user in database\"}", "application/json");
   }
@@ -2895,9 +2907,9 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   json_value_t* user_obj = json_array_get(user_docs, 0);
   if (!user_obj || user_obj->type != JSON_OBJECT) {
     rbac_free_user(user);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     jwt_free(jwt);
-    json_free(user_result);
+    /* CHECKPOINT: json_free(user_result); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Invalid user document\"}", "application/json");
   }
@@ -2909,7 +2921,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     /* Validate username */
     if (strlen(new_username) < 3) {
       rbac_free_user(user);
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       jwt_free(jwt);
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Username must be at least 3 characters long\"}", "application/json");
@@ -2920,7 +2932,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     if (existing_user && strcmp(existing_user->id, target_user_id) != 0) {
       rbac_free_user(user);
       rbac_free_user(existing_user);
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       jwt_free(jwt);
       return create_http_response(HTTP_CONFLICT, 
                    "{\"error\":\"Username already exists\"}", "application/json");
@@ -2941,7 +2953,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     /* Validate password */
     if (strlen(new_password) < 8) {
       rbac_free_user(user);
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       jwt_free(jwt);
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Password must be at least 8 characters long\"}", "application/json");
@@ -2952,7 +2964,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     
     if (!password_hash) {
       rbac_free_user(user);
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       jwt_free(jwt);
       return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                    "{\"error\":\"Failed to hash password\"}", "application/json");
@@ -2971,7 +2983,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
     if (!rbac_check_permission(ctx->rbac, requester_user_id, RBAC_ROLE, "*", RBAC_ADMIN) &&
       !rbac_check_permission(ctx->rbac, requester_user_id, RBAC_USER, "*", RBAC_ADMIN)) {
       rbac_free_user(user);
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       jwt_free(jwt);
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Permission denied for role management\"}", "application/json");
@@ -2998,7 +3010,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
         json_object_set(role_query, "library", json_create_string("system"));
         
         json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-        json_free(role_query);
+        /* CHECKPOINT: json_free(role_query); */
         
         if (role_result) {
           json_value_t* role_docs = json_object_get(role_result, "documents");
@@ -3029,7 +3041,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
               }
             }
           }
-          json_free(role_result);
+          /* CHECKPOINT: json_free(role_result); */
         }
       }
     }
@@ -3050,7 +3062,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
         json_object_set(role_query, "library", json_create_string("system"));
         
         json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-        json_free(role_query);
+        /* CHECKPOINT: json_free(role_query); */
         
         if (role_result) {
           json_value_t* role_docs = json_object_get(role_result, "documents");
@@ -3091,7 +3103,7 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
               }
             }
           }
-          json_free(role_result);
+          /* CHECKPOINT: json_free(role_result); */
         }
       }
     }
@@ -3131,10 +3143,10 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   
   /* Free resources */
   rbac_free_user(user);
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   jwt_free(jwt);
-  json_free(user_result);
+  /* CHECKPOINT: json_free(user_result); */
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -3205,7 +3217,7 @@ http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* requ
   json_object_set(user_query, "library", json_create_string("system"));
   
   json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-  json_free(user_query);
+  /* CHECKPOINT: json_free(user_query); */
   
   if (!user_result) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -3214,11 +3226,11 @@ http_response_t* api_handle_user_delete(api_context_t* ctx, http_request_t* requ
   
   json_value_t* user_docs = json_object_get(user_result, "documents");
   if (!user_docs || user_docs->type != JSON_ARRAY || user_docs->value.array.size == 0) {
-    json_free(user_result);
+    /* CHECKPOINT: json_free(user_result); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"User not found\"}", "application/json");
   }
-  json_free(user_result);
+  /* CHECKPOINT: json_free(user_result); */
   
   /* Delete user */
   if (!rbac_delete_user(ctx->rbac, target_user_id)) {
@@ -3277,7 +3289,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   json_object_set(roles_query, "library", json_create_string("system"));
   
   json_value_t* roles_results = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, roles_query);
-  json_free(roles_query);
+  /* CHECKPOINT: json_free(roles_query); */
   
   if (!roles_results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -3286,7 +3298,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   
   json_value_t* roles_docs = json_object_get(roles_results, "documents");
   if (!roles_docs || roles_docs->type != JSON_ARRAY) {
-    json_free(roles_results);
+    /* CHECKPOINT: json_free(roles_results); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Invalid roles response\"}", "application/json");
   }
@@ -3294,7 +3306,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   /* Create a JSON array of roles */
   json_value_t* roles_array = json_create_array();
   if (!roles_array) {
-    json_free(roles_results);
+    /* CHECKPOINT: json_free(roles_results); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create roles array\"}", "application/json");
   }
@@ -3355,7 +3367,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
     }
   }
   
-  json_free(roles_results);
+  /* CHECKPOINT: json_free(roles_results); */
   
   /* Create response object */
   json_value_t* response = json_create_object();
@@ -3365,7 +3377,7 @@ http_response_t* api_handle_roles_list(api_context_t* ctx, http_request_t* reque
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -3465,7 +3477,7 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
   json_object_set(role_query, "library", json_create_string("system"));
   
   json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-  json_free(role_query);
+  /* CHECKPOINT: json_free(role_query); */
   
   if (role_result) {
     json_value_t* role_docs = json_object_get(role_result, "documents");
@@ -3488,7 +3500,7 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
               json_object_set(user_query, "library", json_create_string("system"));
               
               json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-              json_free(user_query);
+              /* CHECKPOINT: json_free(user_query); */
               
               if (user_result) {
                 json_value_t* user_docs = json_object_get(user_result, "documents");
@@ -3507,14 +3519,14 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
                     }
                   }
                 }
-                json_free(user_result);
+                /* CHECKPOINT: json_free(user_result); */
               }
             }
           }
         }
       }
     }
-    json_free(role_result);
+    /* CHECKPOINT: json_free(role_result); */
   }
   
   json_object_set(role_obj, "users", users_array);
@@ -3525,7 +3537,7 @@ http_response_t* api_handle_role_get(api_context_t* ctx, http_request_t* request
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   rbac_free_role(role);
   
   /* Create and return response */
@@ -3576,7 +3588,7 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -3586,7 +3598,7 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   json_value_t* permissions_val = json_object_get(body, "permissions");
   
   if (!name_val || name_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Role name is required\"}", "application/json");
   }
@@ -3595,7 +3607,7 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   
   /* Validate input */
   if (strlen(name) < 2) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
   }
@@ -3607,23 +3619,23 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   json_object_set(role_query, "name", json_create_string(name));
   
   json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-  json_free(role_query);
+  /* CHECKPOINT: json_free(role_query); */
   
   if (role_result) {
     json_value_t* role_docs = json_object_get(role_result, "documents");
     if (role_docs && role_docs->type == JSON_ARRAY && role_docs->value.array.size > 0) {
-      json_free(role_result);
-      json_free(body);
+      /* CHECKPOINT: json_free(role_result); */
+      /* CHECKPOINT: json_free(body); */
       return create_http_response(HTTP_CONFLICT, 
                    "{\"error\":\"Role name already exists\"}", "application/json");
     }
-    json_free(role_result);
+    /* CHECKPOINT: json_free(role_result); */
   }
   
   /* Create role */
   rbac_role_t* role = rbac_create_role(ctx->rbac, name);
   if (!role) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create role\"}", "application/json");
   }
@@ -3731,8 +3743,8 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   rbac_free_role(role);
   
   /* Create and return response */
@@ -3797,7 +3809,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   json_object_set(role_query, "library", json_create_string("system"));
   
   json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-  json_free(role_query);
+  /* CHECKPOINT: json_free(role_query); */
   
   if (!role_result) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -3806,14 +3818,14 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   
   json_value_t* role_docs = json_object_get(role_result, "documents");
   if (!role_docs || role_docs->type != JSON_ARRAY || role_docs->value.array.size == 0) {
-    json_free(role_result);
+    /* CHECKPOINT: json_free(role_result); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Role not found\"}", "application/json");
   }
   
   json_value_t* role_json = json_array_get(role_docs, 0);
   if (!role_json || role_json->type != JSON_OBJECT) {
-    json_free(role_result);
+    /* CHECKPOINT: json_free(role_result); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Invalid role document\"}", "application/json");
   }
@@ -3821,7 +3833,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -3837,7 +3849,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
     
     /* Validate name */
     if (strlen(new_name) < 2) {
-      json_free(body);
+      /* CHECKPOINT: json_free(body); */
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Role name must be at least 2 characters long\"}", "application/json");
     }
@@ -3849,7 +3861,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
     json_object_set(name_query, "name", json_create_string(new_name));
     
     json_value_t* name_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, name_query);
-    json_free(name_query);
+    /* CHECKPOINT: json_free(name_query); */
     
     if (name_result) {
       json_value_t* name_docs = json_object_get(name_result, "documents");
@@ -3859,16 +3871,16 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
           if (existing_role && existing_role->type == JSON_OBJECT) {
             const char* existing_uuid = json_object_get_string(existing_role, "uuid");
             if (existing_uuid && strcmp(existing_uuid, role_id) != 0) {
-              json_free(name_result);
-              json_free(body);
-              json_free(role_result);
+              /* CHECKPOINT: json_free(name_result); */
+              /* CHECKPOINT: json_free(body); */
+              /* CHECKPOINT: json_free(role_result); */
               return create_http_response(HTTP_CONFLICT, 
                            "{\"error\":\"Role name already exists\"}", "application/json");
             }
           }
         }
       }
-      json_free(name_result);
+      /* CHECKPOINT: json_free(name_result); */
     }
     
     /* Update name */
@@ -3957,7 +3969,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
         json_object_set(user_query, "library", json_create_string("system"));
         
         json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-        json_free(user_query);
+        /* CHECKPOINT: json_free(user_query); */
         
         if (user_result) {
           json_value_t* user_docs = json_object_get(user_result, "documents");
@@ -3987,7 +3999,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
               }
             }
           }
-          json_free(user_result);
+          /* CHECKPOINT: json_free(user_result); */
         }
       }
     }
@@ -4018,7 +4030,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
         json_object_set(user_query, "library", json_create_string("system"));
         
         json_value_t* user_result = virtual_query(ctx->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-        json_free(user_query);
+        /* CHECKPOINT: json_free(user_query); */
         
         if (user_result) {
           json_value_t* user_docs = json_object_get(user_result, "documents");
@@ -4058,7 +4070,7 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
               }
             }
           }
-          json_free(user_result);
+          /* CHECKPOINT: json_free(user_result); */
         }
       }
     }
@@ -4122,10 +4134,10 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   }
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   rbac_free_role(role);
-  json_free(role_result);
+  /* CHECKPOINT: json_free(role_result); */
   
   /* Create and return response */
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -4189,7 +4201,7 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   json_object_set(role_query, "library", json_create_string("system"));
   
   json_value_t* role_result = virtual_query(ctx->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-  json_free(role_query);
+  /* CHECKPOINT: json_free(role_query); */
   
   if (!role_result) {
     return create_http_response(HTTP_NOT_FOUND, 
@@ -4198,7 +4210,7 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
   
   json_value_t* role_docs = json_object_get(role_result, "documents");
   if (!role_docs || role_docs->type != JSON_ARRAY || role_docs->value.array.size == 0) {
-    json_free(role_result);
+    /* CHECKPOINT: json_free(role_result); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Role not found\"}", "application/json");
   }
@@ -4209,12 +4221,12 @@ http_response_t* api_handle_role_delete(api_context_t* ctx, http_request_t* requ
     json_value_t* name_val = json_object_get(role_json, "name");
     if (name_val && name_val->type == JSON_STRING && 
       strcmp(name_val->value.string, "admin") == 0) {
-      json_free(role_result);
+      /* CHECKPOINT: json_free(role_result); */
       return create_http_response(HTTP_FORBIDDEN, 
                    "{\"error\":\"Cannot delete the admin role\"}", "application/json");
     }
   }
-  json_free(role_result);
+  /* CHECKPOINT: json_free(role_result); */
   
   /* Delete role */
   if (!rbac_delete_role(ctx->rbac, role_id)) {
@@ -4307,7 +4319,7 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   if (!filtered_metrics) {
     if (type_filter) BUFFER_FREE(type_filter);
     if (name_filter) BUFFER_FREE(name_filter);
-    json_free(root);
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4385,8 +4397,8 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   if (!filtered_obj) {
     if (type_filter) BUFFER_FREE(type_filter);
     if (name_filter) BUFFER_FREE(name_filter);
-    json_free(filtered_metrics);
-    json_free(root);
+    /* CHECKPOINT: json_free(filtered_metrics); */
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4400,8 +4412,8 @@ http_response_t* api_handle_metrics_get(api_context_t* ctx, http_request_t* requ
   /* Clean up */
   if (type_filter) BUFFER_FREE(type_filter);
   if (name_filter) BUFFER_FREE(name_filter);
-  json_free(filtered_obj); /* This will also free filtered_metrics */
-  json_free(root);
+  /* CHECKPOINT: json_free(filtered_obj); */ /* This will also free filtered_metrics */
+  /* CHECKPOINT: json_free(root); */
   BUFFER_FREE(metrics_json);
   
   if (!filtered_json) {
@@ -4454,7 +4466,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   size_t buffer_size = 10240; /* Start with 10KB buffer */
   char* prom_buffer = (char*)BUFFER_ALLOC(buffer_size);
   if (!prom_buffer) {
-    json_free(root);
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4588,7 +4600,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
         char* new_buffer = (char*)BUFFER_REALLOC(prom_buffer, buffer_size);
         if (!new_buffer) {
           BUFFER_FREE(prom_buffer);
-          json_free(root);
+          /* CHECKPOINT: json_free(root); */
           BUFFER_FREE(metrics_json);
           return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                        "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4603,7 +4615,7 @@ http_response_t* api_handle_metrics(api_context_t* ctx, http_request_t* request)
   
   /* Clean up */
   BUFFER_FREE(prom_buffer);
-  json_free(root);
+  /* CHECKPOINT: json_free(root); */
   BUFFER_FREE(metrics_json);
   
   return response;
@@ -4642,7 +4654,7 @@ http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* r
   /* Extract export path */
   json_value_t* export_path_val = json_object_get(req_body, "export_path");
   if (!export_path_val || export_path_val->type != JSON_STRING) {
-    json_free(req_body);
+    /* CHECKPOINT: json_free(req_body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"export_path is required in request body\"}", 
                  "application/json");
@@ -4654,7 +4666,7 @@ http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* r
   int result = metrics_registry_export(g_metrics_registry, export_path);
   
   /* Clean up */
-  json_free(req_body);
+  /* CHECKPOINT: json_free(req_body); */
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -4707,7 +4719,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   /* Create a new JSON object for the response */
   json_value_t* response_obj = json_create_object();
   if (!response_obj) {
-    json_free(root);
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4720,12 +4732,12 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   json_value_t* histograms_array = json_create_array();
   
   if (!counters_array || !gauges_array || !timers_array || !histograms_array) {
-    if (counters_array) json_free(counters_array);
-    if (gauges_array) json_free(gauges_array);
-    if (timers_array) json_free(timers_array);
-    if (histograms_array) json_free(histograms_array);
-    json_free(response_obj);
-    json_free(root);
+    if (counters_array) /* CHECKPOINT: json_free(counters_array); */
+    if (gauges_array) /* CHECKPOINT: json_free(gauges_array); */
+    if (timers_array) /* CHECKPOINT: json_free(timers_array); */
+    if (histograms_array) /* CHECKPOINT: json_free(histograms_array); */
+    /* CHECKPOINT: json_free(response_obj); */
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -4773,7 +4785,7 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
       } else if (strcmp(type_val->value.string, "histogram") == 0) {
         json_array_append(histograms_array, metric_info);
       } else {
-        json_free(metric_info); /* Unknown type, free the object */
+        /* CHECKPOINT: json_free(metric_info); */ /* Unknown type, free the object */
       }
     }
   }
@@ -4788,8 +4800,8 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   char* response_json = json_stringify(response_obj);
   
   /* Clean up JSON objects */
-  json_free(response_obj);
-  json_free(root);
+  /* CHECKPOINT: json_free(response_obj); */
+  /* CHECKPOINT: json_free(root); */
   BUFFER_FREE(metrics_json);
   
   if (!response_json) {
@@ -4855,6 +4867,6 @@ static char* get_session_library(api_context_t* ctx, http_request_t* request) {
     library = BUFFER_STRDUP("default");
   }
   
-  json_free(session);
+  /* CHECKPOINT: json_free(session); */
   return library;
 }

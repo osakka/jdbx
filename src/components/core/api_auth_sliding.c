@@ -44,7 +44,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   
   if (g_logger) LOG_DEBUG("Querying sessions for token: %.30s...", token);
   json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, RBAC_SYSTEM_LIBRARY, VIRTUAL_COLLECTION_SESSIONS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     if (g_logger) LOG_DEBUG("No results from session query");
@@ -55,7 +55,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
     if (g_logger) LOG_DEBUG("No active sessions found for token.");
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return;
   }
   
@@ -66,7 +66,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   
   if (!session_id_val || session_id_val->type != JSON_STRING ||
       !expires_val || expires_val->type != JSON_STRING) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return;
   }
   
@@ -99,7 +99,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
           LOG_DEBUG("Rate limiting: Skipping session update for %s (last updated %ld seconds ago)",
                     session_id, now - last_update);
         }
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
         return;
       }
     }
@@ -108,7 +108,7 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
   /* Get the full session document first to preserve all fields */
   json_value_t* full_session = json_deep_copy(session);
   if (!full_session) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return;
   }
   
@@ -131,15 +131,15 @@ static void extend_session_expiration(api_context_t* ctx, const char* token) {
     if (g_logger) {
       LOG_DEBUG("Extended session %s expiration to %s", session_id, expire_time);
     }
-    json_free(update_result);
+    /* CHECKPOINT: json_free(update_result); */
   } else {
     if (g_logger) {
       LOG_ERROR("Failed to update session %s expiration - sliding window disabled", session_id);
     }
   }
   
-  json_free(full_session);
-  json_free(results);
+  /* CHECKPOINT: json_free(full_session); */
+  /* CHECKPOINT: json_free(results); */
 }
 
 /* Enhanced authentication function with sliding sessions and comprehensive logging */
@@ -295,7 +295,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   json_object_set(session_query, "active", json_create_boolean(1));
   
   json_value_t* session_results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, RBAC_SYSTEM_LIBRARY, VIRTUAL_COLLECTION_SESSIONS, session_query);
-  json_free(session_query);
+  /* CHECKPOINT: json_free(session_query); */
   
   int session_found = 0;
   const char* session_user = NULL;
@@ -333,7 +333,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
         session_last_seen = buffer_pool_strdup(last_seen_val->value.string);
       }
     }
-    json_free(session_results);
+    /* CHECKPOINT: json_free(session_results); */
   }
   
   if (g_logger) {

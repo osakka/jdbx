@@ -37,7 +37,7 @@ json_value_t* virtual_create_user(database_t* db, const char* username,
     json_value_t* existing = virtual_get_user_by_name(db, username, library);
     if (existing) {
         LOG_ERROR("User already exists: %s in library %s", username, library);
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         return NULL;
     }
     
@@ -56,7 +56,7 @@ json_value_t* virtual_create_user(database_t* db, const char* username,
     
     /* Use generic virtual_insert from database.c - single source of truth */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, library, "users", user_doc, username);
-    json_free(user_doc);
+    /* CHECKPOINT: json_free(user_doc); */
     
     return result;
 }
@@ -90,7 +90,7 @@ json_value_t* virtual_get_user_by_name(database_t* db, const char* username,
     
     /* Query storage */
     json_value_t* result = storage_query_documents(db, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!result) {
         return NULL;
@@ -104,7 +104,7 @@ json_value_t* virtual_get_user_by_name(database_t* db, const char* username,
         user = json_clone(documents->value.array.items[0]);
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return user;
 }
 
@@ -149,7 +149,7 @@ json_value_t* virtual_update_user(database_t* db, const char* uuid,
     
     /* Update in storage */
     json_value_t* result = storage_update_document(db, uuid, user);
-    json_free(user);
+    /* CHECKPOINT: json_free(user); */
     
     return result;
 }
@@ -186,7 +186,7 @@ json_value_t* virtual_create_role(database_t* db, const char* name,
     json_value_t* existing = virtual_get_role_by_name(db, name, library);
     if (existing) {
         LOG_ERROR("Role already exists: %s in library %s", name, library);
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         return NULL;
     }
     
@@ -204,7 +204,7 @@ json_value_t* virtual_create_role(database_t* db, const char* name,
     
     /* Use generic virtual_insert from database.c - single source of truth */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, library, "roles", role_doc, "system");
-    json_free(role_doc);
+    /* CHECKPOINT: json_free(role_doc); */
     
     return result;
 }
@@ -236,7 +236,7 @@ json_value_t* virtual_get_role_by_name(database_t* db, const char* name,
     
     /* Use generic virtual_query from database.c - single source of truth */
     json_value_t* result = virtual_query(db, DOC_TYPE_NAME_ROLE, library ? library : "default", "roles", filters);
-    json_free(filters);
+    /* CHECKPOINT: json_free(filters); */
     
     if (!result) {
         return NULL;
@@ -250,7 +250,7 @@ json_value_t* virtual_get_role_by_name(database_t* db, const char* name,
         role = json_clone(documents->value.array.items[0]);
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return role;
 }
 
@@ -281,7 +281,7 @@ json_value_t* virtual_create_session(database_t* db, const char* user_uuid,
     /* Create session document */
     json_value_t* session_doc = json_create_object();
     if (!session_doc) {
-        json_free(user);
+        /* CHECKPOINT: json_free(user); */
         LOG_ERROR("Failed to create session document");
         return NULL;
     }
@@ -306,11 +306,11 @@ json_value_t* virtual_create_session(database_t* db, const char* user_uuid,
     strftime(expire_time, sizeof(expire_time), "%Y-%m-%dT%H:%M:%SZ", tm_info);
     json_object_set(session_doc, "expires_at", json_create_string(expire_time));
     
-    json_free(user);
+    /* CHECKPOINT: json_free(user); */
     
     /* Use generic virtual_insert from database.c - single source of truth */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_SESSION, "system", "sessions", session_doc, username);
-    json_free(session_doc);
+    /* CHECKPOINT: json_free(session_doc); */
     
     return result;
 }
@@ -330,7 +330,7 @@ json_value_t* virtual_get_session_by_token(database_t* db, const char* token) {
     
     /* Use generic virtual_query from database.c - single source of truth */
     json_value_t* result = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", "sessions", filters);
-    json_free(filters);
+    /* CHECKPOINT: json_free(filters); */
     
     if (!result) {
         return NULL;
@@ -344,6 +344,6 @@ json_value_t* virtual_get_session_by_token(database_t* db, const char* token) {
         session = json_clone(documents->value.array.items[0]);
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return session;
 }

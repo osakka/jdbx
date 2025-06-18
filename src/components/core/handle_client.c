@@ -376,7 +376,7 @@ void handle_client(void* client_data) {
   const size_t MAX_REQUEST_SIZE = 10 * 1024 * 1024; /* 🔧 FIX: 10MB max request size */
   
   /* Read until we have complete headers */
-  while (total_bytes_read < buffer_size - 1) {
+  while (total_bytes_read < (int)(buffer_size - 1)) {
     /* Check if we've exceeded maximum request time */
     if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
       if (g_logger) {
@@ -393,7 +393,13 @@ void handle_client(void* client_data) {
       client->client_fd = 0;
       goto cleanup;
     }
-    bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
+    /* 🔧 FIX: Limit read size for SSL compatibility */
+    size_t read_size = buffer_size - total_bytes_read - 1;
+    const size_t SSL_MAX_READ = 16384;  /* SSL typical buffer limit */
+    if (read_size > SSL_MAX_READ) {
+      read_size = SSL_MAX_READ;
+    }
+    bytes_read = client_read_data(client, buffer + total_bytes_read, read_size);
     
     if (bytes_read <= 0) {
       /* Handle non-blocking socket would-block case */
@@ -535,12 +541,81 @@ void handle_client(void* client_data) {
         }
         
         /* Continue reading until we have the complete body */
-        while (body_received < content_length && total_bytes_read < buffer_size - 1) {
-          int body_bytes = client_read_data(client, buffer + total_bytes_read, 
-                                          buffer_size - total_bytes_read - 1);
+        while (body_received < content_length && total_bytes_read < (int)(buffer_size - 1)) {
+          /* 🔧 FIX: Limit read size for SSL compatibility (16KB max) */
+          /* Calculate available space (already accounts for null terminator in while condition) */
+          size_t bytes_to_read = buffer_size - total_bytes_read - 1;
+          size_t bytes_remaining = content_length - body_received;
+          /* Only read what we actually need */
+          if (bytes_to_read > bytes_remaining) {
+            bytes_to_read = bytes_remaining;
+          }
+          /* SSL has internal buffer limits, typically 16KB */
+          const size_t SSL_MAX_READ = 16384;
+          if (bytes_to_read > SSL_MAX_READ) {
+            bytes_to_read = SSL_MAX_READ;
+          }
+          
+          int body_bytes = client_read_data(client, buffer + total_bytes_read, bytes_to_read);
+          
+          if (g_logger) {
+            LOG_DEBUG("Body read attempt: requested %zu bytes, got %d bytes (total: %d/%zu, body: %zu/%zu)",
+                     bytes_to_read, body_bytes, total_bytes_read, buffer_size, body_received, content_length);
+          }
+          
           if (body_bytes <= 0) {
+            /* Handle non-blocking socket would-block case */
+            if (body_bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+              /* Use select() to wait for data */
+              fd_set readfds;
+              struct timeval select_tv;
+              select_tv.tv_sec = 1;  /* 1 second timeout for select */
+              select_tv.tv_usec = 0;
+              
+              FD_ZERO(&readfds);
+              FD_SET(client_fd, &readfds);
+              
+              int select_result = select(client_fd + 1, &readfds, NULL, NULL, &select_tv);
+              if (select_result > 0) {
+                /* Data is available, continue the loop */
+                continue;
+              } else if (select_result == 0) {
+                /* Timeout - check total time and continue */
+                if (time(NULL) - request_start_time > MAX_REQUEST_TIME) {
+                  if (g_logger) {
+                    LOG_ERROR("Request body read timeout");
+                  }
+                  close(client_fd);
+                  client->client_fd = 0;
+                  goto cleanup;
+                }
+                continue;
+              }
+            }
+            
+            /* 🔧 FIX: Special handling for off-by-one SSL reads */
+            if (body_received == content_length - 1) {
+              /* We're only missing 1 byte - this often happens with chunked SSL sends */
+              /* Try one more small read */
+              if (g_logger) {
+                LOG_DEBUG("Missing 1 byte, attempting final read...");
+              }
+              
+              int final_byte = client_read_data(client, buffer + total_bytes_read, 1);
+              if (final_byte == 1) {
+                total_bytes_read += 1;
+                body_received += 1;
+                buffer[total_bytes_read] = '\0';
+                if (g_logger) {
+                  LOG_DEBUG("Successfully read final byte!");
+                }
+                continue;  /* Success - continue to process request */
+              }
+            }
+            
             if (g_logger) {
-              LOG_ERROR("Failed to read complete request body");
+              LOG_ERROR("Failed to read complete request body (received %zu of %zu bytes)", 
+                        body_received, content_length);
             }
             close(client_fd);
             client->client_fd = 0;
@@ -992,7 +1067,7 @@ void handle_client(void* client_data) {
       header_end = NULL;
       
       /* Read until we have complete headers */
-      while (total_bytes_read < buffer_size - 1) {
+      while (total_bytes_read < (int)(buffer_size - 1)) {
         bytes_read = client_read_data(client, buffer + total_bytes_read, buffer_size - total_bytes_read - 1);
         
         if (bytes_read <= 0) {
@@ -1060,7 +1135,7 @@ void handle_client(void* client_data) {
             }
             
             /* Continue reading until we have the complete body */
-            while (body_received < content_length && total_bytes_read < buffer_size - 1) {
+            while (body_received < content_length && total_bytes_read < (int)(buffer_size - 1)) {
               int body_bytes = client_read_data(client, buffer + total_bytes_read, 
                                               buffer_size - total_bytes_read - 1);
               if (body_bytes <= 0) {

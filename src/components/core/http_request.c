@@ -110,6 +110,15 @@ http_request_t* parse_http_request(const char* request_str) {
   
   /* Parse request line and headers */
   char* request_copy = BUFFER_STRDUP(request_str);
+  if (!request_copy) {
+    /* 🔧 FIX: Handle allocation failure for large requests */
+    if (g_logger) {
+      LOG_ERROR("Failed to allocate memory for request parsing");
+    }
+    BUFFER_FREE(request);
+    return NULL;
+  }
+  
   char* line = strtok(request_copy, "\r\n");
   
   if (line) {
@@ -151,11 +160,12 @@ http_request_t* parse_http_request(const char* request_str) {
     while (line && *line) {
       /* Content-Type header */
       if (strncasecmp(line, "Content-Type:", 13) == 0) {
-        request->content_type = BUFFER_STRDUP(line + 14);
-        /* Trim leading/trailing whitespace */
-        while (*request->content_type == ' ') {
-          request->content_type++;
+        char* value = line + 14;
+        /* Trim leading whitespace before allocation */
+        while (*value == ' ') {
+          value++;
         }
+        request->content_type = BUFFER_STRDUP(value);
       }
       
       /* Content-Length header */
@@ -168,38 +178,42 @@ http_request_t* parse_http_request(const char* request_str) {
       
       /* Authorization header */
       else if (strncasecmp(line, "Authorization:", 14) == 0) {
-        request->authorization = BUFFER_STRDUP(line + 15);
-        /* Trim leading/trailing whitespace */
-        while (*request->authorization == ' ') {
-          request->authorization++;
+        char* value = line + 15;
+        /* Trim leading whitespace before allocation */
+        while (*value == ' ') {
+          value++;
         }
+        request->authorization = BUFFER_STRDUP(value);
       }
       
       /* Cookie header */
       else if (strncasecmp(line, "Cookie:", 7) == 0) {
-        request->cookie_header = BUFFER_STRDUP(line + 8);
-        /* Trim leading/trailing whitespace */
-        while (*request->cookie_header == ' ') {
-          request->cookie_header++;
+        char* value = line + 8;
+        /* Trim leading whitespace before allocation */
+        while (*value == ' ') {
+          value++;
         }
+        request->cookie_header = BUFFER_STRDUP(value);
       }
       
       /* Origin header */
       else if (strncasecmp(line, "Origin:", 7) == 0) {
-        request->origin = BUFFER_STRDUP(line + 8);
-        /* Trim leading/trailing whitespace */
-        while (*request->origin == ' ') {
-          request->origin++;
+        char* value = line + 8;
+        /* Trim leading whitespace before allocation */
+        while (*value == ' ') {
+          value++;
         }
+        request->origin = BUFFER_STRDUP(value);
       }
       
       /* User-Agent header */
       else if (strncasecmp(line, "User-Agent:", 11) == 0) {
-        request->user_agent = BUFFER_STRDUP(line + 12);
-        /* Trim leading/trailing whitespace */
-        while (*request->user_agent == ' ') {
-          request->user_agent++;
+        char* value = line + 12;
+        /* Trim leading whitespace before allocation */
+        while (*value == ' ') {
+          value++;
         }
+        request->user_agent = BUFFER_STRDUP(value);
       }
       
       /* Connection header */

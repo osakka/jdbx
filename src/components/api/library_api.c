@@ -29,7 +29,7 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
   /* Query library documents using virtual layer - single source of truth */
   json_value_t* filters = json_create_object();
   json_value_t* results = virtual_query(ctx->db, "library", "system", "libraries", filters);
-  json_free(filters);
+  /* CHECKPOINT: json_free(filters); */
   
   if (!results) {
     /* If no documents collection, return empty list */
@@ -37,7 +37,7 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
     json_object_set(response, "libraries", json_create_array());
     
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
@@ -45,14 +45,14 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     
     /* Return empty array */
     json_value_t* response = json_create_object();
     json_object_set(response, "libraries", json_create_array());
     
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
@@ -61,10 +61,10 @@ http_response_t* api_handle_get_libraries(api_context_t* ctx, http_request_t* re
   json_value_t* response = json_create_object();
   json_object_set(response, "libraries", json_clone(documents));
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -86,7 +86,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   /* Get library name */
   json_value_t* name_val = json_object_get(body, "name");
   if (!name_val || name_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Library name required\"}", "application/json");
   }
@@ -96,7 +96,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   /* Validate library name */
   if (strlen(library_name) == 0 || strchr(library_name, '/') != NULL ||
       strchr(library_name, '\\') != NULL || strchr(library_name, '.') != NULL) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid library name\"}", "application/json");
   }
@@ -106,17 +106,17 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   json_value_t* filters = json_create_object();
   json_object_set(filters, "name", json_create_string(library_name));
   json_value_t* exists_results = virtual_query(ctx->db, "library", "system", "libraries", filters);
-  json_free(filters);
+  /* CHECKPOINT: json_free(filters); */
   
   if (exists_results) {
     json_value_t* existing_docs = json_object_get(exists_results, "documents");
     if (existing_docs && existing_docs->type == JSON_ARRAY && json_array_size(existing_docs) > 0) {
-      json_free(exists_results);
-      json_free(body);
+      /* CHECKPOINT: json_free(exists_results); */
+      /* CHECKPOINT: json_free(body); */
       return create_http_response(HTTP_CONFLICT,
                    "{\"error\":\"Library already exists\"}", "application/json");
     }
-    json_free(exists_results);
+    /* CHECKPOINT: json_free(exists_results); */
   }
   
   /* Get template name (optional) */
@@ -132,7 +132,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   json_value_t* template_filters = json_create_object();
   json_object_set(template_filters, "name", json_create_string(template_name));
   json_value_t* template_results = virtual_query(ctx->db, "library_template", "system", "templates", template_filters);
-  json_free(template_filters);
+  /* CHECKPOINT: json_free(template_filters); */
   
   if (template_results) {
     json_value_t* templates = json_object_get(template_results, "documents");
@@ -151,7 +151,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
         template_settings = json_clone(settings);
       }
     }
-    json_free(template_results);
+    /* CHECKPOINT: json_free(template_results); */
   }
   
   /* If no template found, use default collections */
@@ -196,11 +196,11 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
       
       json_value_t* col_result = virtual_insert(ctx->db, "collection", library_name, "collections", col_doc, "system");
       if (col_result) {
-        json_free(col_result);
+        /* CHECKPOINT: json_free(col_result); */
       } else {
         LOG_WARNING("Failed to create collection document %s in library %s", collections[i], library_name);
       }
-      json_free(col_doc);
+      /* CHECKPOINT: json_free(col_doc); */
     }
   } else {
     /* Create collection documents from template */
@@ -235,14 +235,14 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
         
         json_value_t* col_result = virtual_insert(ctx->db, "collection", library_name, "collections", col_doc, "system");
         if (col_result) {
-          json_free(col_result);
+          /* CHECKPOINT: json_free(col_result); */
         } else {
           LOG_WARNING("Failed to create collection document %s in library %s", col_name, library_name);
         }
-        json_free(col_doc);
+        /* CHECKPOINT: json_free(col_doc); */
       }
     }
-    json_free(template_collections);
+    /* CHECKPOINT: json_free(template_collections); */
   }
   
   /* Create library document in unified storage (system/libraries) */
@@ -270,15 +270,15 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   /* Save library document using virtual layer - single source of truth */
   json_value_t* result = virtual_insert(ctx->db, "library", "system", "libraries", lib_doc, "system");
   if (!result) {
-    json_free(lib_doc);
-    json_free(body);
+    /* CHECKPOINT: json_free(lib_doc); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to create library document\"}", "application/json");
   }
-  json_free(result);
-  json_free(lib_doc);
+  /* CHECKPOINT: json_free(result); */
+  /* CHECKPOINT: json_free(lib_doc); */
   
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   /* Return success response */
   json_value_t* response = json_create_object();
@@ -287,7 +287,7 @@ http_response_t* api_handle_create_library(api_context_t* ctx, http_request_t* r
   json_object_set(response, "message", json_create_string("Library created successfully"));
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -322,7 +322,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   json_object_set(lib_query, "name", json_create_string(library_name));
   
   json_value_t* lib_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, lib_query);
-  json_free(lib_query);
+  /* CHECKPOINT: json_free(lib_query); */
   
   if (!lib_results) {
     return create_http_response(HTTP_NOT_FOUND,
@@ -331,7 +331,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   
   json_value_t* lib_docs = json_object_get(lib_results, "documents");
   if (!lib_docs || lib_docs->type != JSON_ARRAY || json_array_size(lib_docs) == 0) {
-    json_free(lib_results);
+    /* CHECKPOINT: json_free(lib_results); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
   }
@@ -340,7 +340,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   json_value_t* lib_doc = json_array_get(lib_docs, 0);
   json_value_t* lib_uuid = json_object_get(lib_doc, "uuid");
   const char* library_uuid = lib_uuid && lib_uuid->type == JSON_STRING ? lib_uuid->value.string : NULL;
-  json_free(lib_results);
+  /* CHECKPOINT: json_free(lib_results); */
   
   /* Find all collections in this library */
   json_value_t* coll_query = json_create_object();
@@ -348,7 +348,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   json_object_set(coll_query, "library", json_create_string(library_name));
   
   json_value_t* coll_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, coll_query);
-  json_free(coll_query);
+  /* CHECKPOINT: json_free(coll_query); */
   
   json_value_t* collections = json_create_array();
   
@@ -371,7 +371,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
         }
       }
     }
-    json_free(coll_results);
+    /* CHECKPOINT: json_free(coll_results); */
   }
   
   /* Delete all documents that belong to this library */
@@ -379,7 +379,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   json_object_set(data_query, "library", json_create_string(library_name));
   
   json_value_t* data_results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, data_query);
-  json_free(data_query);
+  /* CHECKPOINT: json_free(data_query); */
   
   if (data_results) {
     json_value_t* data_docs = json_object_get(data_results, "documents");
@@ -393,13 +393,13 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
         }
       }
     }
-    json_free(data_results);
+    /* CHECKPOINT: json_free(data_results); */
   }
   
   /* Delete the library document itself */
   if (library_uuid) {
     if (!virtual_delete(ctx->db, library_uuid)) {
-      json_free(collections);
+      /* CHECKPOINT: json_free(collections); */
       return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                    "{\"error\":\"Failed to delete library document\"}", "application/json");
     }
@@ -413,7 +413,7 @@ http_response_t* api_handle_delete_library(api_context_t* ctx, http_request_t* r
   json_object_set(response, "message", json_create_string("Library deleted successfully"));
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -491,9 +491,9 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
                 json_object_set(coll_info, "document_count", json_create_number(count));
                 total_documents += count;
               }
-              json_free(results);
+              /* CHECKPOINT: json_free(results); */
             }
-            json_free(empty_query);
+            /* CHECKPOINT: json_free(empty_query); */
             
             /* Copy other metadata from collection document */
             json_value_t* is_system = json_object_get(coll_doc, "is_system");
@@ -505,9 +505,9 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
           }
         }
       }
-      json_free(coll_results);
+      /* CHECKPOINT: json_free(coll_results); */
     }
-    json_free(coll_query);
+    /* CHECKPOINT: json_free(coll_query); */
   }
   
   json_object_set(lib_info, "collections", collections);
@@ -552,13 +552,13 @@ http_response_t* api_handle_get_library(api_context_t* ctx, http_request_t* requ
           json_object_set(lib_info, "settings", json_clone(settings));
         }
       }
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
     }
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
   }
   
   char* response_str = json_stringify(lib_info);
-  json_free(lib_info);
+  /* CHECKPOINT: json_free(lib_info); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -600,18 +600,18 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "name", json_create_string(library_name));
   
   json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
   }
   
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-    json_free(results);
-    json_free(body);
+    /* CHECKPOINT: json_free(results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
   }
@@ -620,8 +620,8 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   json_value_t* lib_doc = json_array_get(documents, 0);
   json_value_t* lib_id = json_object_get(lib_doc, "uuid");
   if (!lib_id || lib_id->type != JSON_STRING) {
-    json_free(results);
-    json_free(body);
+    /* CHECKPOINT: json_free(results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Invalid library document\"}", "application/json");
   }
@@ -657,16 +657,16 @@ http_response_t* api_handle_update_library(api_context_t* ctx, http_request_t* r
   /* Update in database using virtual layer - single source of truth */
   json_value_t* update_result = virtual_update(ctx->db, lib_id->value.string, update_doc);
   
-  json_free(update_doc);
-  json_free(results);
-  json_free(body);
+  /* CHECKPOINT: json_free(update_doc); */
+  /* CHECKPOINT: json_free(results); */
+  /* CHECKPOINT: json_free(body); */
   
   if (!update_result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to update library\"}", "application/json");
   }
   
-  json_free(update_result);
+  /* CHECKPOINT: json_free(update_result); */
   
   return create_http_response(HTTP_OK,
                "{\"success\":true,\"message\":\"Library updated successfully\"}", 
@@ -742,15 +742,15 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
               if (documents && documents->type == JSON_ARRAY) {
                 total_documents += json_array_size(documents);
               }
-              json_free(results);
+              /* CHECKPOINT: json_free(results); */
             }
-            json_free(empty_query);
+            /* CHECKPOINT: json_free(empty_query); */
           }
         }
       }
-      json_free(coll_results);
+      /* CHECKPOINT: json_free(coll_results); */
     }
-    json_free(coll_query);
+    /* CHECKPOINT: json_free(coll_query); */
   }
   
   json_object_set(collection_stats, "total", json_create_number(total_collections));
@@ -782,7 +782,7 @@ http_response_t* api_handle_get_library_stats(api_context_t* ctx, http_request_t
   json_object_set(stats, "generated_at", json_create_string(timestamp));
   
   char* response_str = json_stringify(stats);
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   if (library_name && strncmp(request->path, "/api/libraries/", 15) == 0) {
     BUFFER_FREE((void*)library_name);
@@ -839,7 +839,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   /* Get target library name */
   json_value_t* target_name_val = json_object_get(body, "name");
   if (!target_name_val || target_name_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     if (source_library) BUFFER_FREE((void*)source_library);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Target library name required\"}", "application/json");
@@ -851,7 +851,7 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   char test_path[1024];
   snprintf(test_path, sizeof(test_path), "%s/users", target_library);
   if (db_collection_exists(ctx->db, test_path)) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     if (source_library) BUFFER_FREE((void*)source_library);
     return create_http_response(HTTP_CONFLICT,
                  "{\"error\":\"Target library already exists\"}", "application/json");
@@ -870,9 +870,9 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
       if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
         source_metadata = json_clone(json_array_get(documents, 0));
       }
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
     }
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
   }
   
   /* Create new library metadata */
@@ -898,10 +898,10 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   if (db_collection_exists(ctx->db, "documents")) {
     json_value_t* result = virtual_insert(ctx->db, "library", "system", "libraries", lib_doc, "system");
     if (result) {
-      json_free(result);
+      /* CHECKPOINT: json_free(result); */
     }
   }
-  json_free(lib_doc);
+  /* CHECKPOINT: json_free(lib_doc); */
   
   /* Copy collections structure */
   int collections_copied = 0;
@@ -947,20 +947,20 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
                       /* Remove uuid to generate new one */
                       json_object_remove(doc_copy, "uuid");
                       virtual_insert(ctx->db, "document", source_library, "documents", doc_copy, "system");
-                      json_free(doc_copy);
+                      /* CHECKPOINT: json_free(doc_copy); */
                     }
                   }
-                  json_free(results);
+                  /* CHECKPOINT: json_free(results); */
                 }
-                json_free(empty_query);
+                /* CHECKPOINT: json_free(empty_query); */
               }
             }
           }
         }
       }
-      json_free(coll_results);
+      /* CHECKPOINT: json_free(coll_results); */
     }
-    json_free(coll_query);
+    /* CHECKPOINT: json_free(coll_query); */
   }
   
   /* Return success response */
@@ -971,11 +971,11 @@ http_response_t* api_handle_copy_library(api_context_t* ctx, http_request_t* req
   json_object_set(response, "collections_copied", json_create_number(collections_copied));
   json_object_set(response, "data_copied", json_create_boolean(should_copy_data));
   
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   if (source_library) BUFFER_FREE((void*)source_library);
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -992,7 +992,7 @@ http_response_t* api_handle_get_library_templates(api_context_t* ctx, http_reque
   json_object_set(query, "type", json_create_string("library_template"));
   
   json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -1034,10 +1034,10 @@ http_response_t* api_handle_get_library_templates(api_context_t* ctx, http_reque
   }
   
   json_object_set(response, "templates", templates_array);
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }

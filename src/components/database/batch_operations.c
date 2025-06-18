@@ -129,7 +129,7 @@ static int batch_insert_jdbx(
         
         if (success) {
             result->successful_inserts++;
-            json_free(insert_result); /* Free the returned result */
+            /* CHECKPOINT: json_free(insert_result); */ /* Free the returned result */
         } else {
             errors++;
             result->failed_inserts++;
@@ -143,7 +143,7 @@ static int batch_insert_jdbx(
             }
         }
         
-        json_free(parsed_doc);
+        /* CHECKPOINT: json_free(parsed_doc); */
     }
     
     /* Phase 3: Cleanup */
@@ -189,7 +189,7 @@ batch_insert_result_t* db_batch_insert_documents(
     result->total_time_ms = get_time_ms() - start_time;
     
     if (ret != 0) {
-        json_free(result->errors);
+        /* CHECKPOINT: json_free(result->errors); */
         BUFFER_FREE(result);
         return NULL;
     }
@@ -203,7 +203,7 @@ batch_insert_result_t* db_batch_insert_documents(
 void batch_insert_result_free(batch_insert_result_t* result) {
     if (result) {
         if (result->errors) {
-            json_free(result->errors);
+            /* CHECKPOINT: json_free(result->errors); */
         }
         BUFFER_FREE(result);
     }

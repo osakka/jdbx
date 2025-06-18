@@ -106,7 +106,7 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
         json_object_set(response, "user_agent", json_clone(user_agent));
     }
     
-    json_free(session_doc);
+    /* CHECKPOINT: json_free(session_doc); */
     jwt_free(jwt);
     
     /* Wrap in standard envelope */
@@ -114,7 +114,7 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
     json_object_set(envelope, "data", response);
     
     char* response_str = json_stringify(envelope);
-    json_free(envelope);
+    /* CHECKPOINT: json_free(envelope); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -188,7 +188,7 @@ http_response_t* api_handle_get_library_context(api_context_t* ctx, http_request
     json_object_set(envelope, "data", response);
     
     char* response_str = json_stringify(envelope);
-    json_free(envelope);
+    /* CHECKPOINT: json_free(envelope); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -271,14 +271,14 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
             json_value_t* filters = json_create_object();
             json_object_set(filters, "name", json_create_string(target_library));
             json_value_t* results = virtual_query(ctx->db, "library", "system", "libraries", filters);
-            json_free(filters);
+            /* CHECKPOINT: json_free(filters); */
             
             if (results) {
                 json_value_t* documents = json_object_get(results, "documents");
                 if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
                     has_access = 0;  /* Library doesn't exist */
                 }
-                json_free(results);
+                /* CHECKPOINT: json_free(results); */
             } else {
                 has_access = 0;  /* Query failed */
             }
@@ -326,7 +326,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     json_object_set(envelope, "data", response);
     
     char* response_str = json_stringify(envelope);
-    json_free(envelope);
+    /* CHECKPOINT: json_free(envelope); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -373,7 +373,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
         jwt_free(jwt);
-        if (body) json_free(body);
+        /* CHECKPOINT: if (body) json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Invalid JSON body\"}", "application/json");
     }
@@ -385,7 +385,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     if (!current_password_val || current_password_val->type != JSON_STRING ||
         !new_password_val || new_password_val->type != JSON_STRING) {
         jwt_free(jwt);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Current password and new password required\"}", "application/json");
     }
@@ -396,7 +396,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     /* Validate new password length */
     if (strlen(new_password) < 12) {
         jwt_free(jwt);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"New password must be at least 12 characters\"}", "application/json");
     }
@@ -405,7 +405,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_value_t* user_doc = virtual_get(ctx->db, user_uuid);
     if (!user_doc) {
         jwt_free(jwt);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_NOT_FOUND,
                      "{\"error\":\"User not found\"}", "application/json");
     }
@@ -414,8 +414,8 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_value_t* stored_password_hash = json_object_get(user_doc, "password_hash");
     if (!stored_password_hash || stored_password_hash->type != JSON_STRING) {
         jwt_free(jwt);
-        json_free(body);
-        json_free(user_doc);
+        /* CHECKPOINT: json_free(body); */
+        /* CHECKPOINT: json_free(user_doc); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"User password data corrupted\"}", "application/json");
     }
@@ -423,8 +423,8 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     /* Verify current password using PBKDF2 */
     if (!verify_password(current_password, stored_password_hash->value.string)) {
         jwt_free(jwt);
-        json_free(body);
-        json_free(user_doc);
+        /* CHECKPOINT: json_free(body); */
+        /* CHECKPOINT: json_free(user_doc); */
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"Current password is incorrect\"}", "application/json");
     }
@@ -433,8 +433,8 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     char* new_password_hash = hash_password(new_password);
     if (!new_password_hash) {
         jwt_free(jwt);
-        json_free(body);
-        json_free(user_doc);
+        /* CHECKPOINT: json_free(body); */
+        /* CHECKPOINT: json_free(user_doc); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to hash new password\"}", "application/json");
     }
@@ -469,17 +469,17 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_value_t* updated_doc = virtual_update(ctx->db, user_uuid, update_doc);
     
     BUFFER_FREE(new_password_hash);
-    json_free(update_doc);
-    json_free(user_doc);
+    /* CHECKPOINT: json_free(update_doc); */
+    /* CHECKPOINT: json_free(user_doc); */
     jwt_free(jwt);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     
     if (!updated_doc) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to update password\"}", "application/json");
     }
     
-    json_free(updated_doc);
+    /* CHECKPOINT: json_free(updated_doc); */
     
     /* Build success response */
     json_value_t* response = json_create_object();
@@ -492,7 +492,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_object_set(envelope, "data", response);
     
     char* response_str = json_stringify(envelope);
-    json_free(envelope);
+    /* CHECKPOINT: json_free(envelope); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -564,7 +564,7 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
         }
     }
     
-    json_free(session_doc);
+    /* CHECKPOINT: json_free(session_doc); */
     jwt_free(jwt);
     
     if (!can_terminate) {
@@ -589,7 +589,7 @@ http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t
     json_object_set(envelope, "data", response);
     
     char* response_str = json_stringify(envelope);
-    json_free(envelope);
+    /* CHECKPOINT: json_free(envelope); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }

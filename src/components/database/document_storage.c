@@ -65,16 +65,16 @@ static int create_system_actor(database_t* db, const char* username, const char*
     json_object_set(query, "name", json_create_string(username));
     
     json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (results) {
         json_value_t* docs = json_object_get(results, "documents");
         if (docs && docs->type == JSON_ARRAY && json_array_size(docs) > 0) {
             LOG_DEBUG("System actor %s already exists", username);
-            json_free(results);
+            /* CHECKPOINT: json_free(results); */
             return 1;
         }
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
     }
     
     /* Create system actor document */
@@ -114,11 +114,11 @@ static int create_system_actor(database_t* db, const char* username, const char*
     
     /* Insert using virtual layer for consistency */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, actor, username);
-    json_free(actor);
+    /* CHECKPOINT: json_free(actor); */
     
     if (result) {
         LOG_INFO("Created system actor: %s", username);
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         return 1;
     }
     
@@ -136,14 +136,14 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     json_object_set(query, "library", json_create_string(library));
     
     json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (existing && json_object_get(existing, "documents") &&
         json_object_get(existing, "documents")->value.array.size > 0) {
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         return 1; /* Already exists */
     }
-    if (existing) json_free(existing);
+    if (existing) { /* CHECKPOINT: json_free(existing); */ }
     
     /* Create collection metadata */
     json_value_t* coll = json_create_object();
@@ -167,11 +167,11 @@ __attribute__((unused)) static int create_collection_metadata(database_t* db, co
     json_object_set(coll, "settings", settings);
     
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_COLLECTION, library, "collections", coll, owner);
-    json_free(coll);
+    /* CHECKPOINT: json_free(coll); */
     
     if (result) {
         LOG_DEBUG("Created collection metadata: %s.%s", library, collection_name);
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         
         /* Also create the actual collection in the library */
         char collection_path[256];
@@ -200,14 +200,14 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     json_object_set(query, "name", json_create_string(name));
     
     json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (existing && json_object_get(existing, "documents") &&
         json_object_get(existing, "documents")->value.array.size > 0) {
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         return 1; /* Already exists */
     }
-    if (existing) json_free(existing);
+    if (existing) { /* CHECKPOINT: json_free(existing); */ }
     
     /* Create library metadata */
     json_value_t* lib = json_create_object();
@@ -229,11 +229,11 @@ __attribute__((unused)) static int create_library_metadata(database_t* db, const
     add_document_system_fields(lib, "library", "system", "libraries", owner);
     
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_LIBRARY, "system", "libraries", lib, owner);
-    json_free(lib);
+    /* CHECKPOINT: json_free(lib); */
     
     if (result) {
         LOG_INFO("Created library metadata: %s", name);
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         
         /* The database layer will handle creating directories when collections are created */
         LOG_DEBUG("Library metadata created for: %s", name);
@@ -268,9 +268,9 @@ static int create_system_roles(database_t* db) {
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, admin_role, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created system-admin-role");
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
     }
-    json_free(admin_role);
+    /* CHECKPOINT: json_free(admin_role); */
     
     /* Metrics role */
     json_value_t* metrics_role = json_create_object();
@@ -291,9 +291,9 @@ static int create_system_roles(database_t* db) {
     result = virtual_insert(db, DOC_TYPE_NAME_ROLE, VIRTUAL_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, metrics_role, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created system-metrics-role");
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
     }
-    json_free(metrics_role);
+    /* CHECKPOINT: json_free(metrics_role); */
     
     return 1;
 }
@@ -565,23 +565,23 @@ int create_library_templates(database_t* db) {
     json_value_t* result = virtual_insert(db, "library_template", "system", "templates", ecommerce_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created e-commerce library template");
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
     }
-    json_free(ecommerce_template);
+    /* CHECKPOINT: json_free(ecommerce_template); */
     
     result = virtual_insert(db, "library_template", "system", "templates", wiki_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created wiki library template");
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
     }
-    json_free(wiki_template);
+    /* CHECKPOINT: json_free(wiki_template); */
     
     result = virtual_insert(db, "library_template", "system", "templates", cms_template, SYSTEM_USER_ADMIN);
     if (result) {
         LOG_INFO("Created CMS library template");
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
     }
-    json_free(cms_template);
+    /* CHECKPOINT: json_free(cms_template); */
     
     return 1;
 }
@@ -635,7 +635,7 @@ int unified_documents_init(database_t* db) {
     json_object_set(query, "type", json_create_string("role"));
     json_object_set(query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
     json_value_t* existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     char* admin_role_id = NULL;
     if (!existing || !json_object_get(existing, "documents") ||
@@ -664,12 +664,12 @@ int unified_documents_init(database_t* db) {
             if (id_val && id_val->type == JSON_STRING) {
                 admin_role_id = BUFFER_STRDUP(id_val->value.string);
             }
-            json_free(result);
+            /* CHECKPOINT: json_free(result); */
         }
-        json_free(admin_role);
+        /* CHECKPOINT: json_free(admin_role); */
         LOG_INFO("Created admin role");
     }
-    if (existing) json_free(existing);
+    if (existing) { /* CHECKPOINT: json_free(existing); */ }
     
     /* PURE DOCUMENTS: Create admin user in documents collection */
     query = json_create_object();
@@ -677,7 +677,7 @@ int unified_documents_init(database_t* db) {
     json_object_set(query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
     json_object_set(query, "library", json_create_string("system"));
     existing = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!existing || !json_object_get(existing, "documents") ||
         json_object_get(existing, "documents")->value.array.size == 0) {
@@ -730,11 +730,11 @@ int unified_documents_init(database_t* db) {
         json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_USER, "system", "users", admin_user, SYSTEM_USER_ADMIN);
         if (result) {
             LOG_INFO("Created admin user with password 'admin' in documents collection");
-            json_free(result);
+            /* CHECKPOINT: json_free(result); */
         }
-        json_free(admin_user);
+        /* CHECKPOINT: json_free(admin_user); */
     }
-    if (existing) json_free(existing);
+    if (existing) { /* CHECKPOINT: json_free(existing); */ }
     if (admin_role_id) BUFFER_FREE(admin_role_id);
     
     /* Create predefined library templates */
@@ -753,7 +753,7 @@ json_value_t* query_documents_by_type(database_t* db, const char* type,
     json_object_set(query, "type", json_create_string(type));
     
     json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     return results;
 }
@@ -776,7 +776,7 @@ json_value_t* query_documents_by_location(database_t* db, const char* type,
     }
     
     json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     return results;
 }

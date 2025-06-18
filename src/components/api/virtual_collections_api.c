@@ -78,7 +78,7 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
     
     /* Use virtual layer to query collection documents - single source of truth */
     json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, target_library ? target_library : "default", "configs", query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     json_value_t* response = json_create_object();
     json_value_t* virtual_collections_array = json_create_array();
@@ -121,9 +121,9 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
                         if (docs && docs->type == JSON_ARRAY) {
                             doc_count = json_array_size(docs);
                         }
-                        json_free(count_results);
+                        /* CHECKPOINT: json_free(count_results); */
                     }
-                    json_free(count_query);
+                    /* CHECKPOINT: json_free(count_query); */
                     
                     json_object_set(virtual_coll, "document_count", json_create_number(doc_count));
                     
@@ -137,7 +137,7 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
                 }
             }
         }
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
     }
     
     /* Add default virtual collections if they don't exist yet */
@@ -189,9 +189,9 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
                 if (docs && docs->type == JSON_ARRAY) {
                     doc_count = json_array_size(docs);
                 }
-                json_free(count_results);
+                /* CHECKPOINT: json_free(count_results); */
             }
-            json_free(count_query);
+            /* CHECKPOINT: json_free(count_query); */
             
             json_object_set(default_coll, "document_count", json_create_number(doc_count));
             
@@ -202,7 +202,7 @@ http_response_t* api_handle_virtual_collections_list(api_context_t* ctx, http_re
     json_object_set(response, "collections", virtual_collections_array);
     
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     
     /* Cleanup target library copy */
     if (target_library_copy) {
@@ -234,7 +234,7 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     json_value_t* library_val = json_object_get(body, "library");
     
     if (!name_val || name_val->type != JSON_STRING) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Collection name required\"}", "application/json");
     }
@@ -245,7 +245,7 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     
     /* Validate collection name */
     if (strlen(collection_name) == 0) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Invalid collection name\"}", "application/json");
     }
@@ -258,17 +258,17 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     
     /* Use virtual layer to check if collection exists - single source of truth */
     json_value_t* exists_results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", exists_query);
-    json_free(exists_query);
+    /* CHECKPOINT: json_free(exists_query); */
     
     if (exists_results) {
         json_value_t* existing_docs = json_object_get(exists_results, "documents");
         if (existing_docs && existing_docs->type == JSON_ARRAY && json_array_size(existing_docs) > 0) {
-            json_free(exists_results);
-            json_free(body);
+            /* CHECKPOINT: json_free(exists_results); */
+            /* CHECKPOINT: json_free(body); */
             return create_http_response(HTTP_CONFLICT,
                          "{\"error\":\"Virtual collection already exists\"}", "application/json");
         }
-        json_free(exists_results);
+        /* CHECKPOINT: json_free(exists_results); */
     }
     
     /* Create virtual collection document */
@@ -295,8 +295,8 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     
     /* Insert virtual collection document using virtual layer - single source of truth */
     json_value_t* result = virtual_insert(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", coll_doc, "admin");
-    json_free(coll_doc);
-    json_free(body);
+    /* CHECKPOINT: json_free(coll_doc); */
+    /* CHECKPOINT: json_free(body); */
     
     if (!result) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -311,8 +311,8 @@ http_response_t* api_handle_virtual_collection_create(api_context_t* ctx, http_r
     json_object_set(response, "message", json_create_string("Virtual collection created successfully"));
     
     char* response_str = json_stringify(response);
-    json_free(response);
-    json_free(result);
+    /* CHECKPOINT: json_free(response); */
+    /* CHECKPOINT: json_free(result); */
     
     return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -365,7 +365,7 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     
     /* Use virtual layer to find collection document - single source of truth */
     json_value_t* find_results = virtual_query(ctx->db, DOC_TYPE_NAME_COLLECTION, virtual_library, "configs", find_query);
-    json_free(find_query);
+    /* CHECKPOINT: json_free(find_query); */
     
     if (!find_results) {
         return create_http_response(HTTP_NOT_FOUND,
@@ -374,7 +374,7 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     
     json_value_t* coll_docs = json_object_get(find_results, "documents");
     if (!coll_docs || coll_docs->type != JSON_ARRAY || json_array_size(coll_docs) == 0) {
-        json_free(find_results);
+        /* CHECKPOINT: json_free(find_results); */
         return create_http_response(HTTP_NOT_FOUND,
                      "{\"error\":\"Virtual collection not found\"}", "application/json");
     }
@@ -383,13 +383,13 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     json_value_t* coll_doc = json_array_get(coll_docs, 0);
     json_value_t* uuid_val = json_object_get(coll_doc, "uuid");
     if (!uuid_val || uuid_val->type != JSON_STRING) {
-        json_free(find_results);
+        /* CHECKPOINT: json_free(find_results); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Invalid collection document\"}", "application/json");
     }
     
     const char* collection_uuid = uuid_val->value.string;
-    json_free(find_results);
+    /* CHECKPOINT: json_free(find_results); */
     
     /* Delete the virtual collection document using virtual layer - single source of truth */
     if (!virtual_delete(ctx->db, collection_uuid)) {
@@ -408,7 +408,7 @@ http_response_t* api_handle_virtual_collection_drop(api_context_t* ctx, http_req
     json_object_set(response, "message", json_create_string("Virtual collection deleted successfully"));
     
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
 }

@@ -1,5 +1,0 @@
-[Thread debugging using libthread_db enabled]
-Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-[Detaching after fork from child process 4017170]
-[Inferior 1 (process 4017143) exited normally]
-No stack.
