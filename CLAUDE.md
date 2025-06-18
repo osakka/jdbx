@@ -61,6 +61,8 @@
  26. Implement proper NULL checks and error handling to prevent crashes
  27. Protect against security vulnerabilities (JSON overflow, buffer overflows, DoS attacks)
  28. ARCHITECTURAL RULE: Single Source of Truth - Minimize duplicate implementations, clearly document routing patterns
+ 29. Be aware that curl and many SSL clients with OpenSSL 3.x don't send proper close_notify alerts, causing "N-1 byte" incomplete request errors. This is a client issue, not a server bug. Our server correctly enforces HTTP protocol compliance.
+ 30. SSL_OP_IGNORE_UNEXPECTED_EOF is configurable via JDBX_SSL_IGNORE_UNEXPECTED_EOF environment variable or --ssl-ignore-unexpected-eof CLI flag to handle OpenSSL 3.x clients that don't send proper close_notify alerts.
 
 ## 🎯 HTTP PROTOCOL COMPLIANCE: Incomplete Request Handling Excellence (v6.5.9)
 

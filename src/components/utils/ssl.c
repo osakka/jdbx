@@ -130,6 +130,23 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
   SSL_CTX_set_timeout(ssl_ctx, 300); /* 5 minute session timeout */
   LOG_INFO("SSL session caching enabled (128 sessions, 5 min timeout).");
   
+  /* 🎯 OPENSSL 3.X COMPATIBILITY: Handle unexpected EOF from non-compliant clients */
+  LOG_INFO("SSL config->ignore_unexpected_eof = %d", config->ignore_unexpected_eof);
+  if (config->ignore_unexpected_eof) {
+    /* Enable SSL_OP_IGNORE_UNEXPECTED_EOF to treat abrupt closures as normal */
+    /* This is necessary because many SSL clients (curl, Python requests, etc.) with 
+     * OpenSSL 3.x don't send proper close_notify alerts, causing "N-1 byte" errors.
+     * See: https://github.com/openssl/openssl/issues/10880 */
+    unsigned long opts_before = SSL_CTX_get_options(ssl_ctx);
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
+    unsigned long opts_after = SSL_CTX_get_options(ssl_ctx);
+    LOG_INFO("SSL_OP_IGNORE_UNEXPECTED_EOF enabled for OpenSSL 3.x client compatibility.");
+    LOG_INFO("SSL options before: 0x%lx, after: 0x%lx", opts_before, opts_after);
+    LOG_INFO("This allows non-compliant clients that don't send close_notify alerts.");
+  } else {
+    LOG_INFO("SSL_OP_IGNORE_UNEXPECTED_EOF disabled - strict SSL compliance mode.");
+  }
+  
   /* Set the certificate file */
   if (config->cert_file) {
     if (SSL_CTX_use_certificate_file(ssl_ctx, config->cert_file, SSL_FILETYPE_PEM) <= 0) {

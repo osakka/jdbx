@@ -47,6 +47,7 @@ typedef struct {
     const char *ca_file;              /**< Path to the CA certificate file (optional) */
     const char *cipher_list;          /**< List of allowed ciphers (optional) */
     int verify_peer;                  /**< Whether to verify peer certificates (0 = no, 1 = yes) */
+    int ignore_unexpected_eof;        /**< Whether to ignore unexpected EOF (OpenSSL 3.x compatibility) */
     int verify_depth;                 /**< Depth for certificate verification */
 } ssl_config_t;
 

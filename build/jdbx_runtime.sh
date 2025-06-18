@@ -83,11 +83,14 @@ case "$1" in
         # Clean database for fresh start (use configurable paths)
         rm -f "$VAR_DIR/database.jdb" "$VAR_DIR/jdbx.jdbx" "$VAR_DIR/jdbx.wal"
         
-        # Start server with secure credentials from environment
+        # Export all JDBX variables for the daemon
+        export JDBX_BOOTSTRAP_ADMIN_USER
+        export JDBX_BOOTSTRAP_ADMIN_PASS  
+        export JDBX_DEFAULT_ADMIN_EMAIL
+        export JDBX_SSL_IGNORE_UNEXPECTED_EOF
+        
+        # Start server with secure configuration from environment
         echo "🚀 Starting JDBX server with secure configuration..."
-        JDBX_BOOTSTRAP_ADMIN_USER="$JDBX_BOOTSTRAP_ADMIN_USER" \
-        JDBX_BOOTSTRAP_ADMIN_PASS="$JDBX_BOOTSTRAP_ADMIN_PASS" \
-        JDBX_DEFAULT_ADMIN_EMAIL="$JDBX_DEFAULT_ADMIN_EMAIL" \
         "$DAEMON" --daemon
         ;;
     stop)

@@ -222,6 +222,12 @@ init_status_t init_socket(server_config_t* config) {
     ssl_config.key_file = config->key_path;
     ssl_config.verify_peer = 0;  /* Default to no client verification */
     ssl_config.verify_depth = 0; /* Default depth */
+    ssl_config.ignore_unexpected_eof = config->ssl_ignore_unexpected_eof; /* OpenSSL 3.x compatibility */
+    
+    INIT_LOG_PROGRESS("SOCKET", "SSL configuration: server_config->ssl_ignore_unexpected_eof=%d", 
+                      config->ssl_ignore_unexpected_eof);
+    INIT_LOG_PROGRESS("SOCKET", "SSL configuration: ssl_config.ignore_unexpected_eof=%d", 
+                      ssl_config.ignore_unexpected_eof);
     
     /* Create SSL context */
     ssl_result = ssl_context_create(&ssl_config, &config->ssl_context);

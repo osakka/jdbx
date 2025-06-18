@@ -46,10 +46,13 @@ fi
 # Medium document  
 echo "📝 Testing medium document (5KB)..."
 MEDIUM_CONTENT=$(head -c 5000 < /dev/zero | tr '\0' 'A')
-MEDIUM_RESPONSE=$(curl -s -k -X POST "$BASE_URL/api/documents" \
+MEDIUM_DOC="{\"title\":\"Medium Document\",\"content\":\"$MEDIUM_CONTENT\"}"
+# Use --data-binary @- to avoid curl's SSL EOF issue with large payloads
+MEDIUM_RESPONSE=$(echo -n "$MEDIUM_DOC" | curl -s -k -X POST "$BASE_URL/api/documents" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"title\":\"Medium Document\",\"content\":\"$MEDIUM_CONTENT\"}" \
+    -H "Content-Length: ${#MEDIUM_DOC}" \
+    --data-binary @- \
     -w "HTTP:%{http_code}")
 
 MEDIUM_CODE=$(echo "$MEDIUM_RESPONSE" | grep -o "HTTP:[0-9]*" | cut -d':' -f2)
@@ -62,10 +65,13 @@ fi
 # Large document
 echo "📝 Testing large document (50KB)..."
 LARGE_CONTENT=$(head -c 50000 < /dev/zero | tr '\0' 'B')
-LARGE_RESPONSE=$(curl -s -k -X POST "$BASE_URL/api/documents" \
+LARGE_DOC="{\"title\":\"Large Document\",\"content\":\"$LARGE_CONTENT\"}"
+# Use --data-binary @- to avoid curl's SSL EOF issue with large payloads
+LARGE_RESPONSE=$(echo -n "$LARGE_DOC" | curl -s -k -X POST "$BASE_URL/api/documents" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"title\":\"Large Document\",\"content\":\"$LARGE_CONTENT\"}" \
+    -H "Content-Length: ${#LARGE_DOC}" \
+    --data-binary @- \
     -w "HTTP:%{http_code}")
 
 LARGE_CODE=$(echo "$LARGE_RESPONSE" | grep -o "HTTP:[0-9]*" | cut -d':' -f2)
@@ -109,10 +115,12 @@ for i in $(seq 1 1000); do
 done
 ARRAY_JSON+=']}'
 
-ARRAY_RESPONSE=$(curl -s -k -X POST "$BASE_URL/api/documents" \
+# Use --data-binary @- to avoid curl's SSL EOF issue with large payloads
+ARRAY_RESPONSE=$(echo -n "$ARRAY_JSON" | curl -s -k -X POST "$BASE_URL/api/documents" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d "$ARRAY_JSON" \
+    -H "Content-Length: ${#ARRAY_JSON}" \
+    --data-binary @- \
     -w "HTTP:%{http_code}")
 
 ARRAY_CODE=$(echo "$ARRAY_RESPONSE" | grep -o "HTTP:[0-9]*" | cut -d':' -f2)

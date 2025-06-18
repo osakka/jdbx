@@ -237,6 +237,22 @@ int load_environment_config(server_config_t* config) {
     config->use_ssl = (strcmp(use_ssl, "true") == 0 || strcmp(use_ssl, "1") == 0);
   }
   
+  const char* ssl_ignore_unexpected_eof = getenv("JDBX_SSL_IGNORE_UNEXPECTED_EOF");
+  if (ssl_ignore_unexpected_eof) {
+    config->ssl_ignore_unexpected_eof = (strcmp(ssl_ignore_unexpected_eof, "true") == 0 || strcmp(ssl_ignore_unexpected_eof, "1") == 0);
+    if (g_logger) {
+      LOG_INFO("Loaded JDBX_SSL_IGNORE_UNEXPECTED_EOF='%s' -> %d", ssl_ignore_unexpected_eof, config->ssl_ignore_unexpected_eof);
+    } else {
+      fprintf(stderr, "[ENV] Loaded JDBX_SSL_IGNORE_UNEXPECTED_EOF='%s' -> %d\n", ssl_ignore_unexpected_eof, config->ssl_ignore_unexpected_eof);
+    }
+  } else {
+    if (g_logger) {
+      LOG_INFO("JDBX_SSL_IGNORE_UNEXPECTED_EOF not set in environment");
+    } else {
+      fprintf(stderr, "[ENV] JDBX_SSL_IGNORE_UNEXPECTED_EOF not set in environment\n");
+    }
+  }
+  
   /* Thread pool configuration */
   const char* thread_pool_min = getenv("JDBX_THREAD_POOL_MIN");
   if (thread_pool_min) {

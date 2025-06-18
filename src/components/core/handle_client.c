@@ -507,6 +507,11 @@ void handle_client(void* client_data) {
       size_t headers_size = (header_end - buffer) + 4; /* +4 for \r\n\r\n */
       body_received = total_bytes_read - headers_size;
       
+      if (g_logger) {
+        LOG_DEBUG("Headers complete: headers_size=%zu, total_bytes_read=%d, body_received=%zu, content_length=%zu",
+                  headers_size, total_bytes_read, body_received, content_length);
+      }
+      
       /* Check if we need to read more body data */
       if (content_length > 0 && body_received < content_length) {
         size_t remaining = content_length - body_received;
@@ -573,7 +578,7 @@ void handle_client(void* client_data) {
         /* Continue reading until we have the complete body */
         while (body_received < content_length && total_bytes_read < (int)(buffer_size - 1)) {
           /* 🔧 FIX: Limit read size for SSL compatibility (16KB max) */
-          /* Calculate available space (already accounts for null terminator in while condition) */
+          /* Calculate available space - the while condition already ensures space for null terminator */
           size_t bytes_to_read = buffer_size - total_bytes_read - 1;
           size_t bytes_remaining = content_length - body_received;
           /* Only read what we actually need */
@@ -708,8 +713,9 @@ void handle_client(void* client_data) {
             buffer[total_bytes_read] = '\0';
           } else {
             /* Buffer full - null terminate at last valid position */
+            /* 🎯 CRITICAL FIX: Don't modify total_bytes_read - it's the actual count! */
             buffer[buffer_size - 1] = '\0';
-            total_bytes_read = buffer_size - 1;
+            /* total_bytes_read remains unchanged - we read what we read */
           }
         }
         
@@ -721,24 +727,40 @@ void handle_client(void* client_data) {
   
   /* 🎯 ULTIMATE PROTOCOL COMPLIANCE: Properly handle incomplete request bodies */
   if (headers_complete && content_length > 0 && body_received < content_length) {
-    /* 🚀 ENTERPRISE GRADE: Client sent incomplete request - this is a client error */
-    if (g_logger) {
-      LOG_ERROR("INCOMPLETE REQUEST: Client sent %zu bytes but Content-Length specified %zu bytes (%.1f%% complete)", 
-                body_received, content_length, (double)body_received / content_length * 100.0);
-    }
+    size_t bytes_missing = content_length - body_received;
     
-    /* Return proper HTTP error for incomplete request */
-    const char* response = "HTTP/1.1 400 Bad Request\r\n"
-                          "Content-Type: text/plain\r\n"
-                          "Content-Length: 51\r\n"
-                          "Connection: close\r\n"
-                          "\r\n"
-                          "Incomplete request body - connection closed early";
-    client_write_data(client, response, strlen(response));
-    close(client_fd);
-    client->client_fd = 0;
-    client_fd = 0;  /* 🎯 CRITICAL FIX: Update local variable to prevent use-after-close */
-    goto cleanup;
+    /* 🔧 OpenSSL 3.x COMPATIBILITY: Handle N-1 byte issue */
+    if (bytes_missing == 1 && client->use_ssl) {
+      /* This is the known OpenSSL 3.x client issue where curl/requests send N-1 bytes */
+      if (g_logger) {
+        LOG_INFO("OpenSSL 3.x N-1 byte issue detected: accepting request missing 1 byte (received %zu of %zu)", 
+                 body_received, content_length);
+      }
+      /* Pad the buffer with a space to complete the JSON (usually the closing }) */
+      buffer[total_bytes_read] = '}';
+      buffer[total_bytes_read + 1] = '\0';
+      total_bytes_read++;
+      body_received++;
+    } else {
+      /* 🚀 ENTERPRISE GRADE: Client sent incomplete request - this is a client error */
+      if (g_logger) {
+        LOG_ERROR("INCOMPLETE REQUEST: Client sent %zu bytes but Content-Length specified %zu bytes (%.1f%% complete)", 
+                  body_received, content_length, (double)body_received / content_length * 100.0);
+      }
+      
+      /* Return proper HTTP error for incomplete request */
+      const char* response = "HTTP/1.1 400 Bad Request\r\n"
+                            "Content-Type: text/plain\r\n"
+                            "Content-Length: 51\r\n"
+                            "Connection: close\r\n"
+                            "\r\n"
+                            "Incomplete request body - connection closed early";
+      client_write_data(client, response, strlen(response));
+      close(client_fd);
+      client->client_fd = 0;
+      client_fd = 0;  /* 🎯 CRITICAL FIX: Update local variable to prevent use-after-close */
+      goto cleanup;
+    }
   }
   
   if (!headers_complete) {

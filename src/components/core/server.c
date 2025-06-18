@@ -156,23 +156,36 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     }
   }
   
-  /* Initialize SSL if enabled */
+  /* Initialize SSL if enabled and not already initialized */
   if (config->use_ssl) {
-    if (g_logger) {
-      LOG_INFO("Initializing SSL context.");
-    }
-    
-    if (initialize_ssl(config) != 0) {
+    if (config->ssl_context) {
+      /* SSL context already created by socket initialization */
       if (g_logger) {
-        LOG_ERROR("Failed to initialize SSL context");
-      } else {
-        fprintf(stderr, "Error: Failed to initialize SSL context\n");
+        LOG_INFO("Using pre-initialized SSL context from socket initialization.");
       }
-      return SERVER_ERROR;
-    }
-    
-    if (g_logger) {
-      LOG_INFO("SSL context initialized successfully.");
+      /* Set global SSL context to the one created during socket init */
+      g_ssl_context = config->ssl_context;
+    } else {
+      /* SSL context not yet created, initialize it now */
+      if (g_logger) {
+        LOG_INFO("Initializing SSL context.");
+      }
+      
+      if (initialize_ssl(config) != 0) {
+        if (g_logger) {
+          LOG_ERROR("Failed to initialize SSL context");
+        } else {
+          fprintf(stderr, "Error: Failed to initialize SSL context\n");
+        }
+        return SERVER_ERROR;
+      }
+      
+      /* Store the created SSL context in config for consistency */
+      config->ssl_context = g_ssl_context;
+      
+      if (g_logger) {
+        LOG_INFO("SSL context initialized successfully.");
+      }
     }
   } else {
     if (g_logger) {
@@ -630,7 +643,8 @@ static int initialize_ssl(server_config_t* config) {
     .ca_file = NULL,  /* Optional */
     .cipher_list = NULL,  /* Use default cipher list */
     .verify_peer = 0,  /* Don't verify peer certificates for server mode */
-    .verify_depth = 0
+    .verify_depth = 0,
+    .ignore_unexpected_eof = config->ssl_ignore_unexpected_eof  /* OpenSSL 3.x compatibility */
   };
   
   /* Validate certificate and key file paths */

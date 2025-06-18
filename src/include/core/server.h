@@ -134,6 +134,7 @@ typedef struct {
     char* cert_path;
     char* key_path;
     ssl_context_t* ssl_context; /* SSL context for TLS connections */
+    int ssl_ignore_unexpected_eof;  /* Whether to ignore unexpected EOF (OpenSSL 3.x compatibility) */
 
     /* Cache configuration */
     int cache_enabled;           /* Enable/disable cache */

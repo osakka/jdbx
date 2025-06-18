@@ -161,6 +161,7 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"no-ssl",       no_argument,       0, 415},
     {"ssl-cert",     required_argument, 0, 416},
     {"ssl-key",      required_argument, 0, 417},
+    {"ssl-ignore-unexpected-eof", no_argument, 0, 418},
     /* Thread pool options */
     {"thread-pool-min", required_argument, 0, 301},
     {"thread-pool-max", required_argument, 0, 302},
@@ -257,6 +258,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 417: /* --ssl-key */
         ssl_key = optarg;
+        break;
+      case 418: /* --ssl-ignore-unexpected-eof */
+        heap_config->ssl_ignore_unexpected_eof = 1;
         break;
       /* Thread pool options */
       case 301:
