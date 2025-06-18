@@ -56,7 +56,7 @@
   
   <!-- Title -->
   <text x="800" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="700" text-anchor="middle" fill="#111827">JDBX v6.5.12</text>
-  <text x="800" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#6B7280">Enterprise Document Database with 100% HTTP Compliance</text>
+  <text x="800" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#6B7280">Enterprise Document Database with Unified Architecture</text>
   
   <!-- Client Layer -->
   <g transform="translate(0, 120)">
@@ -93,8 +93,8 @@
     
     <!-- Key achievements -->
     <rect x="250" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
-    <text x="375" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">HTTP/1.1 Compliant</text>
-    <text x="375" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">N-1 byte issue fixed</text>
+    <text x="375" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">HTTP/1.1 Protocol</text>
+    <text x="375" y="88" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" text-anchor="middle" fill="#FFFFFF">Standard compliance</text>
     
     <rect x="520" y="50" width="250" height="50" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
     <text x="645" y="70" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF">SSL/TLS Security</text>
@@ -221,7 +221,7 @@
     <text x="0" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#111827">Key Features:</text>
     
     <rect x="150" y="0" width="150" height="30" rx="15" fill="#10B981"/>
-    <text x="225" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">100% HTTP Compliant</text>
+    <text x="225" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">ACID Transactions</text>
     
     <rect x="320" y="0" width="150" height="30" rx="15" fill="#8B5CF6"/>
     <text x="395" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">Unified Documents</text>
