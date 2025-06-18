@@ -242,14 +242,6 @@
     <text x="1245" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" text-anchor="middle" fill="#FFFFFF">SSL/TLS Security</text>
   </g>
   
-  <!-- Performance metrics -->
-  <g transform="translate(100, 1020)">
-    <text x="0" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#111827">Performance:</text>
-    <text x="150" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">50+ concurrent connections</text>
-    <text x="400" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">Sub-10ms response times</text>
-    <text x="650" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">Zero memory leaks</text>
-    <text x="850" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6B7280">100% crash-free under load</text>
-  </g>
   
   <!-- Footer -->
   <text x="100" y="1150" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" fill="#9CA3AF">© 2025 JDBX Project</text>
