@@ -364,10 +364,24 @@ void* memory_alloc(size_t size) {
         return NULL;
     }
     
-    /* If memory manager not initialized yet, use regular malloc */
+    /* If memory manager not initialized yet, still allocate with header for consistency */
     if (!g_memory_manager_initialized) {
-        /* Use standard malloc for pre-init allocations to ensure free() compatibility */
-        return malloc(size);
+        /* Even pre-init allocations get headers to maintain single source of truth */
+        size_t total_size = HEADER_SIZE + size;
+        memory_header_t* header = (memory_header_t*)malloc(total_size);
+        if (!header) {
+            return NULL;
+        }
+        
+        /* Initialize header for pre-init allocation */
+        header->magic = MEMORY_MAGIC;
+        header->size = size;
+        header->checkpoint = NULL;
+        header->next = NULL;
+        header->prev = NULL;
+        
+        /* Return pointer after header */
+        return (char*)header + HEADER_SIZE;
     }
     
     ensure_memory_initialized();
@@ -424,9 +438,17 @@ void* memory_alloc(size_t size) {
 void memory_free(void* ptr) {
     if (!ptr) return;
     
-    /* If memory manager not initialized yet, use regular free */
+    /* If memory manager not initialized yet, still handle header */
     if (!g_memory_manager_initialized) {
-        free(ptr);
+        /* Pre-init allocations still have headers for consistency */
+        memory_header_t* header = get_memory_header(ptr);
+        if (header && header->magic == MEMORY_MAGIC) {
+            header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed */
+            free(header);
+        } else {
+            /* Fallback for any truly external allocations */
+            free(ptr);
+        }
         return;
     }
     
