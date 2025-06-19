@@ -96,6 +96,10 @@ Through standardized prompts, AI learns to:
 ## Documentation Structure
 
 - **[Methodology](methodology/)** - Core EVC concepts and practices
+  - [Standardized Prompts](methodology/prompts.md) - 15 essential prompts
+  - [Letting the Cave Echo](methodology/letting-the-cave-echo.md) - Deliberate observation technique
+  - [Pitfalls & Anti-patterns](methodology/pitfalls.md) - Common traps to avoid
+  - [Collaboration Infrastructure](methodology/collaboration-infrastructure.md) - Essential scaffolding
 - **[Psychology](psychology/)** - Understanding human-AI collaboration
 - **[Patterns](patterns/)** - Neural network behavioral patterns
 - **[Case Studies](case-studies/)** - Real-world EVC projects

@@ -1,6 +1,8 @@
 # The N-1 Byte Crisis: A Deep Learning Experience
 
 > **How a simple string assumption led to 5-7 days of misdirection**
+> 
+> **Note**: For the deeper truth about this "crisis" as a deliberate diagnostic exercise, see [Letting the Cave Echo](../methodology/letting-the-cave-echo.md)
 
 ## The Timeline
 
