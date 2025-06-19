@@ -2,6 +2,7 @@
 #include "rbac/jwt.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/evp.h>
@@ -143,6 +144,7 @@ int jwt_cache_init(size_t max_entries) {
         LOG_ERROR("Cannot allocate JWT cache.");
         return -1;
     }
+    memory_promote(g_jwt_cache);  /* Global cache survives checkpoints */
     
     g_jwt_cache->bucket_count = CACHE_BUCKET_COUNT;
     g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
@@ -152,6 +154,7 @@ int jwt_cache_init(size_t max_entries) {
         LOG_ERROR("Cannot allocate JWT cache buckets.");
         return -1;
     }
+    memory_promote(g_jwt_cache->buckets);  /* Part of global cache */
     
     /* Initialize all bucket pointers to NULL */
     memset(g_jwt_cache->buckets, 0, sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
@@ -343,6 +346,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
         pthread_rwlock_unlock(&g_jwt_cache->lock);
         return;
     }
+    memory_promote(new_entry);  /* Cache entry survives checkpoints */
     
     /* Initialize all fields to prevent uninitialized memory access */
     memset(new_entry, 0, sizeof(jwt_cache_entry_t));
@@ -361,10 +365,22 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
         pthread_rwlock_unlock(&g_jwt_cache->lock);
         return;
     }
+    memory_promote(new_entry->token_hash);  /* Part of cache entry */
     
     new_entry->claims = claims;  /* Cache takes ownership */
+    if (claims) {
+        memory_promote(claims);  /* JWT payload survives checkpoints */
+        /* Also promote the string fields inside the payload */
+        if (claims->iss) memory_promote(claims->iss);
+        if (claims->sub) memory_promote(claims->sub);
+        if (claims->aud) memory_promote(claims->aud);
+        if (claims->jti) memory_promote(claims->jti);
+        if (claims->claims) json_promote(claims->claims);  /* Recursively promote JSON */
+    }
     new_entry->username = username ? BUFFER_STRDUP(username) : NULL;
     new_entry->user_id = user_id ? BUFFER_STRDUP(user_id) : NULL;
+    if (new_entry->username) memory_promote(new_entry->username);  /* Part of cache entry */
+    if (new_entry->user_id) memory_promote(new_entry->user_id);  /* Part of cache entry */
     new_entry->expiry = claims->exp;
     new_entry->cached_at = now;
     new_entry->next = NULL;

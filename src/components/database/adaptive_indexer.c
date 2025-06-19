@@ -3,6 +3,7 @@
 #include "database/index_metrics.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -432,6 +433,7 @@ int adaptive_indexer_init(database_t* database) {
         LOG_ERROR("Cannot allocate adaptive indexer.");
         return 0;
     }
+    memory_promote(g_adaptive_indexer);  /* Global indexer survives checkpoints */
     
     /* Initialize structure */
     g_adaptive_indexer->database = database;

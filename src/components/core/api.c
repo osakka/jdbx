@@ -331,6 +331,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     }
     return NULL;
   }
+  memory_promote(ctx);  /* API context survives checkpoints */
 
   /* Initialize basic fields */
   ctx->db = db;
@@ -343,6 +344,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     }
     return NULL;
   }
+  memory_promote((void*)ctx->jwt_secret);  /* Part of API context */
 
   /* Initialize transaction manager with capacity for 100 concurrent transactions */
   ctx->transaction_manager = transaction_manager_create(db, 100);
@@ -373,6 +375,7 @@ api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const cha
     }
     return NULL;
   }
+  memory_promote(ctx->routes);  /* Part of API context */
 
   /* Copy the routes */
   for (int i = 0; i < num_routes; i++) {

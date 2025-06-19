@@ -1,6 +1,7 @@
 #include "database/query_tracker.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -134,6 +135,7 @@ int query_tracker_init(void) {
         LOG_ERROR("Cannot allocate query tracker.");
         return 0;
     }
+    memory_promote(g_query_tracker);  /* Global query tracker survives checkpoints */
     
     /* Initialize hash table */
     g_query_tracker->num_buckets = 1024; /* Start with 1024 buckets */
@@ -144,6 +146,7 @@ int query_tracker_init(void) {
         LOG_ERROR("Cannot allocate query tracker hash table.");
         return 0;
     }
+    memory_promote(g_query_tracker->patterns);  /* Part of query tracker */
     
     /* Initialize other fields */
     g_query_tracker->pattern_count = 0;

@@ -16,6 +16,7 @@
 #include "utils/json.h"
 #include "utils/diagnostics.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -335,6 +336,47 @@ void json_object_remove(json_value_t* object, const char* key) {
       object->value.object.size--;
       return;
     }
+  }
+}
+
+/* Recursively promote a JSON value and all its contents */
+void json_promote(json_value_t* value) {
+  if (!value) return;
+  
+  /* Promote the value itself */
+  memory_promote(value);
+  
+  switch (value->type) {
+    case JSON_STRING:
+      if (value->value.string) {
+        memory_promote((void*)value->value.string);
+      }
+      break;
+      
+    case JSON_ARRAY:
+      if (value->value.array.items) {
+        memory_promote(value->value.array.items);
+        for (size_t i = 0; i < value->value.array.size; i++) {
+          json_promote(value->value.array.items[i]);
+        }
+      }
+      break;
+      
+    case JSON_OBJECT:
+      if (value->value.object.entries) {
+        memory_promote(value->value.object.entries);
+        for (size_t i = 0; i < value->value.object.size; i++) {
+          if (value->value.object.entries[i].key) {
+            memory_promote((void*)value->value.object.entries[i].key);
+          }
+          json_promote(value->value.object.entries[i].value);
+        }
+      }
+      break;
+      
+    default:
+      /* NULL, BOOLEAN, NUMBER, INTEGER don't have additional allocations */
+      break;
   }
 }
 

@@ -9,6 +9,7 @@
 #include "core/lockfree_queue.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +53,7 @@ lockfree_queue_t* lockfree_queue_create(size_t max_size, size_t node_pool_size) 
     if (!queue) {
         return NULL;
     }
+    memory_promote(queue);  /* Lock-free queue survives checkpoints */
     
     /* Create sentinel node for lock-free operations */
     queue_node_t* sentinel = BUFFER_ALLOC(sizeof(queue_node_t));
@@ -59,6 +61,7 @@ lockfree_queue_t* lockfree_queue_create(size_t max_size, size_t node_pool_size) 
         buffer_pool_free(queue);
         return NULL;
     }
+    memory_promote(sentinel);  /* Part of lock-free queue */
     
     /* Initialize sentinel node */
     atomic_store(&sentinel->next, NULL);
@@ -81,6 +84,7 @@ lockfree_queue_t* lockfree_queue_create(size_t max_size, size_t node_pool_size) 
     for (size_t i = 0; i < queue->node_pool_size; i++) {
         queue_node_t* node = BUFFER_ALLOC(sizeof(queue_node_t));
         if (node) {
+            memory_promote(node);  /* Part of lock-free queue pool */
             atomic_store(&node->next, atomic_load(&queue->free_nodes));
             atomic_store(&queue->free_nodes, node);
             atomic_fetch_add(&queue->nodes_allocated, 1);
@@ -293,6 +297,7 @@ static queue_node_t* allocate_node(lockfree_queue_t* queue) {
     /* Pool is empty, allocate new node */
     node = BUFFER_ALLOC(sizeof(queue_node_t));
     if (node) {
+        memory_promote(node);  /* Queue node survives checkpoints */
         atomic_fetch_add(&queue->nodes_allocated, 1);
     }
     

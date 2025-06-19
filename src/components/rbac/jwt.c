@@ -1129,6 +1129,8 @@ jwt_payload_t* jwt_payload_duplicate(const jwt_payload_t* payload) {
   dup->nbf = payload->nbf;
   dup->iat = payload->iat;
   
+  /* Note: The caller (JWT cache) is responsible for promoting these allocations */
+  
   return dup;
 }
 

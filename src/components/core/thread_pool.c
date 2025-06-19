@@ -24,6 +24,7 @@
 #include "core/thread_pool.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,6 +90,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
     POOL_LOG(ERROR, "Out of memory");
     return NULL;
   }
+  memory_promote(pool);  /* Thread pool survives checkpoints */
   
   /* Initialize pool structure */
   memset(pool, 0, sizeof(thread_pool_t));
@@ -129,6 +131,7 @@ thread_pool_t* thread_pool_create_config(thread_pool_config_t* config) {
     BUFFER_FREE(pool);
     return NULL;
   }
+  memory_promote(pool->threads);  /* Part of thread pool */
   
   /* Create initial threads (minimum required) */
   for (int i = 0; i < pool->min_threads; i++) {

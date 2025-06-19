@@ -2,6 +2,7 @@
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,11 +255,14 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
     pthread_mutex_unlock(&coll->lock);
     return NULL;
   }
+  memory_promote(index);  /* Index survives checkpoints */
 
   /* Initialize index fields */
   LOG_DEBUG("Initializing index fields.");
   index->name = BUFFER_STRDUP(name);
   index->field_path = BUFFER_STRDUP(field_path);
+  if (index->name) memory_promote(index->name);  /* Part of index */
+  if (index->field_path) memory_promote(index->field_path);  /* Part of index */
   index->type = type;
   index->entries = 0;
   index->next = NULL;
@@ -268,6 +272,7 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
   LOG_DEBUG("Initializing hash buckets with prime number %zu", index->num_buckets);
 
   index->buckets = (index_entry_t**)BUFFER_ALLOC(index->num_buckets * sizeof(index_entry_t*));
+  if (index->buckets) memory_promote(index->buckets);  /* Part of index */
 
   if (!index->buckets) {
     LOG_ERROR("Out of memory", index->num_buckets);
@@ -353,8 +358,11 @@ index_t* db_create_index_old(database_t* db, const char* collection, const char*
               TRACE_DB("Adding document %s with value '%s' to index", doc_id, value_str);
               index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
               if (new_entry) {
+                memory_promote(new_entry);  /* Index entry survives checkpoints */
                 new_entry->document_id = BUFFER_STRDUP(doc_id);
+                if (new_entry->document_id) memory_promote(new_entry->document_id);  /* Part of entry */
                 new_entry->key_value = value_str;
+                if (value_str) memory_promote(value_str);  /* Part of entry */
                 new_entry->next = index->buckets[hash];
                 index->buckets[hash] = new_entry;
                 index->entries++;
@@ -669,8 +677,11 @@ int db_rebuild_index(database_t* db, const char* collection, const char* name) {
               /* Create new entry */
               index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
               if (new_entry) {
+                memory_promote(new_entry);  /* Index entry survives checkpoints */
                 new_entry->document_id = BUFFER_STRDUP(doc_id);
+                if (new_entry->document_id) memory_promote(new_entry->document_id);  /* Part of entry */
                 new_entry->key_value = value_str;
+                if (value_str) memory_promote(value_str);  /* Part of entry */
                 new_entry->next = index->buckets[hash];
                 index->buckets[hash] = new_entry;
                 index->entries++;
@@ -916,8 +927,11 @@ void db_update_indexes_for_document(database_t* db, const char* collection,
         /* Create new entry */
         index_entry_t* new_entry = (index_entry_t*)BUFFER_ALLOC(sizeof(index_entry_t));
         if (new_entry) {
+          memory_promote(new_entry);  /* Index entry survives checkpoints */
           new_entry->document_id = BUFFER_STRDUP(document_id);
+          if (new_entry->document_id) memory_promote(new_entry->document_id);  /* Part of entry */
           new_entry->key_value = value_str;
+          if (value_str) memory_promote(value_str);  /* Part of entry */
           new_entry->next = index->buckets[hash];
           index->buckets[hash] = new_entry;
           index->entries++;
