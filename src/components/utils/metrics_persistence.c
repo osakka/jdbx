@@ -176,8 +176,8 @@ static void* metrics_persistence_thread(void* arg) {
       mp->last_cleanup = now;
     }
     
-    /* Sleep for a short time - reduced from 5s to 100ms for lower latency */
-    usleep(100000); /* 100ms */
+    /* Sleep for a reasonable time - check every 5 seconds instead of 10 times per second */
+    sleep(5); /* 5 seconds - still responsive but not CPU intensive */
   }
   
   LOG_INFO("Metrics persistence thread stopped.");
