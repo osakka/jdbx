@@ -17,9 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - ADR-035: Client Connection Memory Lifecycle Fix with comprehensive analysis
+- ADR-TIMELINE: Comprehensive architectural decision timeline across project history
+- ADR-028: Checkpoint-Based Memory Manager foundational architecture
+- ADR-033: Checkpoint-Only JSON Memory Management systematic conversion
 - Memory scope classification guidelines for developers
 - Comprehensive validation testing for operation stability
 - Clean workspace management with organized test script archival
+- Maintainable architectural decision tracking with git commit references
 
 ### Changed
 - Client connections are now properly classified as request-scoped, not checkpoint-scoped
