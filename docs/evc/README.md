@@ -99,10 +99,14 @@ Through standardized prompts, AI learns to:
 - **[Psychology](psychology/)** - Understanding human-AI collaboration
 - **[Patterns](patterns/)** - Neural network behavioral patterns
 - **[Case Studies](case-studies/)** - Real-world EVC projects
+  - [JDBX Success Story](case-studies/jdbx-lessons.md) - 3 months to production
+  - [N-1 Byte Crisis](case-studies/n1-byte-crisis.md) - Deep learning from debugging
 - **[Guides](guides/)** - Practical implementation guides
   - [Do's and Don'ts](guides/dos-and-donts.md) - Quick reference for success
   - [Setup and Scaling](guides/setup-and-scaling.md) - Infrastructure and WORCA
 - **[Principles](principles/)** - Foundational principles and standards
+- **[Philosophy](philosophy/)** - Deeper understanding of EVC
+  - [Parable of the Cave](philosophy/parable-of-the-cave.md) - Understanding LLM echo mechanics
 
 ### Reference Documents
 - **[EVC Taxonomy](EVC_TAXONOMY.md)** - Comprehensive classification system

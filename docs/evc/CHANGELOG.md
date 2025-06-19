@@ -5,6 +5,20 @@ All notable changes to the Extreme Vibe Coding (EVC) documentation will be docum
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-20
+
+### Added
+- **Philosophy Section**: Deep philosophical understanding of EVC
+  - Parable of the Cave (`philosophy/parable-of-the-cave.md`) - Understanding LLM echo mechanics
+- **Extended Case Studies**: Comprehensive lessons from JDBX development
+  - JWT Cache Race Condition (`case-studies/jwt-cache-race-condition.md`) - Concurrent auth crisis
+  - Memory Management Revolution (`case-studies/memory-management-revolution.md`) - 540 frees to zero
+  - The Great Reorganization (`case-studies/great-reorganization.md`) - 50 commits in one day
+
+### Updated
+- Main EVC README with philosophy section and additional case studies
+- Root project README with Parable of the Cave reference
+
 ## [1.0.0] - 2025-01-20
 
 ### Added
@@ -21,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Do's and Don'ts quick reference (`guides/dos-and-donts.md`)
 - Comprehensive EVC taxonomy (`EVC_TAXONOMY.md`)
 - This changelog file
+- N-1 Byte Crisis case study: Deep learning from 5-7 day debugging experience
 
 ### Context
 This documentation captures the methodology that enabled JDBX development:
