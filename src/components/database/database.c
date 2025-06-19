@@ -1118,9 +1118,10 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     }
     *doc_ptr = json_deep_copy(doc_copy);
     
-    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
     // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(*doc_ptr);
+    memory_promote(doc_ptr);     // Promote the pointer storage
+    memory_promote(*doc_ptr);    // Promote the document itself
     
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     
@@ -1298,9 +1299,10 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
     }
     *new_doc_ptr = json_deep_copy(updated_doc);
     
-    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
     // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(*new_doc_ptr);
+    memory_promote(new_doc_ptr);     // Promote the pointer storage
+    memory_promote(*new_doc_ptr);    // Promote the document itself
     
     // 3. Atomic replace in skiplist
     skiplist_delete(coll->documents, id, strlen(id) + 1);
@@ -1796,13 +1798,21 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     json_object_set(doc_copy, "modified_at", json_create_integer(now));
     
     // BAR RAISING: Store JSON object directly - skiplist manages pointer lifecycle
-    json_value_t* stored_doc = json_deep_copy(doc_copy);
+    // CRITICAL FIX: Must allocate persistent pointer storage, not use stack address!
+    json_value_t** doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
+    if (!doc_ptr) {
+        pthread_rwlock_unlock(&coll->lock);
+        /* CHECKPOINT: json_free(doc_copy); */
+        return NULL;
+    }
+    *doc_ptr = json_deep_copy(doc_copy);
     
-    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
     // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(stored_doc);
+    memory_promote(doc_ptr);     // Promote the pointer storage
+    memory_promote(*doc_ptr);    // Promote the document itself
     
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_doc, sizeof(json_value_t*));
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1877,14 +1887,23 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
     
     // BAR RAISING: Replace JSON object - skiplist manages pointer lifecycle
-    json_value_t* stored_updated = json_deep_copy(updated_doc);
+    // CRITICAL FIX: Must allocate persistent pointer storage, not use stack address!
+    json_value_t** updated_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
+    if (!updated_ptr) {
+        BUFFER_FREE(raw_data);
+        pthread_rwlock_unlock(&coll->lock);
+        /* CHECKPOINT: json_free(updated_doc); */
+        return NULL;
+    }
+    *updated_ptr = json_deep_copy(updated_doc);
     
-    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
     // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(stored_updated);
+    memory_promote(updated_ptr);     // Promote the pointer storage
+    memory_promote(*updated_ptr);    // Promote the document itself
     
     skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_updated, sizeof(json_value_t*));
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, updated_ptr, sizeof(json_value_t*));
     /* CHECKPOINT: json_free(existing_doc); */  // Free old JSON object
     
     BUFFER_FREE(raw_data);  // Free the search result

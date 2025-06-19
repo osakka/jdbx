@@ -161,6 +161,8 @@ bool skiplist_insert(skiplist_t* list, const void* key, size_t key_len,
                 hp_release_record(hp_rec);
                 return false;
             }
+            /* CRITICAL: Promote skiplist value to survive checkpoint rewinds */
+            memory_promote(new_value);
             memcpy(new_value, value, value_len);
             
             void* old_value = succs[0]->value;

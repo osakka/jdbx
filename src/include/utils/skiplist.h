@@ -9,6 +9,7 @@
 #include <string.h>
 #include "utils/hazard_pointer.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 
 /* Lock-free skip list for high-performance indexing
  * Supports concurrent reads and writes without locks
@@ -97,6 +98,10 @@ static inline skiplist_node_t* skiplist_create_node(int level,
     skiplist_node_t* node = BUFFER_ALLOC(node_size);
     if (!node) return NULL;
     
+    /* CRITICAL: Skiplist nodes must survive checkpoint rewinds as they are
+     * part of persistent data structures. Promote immediately after allocation. */
+    memory_promote(node);
+    
     /* Handle NULL key/value (for sentinel nodes) */
     if (key && key_len > 0) {
         node->key = BUFFER_ALLOC(key_len);
@@ -104,6 +109,7 @@ static inline skiplist_node_t* skiplist_create_node(int level,
             BUFFER_FREE(node);
             return NULL;
         }
+        memory_promote(node->key);  // Promote key storage
         memcpy(node->key, key, key_len);
     } else {
         node->key = NULL;
@@ -116,6 +122,7 @@ static inline skiplist_node_t* skiplist_create_node(int level,
             BUFFER_FREE(node);
             return NULL;
         }
+        memory_promote(node->value);  // Promote value storage
         memcpy(node->value, value, value_len);
     } else {
         node->value = NULL;
