@@ -39,7 +39,7 @@
 ```bash
 # 1. Environment Check
 git status              # Clean working directory?
-pytest                  # All tests passing?
+go test ./...          # All tests passing?
 git pull               # Latest code?
 
 # 2. Mental Preparation
@@ -66,7 +66,7 @@ git pull               # Latest code?
 
 Example:
 "This is an implementation session. We're adding rate limiting to our API 
-following our established middleware pattern from auth_middleware.py. 
+following our established middleware pattern from auth_middleware.go. 
 Success means: working rate limiter with tests, configurable limits, 
 and Redis backend for distributed counting."
 ```
@@ -83,17 +83,17 @@ and Redis backend for distributed counting."
 ```
 
 **Context Management**:
-```python
-# Start broad
+```javascript
+// Start broad
 "We need rate limiting for our API"
 
-# Narrow focus  
+// Narrow focus  
 "Implement token bucket algorithm"
 
-# Specific details
+// Specific details
 "Use Redis INCR with TTL for atomic counting"
 
-# Back to integration
+// Back to integration
 "Now integrate with existing middleware"
 ```
 
@@ -242,7 +242,7 @@ git push
 ### Context Notes
 - Using token bucket algorithm
 - Redis keys: "rate_limit:{user_id}:{endpoint}"  
-- Pattern follows auth_middleware.py structure
+- Pattern follows auth_middleware.go structure
 ```
 
 ### Resuming Work

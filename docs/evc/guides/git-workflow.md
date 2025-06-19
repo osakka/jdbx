@@ -35,8 +35,8 @@ cat > .gitignore << 'EOF'
 build/
 dist/
 *.o
-*.pyc
-__pycache__/
+*.a
+*.so
 
 # IDE
 .vscode/
@@ -45,8 +45,8 @@ __pycache__/
 
 # Dependencies
 node_modules/
-venv/
 vendor/
+go.sum
 EOF
 
 # Create initial structure
@@ -182,7 +182,7 @@ git reset HEAD .
 git add -p  # Add chunks selectively
 
 # 3. Test before committing
-pytest  # or your test command
+go test ./...  # or npm test
 git commit -m "test: Add comprehensive test suite for auth module"
 ```
 
@@ -245,7 +245,7 @@ Implements complete authentication with:
 ### Amending Recent Commit
 ```bash
 # Fix the last commit
-git add forgotten-file.py
+git add forgotten-file.go
 git commit --amend --no-edit
 
 # Or update message
@@ -255,10 +255,10 @@ git commit --amend -m "Better commit message"
 ### Undoing Changes
 ```bash
 # Unstage files
-git reset HEAD file.py
+git reset HEAD file.go
 
 # Discard local changes  
-git checkout -- file.py
+git checkout -- file.go
 
 # Undo last commit (keep changes)
 git reset --soft HEAD~1
@@ -487,7 +487,7 @@ git filter-branch --force --index-filter \
 # During rebase conflicts
 git status  # See conflicted files
 # Edit files to resolve
-git add resolved-file.py
+git add resolved-file.go
 git rebase --continue
 
 # Or abort and try different strategy

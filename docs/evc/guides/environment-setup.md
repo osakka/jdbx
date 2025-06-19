@@ -35,7 +35,7 @@ git config --global diff.algorithm histogram
 **Option B: API Access**
 ```bash
 # Install API client
-pip install anthropic  # or openai
+npm install @anthropic-ai/sdk  # or openai
 
 # Set API key
 export ANTHROPIC_API_KEY="your-key-here"
@@ -60,7 +60,7 @@ sudo apt install tmux  # or brew install tmux
 **Editor Configuration**
 ```bash
 # VS Code with extensions
-code --install-extension ms-python.python
+code --install-extension golang.go
 code --install-extension ms-vscode.cpptools
 code --install-extension yzhang.markdown-all-in-one
 code --install-extension streetsidesoftware.code-spell-checker
@@ -82,7 +82,7 @@ set updatetime=100
 │   ├── project-1/
 │   └── project-2/
 ├── templates/          # Reusable templates
-│   ├── python/
+│   ├── go/
 │   ├── javascript/
 │   └── c/
 ├── logs/              # Session logs
@@ -196,45 +196,49 @@ javascript:(function(){
 ```
 
 ### Terminal AI Setup
-```python
-# ~/.config/evc/ai_client.py
-import anthropic
-import os
-from datetime import datetime
+```javascript
+// ~/.config/evc/ai_client.js
+const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 
-class EVCClient:
-    def __init__(self):
-        self.client = anthropic.Client(
-            api_key=os.environ.get("ANTHROPIC_API_KEY")
-        )
-        self.context = []
-        self.session_file = f"session_{datetime.now():%Y%m%d_%H%M%S}.log"
+class EVCClient {
+    constructor() {
+        this.client = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY
+        });
+        this.context = [];
+        this.sessionFile = `session_${new Date().toISOString().slice(0,19)}.log`;
+    }
     
-    def send(self, message):
-        # Add to context
-        self.context.append({"role": "user", "content": message})
+    async send(message) {
+        // Add to context
+        this.context.push({ role: 'user', content: message });
         
-        # Get response
-        response = self.client.messages.create(
-            model="claude-3-sonnet-20240229",
-            messages=self.context,
-            max_tokens=4000
-        )
+        // Get response
+        const response = await this.client.messages.create({
+            model: 'claude-3-sonnet-20240229',
+            messages: this.context,
+            max_tokens: 4000
+        });
         
-        # Log everything
-        with open(self.session_file, "a") as f:
-            f.write(f"\n\nUser: {message}\n")
-            f.write(f"\nClaude: {response.content}\n")
+        // Log everything
+        fs.appendFileSync(this.sessionFile, 
+            `\n\nUser: ${message}\n\nClaude: ${response.content}\n`);
         
-        return response.content
+        return response.content;
+    }
+}
+
+module.exports = EVCClient;
 ```
 
 ## Quality Assurance Tools
 
 ### Language-Specific Linters
 ```bash
-# Python
-pip install pylint black mypy pytest pytest-cov
+# Go
+go install golang.org/x/lint/golint@latest
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 # JavaScript  
 npm install -g eslint prettier jest
@@ -242,8 +246,8 @@ npm install -g eslint prettier jest
 # C
 sudo apt install cppcheck clang-format valgrind
 
-# Go
-go install golang.org/x/lint/golint@latest
+# Java
+# Use built-in compiler warnings or install SpotBugs
 ```
 
 ### Pre-commit Hooks
@@ -258,15 +262,13 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       
-  - repo: https://github.com/psf/black
-    rev: 23.3.0
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
     hooks:
-      - id: black
-        
-  - repo: https://github.com/pycqa/pylint
-    rev: v2.17.4
-    hooks:
-      - id: pylint
+      - id: go-fmt
+      - id: go-vet
+      - id: go-imports
+      - id: go-mod-tidy
 ```
 
 ## Performance Monitoring
@@ -303,7 +305,7 @@ chmod +x ~/bin/evc-monitor
 split -l 500 large_file.py part_
 
 # Or use context management
-find . -name "*.py" -exec wc -l {} + | sort -n
+find . -name "*.go" -exec wc -l {} + | sort -n
 ```
 
 **2. Git Conflicts**
@@ -318,6 +320,8 @@ git config merge.tool vimdiff
 # Clear caches and restart
 tmux kill-server
 git gc --aggressive
+# Clear build artifacts
+rm -rf build/ node_modules/ target/
 # Restart AI session
 ```
 
@@ -342,10 +346,12 @@ mkdir -p ~/evc-workspace/{projects,templates,logs,archives}
 
 # Install language tools (customize as needed)
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-sudo apt install -y nodejs python3-pip
+sudo apt install -y nodejs
 
-# Python tools
-pip3 install --user pylint black mypy pytest pytest-cov
+# Install Go
+wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 
 # Create helper scripts
 mkdir -p ~/bin

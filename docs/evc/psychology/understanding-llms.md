@@ -28,18 +28,18 @@ Output: "memory_checkpoint_rewind()"
 
 LLMs have no persistent memory between sessions—only the current context:
 
-```python
-# Context Window Visualization
+```javascript
+// Context Window Visualization
 [System Instructions]
 [Previous Messages]  
 [Current Prompt]
-[Generated Response] <- Based ONLY on above
+[Generated Response] // <- Based ONLY on above
 
-# Next interaction
+// Next interaction
 [System Instructions]
 [Previous Messages + Last Response]
 [New Prompt]
-[New Response] <- May contradict if context unclear
+[New Response] // <- May contradict if context unclear
 ```
 
 **Implication**: Manage context deliberately and consistently.
@@ -69,7 +69,7 @@ LLMs carry biases from their training data:
 ```
 Common patterns in training:
 - Web development > Systems programming
-- JavaScript/Python > C
+- JavaScript/Java > C
 - Quick fixes > Architectural purity
 - Generic solutions > Domain-specific
 
@@ -129,14 +129,14 @@ following our established ERROR_* constants pattern"
 
 ### 2. **Pattern Reinforcement**
 
-```python
-# Establish pattern
+```javascript
+// Establish pattern
 "In our system, we always use storage_* functions for database access"
 
-# Reinforce pattern
+// Reinforce pattern
 "Like we did with storage_query_documents..."
 
-# Apply pattern
+// Apply pattern
 "Now implement user creation using the same storage pattern"
 ```
 

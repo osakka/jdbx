@@ -25,20 +25,20 @@
 
 For your first EVC project, **language choice matters immensely**. Start with:
 
-1. **Python** (Recommended for beginners)
+1. **JavaScript/TypeScript** (Recommended for beginners)
    - Highest LLM fluency
    - Clearest echoes from the cave
    - Focus on patterns, not syntax fights
 
-2. **JavaScript/TypeScript** (Good alternative)
-   - Excellent LLM support
-   - Web-friendly if that's your domain
-   - Modern patterns well understood
-
-3. **Go** (If you want compiled language)
+2. **Go** (Excellent choice)
    - Strong LLM support
-   - Fewer footguns than C
-   - Great middle ground
+   - Clean, simple syntax
+   - Great for backend services
+
+3. **Java** (If you prefer JVM)
+   - Massive training data
+   - Enterprise patterns well understood
+   - Excellent tooling
 
 **Avoid for first project**: C, C++, Rust, or niche languages. See [Language Choice Guide](language-choice.md) for why.
 
@@ -70,12 +70,12 @@ Create `CLAUDE.md` with your project vision:
 ```markdown
 # Project Vision
 
-We are building a task management CLI tool in Python with these principles:
+We are building a task management CLI tool in Go with these principles:
 
 1. **Single Source of Truth**: No duplicate implementations
 2. **Test-Driven**: Tests before implementation  
 3. **Clean Architecture**: Clear separation of concerns
-4. **Zero External Dependencies**: Pure Python only
+4. **Zero External Dependencies**: Pure Go stdlib only
 5. **Comprehensive Logging**: Every decision visible
 
 ## Core Features
@@ -86,9 +86,9 @@ We are building a task management CLI tool in Python with these principles:
 
 ## Quality Standards
 - 100% test coverage
-- Zero warnings (pylint)
-- Type hints everywhere
-- Docstrings for all functions
+- Zero linter warnings
+- Proper error handling
+- Clear documentation
 ```
 
 ### Step 3: First Interaction (15 minutes)
@@ -99,14 +99,14 @@ Start your AI session with this prompt:
 I'm starting a new project using Extreme Vibe Coding (EVC). 
 
 Project: Task management CLI tool
-Language: Python
+Language: Go
 Principles: Single source of truth, test-driven, clean architecture, zero dependencies
 
 Please read the vision in CLAUDE.md and then:
-1. Create a comprehensive test file for the core Task class
-2. Implement the Task class to pass all tests
+1. Create a comprehensive test file for the core Task struct
+2. Implement the Task type to pass all tests
 3. Add proper logging throughout
-4. Ensure clean code with type hints
+4. Ensure clean, idiomatic Go code
 
 Start with the test file first.
 ```
@@ -174,7 +174,7 @@ Review generated code against your standards before committing.
 
 ### ✅ Specific Standards
 ```
-"Follow PEP 8, add type hints, 100% test coverage"
+"Follow Go conventions, handle all errors, 100% test coverage"
 ```
 
 ### ❌ Accepting First Draft
@@ -199,7 +199,7 @@ Review generated code against your standards before committing.
 ```
 Structure: [Role] + [Context] + [Task] + [Constraints]
 
-Example: "As a Python expert, following our test-driven approach 
+Example: "As a Go expert, following our test-driven approach 
 and zero-dependency principle, create a JSON persistence layer 
 for TaskList with comprehensive error handling."
 ```
@@ -272,11 +272,13 @@ a8c3421 Add JSON persistence for TaskList
 c7e4332 Add Task class with comprehensive tests
 2341233 Initial project structure
 
-$ pytest
-==================== 24 passed in 0.05s ====================
+$ go test ./...
+ok      taskmanager/task        0.005s
+ok      taskmanager/persistence 0.003s
+PASS
 
-$ pylint src/
-Your code has been rated at 10.00/10
+$ golangci-lint run
+No issues found!
 ```
 
 ## Conclusion

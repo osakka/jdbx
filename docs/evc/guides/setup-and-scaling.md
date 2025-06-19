@@ -25,14 +25,16 @@ For individual developers or small teams starting with EVC:
 As projects grow, direct API usage becomes essential:
 
 #### 1. **Multiple LLM Usage**
-```python
-# Example: Using different LLMs for different tasks
-class EVCOrchestrator:
-    def __init__(self):
-        self.code_llm = ClaudeAPI()      # Primary coding
-        self.review_llm = GPT4API()      # Code review
-        self.docs_llm = ClaudeAPI()      # Documentation
-        self.test_llm = LlamaAPI()       # Test generation
+```javascript
+// Example: Using different LLMs for different tasks
+class EVCOrchestrator {
+    constructor() {
+        this.codeLLM = new ClaudeAPI();      // Primary coding
+        this.reviewLLM = new GPT4API();      // Code review
+        this.docsLLM = new ClaudeAPI();      // Documentation
+        this.testLLM = new LlamaAPI();       // Test generation
+    }
+}
 ```
 
 Benefits:
@@ -42,17 +44,18 @@ Benefits:
 - Redundancy and verification
 
 #### 2. **Simultaneous LLM Operations**
-```python
-# Parallel EVC execution
-async def parallel_evc_development():
-    tasks = [
-        code_llm.generate_api_endpoints(),
-        test_llm.create_test_suite(),
-        docs_llm.update_documentation(),
-        review_llm.audit_security()
-    ]
-    results = await asyncio.gather(*tasks)
-    return merge_results(results)
+```javascript
+// Parallel EVC execution
+async function parallelEVCDevelopment() {
+    const tasks = [
+        codeLLM.generateAPIEndpoints(),
+        testLLM.createTestSuite(),
+        docsLLM.updateDocumentation(),
+        reviewLLM.auditSecurity()
+    ];
+    const results = await Promise.all(tasks);
+    return mergeResults(results);
+}
 ```
 
 Advantages:
@@ -120,20 +123,28 @@ workforce:
 ### Cost Considerations
 
 #### Token Usage Optimization
-```python
-class TokenOptimizer:
-    def __init__(self):
-        self.context_cache = {}
-        self.prompt_library = StandardPrompts()
-        
-    def optimize_prompt(self, task, context):
-        # Reuse cached context where possible
-        base_context = self.context_cache.get(task.category)
-        # Use standardized prompts to reduce tokens
-        prompt = self.prompt_library.get(task.type)
-        # Compress context using references
-        compressed = self.compress_context(context)
-        return combine_efficiently(base_context, prompt, compressed)
+```go
+type TokenOptimizer struct {
+    contextCache  map[string]string
+    promptLibrary *StandardPrompts
+}
+
+func NewTokenOptimizer() *TokenOptimizer {
+    return &TokenOptimizer{
+        contextCache:  make(map[string]string),
+        promptLibrary: NewStandardPrompts(),
+    }
+}
+
+func (t *TokenOptimizer) OptimizePrompt(task Task, context string) string {
+    // Reuse cached context where possible
+    baseContext := t.contextCache[task.Category]
+    // Use standardized prompts to reduce tokens
+    prompt := t.promptLibrary.Get(task.Type)
+    // Compress context using references
+    compressed := t.compressContext(context)
+    return combineEfficiently(baseContext, prompt, compressed)
+}
 ```
 
 #### Resource Planning

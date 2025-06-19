@@ -9,14 +9,14 @@
 **Definition**: Every piece of functionality exists in exactly one place.
 
 **In Practice**:
-```python
-# ❌ VIOLATION
-def get_user_by_id(id): ...
-def fetch_user(id): ...  
-def load_user_data(id): ...  # Three ways to do the same thing
+```javascript
+// ❌ VIOLATION
+function getUserById(id) { ... }
+function fetchUser(id) { ... }  
+function loadUserData(id) { ... }  // Three ways to do the same thing
 
-# ✅ PRINCIPLE UPHELD  
-def get_user(id): ...  # One way, one place
+// ✅ PRINCIPLE UPHELD  
+function getUser(id) { ... }  // One way, one place
 ```
 
 **Why It Matters**:
@@ -174,15 +174,17 @@ Every change: Reason explained
 
 Tests aren't optional—they're specifications.
 
-```python
-# Write test first
-def test_user_validation():
-    assert validate_user({"name": ""}) == False
-    assert validate_user({"name": "John"}) == True
+```javascript
+// Write test first
+test('user validation', () => {
+    expect(validateUser({name: ''})).toBe(false);
+    expect(validateUser({name: 'John'})).toBe(true);
+});
 
-# Then implement
-def validate_user(data):
-    return bool(data.get("name"))
+// Then implement
+function validateUser(data) {
+    return Boolean(data.name);
+}
 ```
 
 ### 🔍 **Aggressive Refactoring**

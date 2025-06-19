@@ -26,22 +26,20 @@ Session 500: Cognitive resonance
 
 Repeated patterns become "crystallized" in responses:
 
-```python
-# Early sessions: Generic implementation
-def get_user(id):
-    return database.query(f"SELECT * FROM users WHERE id={id}")
+```javascript
+// Early sessions: Generic implementation
+function getUser(id) {
+    return database.query(`SELECT * FROM users WHERE id=${id}`);
+}
 
-# After crystallization: Project-specific patterns
-def get_user(user_id):
-    """Retrieve user document from unified storage.
-    
-    Args:
-        user_id: User document UUID
-        
-    Returns:
-        JSON document with type='user' or None
-    """
-    query = json_create_object()
+// After crystallization: Project-specific patterns
+function getUser(userId) {
+    /**
+     * Retrieve user document from unified storage.
+     * @param {string} userId - User document UUID
+     * @returns {Object} JSON document with type='user' or null
+     */
+    const query = jsonCreateObject();
     json_object_set(query, "uuid", json_create_string(user_id))
     json_object_set(query, "type", json_create_string("user"))
     
@@ -180,22 +178,24 @@ Under uncertainty, AI regresses to generic patterns:
 
 Manage context strategically:
 
-```python
-class ContextManager:
-    def __init__(self):
-        self.core_context = load_principles()
-        self.component_context = {}
+```javascript
+class ContextManager {
+    constructor() {
+        this.coreContext = loadPrinciples();
+        this.componentContext = {};
+    }
+    
+    optimizeContext(task) {
+        // Always include core principles
+        let context = this.coreContext;
         
-    def optimize_context(self, task):
-        # Always include core principles
-        context = self.core_context
-        
-        # Add component-specific context
-        if task.component in self.component_context:
-            context += self.component_context[task.component]
+        // Add component-specific context
+        if (task.component in this.componentContext) {
+            context += this.componentContext[task.component];
+        }
             
-        # Prune old decisions
-        context = self.prune_outdated(context)
+        // Prune old decisions
+        context = this.pruneOutdated(context);
         
         return context
 ```

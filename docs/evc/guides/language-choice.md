@@ -119,31 +119,34 @@ type UserService interface {
 - Single method interfaces
 - Resist concurrency unless necessary
 
-### Python: The Library Dependency Web
+### Ruby: The DSL Proliferation
 
 **What Happens**:
-```python
+```ruby
 # LLM immediately suggests:
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import StandardScaler
-import tensorflow as tf
-import requests
-import flask
-# ... for a simple data processing task
+class TaskManager < ApplicationRecord
+  has_many :tasks, dependent: :destroy
+  validates :name, presence: true
+  
+  before_save :normalize_name
+  after_create :send_notification
+  
+  scope :active, -> { where(active: true) }
+  # ... DSLs and metaprogramming everywhere
+end
 ```
 
 **Why It Happens**:
-- Python's "batteries included" philosophy
-- Training data full of heavy dependencies
-- Every problem solved with libraries
-- Import statements are "free"
+- Ruby culture loves DSLs
+- Rails patterns dominate training data
+- "Magic" is considered good
+- Metaprogramming is common
 
 **EVC Guidance Required**:
-- "Zero dependencies" reminders
-- Standard library solutions first
-- Question every import
-- Build from scratch when simple
+- Explicit over magic
+- Clear method calls
+- Avoid excessive DSLs
+- Standard Ruby when possible
 
 ### JavaScript: The Framework Churn
 
@@ -172,10 +175,10 @@ Prisma ORM, tRPC, React Query, Zustand..."
 
 ### For Maximum EVC Efficiency
 
-**Choose Python/JavaScript when**:
+**Choose JavaScript/TypeScript when**:
 - Rapid prototyping needed
 - Web/API development
-- Data processing tasks
+- Full-stack applications
 - Learning EVC patterns
 
 **Choose Go when**:
@@ -234,20 +237,19 @@ type Storage interface {
 // Add channels/goroutines only when measured need
 ```
 
-### In Python (Dependency Web)
+### In JavaScript (Dependency Web)
 
 **Patterns that Help**:
-```python
-# 1. Standard library first
-import json  # Not: import simplejson
-import urllib.request  # Not: import requests
+```javascript
+// 1. Use built-ins first
+JSON.parse(data)  // Not: require('json5')
+fetch(url)  // Not: import axios
 
-# 2. Copy small utilities
-def flatten(lst):  # Not: from itertools import chain
-    return [item for sublist in lst for item in sublist]
+// 2. Write simple utilities
+const flatten = arr => arr.flat()  // Not: require('lodash')
 
-# 3. Measure before optimizing
-# Profile before reaching for numpy
+// 3. Measure before optimizing
+// Profile before adding bundlers/transpilers
 ```
 
 ## The Echo Chamber Effect
@@ -255,7 +257,7 @@ def flatten(lst):  # Not: from itertools import chain
 ### High-Representation Languages
 ```
 Human: "Parse JSON"
-Python LLM: json.loads(data) ✓ [Instant, correct]
+JavaScript LLM: JSON.parse(data) ✓ [Instant, correct]
 C LLM: "Let's implement a JSON parser..." [Rabbit hole]
 ```
 
@@ -269,32 +271,32 @@ C LLM: Various styles, inconsistent
 ### Library Knowledge
 ```
 Human: "Add HTTP client"
-Python LLM: requests.get() or urllib ✓ [Knows options]
+JavaScript LLM: fetch() or axios ✓ [Knows options]
 C LLM: "Let's use... curl? libcurl? raw sockets?" [Uncertain]
 ```
 
 ## Strategic Language Mixing
 
-### Use Python for:
+### Use JavaScript for:
 - Prototyping the algorithm
-- Understanding the problem
+- Web interface development
 - Quick experiments
 - Initial design
 
 ### Then Port to:
-- C for performance
-- Go for production services  
-- Rust for safety-critical
-- Keep Python for scripts
+- C for performance-critical parts
+- Go for backend services  
+- Rust for safety-critical systems
+- Keep JavaScript for UI/frontend
 
 ### Example Workflow:
-```python
-# 1. Prototype in Python (1 hour)
-def process_data(items):
-    return [transform(x) for x in items if validate(x)]
+```javascript
+// 1. Prototype in JavaScript (1 hour)
+const processData = (items) => 
+    items.filter(validate).map(transform);
 
-# 2. Understand performance needs
-# 3. Port to appropriate language with clear spec
+// 2. Understand performance needs
+// 3. Port to appropriate language with clear spec
 ```
 
 ## The Meta-Learning
@@ -319,7 +321,7 @@ def process_data(items):
 ## Recommendations
 
 ### For New EVC Practitioners
-1. **Start with Python or JavaScript**
+1. **Start with JavaScript or Go**
    - Maximum LLM fluency
    - Focus on EVC patterns, not language fights
    - Rapid feedback loops

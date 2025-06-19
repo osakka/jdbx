@@ -22,7 +22,7 @@ PROJECT VISION:
 [Clear, specific description - e.g., "A high-performance document database where EVERYTHING is a document, stored in a single unified collection"]
 
 TECHNICAL CONTEXT:
-- Language: [C/Python/Go/etc]
+- Language: [C/Go/JavaScript/Rust/etc]
 - Architecture: [monolithic/microservices/etc]
 - Performance: [requirements]
 - Scale: [expected load]
