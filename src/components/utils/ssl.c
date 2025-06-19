@@ -31,6 +31,7 @@
 #include "utils/ssl.h"
 #include "utils/buffer_pool.h"
 #include "utils/logger.h"
+#include "utils/memory_manager.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -225,6 +226,12 @@ ssl_error_t ssl_context_create(const ssl_config_t *config, ssl_context_t **ctx) 
     return SSL_ERROR_MEMORY;
   }
   
+  /* CRITICAL: SSL context is a global resource that must survive checkpoint rewinds.
+   * It's created once at startup and used for all SSL connections throughout the
+   * server lifetime. OpenSSL maintains extensive internal state that would corrupt
+   * if the context memory is freed. */
+  memory_promote(new_ctx);
+  
   /* Initialize mutex for thread-safe SSL_new() operations */
   if (pthread_mutex_init(&new_ctx->ssl_new_mutex, NULL) != 0) {
     LOG_ERROR("initialize SSL context mutex.");
@@ -293,6 +300,11 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
     SSL_free(ssl);
     return SSL_ERROR_MEMORY;
   }
+  
+  /* CRITICAL: SSL connections must survive checkpoint rewinds as they're used
+   * across multiple requests in keep-alive sessions. OpenSSL maintains internal
+   * references that would become dangling if the connection is freed by checkpoint. */
+  memory_promote(new_conn);
   
   new_conn->ssl = ssl;
   new_conn->connected = 0;
