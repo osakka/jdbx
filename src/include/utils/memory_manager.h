@@ -131,6 +131,30 @@ void memory_bypass_checkpoint(int bypass);
  */
 void memory_manager_get_stats(uint64_t* checkpoints_created, uint64_t* rewinds, uint64_t* allocations_freed);
 
+/**
+ * Mark an allocation as hazard-protected
+ * The allocation will not be freed on checkpoint rewind until the hazard is cleared
+ * 
+ * @param ptr The allocation to protect
+ * @param hazard_data Hazard pointer system data
+ */
+void memory_mark_hazard_protected(void* ptr, void* hazard_data);
+
+/**
+ * Clear hazard protection from an allocation
+ * If the checkpoint was already rewound, the memory will be freed
+ * 
+ * @param ptr The allocation to unprotect
+ */
+void memory_clear_hazard_protection(void* ptr);
+
+/**
+ * Callback from hazard pointer system when memory is safe to free
+ * 
+ * @param ptr The memory that can now be safely freed
+ */
+void memory_hazard_retire_callback(void* ptr);
+
 /* Convenience macros for easy integration */
 #define MEMORY_CHECKPOINT() memory_checkpoint_create()
 #define MEMORY_REWIND(cp) memory_checkpoint_rewind(cp)

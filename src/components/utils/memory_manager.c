@@ -23,6 +23,9 @@
 
 /* Memory managers should not depend on logging */
 
+/* Memory allocation flags */
+#define MEMORY_FLAG_HAZARD_PROTECTED 0x00000001  /* Protected by hazard pointers */
+
 /* Memory allocation header for tracking */
 typedef struct memory_header {
     struct memory_header* next;      /* Next allocation in checkpoint */
@@ -30,6 +33,8 @@ typedef struct memory_header {
     memory_checkpoint_t* checkpoint; /* Owning checkpoint */
     size_t size;                    /* Allocation size */
     uint32_t magic;                 /* Magic number for corruption detection */
+    uint32_t flags;                 /* Memory flags (hazard protected, etc) */
+    void* hazard_data;              /* Hazard pointer data if protected */
     /* User data follows immediately after this header with proper alignment */
 } memory_header_t;
 
@@ -209,17 +214,32 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
         
         /* Free all allocations in this checkpoint */
         memory_header_t* header = cp->first_alloc;
+        memory_header_t* hazard_list = NULL;  /* List of hazard-protected allocations */
+        
         while (header) {
             memory_header_t* next = header->next;
-            header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
-            free(header);
-            freed_count++;
+            
+            if (header->flags & MEMORY_FLAG_HAZARD_PROTECTED) {
+                /* Hazard protected - defer freeing, add to hazard list */
+                header->prev = NULL;
+                header->next = hazard_list;
+                if (hazard_list) hazard_list->prev = header;
+                hazard_list = header;
+            } else {
+                /* Not hazard protected - free immediately */
+                header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
+                free(header);
+                freed_count++;
+            }
             header = next;
         }
         
-        /* Clear the list pointers */
-        cp->first_alloc = NULL;
-        cp->last_alloc = NULL;
+        /* Update the checkpoint to only contain hazard-protected allocations */
+        cp->first_alloc = hazard_list;
+        cp->last_alloc = hazard_list;
+        while (cp->last_alloc && cp->last_alloc->next) {
+            cp->last_alloc = cp->last_alloc->next;
+        }
         
         /* Unlock before destroying */
         pthread_spin_unlock(&cp->lock);
@@ -238,17 +258,32 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
     pthread_spin_lock(&checkpoint->lock);
     
     memory_header_t* header = checkpoint->first_alloc;
+    memory_header_t* hazard_list = NULL;
+    
     while (header) {
         memory_header_t* next = header->next;
-        header->magic = 0;
-        free(header);
-        freed_count++;
+        
+        if (header->flags & MEMORY_FLAG_HAZARD_PROTECTED) {
+            /* Hazard protected - defer freeing */
+            header->prev = NULL;
+            header->next = hazard_list;
+            if (hazard_list) hazard_list->prev = header;
+            hazard_list = header;
+        } else {
+            /* Not hazard protected - free immediately */
+            header->magic = MEMORY_MAGIC_FREE;
+            free(header);
+            freed_count++;
+        }
         header = next;
     }
     
-    /* Reset checkpoint */
-    checkpoint->first_alloc = NULL;
-    checkpoint->last_alloc = NULL;
+    /* Update checkpoint to only contain hazard-protected allocations */
+    checkpoint->first_alloc = hazard_list;
+    checkpoint->last_alloc = hazard_list;
+    while (checkpoint->last_alloc && checkpoint->last_alloc->next) {
+        checkpoint->last_alloc = checkpoint->last_alloc->next;
+    }
     checkpoint->allocation_count = 0;
     checkpoint->total_size = 0;
     
@@ -621,4 +656,56 @@ void memory_manager_get_stats(uint64_t* checkpoints_created, uint64_t* rewinds, 
     if (checkpoints_created) *checkpoints_created = g_memory_stats.checkpoints_created;
     if (rewinds) *rewinds = g_memory_stats.rewinds_performed;
     if (allocations_freed) *allocations_freed = g_memory_stats.allocations_freed_by_rewind;
+}
+
+/**
+ * Mark an allocation as hazard-protected
+ * The allocation will not be freed on checkpoint rewind until the hazard is cleared
+ */
+void memory_mark_hazard_protected(void* ptr, void* hazard_data) {
+    if (!ptr || !g_memory_manager_initialized) return;
+    
+    memory_header_t* header = get_memory_header(ptr);
+    if (!header || header->magic != MEMORY_MAGIC) return;
+    
+    /* Set hazard protection flag and data */
+    header->flags |= MEMORY_FLAG_HAZARD_PROTECTED;
+    header->hazard_data = hazard_data;
+}
+
+/**
+ * Clear hazard protection from an allocation
+ * If the checkpoint was already rewound, the memory will be freed
+ */
+void memory_clear_hazard_protection(void* ptr) {
+    if (!ptr || !g_memory_manager_initialized) return;
+    
+    memory_header_t* header = get_memory_header(ptr);
+    if (!header || header->magic != MEMORY_MAGIC) return;
+    
+    /* Clear hazard protection */
+    header->flags &= ~MEMORY_FLAG_HAZARD_PROTECTED;
+    header->hazard_data = NULL;
+    
+    /* If checkpoint was already rewound and we're no longer in the checkpoint, free now */
+    if (header->checkpoint && header->checkpoint->committed) {
+        /* Checkpoint was committed, not rewound */
+        return;
+    }
+    
+    /* Check if we're still linked to an active checkpoint */
+    if (!header->checkpoint || (!header->prev && !header->next && 
+        header->checkpoint->first_alloc != header)) {
+        /* Not in any checkpoint list - was already rewound, free now */
+        header->magic = MEMORY_MAGIC_FREE;
+        free(header);
+    }
+}
+
+/**
+ * Callback from hazard pointer system when memory is safe to free
+ */
+void memory_hazard_retire_callback(void* ptr) {
+    /* Just clear the hazard protection - the logic in clear will handle freeing */
+    memory_clear_hazard_protection(ptr);
 }

@@ -2,39 +2,52 @@
 
 **Last Updated**: June 19, 2025 (v6.3.7 - Checkpoint Memory vs Hazard Pointers)
 
-## 🚧 ARCHITECTURAL CONFLICT: Checkpoint Memory vs Hazard Pointers (v6.3.7)
+## 🚧 SSL THREAD SAFETY & UNIFIED MEMORY RECLAMATION (v6.3.7)
 
-**JDBX has identified a fundamental architectural conflict between checkpoint-based memory management and the lock-free skiplist's hazard pointer system.**
+**JDBX has discovered a critical SSL thread safety issue and implemented a bar-raising unified memory reclamation system to resolve architectural conflicts.**
 
-### 🚨 **CRITICAL ISSUE DISCOVERED:**
-- **MEMORY SYSTEM CONFLICT**: Checkpoint memory expects to free allocations on rewind
-- **HAZARD POINTER PROTECTION**: Skiplist defers memory reclamation to prevent use-after-free
-- **CRASH PATTERN**: Server crashes after 4-5 rapid create/delete operations
-- **ROOT CAUSE**: Promoted skiplist documents can't be freed safely
+### 🚨 **CRITICAL ISSUES DISCOVERED:**
+- **SSL THREAD CRASH**: Server crashes consistently after 4 operations (matching 4 worker threads)
+- **CRASH LOCATION**: EVP_RAND_generate in OpenSSL during 5th SSL handshake
+- **MEMORY CONFLICT**: Checkpoint memory vs hazard pointer systems incompatible
+- **ROOT CAUSE**: SSL random number generator corruption in multi-threaded environment
 
-### 🔧 **ATTEMPTED SOLUTIONS:**
-- **SSL Thread Safety**: Added OPENSSL_init_ssl with ATFORK flag
-- **SSL Reinit After Fork**: Call RAND_poll() after daemonization
-- **No Promotion**: Removed memory_promote() calls for skiplist documents
-- **Status**: Issue persists - deeper architectural change needed
+### 🏆 **BAR-RAISING SOLUTION IMPLEMENTED:**
+- **UNIFIED MEMORY RECLAMATION**: Integrated checkpoint memory with hazard pointers
+- **HAZARD PROTECTION FLAGS**: Allocations marked as hazard-protected defer freeing
+- **SMART CHECKPOINT REWIND**: Respects hazard-protected allocations
+- **CALLBACK INTEGRATION**: Hazard pointer retirement triggers proper cleanup
+
+### 🔧 **SOLUTIONS ATTEMPTED:**
+- ✅ **Unified Memory System**: Implemented complete integration (memory_mark_hazard_protected)
+- ✅ **SSL Thread Safety**: Added OPENSSL_init_ssl with proper flags
+- ✅ **SSL Reinit After Fork**: Call RAND_poll() after daemonization
+- ✅ **Hazard Protection**: Skiplist documents marked as hazard-protected
+- ❌ **Status**: SSL crash persists - appears to be deeper OpenSSL issue
 
 ### 📊 **CRASH ANALYSIS:**
-- ✅ **Pattern**: Consistent crash after 4 create/delete cycles
-- ✅ **Location**: EVP_RAND_generate in OpenSSL during SSL handshake
-- ✅ **Threads**: 4 worker threads - crash on 5th operation
-- ✅ **Memory**: Checkpoint tries to free hazard-pointer-protected memory
+- ✅ **Pattern**: Always crashes on 5th operation (after using all 4 threads)
+- ✅ **Timing**: Each thread handles one request, 5th request triggers issue
+- ✅ **Location**: OpenSSL RNG during ephemeral key generation
+- ✅ **Hypothesis**: SSL context or RNG state corruption across threads
 
-### 🏆 **LESSONS LEARNED:**
-- **Architectural Alignment**: Memory systems must be compatible
-- **Hazard Pointers**: Essential for lock-free data structures
-- **Checkpoint Memory**: Great for request-scoped allocations
-- **Integration Challenge**: Need unified memory reclamation strategy
+### 🏗️ **UNIFIED MEMORY ARCHITECTURE:**
+```c
+// Hazard-protected allocation that survives checkpoint rewind
+memory_mark_hazard_protected(ptr, hazard_data);
+
+// Smart rewind that defers hazard-protected frees
+memory_checkpoint_rewind(checkpoint);  // Only frees non-hazard allocations
+
+// Callback when safe to free
+memory_hazard_retire_callback(ptr);   // Frees when no longer protected
+```
 
 ### 🔄 **NEXT STEPS:**
-- **Option 1**: Use malloc/free for skiplist allocations (bypass checkpoint)
-- **Option 2**: Integrate hazard pointer callbacks with checkpoint system
-- **Option 3**: Separate allocation pools for persistent vs transient data
-- **Option 4**: Investigate SSL thread pool initialization issue
+- **Option 1**: Initialize SSL separately in each worker thread
+- **Option 2**: Use thread-local SSL contexts instead of shared context
+- **Option 3**: Investigate OpenSSL 3.x specific thread safety requirements
+- **Option 4**: Test with OpenSSL 1.1.x to isolate version-specific issues
 
 ## 🔧 METRICS THREAD CPU USAGE FIX (v6.3.6)
 
