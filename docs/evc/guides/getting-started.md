@@ -21,6 +21,27 @@
    - Commitment to principles
    - Patience for partnership building
 
+### Choosing Your First Language
+
+For your first EVC project, **language choice matters immensely**. Start with:
+
+1. **Python** (Recommended for beginners)
+   - Highest LLM fluency
+   - Clearest echoes from the cave
+   - Focus on patterns, not syntax fights
+
+2. **JavaScript/TypeScript** (Good alternative)
+   - Excellent LLM support
+   - Web-friendly if that's your domain
+   - Modern patterns well understood
+
+3. **Go** (If you want compiled language)
+   - Strong LLM support
+   - Fewer footguns than C
+   - Great middle ground
+
+**Avoid for first project**: C, C++, Rust, or niche languages. See [Language Choice Guide](language-choice.md) for why.
+
 ## Your First EVC Session
 
 ### Step 1: Project Setup (5 minutes)

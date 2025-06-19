@@ -108,6 +108,7 @@ Through standardized prompts, AI learns to:
 - **[Guides](guides/)** - Practical implementation guides
   - [Getting Started](guides/getting-started.md) - Your first EVC session
   - [Environment Setup](guides/environment-setup.md) - Tools and configuration
+  - [Language Choice](guides/language-choice.md) - How language affects the entire narrative
   - [Session Management](guides/session-management.md) - Optimizing productivity
   - [Git Workflow](guides/git-workflow.md) - Version control for EVC
   - [Do's and Don'ts](guides/dos-and-donts.md) - Quick reference
