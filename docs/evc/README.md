@@ -104,6 +104,10 @@ Through standardized prompts, AI learns to:
   - [Setup and Scaling](guides/setup-and-scaling.md) - Infrastructure and WORCA
 - **[Principles](principles/)** - Foundational principles and standards
 
+### Reference Documents
+- **[EVC Taxonomy](EVC_TAXONOMY.md)** - Comprehensive classification system
+- **[Changelog](CHANGELOG.md)** - Documentation version history
+
 ## Key Insights
 
 ### What Makes EVC Different
