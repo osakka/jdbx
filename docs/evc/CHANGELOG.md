@@ -5,6 +5,29 @@ All notable changes to the Extreme Vibe Coding (EVC) documentation will be docum
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-01-20
+
+### Added
+- **Practical Guides**: Complete setup and workflow documentation
+  - Getting Started (`guides/getting-started.md`) - First EVC session walkthrough
+  - Environment Setup (`guides/environment-setup.md`) - Tools and configuration
+  - Session Management (`guides/session-management.md`) - Optimizing productivity
+  - Git Workflow (`guides/git-workflow.md`) - Version control best practices
+- **Core Principles**: Comprehensive principles documentation (`principles/README.md`)
+- **Methodology Enhancement**: "Letting the Cave Echo" deliberate observation technique
+
+### Updated
+- Removed irrelevant budget/cost data from setup guide
+- Fixed broken links in main README
+- Reorganized guides for logical learning path
+- Enhanced documentation structure for clarity
+
+### Fixed
+- Missing principles directory now populated
+- Missing git workflow guide now created
+- Broken internal navigation links
+- Outdated tool references
+
 ## [1.1.0] - 2025-01-20
 
 ### Added

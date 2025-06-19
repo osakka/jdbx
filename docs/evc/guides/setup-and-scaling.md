@@ -136,10 +136,10 @@ class TokenOptimizer:
         return combine_efficiently(base_context, prompt, compressed)
 ```
 
-#### Budget Management
-- **Development Phase**: $500-2000/month for active EVC
-- **Maintenance Phase**: $100-500/month for updates
-- **Scaling Factor**: ~$300/month per parallel LLM
+#### Resource Planning
+- **Solo Developer**: Single AI instance sufficient
+- **Small Team**: 2-3 parallel AI sessions
+- **Large Team**: WORCA orchestration required
 
 ### Migration Path
 

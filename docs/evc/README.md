@@ -87,11 +87,11 @@ Through standardized prompts, AI learns to:
 
 ## Getting Started with EVC
 
-1. **Establish Your Principles** (See [Core Principles](principles/README.md))
-2. **Learn Standardized Prompts** (See [Prompt Library](methodology/prompts.md))
-3. **Understand Neural Patterns** (See [Neural Behavior Guide](patterns/neural-behavior.md))
-4. **Master Git Hygiene** (See [Git Workflow](guides/git-hygiene.md))
-5. **Avoid Common Pitfalls** (See [Anti-patterns](methodology/pitfalls.md))
+1. **Setup Your Environment** → [Environment Setup Guide](guides/environment-setup.md)
+2. **Start Your First Session** → [Getting Started Guide](guides/getting-started.md)
+3. **Learn the Principles** → [Core Principles](principles/README.md)
+4. **Master the Prompts** → [Standardized Prompts](methodology/prompts.md)
+5. **Follow Git Workflow** → [Git Workflow Guide](guides/git-workflow.md)
 
 ## Documentation Structure
 
@@ -106,7 +106,11 @@ Through standardized prompts, AI learns to:
   - [JDBX Success Story](case-studies/jdbx-lessons.md) - 3 months to production
   - [N-1 Byte Crisis](case-studies/n1-byte-crisis.md) - Deep learning from debugging
 - **[Guides](guides/)** - Practical implementation guides
-  - [Do's and Don'ts](guides/dos-and-donts.md) - Quick reference for success
+  - [Getting Started](guides/getting-started.md) - Your first EVC session
+  - [Environment Setup](guides/environment-setup.md) - Tools and configuration
+  - [Session Management](guides/session-management.md) - Optimizing productivity
+  - [Git Workflow](guides/git-workflow.md) - Version control for EVC
+  - [Do's and Don'ts](guides/dos-and-donts.md) - Quick reference
   - [Setup and Scaling](guides/setup-and-scaling.md) - Infrastructure and WORCA
 - **[Principles](principles/)** - Foundational principles and standards
 - **[Philosophy](philosophy/)** - Deeper understanding of EVC
