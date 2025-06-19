@@ -806,27 +806,33 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       http_response_t* result = ctx->routes[i].handler(ctx, request);
       if (g_logger) LOG_DEBUG("Handler function returned: %p", (void*)result);
       
+      /* CRITICAL: ALL responses must be promoted before checkpoint operations
+       * as they survive beyond the checkpoint boundary. This includes:
+       * - Error responses (promoted before rewind)
+       * - Success responses (promoted before commit)
+       * - Static file responses with large HTML/JS/CSS content
+       * Without promotion, response memory can be freed and reused, causing
+       * corruption when the response data is accessed later. */
+      if (request_checkpoint && result) {
+          /* Promote the response structure and its contents */
+          memory_promote(result);
+          if (result->body) memory_promote(result->body);
+          if (result->content_type) memory_promote(result->content_type);
+          if (result->headers) {
+              memory_promote(result->headers);
+              for (size_t j = 0; j < result->num_headers; j++) {
+                  if (result->headers[j]) {
+                      memory_promote(result->headers[j]);
+                  }
+              }
+          }
+      }
+      
       /* Track errors */
       if (result && result->status >= 400) {
           metric_t* error_counter = get_api_errors_metric();
           if (error_counter) {
               metrics_counter_inc(error_counter, 1);
-          }
-          
-          /* CRITICAL: Promote response before rewinding checkpoint */
-          if (request_checkpoint && result) {
-              /* Promote the response structure and its contents */
-              memory_promote(result);
-              if (result->body) memory_promote(result->body);
-              if (result->content_type) memory_promote(result->content_type);
-              if (result->headers) {
-                  memory_promote(result->headers);
-                  for (size_t j = 0; j < result->num_headers; j++) {
-                      if (result->headers[j]) {
-                          memory_promote(result->headers[j]);
-                      }
-                  }
-              }
           }
           
           /* Rewind memory checkpoint on error */
