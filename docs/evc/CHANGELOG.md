@@ -5,6 +5,37 @@ All notable changes to the Extreme Vibe Coding (EVC) documentation will be docum
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-20
+
+### Added
+- **Comprehensive Prompt Library** (`reference/prompt-library.md`)
+  - 15 core prompt templates with mental model setting
+  - Advanced prompt patterns and composition strategies
+  - Quality gate prompts for maintaining standards
+- **Language Choice Guide** (`guides/language-choice.md`)
+  - How programming language affects the entire EVC narrative
+  - Language tiers based on LLM training density
+  - Language-specific challenges and solutions
+
+### Updated
+- **Main EVC README** - Complete overhaul for next level
+  - Three Pillars framework (Cognitive Resonance, Explicit Mental Models, Iterative Excellence)
+  - Bidirectional benefits clearly articulated
+  - EVC Journey phases with concrete timelines
+  - Path to Mastery progression model
+  - Powerful call to action
+- **Documentation Structure** - Reorganized for better flow
+  - Essential Resources section
+  - Getting Started path
+  - Learning from Experience
+  - Reference Materials
+
+### Enhanced
+- More emphasis on mental model transfer
+- Clearer distinction from code generation tools
+- Stronger focus on helping both humans and AIs
+- Richer examples throughout
+
 ## [1.2.0] - 2025-01-20
 
 ### Added
