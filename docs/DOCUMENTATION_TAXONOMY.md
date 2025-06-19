@@ -1,7 +1,7 @@
 # JDBX Documentation Taxonomy
 
-**Version**: 6.5.12  
-**Last Updated**: June 18, 2025  
+**Version**: 6.3.7  
+**Last Updated**: June 19, 2025  
 **Purpose**: Establish consistent naming and organization standards for all JDBX documentation
 
 ## 1. Documentation Framework
