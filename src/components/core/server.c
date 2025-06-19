@@ -488,11 +488,12 @@ static void* accept_thread_func(void* arg) {
         continue;
       }
       
-      /* CRITICAL: Client connections must survive checkpoint rewinds as they're used
-       * throughout the entire request handling lifecycle. The thread pool worker
-       * creates checkpoints during request processing, but the client structure
-       * must persist beyond those checkpoints. */
-      memory_promote(client);
+      /* BAR RAISING: Client connections are request-scoped, not checkpoint-scoped
+       * They should NOT be promoted as they're allocated and freed within a single
+       * request lifecycle. Promoting them causes memory manager confusion when
+       * handle_client tries to BUFFER_FREE() promoted memory. 
+       * Single source of truth: request-scoped memory uses normal allocation. */
+      /* memory_promote(client); - REMOVED: Fixes deterministic crash at operation 5 */
       
       /* Initialize client connection with memory safety */
       memset(client, 0, sizeof(client_conn_t)); /* Zero entire structure */
