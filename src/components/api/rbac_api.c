@@ -13,28 +13,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Helper function to create a JSON error response */
+/* SINGLE SOURCE OF TRUTH: Use unified response creation */
 static http_response_t* create_error_response(const char* message, int status_code) {
   json_value_t* error = json_create_object();
   json_object_set(error, "error", json_create_string(message));
   
   char* error_str = json_stringify(error);
-  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
-  if (!response) {
-    BUFFER_FREE(error_str);
-    /* CHECKPOINT: json_free(error); */
-    return NULL;
-  }
-  
-  /* Initialize response */
-  response->status = (http_status_t)status_code;
-  response->body = error_str;
-  response->content_type = BUFFER_STRDUP("application/json");
-  response->content_length = strlen(error_str);
-  response->headers = NULL;
-  response->num_headers = 0;
-  
   /* CHECKPOINT: json_free(error); */
+  
+  /* Use unified response creation function */
+  http_response_t* response = create_http_response((http_status_t)status_code, error_str, "application/json");
+  
+  /* Free the temporary string since create_http_response duplicates it */
+  BUFFER_FREE(error_str);
   
   return response;
 }
@@ -203,18 +194,12 @@ static http_response_t* create_json_response(json_value_t* json_data, int status
   }
   
   char* json_str = json_stringify(json_data);
-  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
-  if (!response) {
-    BUFFER_FREE(json_str);
-    return create_error_response("Out of memory", HTTP_INTERNAL_SERVER_ERROR);
-  }
   
-  response->status = (http_status_t)status_code;
-  response->body = json_str;
-  response->content_type = BUFFER_STRDUP("application/json");
-  response->content_length = strlen(json_str);
-  response->headers = NULL;
-  response->num_headers = 0;
+  /* SINGLE SOURCE OF TRUTH: Use unified response creation */
+  http_response_t* response = create_http_response((http_status_t)status_code, json_str, "application/json");
+  
+  /* Free the temporary string since create_http_response duplicates it */
+  BUFFER_FREE(json_str);
   
   /* CHECKPOINT: json_free(json_data); */
   

@@ -18,6 +18,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdalign.h>
+#include <stdio.h>
 #include <pthread.h>
 
 /* Memory managers should not depend on logging */
@@ -364,24 +365,11 @@ void* memory_alloc(size_t size) {
         return NULL;
     }
     
-    /* If memory manager not initialized yet, still allocate with header for consistency */
+    /* SINGLE SOURCE OF TRUTH: Memory manager must be initialized before ANY allocation */
     if (!g_memory_manager_initialized) {
-        /* Even pre-init allocations get headers to maintain single source of truth */
-        size_t total_size = HEADER_SIZE + size;
-        memory_header_t* header = (memory_header_t*)malloc(total_size);
-        if (!header) {
-            return NULL;
-        }
-        
-        /* Initialize header for pre-init allocation */
-        header->magic = MEMORY_MAGIC;
-        header->size = size;
-        header->checkpoint = NULL;
-        header->next = NULL;
-        header->prev = NULL;
-        
-        /* Return pointer after header */
-        return (char*)header + HEADER_SIZE;
+        fprintf(stderr, "FATAL: memory_alloc called before memory_manager_init()\n");
+        fprintf(stderr, "This violates single source of truth - all allocations must go through initialized manager\n");
+        abort();
     }
     
     ensure_memory_initialized();
@@ -438,18 +426,11 @@ void* memory_alloc(size_t size) {
 void memory_free(void* ptr) {
     if (!ptr) return;
     
-    /* If memory manager not initialized yet, still handle header */
+    /* SINGLE SOURCE OF TRUTH: Memory manager must be initialized before ANY free */
     if (!g_memory_manager_initialized) {
-        /* Pre-init allocations still have headers for consistency */
-        memory_header_t* header = get_memory_header(ptr);
-        if (header && header->magic == MEMORY_MAGIC) {
-            header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed */
-            free(header);
-        } else {
-            /* Fallback for any truly external allocations */
-            free(ptr);
-        }
-        return;
+        fprintf(stderr, "FATAL: memory_free called before memory_manager_init()\n");
+        fprintf(stderr, "This violates single source of truth - all frees must go through initialized manager\n");
+        abort();
     }
     
     /* Ensure thread-local state is initialized */

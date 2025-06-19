@@ -53,10 +53,40 @@ http_response_t* create_http_response(http_status_t status, const char* body, co
     return NULL;
   }
   
+  /* Initialize all fields to zero first */
+  memset(response, 0, sizeof(http_response_t));
+  
   response->status = status;
-  response->body = body ? buffer_pool_strdup(body) : NULL;
-  response->content_type = content_type ? buffer_pool_strdup(content_type) : buffer_pool_strdup("application/json");
-  response->content_length = response->body ? strlen(response->body) : 0;
+  
+  /* SINGLE SOURCE OF TRUTH: Always duplicate strings to ensure ownership */
+  if (body) {
+    response->body = buffer_pool_strdup(body);
+    if (!response->body) {
+      BUFFER_FREE(response);
+      return NULL;
+    }
+    response->content_length = strlen(response->body);
+  } else {
+    response->body = NULL;
+    response->content_length = 0;
+  }
+  
+  if (content_type) {
+    response->content_type = buffer_pool_strdup(content_type);
+    if (!response->content_type) {
+      if (response->body) BUFFER_FREE(response->body);
+      BUFFER_FREE(response);
+      return NULL;
+    }
+  } else {
+    response->content_type = buffer_pool_strdup("application/json");
+    if (!response->content_type) {
+      if (response->body) BUFFER_FREE(response->body);
+      BUFFER_FREE(response);
+      return NULL;
+    }
+  }
+  
   response->headers = NULL;
   response->num_headers = 0;
   response->keep_alive = 0;  /* Default to close */
@@ -101,21 +131,8 @@ http_response_t* http_response_error(const char* message, int status_code) {
   char buffer[512];
   snprintf(buffer, sizeof(buffer), "{\"error\":\"%s\"}", message);
   
-  /* CRITICAL FIX: Create response with proper string duplication */
-  http_response_t* response = (http_response_t*)BUFFER_ALLOC(sizeof(http_response_t));
-  if (!response) {
-    return NULL;
-  }
-  
-  response->status = (http_status_t)status_code;
-  response->body = buffer_pool_strdup(buffer);  /* Safe copy of stack buffer */
-  response->content_type = buffer_pool_strdup("application/json");
-  response->content_length = response->body ? strlen(response->body) : 0;
-  response->headers = NULL;
-  response->num_headers = 0;
-  response->keep_alive = 0;
-  
-  return response;
+  /* SINGLE SOURCE OF TRUTH: Use unified response creation */
+  return create_http_response((http_status_t)status_code, buffer, "application/json");
 }
 
 /* Create a JSON response */

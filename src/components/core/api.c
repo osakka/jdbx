@@ -813,6 +813,22 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
               metrics_counter_inc(error_counter, 1);
           }
           
+          /* CRITICAL: Promote response before rewinding checkpoint */
+          if (request_checkpoint && result) {
+              /* Promote the response structure and its contents */
+              memory_promote(result);
+              if (result->body) memory_promote(result->body);
+              if (result->content_type) memory_promote(result->content_type);
+              if (result->headers) {
+                  memory_promote(result->headers);
+                  for (size_t j = 0; j < result->num_headers; j++) {
+                      if (result->headers[j]) {
+                          memory_promote(result->headers[j]);
+                      }
+                  }
+              }
+          }
+          
           /* Rewind memory checkpoint on error */
           if (request_checkpoint) {
               memory_checkpoint_rewind(request_checkpoint);
