@@ -100,6 +100,8 @@ Through standardized prompts, AI learns to:
 - **[Patterns](patterns/)** - Neural network behavioral patterns
 - **[Case Studies](case-studies/)** - Real-world EVC projects
 - **[Guides](guides/)** - Practical implementation guides
+  - [Do's and Don'ts](guides/dos-and-donts.md) - Quick reference for success
+  - [Setup and Scaling](guides/setup-and-scaling.md) - Infrastructure and WORCA
 - **[Principles](principles/)** - Foundational principles and standards
 
 ## Key Insights
