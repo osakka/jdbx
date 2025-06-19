@@ -4,6 +4,7 @@
 #include "core/thread_pool.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
+#include "utils/memory_manager.h"
 #include <sys/socket.h>
 #include <errno.h>
 #include <string.h>
@@ -146,6 +147,12 @@ void server_accept_loop_thread_safe_direct(server_config_t *config) {
             close(client_fd);
             continue;
         }
+        
+        /* CRITICAL: Client connections must survive checkpoint rewinds as they're used
+         * throughout the entire request handling lifecycle. The thread pool worker
+         * creates checkpoints during request processing, but the client structure
+         * must persist beyond those checkpoints. */
+        memory_promote(client);
         
         /* Initialize client structure */
         client->client_fd = client_fd;

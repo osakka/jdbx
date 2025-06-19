@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "utils/daemonize.h"
 #include "utils/logger.h"
+#include "utils/memory_manager.h"
 #include "core/thread_pool.h"
 #include "init.h" /* For init_socket and INIT_OK */
 
@@ -352,6 +353,12 @@ static void* accept_loop(void *arg) {
         close(client_fd);
         continue;
       }
+      
+      /* CRITICAL: Client connections must survive checkpoint rewinds as they're used
+       * throughout the entire request handling lifecycle. The thread pool worker
+       * creates checkpoints during request processing, but the client structure
+       * must persist beyond those checkpoints. */
+      memory_promote(client_conn);
       
       /* Initialize client connection */
       client_conn->client_fd = client_fd;

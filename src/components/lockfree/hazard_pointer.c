@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 
 /* Thread-local storage for retired list */
 static __thread retired_node_t* tls_retired_list = NULL;
@@ -16,6 +17,11 @@ hp_domain_t* hp_domain_create(void) {
         LOG_ERROR("Cannot allocate hazard pointer domain.");
         return NULL;
     }
+    
+    /* CRITICAL: Hazard pointer domains are global resources that persist
+     * throughout the lifetime of skiplist structures. They must survive
+     * checkpoint rewinds to maintain the integrity of lock-free operations. */
+    memory_promote(domain);
     
     pthread_mutex_init(&domain->list_lock, NULL);
     domain->head = NULL;
@@ -77,6 +83,11 @@ hp_record_t* hp_acquire_record(hp_domain_t* domain) {
         LOG_ERROR("Cannot allocate hazard pointer record.");
         return NULL;
     }
+    
+    /* CRITICAL: Hazard pointer records are part of a persistent linked list
+     * used throughout the lifetime of the skiplist. They must survive checkpoint
+     * rewinds to prevent use-after-free when the list is traversed. */
+    memory_promote(new_record);
     
     new_record->thread_id = tid;
     new_record->active = true;
