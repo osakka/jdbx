@@ -12,6 +12,8 @@
 
 # JDBX
 
+> **Development Methodology Notice**: This project was developed using [Extreme Vibe Coding (EVC)](docs/evc/README.md), a novel AI-assisted development methodology. The entire codebase—including architecture, implementation, testing, and documentation—was created through structured collaboration with Claude (Anthropic) with minimal human code intervention. The human guide provided vision, principles, and quality standards while Claude handled technical execution. This represents approximately 3 months of intensive development that would traditionally require 12-18 months of solo developer effort. [Learn more about EVC →](docs/evc/README.md)
+
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
 **Latest Version**: 6.5.12 (June 18, 2025)  
