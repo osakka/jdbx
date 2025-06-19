@@ -364,11 +364,10 @@ void* memory_alloc(size_t size) {
         return NULL;
     }
     
-    /* If memory manager not initialized yet, use aligned allocation */
+    /* If memory manager not initialized yet, use regular malloc */
     if (!g_memory_manager_initialized) {
-        /* Ensure proper alignment even for pre-init allocations */
-        return aligned_alloc(_Alignof(max_align_t), 
-                            (size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1));
+        /* Use standard malloc for pre-init allocations to ensure free() compatibility */
+        return malloc(size);
     }
     
     ensure_memory_initialized();
