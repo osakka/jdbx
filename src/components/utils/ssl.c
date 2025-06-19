@@ -37,6 +37,7 @@
 #include <openssl/err.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
+#include <openssl/rand.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -57,6 +58,7 @@ struct ssl_connection_t {
 
 /* Global initialization flag */
 static int g_ssl_initialized = 0;
+static pthread_mutex_t g_ssl_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Get the last OpenSSL error as a string */
 static char *get_openssl_error(void) {
@@ -76,16 +78,34 @@ static char *get_openssl_error(void) {
 
 /* Initialize the SSL library */
 ssl_error_t ssl_library_init(void) {
+  pthread_mutex_lock(&g_ssl_init_mutex);
+  
   if (g_ssl_initialized) {
+    pthread_mutex_unlock(&g_ssl_init_mutex);
     return SSL_SUCCESS;
   }
   
+  /* OpenSSL 3.x requires explicit initialization for thread safety */
+  if (OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | 
+                       OPENSSL_INIT_LOAD_CRYPTO_STRINGS |
+                       OPENSSL_INIT_ADD_ALL_CIPHERS |
+                       OPENSSL_INIT_ADD_ALL_DIGESTS |
+                       OPENSSL_INIT_ATFORK, NULL) == 0) {
+    char *err = get_openssl_error();
+    LOG_ERROR("Failed to initialize OpenSSL: %s", err ? err : "Unknown error");
+    if (err) BUFFER_FREE(err);
+    pthread_mutex_unlock(&g_ssl_init_mutex);
+    return SSL_ERROR_INIT;
+  }
+  
+  /* For older OpenSSL compatibility */
   SSL_load_error_strings();
   OpenSSL_add_ssl_algorithms();
   
   g_ssl_initialized = 1;
-  LOG_INFO("SSL library initialized.");
+  LOG_INFO("SSL library initialized with thread safety.");
   
+  pthread_mutex_unlock(&g_ssl_init_mutex);
   return SSL_SUCCESS;
 }
 
@@ -100,6 +120,13 @@ void ssl_library_cleanup(void) {
   
   g_ssl_initialized = 0;
   LOG_INFO("SSL library cleaned up.");
+}
+
+/* Reinitialize SSL after fork */
+void ssl_reinit_after_fork(void) {
+  /* OpenSSL 3.x requires reinitializing the random number generator after fork */
+  RAND_poll();
+  LOG_INFO("SSL random number generator reinitialized after fork.");
 }
 
 /* Create a new SSL context */

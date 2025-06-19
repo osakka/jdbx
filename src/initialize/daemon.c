@@ -1,5 +1,6 @@
 #include "init.h"
 #include "utils/daemonize.h"
+#include "utils/ssl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,6 +86,12 @@ init_status_t init_daemon(server_config_t* config) {
   
   /* This is the final daemon process after double fork */
   init_set_process_type(PROCESS_TYPE_SERVER);
+  
+  /* Reinitialize SSL random number generator after fork */
+  if (config->use_ssl) {
+    ssl_reinit_after_fork();
+    INIT_LOG_PROGRESS("DAEMON", "SSL random number generator reinitialized after fork");
+  }
   
   /* This is the child (daemon) process */
   if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) {

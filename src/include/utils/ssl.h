@@ -68,6 +68,14 @@ ssl_error_t ssl_library_init(void);
 void ssl_library_cleanup(void);
 
 /**
+ * @brief Reinitialize SSL after fork
+ * 
+ * This function must be called after forking to reinitialize the
+ * OpenSSL random number generator.
+ */
+void ssl_reinit_after_fork(void);
+
+/**
  * @brief Create a new SSL context
  * 
  * @param config SSL configuration options

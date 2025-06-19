@@ -1118,10 +1118,11 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     }
     *doc_ptr = json_deep_copy(doc_copy);
     
-    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
-    // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(doc_ptr);     // Promote the pointer storage
-    memory_promote(*doc_ptr);    // Promote the document itself
+    // CRITICAL: Do NOT promote skiplist documents - they are managed by hazard pointers
+    // The skiplist uses hazard pointers for safe memory reclamation, which conflicts
+    // with checkpoint memory promotion. Documents will be freed when safe to do so.
+    // memory_promote(doc_ptr);     // DO NOT PROMOTE - causes conflict with hazard pointers
+    // json_promote(*doc_ptr);      // DO NOT PROMOTE - causes conflict with hazard pointers
     
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     
@@ -1807,10 +1808,11 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     }
     *doc_ptr = json_deep_copy(doc_copy);
     
-    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
-    // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(doc_ptr);     // Promote the pointer storage
-    memory_promote(*doc_ptr);    // Promote the document itself
+    // CRITICAL: Do NOT promote skiplist documents - they are managed by hazard pointers
+    // The skiplist uses hazard pointers for safe memory reclamation, which conflicts
+    // with checkpoint memory promotion. Documents will be freed when safe to do so.
+    // memory_promote(doc_ptr);     // DO NOT PROMOTE - causes conflict with hazard pointers
+    // json_promote(*doc_ptr);      // DO NOT PROMOTE - causes conflict with hazard pointers
     
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     

@@ -1,6 +1,40 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 19, 2025 (v6.3.6 - Metrics Thread CPU Usage Fix)
+**Last Updated**: June 19, 2025 (v6.3.7 - Checkpoint Memory vs Hazard Pointers)
+
+## 🚧 ARCHITECTURAL CONFLICT: Checkpoint Memory vs Hazard Pointers (v6.3.7)
+
+**JDBX has identified a fundamental architectural conflict between checkpoint-based memory management and the lock-free skiplist's hazard pointer system.**
+
+### 🚨 **CRITICAL ISSUE DISCOVERED:**
+- **MEMORY SYSTEM CONFLICT**: Checkpoint memory expects to free allocations on rewind
+- **HAZARD POINTER PROTECTION**: Skiplist defers memory reclamation to prevent use-after-free
+- **CRASH PATTERN**: Server crashes after 4-5 rapid create/delete operations
+- **ROOT CAUSE**: Promoted skiplist documents can't be freed safely
+
+### 🔧 **ATTEMPTED SOLUTIONS:**
+- **SSL Thread Safety**: Added OPENSSL_init_ssl with ATFORK flag
+- **SSL Reinit After Fork**: Call RAND_poll() after daemonization
+- **No Promotion**: Removed memory_promote() calls for skiplist documents
+- **Status**: Issue persists - deeper architectural change needed
+
+### 📊 **CRASH ANALYSIS:**
+- ✅ **Pattern**: Consistent crash after 4 create/delete cycles
+- ✅ **Location**: EVP_RAND_generate in OpenSSL during SSL handshake
+- ✅ **Threads**: 4 worker threads - crash on 5th operation
+- ✅ **Memory**: Checkpoint tries to free hazard-pointer-protected memory
+
+### 🏆 **LESSONS LEARNED:**
+- **Architectural Alignment**: Memory systems must be compatible
+- **Hazard Pointers**: Essential for lock-free data structures
+- **Checkpoint Memory**: Great for request-scoped allocations
+- **Integration Challenge**: Need unified memory reclamation strategy
+
+### 🔄 **NEXT STEPS:**
+- **Option 1**: Use malloc/free for skiplist allocations (bypass checkpoint)
+- **Option 2**: Integrate hazard pointer callbacks with checkpoint system
+- **Option 3**: Separate allocation pools for persistent vs transient data
+- **Option 4**: Investigate SSL thread pool initialization issue
 
 ## 🔧 METRICS THREAD CPU USAGE FIX (v6.3.6)
 
