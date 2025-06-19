@@ -174,7 +174,7 @@ static json_value_t* get_database_stats(database_t* db) {
   json_object_set(stats, "collections", collection_stats);
   
   /* Free collections list */
-  json_free(collections);
+  /* CHECKPOINT: json_free(collections); */
   
   return stats;
 }
@@ -215,7 +215,7 @@ http_response_t* api_handle_system_info(api_context_t* ctx, http_request_t* requ
   char* result_str = json_stringify(result);
   
   /* Free result */
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
@@ -306,7 +306,7 @@ http_response_t* api_handle_log_control(api_context_t* ctx, http_request_t* requ
           json_object_set(result, "message", json_create_string("Log configuration updated"));
         }
         
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
       }
     }
   } else {
@@ -315,7 +315,7 @@ http_response_t* api_handle_log_control(api_context_t* ctx, http_request_t* requ
   
   /* Serialize result */
   char* result_str = json_stringify(result);
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");

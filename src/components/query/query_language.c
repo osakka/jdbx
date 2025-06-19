@@ -182,7 +182,7 @@ void query_free_expr(query_expr_t* expr) {
   }
   
   if (expr->value) {
-    json_free(expr->value);
+    /* CHECKPOINT: json_free(expr->value); */
   }
   
   if (expr->children) {
@@ -535,11 +535,11 @@ void query_free_parse_result(query_parse_result_t* result) {
   }
   
   if (result->options.sort) {
-    json_free(result->options.sort);
+    /* CHECKPOINT: json_free(result->options.sort); */
   }
   
   if (result->options.projection) {
-    json_free(result->options.projection);
+    /* CHECKPOINT: json_free(result->options.projection); */
   }
   
   if (result->error) {
@@ -1261,7 +1261,7 @@ char* query_generate_cursor(json_value_t* document, query_options_t* options) {
   
   /* Serialize to JSON string */
   char* json_str = json_stringify(cursor_data);
-  json_free(cursor_data);
+  /* CHECKPOINT: json_free(cursor_data); */
   
   if (!json_str) {
     return NULL;
@@ -1284,14 +1284,18 @@ int query_parse_cursor(const char* cursor, query_options_t* options) {
   /* Decode cursor (in production, you'd decode base64 first) */
   json_value_t* cursor_data = json_parse(cursor);
   if (!cursor_data || cursor_data->type != JSON_OBJECT) {
-    if (cursor_data) json_free(cursor_data);
+    if (cursor_data) {
+
+        /* CHECKPOINT: json_free(cursor_data); */
+
+    }
     return 0;
   }
   
   /* TODO: Use cursor data to set up appropriate skip/sort options for continuation */
   /* This is a complex topic and would require more extensive implementation */
   
-  json_free(cursor_data);
+  /* CHECKPOINT: json_free(cursor_data); */
   return 1;
 }
 
@@ -1390,7 +1394,7 @@ query_result_t query_execute(query_expr_t* expr, json_value_t* documents, query_
 
   /* Free temporary matches array */
   TRACE_DB("Freeing temporary result set");
-  json_free(matches);
+  /* CHECKPOINT: json_free(matches); */
 
   LOG_INFO("Query execution completed: returned %d/%d matching documents",
       result.count, result.total_count);

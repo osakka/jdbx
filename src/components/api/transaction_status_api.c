@@ -35,7 +35,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
     BUFFER_FREE(transaction_id);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
   
@@ -43,7 +43,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   const char* isolation_str = json_get_string_value(body, "isolation_level", 0);
   if (!isolation_str) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Isolation level required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
   
@@ -53,7 +53,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -61,7 +61,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
@@ -70,7 +70,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   /*int result = transaction_set_isolation_level(manager, transaction, isolation_level);*/
   if (!result) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Failed to set isolation level", "SET_ISOLATION_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -81,7 +81,7 @@ http_response_t* api_handle_transaction_set_isolation(api_context_t* ctx, http_r
   
   /* Clean up */
   BUFFER_FREE(transaction_id);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   return http_response_success_with_data("Isolation level set successfully", response, HTTP_OK);
 }
@@ -114,7 +114,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
     BUFFER_FREE(transaction_id);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
   
@@ -122,7 +122,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   int timeout = json_get_int_value(body, "timeout", 0);
   if (timeout <= 0) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Valid timeout value required (positive integer)", "INVALID_TIMEOUT", HTTP_BAD_REQUEST);
   }
   
@@ -130,7 +130,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -138,7 +138,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
@@ -146,7 +146,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   int result = transaction_set_timeout(transaction, timeout);
   if (!result) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Failed to set timeout", "SET_TIMEOUT_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -157,7 +157,7 @@ http_response_t* api_handle_transaction_set_timeout(api_context_t* ctx, http_req
   
   /* Clean up */
   BUFFER_FREE(transaction_id);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   return http_response_success_with_data("Timeout set successfully", response, HTTP_OK);
 }
@@ -190,7 +190,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
     BUFFER_FREE(transaction_id);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
   
@@ -198,7 +198,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   const char* savepoint_name = json_get_string_value(body, "name", 0);
   if (!savepoint_name) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Savepoint name required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
   
@@ -206,7 +206,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -214,7 +214,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
@@ -222,7 +222,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   int result = transaction_create_savepoint(transaction, savepoint_name);
   if (!result) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Failed to create savepoint", "SAVEPOINT_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -234,7 +234,7 @@ http_response_t* api_handle_transaction_create_savepoint(api_context_t* ctx, htt
   
   /* Clean up */
   BUFFER_FREE(transaction_id);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   return http_response_success_with_data("Savepoint created", response, HTTP_CREATED);
 }
@@ -267,7 +267,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   json_value_t* body = json_parse_request_body(request);
   if (!body || json_get_type(body) != JSON_OBJECT) {
     BUFFER_FREE(transaction_id);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Invalid request body", "INVALID_BODY", HTTP_BAD_REQUEST);
   }
   
@@ -275,7 +275,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   const char* savepoint_name = json_get_string_value(body, "name", 0);
   if (!savepoint_name) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Savepoint name required", "MISSING_FIELD", HTTP_BAD_REQUEST);
   }
   
@@ -283,7 +283,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   transaction_manager_t* manager = ctx->transaction_manager;
   if (!manager) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction manager not available", "SERVICE_UNAVAILABLE", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -291,7 +291,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   transaction_t* transaction = transaction_manager_get_transaction(manager, transaction_id);
   if (!transaction) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Transaction not found", "NOT_FOUND", HTTP_NOT_FOUND);
   }
   
@@ -299,7 +299,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   int result = transaction_rollback_to_savepoint(manager, transaction, savepoint_name);
   if (!result) {
     BUFFER_FREE(transaction_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return http_response_error_detailed("Failed to rollback to savepoint", "ROLLBACK_FAILED", HTTP_INTERNAL_SERVER_ERROR);
   }
   
@@ -311,7 +311,7 @@ http_response_t* api_handle_transaction_rollback_to_savepoint(api_context_t* ctx
   
   /* Clean up */
   BUFFER_FREE(transaction_id);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   return http_response_success_with_data("Rolled back to savepoint successfully", response, HTTP_OK);
 }

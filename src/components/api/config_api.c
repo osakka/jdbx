@@ -80,7 +80,7 @@ http_response_t* api_handle_config_get(api_context_t* ctx, http_request_t* reque
     json_object_set(result, "priority", json_create_string("database"));
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);
@@ -119,7 +119,7 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
     /* Validate configuration */
     json_value_t* settings = json_object_get(new_config, "settings");
     if (!settings || settings->type != JSON_OBJECT) {
-        json_free(new_config);
+        /* CHECKPOINT: json_free(new_config); */
         BUFFER_FREE(username);
         return create_http_response(HTTP_BAD_REQUEST,
             "{\"error\":\"Missing or invalid settings object\"}", "application/json");
@@ -128,7 +128,7 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
     /* Save to database */
     int save_result = config_save_to_database(ctx->db, settings);
     if (save_result != 0) {
-        json_free(new_config);
+        /* CHECKPOINT: json_free(new_config); */
         BUFFER_FREE(username);
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
             "{\"error\":\"Failed to save configuration\"}", "application/json");
@@ -141,7 +141,7 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
         LOG_WARNING("Failed to apply some configuration changes.");
     }
     
-    json_free(new_config);
+    /* CHECKPOINT: json_free(new_config); */
     
     /* Return success response */
     json_value_t* result = json_create_object();
@@ -150,7 +150,7 @@ http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* re
     json_object_set(result, "applied", json_create_boolean(apply_result == 0));
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);
@@ -195,7 +195,7 @@ http_response_t* api_handle_config_reload(api_context_t* ctx, http_request_t* re
     }
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);
@@ -280,7 +280,7 @@ http_response_t* api_handle_config_defaults(api_context_t* ctx, http_request_t* 
     json_object_set(result, "description", json_create_string("Default configuration values"));
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);
@@ -334,7 +334,7 @@ http_response_t* api_handle_logging_get(api_context_t* ctx, http_request_t* requ
     json_object_set(result, "logging", logging);
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);
@@ -409,7 +409,7 @@ http_response_t* api_handle_logging_update(api_context_t* ctx, http_request_t* r
         LOG_INFO("Trace mask updated to %d by admin user: %s", new_mask, username);
     }
     
-    json_free(new_config);
+    /* CHECKPOINT: json_free(new_config); */
     BUFFER_FREE(username);
     
     if (!changes_made) {
@@ -429,7 +429,7 @@ http_response_t* api_handle_logging_update(api_context_t* ctx, http_request_t* r
     json_object_set(result, "logging", current_logging);
     
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     http_response_t* response = create_http_response(HTTP_OK, json_str, "application/json");
     BUFFER_FREE(json_str);

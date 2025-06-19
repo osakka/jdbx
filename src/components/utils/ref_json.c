@@ -89,7 +89,7 @@ void ref_json_free(void* value) {
   
   /* Call the original json_free function */
   DEBUG_PRINT("Freeing JSON value %p", (void*)json_val);
-  json_free(json_val);
+  /* CHECKPOINT: json_free(json_val); */
 }
 
 /**

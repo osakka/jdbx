@@ -57,7 +57,7 @@ http_response_t* api_handle_index_cleanup_status(api_context_t* ctx, http_reques
     
     /* Convert to string */
     char* json_str = json_stringify(status);
-    json_free(status);
+    /* CHECKPOINT: json_free(status); */
     
     if (!json_str) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -90,7 +90,7 @@ http_response_t* api_handle_index_cleanup_configure(api_context_t* ctx, http_req
     /* Parse request body */
     json_value_t* config = json_parse(request->body);
     if (!config || config->type != JSON_OBJECT) {
-        if (config) json_free(config);
+        if (config) /* CHECKPOINT: json_free(config); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid configuration object\"}", 
                                   "application/json");
@@ -122,7 +122,7 @@ http_response_t* api_handle_index_cleanup_configure(api_context_t* ctx, http_req
         min_queries = (int)val->value.number;
     }
     
-    json_free(config);
+    /* CHECKPOINT: json_free(config); */
     
     /* Apply configuration */
     index_cleanup_configure(g_index_cleanup, roi_threshold, effectiveness_threshold,
@@ -234,7 +234,7 @@ http_response_t* api_handle_index_cleanup_evaluate(api_context_t* ctx, http_requ
     
     /* Convert to string */
     char* json_str = json_stringify(result);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     if (!json_str) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,

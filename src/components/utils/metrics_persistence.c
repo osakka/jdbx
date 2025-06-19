@@ -195,7 +195,7 @@ static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_n
   json_object_set(query, "library", json_create_string("system"));
   
   json_value_t* result = db_query_documents(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (result) {
     json_value_t* documents = json_object_get(result, "documents");
@@ -207,11 +207,11 @@ static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_n
       }
       if (id && id->type == JSON_STRING) {
         char* id_copy = BUFFER_STRDUP(json_get_string(id));
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         return id_copy;
       }
     }
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
   }
   return NULL;
 }
@@ -298,7 +298,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
       json_object_set(existing, "current", json_deep_copy(current_data));
     } else {
       /* Values haven't changed, free the unused data point */
-      json_free(data_point);
+      /* CHECKPOINT: json_free(data_point); */
     }
     
     document_to_save = existing;
@@ -350,14 +350,14 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   
   /* Clean up */
   if (existing) {
-    json_free(existing);
+    /* CHECKPOINT: json_free(existing); */
   } else {
-    json_free(document_to_save);
+    /* CHECKPOINT: json_free(document_to_save); */
   }
   
   if (result) {
     LOG_DEBUG("Updated: %s", metric_id);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return 1;
   } else {
     LOG_ERROR("update metric document: %s", metric_id);
@@ -390,7 +390,7 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
   if (!update_metric_document(mp, &g_metric_id_operations, "operations", "operations", operations)) {
     success = 0;
   }
-  json_free(operations);
+  /* CHECKPOINT: json_free(operations); */
   
   /* Update performance metrics */
   metric_t* request_timer = get_server_request_duration_metric();
@@ -412,7 +412,7 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
   if (!update_metric_document(mp, &g_metric_id_performance, "performance", "performance", performance)) {
     success = 0;
   }
-  json_free(performance);
+  /* CHECKPOINT: json_free(performance); */
   
   /* Update cache metrics */
   metric_t* cache_hits = get_cache_hits_metric();
@@ -435,7 +435,7 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
   if (!update_metric_document(mp, &g_metric_id_cache, "cache", "cache", cache)) {
     success = 0;
   }
-  json_free(cache);
+  /* CHECKPOINT: json_free(cache); */
   
   /* Update memory metrics */
   struct sysinfo mem_info;
@@ -463,7 +463,7 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
     if (!update_metric_document(mp, &g_metric_id_memory, "memory", "memory", memory)) {
       success = 0;
     }
-    json_free(memory);
+    /* CHECKPOINT: json_free(memory); */
   }
   
   /* Update connections metrics */
@@ -474,7 +474,7 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
   if (!update_metric_document(mp, &g_metric_id_connections, "connections", "connections", connections)) {
     success = 0;
   }
-  json_free(connections);
+  /* CHECKPOINT: json_free(connections); */
   
   if (success) {
     LOG_DEBUG("Metrics saved.");
@@ -518,7 +518,7 @@ static int cleanup_old_metrics(metrics_persistence_t* mp) {
         }
       }
     }
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
   }
   
   if (deleted_count > 0) {
@@ -548,7 +548,7 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
   /* Query metrics */
   json_value_t* result = db_query_documents(g_metrics_persistence->db, 
                        STORAGE_LIBRARY, STORAGE_COLLECTION, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!result) {
     return NULL;
@@ -556,7 +556,7 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
   
   json_value_t* documents = json_object_get(result, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return NULL;
   }
   
@@ -580,7 +580,7 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
           json_object_set(point, "value", json_deep_copy(metric_value));
           json_array_append(response, point);
         } else {
-          json_free(point);
+          /* CHECKPOINT: json_free(point); */
         }
       } else {
         /* Get all metrics */
@@ -590,6 +590,6 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
     }
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   return response;
 }

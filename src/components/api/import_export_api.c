@@ -120,7 +120,7 @@ http_response_t* api_handle_export(api_context_t* ctx, http_request_t* request) 
   add_response_header(response, content_disp);
   
   /* Free the exported data - http_response_json has made a copy */
-  json_free(exported_data);
+  /* CHECKPOINT: json_free(exported_data); */
   
   return response;
 }
@@ -211,7 +211,7 @@ http_response_t* api_handle_import(api_context_t* ctx, http_request_t* request) 
   }
   
   /* Free the import data */
-  json_free(import_data);
+  /* CHECKPOINT: json_free(import_data); */
   
   if (!result) {
     return http_response_error("Import failed", HTTP_INTERNAL_SERVER_ERROR);

@@ -90,7 +90,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     /* Parse request body */
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
-        if (body) json_free(body);
+        if (body) /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid JSON request body\"}", "application/json");
     }
@@ -98,7 +98,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     /* Extract script metadata from request */
     js_script_metadata_t *metadata = js_native_create_script_metadata();
     if (!metadata) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                                   "{\"error\":\"Failed to create script metadata\"}", "application/json");
     }
@@ -139,7 +139,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
 
     val = json_object_get(body, "trigger_tags");
     if (val && val->type == JSON_ARRAY) {
-        json_free(metadata->trigger_tags);
+        /* CHECKPOINT: json_free(metadata->trigger_tags); */
         metadata->trigger_tags = json_clone(val);
     }
 
@@ -150,7 +150,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
 
     val = json_object_get(body, "rbac_permissions");
     if (val && val->type == JSON_ARRAY) {
-        json_free(metadata->rbac_permissions);
+        /* CHECKPOINT: json_free(metadata->rbac_permissions); */
         metadata->rbac_permissions = json_clone(val);
     }
 
@@ -158,7 +158,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     char error_msg[512];
     if (!validate_script_metadata(metadata, error_msg, sizeof(error_msg))) {
         js_native_free_script_metadata(metadata);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         
         char response[1024];
         snprintf(response, sizeof(response), "{\"error\":\"%s\"}", error_msg);
@@ -170,7 +170,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
         char *syntax_error = NULL;
         if (!js_native_validate_script_syntax(g_js_engine, metadata->script_code, &syntax_error)) {
             js_native_free_script_metadata(metadata);
-            json_free(body);
+            /* CHECKPOINT: json_free(body); */
             
             char response[1024];
             snprintf(response, sizeof(response), 
@@ -187,7 +187,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     const char *collection_name = js_script_type_to_collection(metadata->type);
     if (!collection_name || !check_js_permission(ctx->db, user_id, "CREATE", collection_name)) {
         js_native_free_script_metadata(metadata);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to create scripts\"}", "application/json");
     }
@@ -195,7 +195,7 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     /* Store script in database */
     if (!js_native_store_script(ctx->db, user_id, metadata)) {
         js_native_free_script_metadata(metadata);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                                   "{\"error\":\"Failed to store script\"}", "application/json");
     }
@@ -208,9 +208,9 @@ http_response_t* api_handle_js_native_store_script(api_context_t* ctx, http_requ
     json_object_set(response, "script_type", json_create_string(js_script_type_to_string(metadata->type)));
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     js_native_free_script_metadata(metadata);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
 
     http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -259,7 +259,7 @@ http_response_t* api_handle_js_native_get_script(api_context_t* ctx, http_reques
     }
 
     char* response_str = json_stringify(script_json);
-    json_free(script_json);
+    /* CHECKPOINT: json_free(script_json); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -336,7 +336,7 @@ http_response_t* api_handle_js_native_list_scripts(api_context_t* ctx, http_requ
     json_object_set(response, "count", json_create_integer(json_array_size(scripts)));
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -353,7 +353,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
     /* Parse request body */
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
-        if (body) json_free(body);
+        if (body) /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid JSON request body\"}", "application/json");
     }
@@ -363,7 +363,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
     json_value_t *input_data = json_object_get(body, "input_data");
 
     if (!script_id_val || script_id_val->type != JSON_STRING) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Script ID is required\"}", "application/json");
     }
@@ -373,7 +373,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
 
     /* Check execution permissions */
     if (!js_native_check_execution_permission(ctx->db, user_id, script_id, "execute")) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to execute script\"}", "application/json");
     }
@@ -385,7 +385,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
     int success = js_native_execute_script(g_js_engine, ctx->db, script_id, user_id, 
                                           input_data, &output_data, &context);
 
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
 
     if (!success) {
         char error_response[1024];
@@ -405,7 +405,7 @@ http_response_t* api_handle_js_native_execute_script(api_context_t* ctx, http_re
     json_object_set(response, "result", output_data ? output_data : json_create_null());
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -450,7 +450,7 @@ http_response_t* api_handle_js_native_get_metrics(api_context_t* ctx, http_reque
     }
 
     char* response_str = json_stringify(metrics);
-    json_free(metrics);
+    /* CHECKPOINT: json_free(metrics); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -476,7 +476,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     /* Parse request body */
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
-        if (body) json_free(body);
+        if (body) /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid JSON request body\"}", "application/json");
     }
@@ -484,7 +484,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     /* Create metadata from JSON */
     js_script_metadata_t *metadata = js_native_script_metadata_from_json(body);
     if (!metadata) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid script metadata\"}", "application/json");
     }
@@ -493,7 +493,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     char error_msg[512];
     if (!validate_script_metadata(metadata, error_msg, sizeof(error_msg))) {
         js_native_free_script_metadata(metadata);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         
         char response[1024];
         snprintf(response, sizeof(response), "{\"error\":\"%s\"}", error_msg);
@@ -505,7 +505,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
         char *syntax_error = NULL;
         if (!js_native_validate_script_syntax(g_js_engine, metadata->script_code, &syntax_error)) {
             js_native_free_script_metadata(metadata);
-            json_free(body);
+            /* CHECKPOINT: json_free(body); */
             
             char response[1024];
             snprintf(response, sizeof(response), 
@@ -521,7 +521,7 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     const char *user_id = get_user_id_from_context(ctx);
     if (!js_native_update_script(ctx->db, user_id, script_id, metadata)) {
         js_native_free_script_metadata(metadata);
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Failed to update script - insufficient permissions or script not found\"}", 
                                   "application/json");
@@ -535,9 +535,9 @@ http_response_t* api_handle_js_native_update_script(api_context_t* ctx, http_req
     json_object_set(response, "version", json_create_integer(metadata->version));
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     js_native_free_script_metadata(metadata);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -575,7 +575,7 @@ http_response_t* api_handle_js_native_delete_script(api_context_t* ctx, http_req
     json_object_set(response, "script_id", json_create_string(script_id));
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -631,7 +631,7 @@ http_response_t* api_handle_js_native_get_script_stats(api_context_t* ctx, http_
     }
 
     char* response_str = json_stringify(stats);
-    json_free(stats);
+    /* CHECKPOINT: json_free(stats); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);
@@ -648,7 +648,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
     /* Parse request body */
     json_value_t* body = json_parse(request->body);
     if (!body || body->type != JSON_OBJECT) {
-        if (body) json_free(body);
+        if (body) /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Invalid JSON request body\"}", "application/json");
     }
@@ -660,7 +660,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
 
     if (!collection_val || collection_val->type != JSON_STRING ||
         !tag_val || tag_val->type != JSON_STRING) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_BAD_REQUEST,
                                   "{\"error\":\"Collection name and tag are required\"}", "application/json");
     }
@@ -671,7 +671,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
 
     /* Check execution permissions */
     if (!check_js_permission(ctx->db, user_id, "EXECUTE", collection_name)) {
-        json_free(body);
+        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_FORBIDDEN,
                                   "{\"error\":\"Insufficient permissions to execute functions\"}", 
                                   "application/json");
@@ -681,7 +681,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
     json_value_t *results = js_native_execute_tagged_functions(g_js_engine, ctx->db, 
                                                              collection_name, input_data, 
                                                              tag, user_id);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
 
     if (!results) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -697,7 +697,7 @@ http_response_t* api_handle_js_native_execute_tagged_functions(api_context_t* ct
     json_object_set(response, "count", json_create_integer(json_array_size(results)));
 
     char* response_str = json_stringify(response);
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
 
     http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
     BUFFER_FREE(response_str);

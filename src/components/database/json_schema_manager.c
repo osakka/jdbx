@@ -38,7 +38,7 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
   if (!db_collection_exists(db, SCHEMAS_COLLECTION)) {
     if (!db_create_collection(db, SCHEMAS_COLLECTION)) {
       LOG_ERROR("create schemas collection.");
-      json_free(schema_doc);
+      /* CHECKPOINT: json_free(schema_doc); */
       return 0;
     }
   }
@@ -62,19 +62,21 @@ int db_store_json_schema(database_t* db, const char* collection_name, json_value
     }
   }
   
-  if (existing) json_free(existing);
-  json_free(query);
+  if (existing) {
+    /* CHECKPOINT: json_free(existing); */
+  }
+  /* CHECKPOINT: json_free(query); */
   
   /* Insert new schema */
   json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, schema_doc, SYSTEM_USER_ADMIN);
-  json_free(schema_doc);
+  /* CHECKPOINT: json_free(schema_doc); */
   
   if (!result) {
     LOG_ERROR("store schema for collection: %s.");
     return 0;
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   LOG_INFO("Schema stored for collection: %s.");
   return 1;
 }
@@ -90,7 +92,7 @@ json_value_t* db_get_json_schema(database_t* db, const char* collection_name) {
   json_object_set(query, "collection", json_create_string(collection_name));
   
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return NULL;
@@ -99,7 +101,7 @@ json_value_t* db_get_json_schema(database_t* db, const char* collection_name) {
   /* Extract documents array from results */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return NULL;
   }
   
@@ -109,7 +111,7 @@ json_value_t* db_get_json_schema(database_t* db, const char* collection_name) {
   
   /* Clone the schema before freeing results */
   json_value_t* schema_copy = schema ? json_clone(schema) : NULL;
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   return schema_copy;
 }
@@ -125,7 +127,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
   json_object_set(query, "collection", json_create_string(collection_name));
   
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return 1; /* Already deleted */
@@ -134,7 +136,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
   /* Extract documents array from results */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return 1; /* Already deleted */
   }
   
@@ -150,7 +152,7 @@ int db_delete_json_schema(database_t* db, const char* collection_name) {
     }
   }
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   return success;
 }
 
@@ -169,7 +171,7 @@ json_value_t* db_list_json_schemas(database_t* db) {
   /* Get all schemas */
   json_value_t* empty_query = json_create_object();
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SCHEMA, "system", VIRTUAL_COLLECTION_SCHEMAS, empty_query);
-  json_free(empty_query);
+  /* CHECKPOINT: json_free(empty_query); */
   
   if (!results) {
     return json_create_array();
@@ -178,13 +180,13 @@ json_value_t* db_list_json_schemas(database_t* db) {
   /* Extract documents array from results */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return json_create_array();
   }
   
   /* Clone the documents array to return it */
   json_value_t* schemas_array = json_clone(documents);
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   return schemas_array ? schemas_array : json_create_array();
 }

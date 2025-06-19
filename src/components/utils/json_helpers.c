@@ -85,7 +85,7 @@ json_value_t* json_export_collection(database_t* db, const char* collection) {
   /* Create a deep copy of the collection using optimized structural copy */
   json_value_t* coll_copy = json_clone(coll);
   if (!coll_copy) {
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     /* No need to free db_coll - it's managed by the database */
     return NULL;
   }
@@ -239,7 +239,7 @@ int json_import_database(database_t* db, json_value_t* data, int replace_mode, i
   
   /* If replace mode, clear all collections */
   if (replace_mode) {
-    json_free(db->collections);
+    /* CHECKPOINT: json_free(db->collections); */
     db->collections = json_create_object();
     if (!db->collections) {
       pthread_rwlock_unlock(&db->rwlock);

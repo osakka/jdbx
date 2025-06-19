@@ -305,7 +305,7 @@ int jdbx_rebuild_secondary_index(jdbx_btree_t* doc_tree, jdbx_btree_t* idx,
                     BUFFER_FREE(field_str);
                 }
             }
-            json_free(doc);
+            /* CHECKPOINT: json_free(doc); */
         }
         
         BUFFER_FREE(key);

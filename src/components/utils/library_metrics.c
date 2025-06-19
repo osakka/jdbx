@@ -90,7 +90,7 @@ int library_metrics_record(database_t* db, const char* library_name,
   
   /* Insert metric document using virtual layer - single source of truth */
   json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_METRIC, library_name ? library_name : "default", VIRTUAL_COLLECTION_METRICS, document, SYSTEM_USER_METRICS);
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   BUFFER_FREE(collection_name);
   
   if (!result) {
@@ -98,7 +98,7 @@ int library_metrics_record(database_t* db, const char* library_name,
     return 0;
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   return 1;
 }
 
@@ -125,7 +125,7 @@ json_value_t* library_metrics_query(database_t* db, const char* library_name,
   
   /* Query metrics - TODO: Add sorting and limit support to db_query_documents */
   json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_name, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   /* Apply limit manually if results exist */
   if (results && limit > 0) {
@@ -171,7 +171,7 @@ json_value_t* library_metrics_aggregate(database_t* db, const char* library_name
           json_object_set(response, metric_types[i], json_deep_copy(data));
         }
       }
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
     }
   }
   
@@ -212,7 +212,7 @@ int library_metrics_cleanup(database_t* db, const char* library_name, int retent
   json_object_set(query, "timestamp", timestamp_filter);
   
   json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_name, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   int deleted_count = 0;
   if (results) {
@@ -229,7 +229,7 @@ int library_metrics_cleanup(database_t* db, const char* library_name, int retent
         }
       }
     }
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
   }
   
   BUFFER_FREE(collection_name);

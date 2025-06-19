@@ -362,11 +362,11 @@ void transaction_manager_free(transaction_manager_t* manager) {
           }
 
           if (operation->before_state) {
-            json_free(operation->before_state);
+            /* CHECKPOINT: json_free(operation->before_state); */
           }
 
           if (operation->after_state) {
-            json_free(operation->after_state);
+            /* CHECKPOINT: json_free(operation->after_state); */
           }
 
           BUFFER_FREE(operation);

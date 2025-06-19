@@ -153,7 +153,7 @@ int export_collections(database_t* db, const char* output_path, const char** col
   
   /* Write to file */
   char* json_str = json_stringify(export_obj);
-  json_free(export_obj);
+  /* CHECKPOINT: json_free(export_obj); */
   
   if (!json_str) {
     return EXPORT_ERROR_MEMORY;
@@ -228,7 +228,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   
   if (!import_obj || import_obj->type != JSON_OBJECT) {
     if (import_obj) {
-      json_free(import_obj);
+      /* CHECKPOINT: json_free(import_obj); */
     }
     return IMPORT_ERROR_INVALID_FORMAT;
   }
@@ -238,11 +238,11 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   
   /* If overwrite, clear existing collections */
   if (overwrite) {
-    json_free(db->collections);
+    /* CHECKPOINT: json_free(db->collections); */
     db->collections = json_create_object();
     if (!db->collections) {
       pthread_rwlock_unlock(&db->rwlock);
-      json_free(import_obj);
+      /* CHECKPOINT: json_free(import_obj); */
       return IMPORT_ERROR_MEMORY;
     }
   }
@@ -271,7 +271,7 @@ int import_database(database_t* db, const char* input_path, int overwrite) {
   
   pthread_rwlock_unlock(&db->rwlock);
   
-  json_free(import_obj);
+  /* CHECKPOINT: json_free(import_obj); */
   
   /* Save the updated database */
   if (!db_save(db)) {
@@ -322,7 +322,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
   
   if (!import_obj || import_obj->type != JSON_OBJECT) {
     if (import_obj) {
-      json_free(import_obj);
+      /* CHECKPOINT: json_free(import_obj); */
     }
     return IMPORT_ERROR_INVALID_FORMAT;
   }
@@ -358,7 +358,7 @@ int import_collections(database_t* db, const char* input_path, const char** coll
   
   pthread_rwlock_unlock(&db->rwlock);
   
-  json_free(import_obj);
+  /* CHECKPOINT: json_free(import_obj); */
   
   /* Save the updated database */
   if (db->is_modified && !db_save(db)) {

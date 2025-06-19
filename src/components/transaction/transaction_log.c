@@ -355,7 +355,7 @@ static int log_append_entry(transaction_log_t* log, const char* type,
       add_to_cache(log, type, transaction_id, now, state, OPERATION_INSERT,
             NULL, NULL, user_id);
 
-      json_free(data);
+      /* CHECKPOINT: json_free(data); */
     }
   } else if (strcmp(type, "OPERATION") == 0) {
     json_value_t* data = json_parse(data_json);
@@ -392,7 +392,7 @@ static int log_append_entry(transaction_log_t* log, const char* type,
       add_to_cache(log, type, transaction_id, now, TRANSACTION_ACTIVE, op_type,
             collection, document_id, NULL);
 
-      json_free(data);
+      /* CHECKPOINT: json_free(data); */
     }
   }
 
@@ -430,7 +430,7 @@ int transaction_log_write_state_change(transaction_log_t* log, transaction_t* tr
   }
   
   char* data_json = json_stringify(data);
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   if (!data_json) {
     return 0;
@@ -492,7 +492,7 @@ int transaction_log_write_operation(transaction_log_t* log, transaction_t* trans
   }
   
   char* data_json = json_stringify(data);
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   if (!data_json) {
     return 0;
@@ -537,14 +537,14 @@ static int parse_log_line(char* line, time_t* timestamp, char** type,
 static transaction_operation_t* operation_from_json(const char* data_json) {
   json_value_t* data = json_parse(data_json);
   if (!data || data->type != JSON_OBJECT) {
-    if (data) json_free(data);
+    if (data) /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
   /* Get operation type */
   json_value_t* type_val = json_object_get(data, "type");
   if (!type_val || type_val->type != JSON_STRING) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
@@ -556,14 +556,14 @@ static transaction_operation_t* operation_from_json(const char* data_json) {
   } else if (strcmp(type_val->value.string, "delete") == 0) {
     op_type = OPERATION_DELETE;
   } else {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
   /* Get collection name */
   json_value_t* collection_val = json_object_get(data, "collection");
   if (!collection_val || collection_val->type != JSON_STRING) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
@@ -581,7 +581,7 @@ static transaction_operation_t* operation_from_json(const char* data_json) {
   /* Create operation */
   transaction_operation_t* operation = (transaction_operation_t*)BUFFER_ALLOC(sizeof(transaction_operation_t));
   if (!operation) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
@@ -592,7 +592,7 @@ static transaction_operation_t* operation_from_json(const char* data_json) {
   operation->after_state = after_state ? json_clone(after_state) : NULL;
   operation->next = NULL;
   
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   return operation;
 }
@@ -603,14 +603,14 @@ static transaction_t* create_recovery_transaction(const char* transaction_id,
                         time_t timestamp) {
   json_value_t* data = json_parse(state_json);
   if (!data || data->type != JSON_OBJECT) {
-    if (data) json_free(data);
+    if (data) /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
   /* Get user ID */
   json_value_t* user_id_val = json_object_get(data, "user_id");
   if (!user_id_val || user_id_val->type != JSON_STRING) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
@@ -624,7 +624,7 @@ static transaction_t* create_recovery_transaction(const char* transaction_id,
   /* Create transaction */
   transaction_t* transaction = (transaction_t*)BUFFER_ALLOC(sizeof(transaction_t));
   if (!transaction) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return NULL;
   }
   
@@ -638,7 +638,7 @@ static transaction_t* create_recovery_transaction(const char* transaction_id,
   transaction->isolation_level = isolation;
   pthread_mutex_init(&transaction->lock, NULL);
   
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   return transaction;
 }
@@ -647,14 +647,14 @@ static transaction_t* create_recovery_transaction(const char* transaction_id,
 static int update_transaction_state(transaction_t* transaction, const char* state_json) {
   json_value_t* data = json_parse(state_json);
   if (!data || data->type != JSON_OBJECT) {
-    if (data) json_free(data);
+    if (data) /* CHECKPOINT: json_free(data); */
     return 0;
   }
   
   /* Get state */
   json_value_t* state_val = json_object_get(data, "state");
   if (!state_val || state_val->type != JSON_STRING) {
-    json_free(data);
+    /* CHECKPOINT: json_free(data); */
     return 0;
   }
   
@@ -677,7 +677,7 @@ static int update_transaction_state(transaction_t* transaction, const char* stat
     transaction->state = TRANSACTION_ABORTED;
   }
   
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   return 1;
 }
@@ -784,8 +784,8 @@ int transaction_log_read_operations(transaction_log_t* log, transaction_manager_
       /* Free operation memory */
       if (operation->collection_name) BUFFER_FREE(operation->collection_name);
       if (operation->document_id) BUFFER_FREE(operation->document_id);
-      if (operation->before_state) json_free(operation->before_state);
-      if (operation->after_state) json_free(operation->after_state);
+      if (operation->before_state) /* CHECKPOINT: json_free(operation->before_state); */
+      if (operation->after_state) /* CHECKPOINT: json_free(operation->after_state); */
       
       BUFFER_FREE(operation);
       operation = next;
@@ -857,13 +857,13 @@ int transaction_log_compact(transaction_log_t* log) {
     if (strcmp(type, LOG_ENTRY_STATE_CHANGE) == 0) {
       json_value_t* data = json_parse(data_json);
       if (!data || data->type != JSON_OBJECT) {
-        if (data) json_free(data);
+        if (data) /* CHECKPOINT: json_free(data); */
         continue;
       }
       
       json_value_t* state_val = json_object_get(data, "state");
       if (!state_val || state_val->type != JSON_STRING) {
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
         continue;
       }
       
@@ -884,7 +884,7 @@ int transaction_log_compact(transaction_log_t* log) {
         }
       }
       
-      json_free(data);
+      /* CHECKPOINT: json_free(data); */
     }
   }
   
@@ -1095,7 +1095,7 @@ int transaction_log_write_audit(transaction_log_t* log, transaction_t* transacti
          json_create_string(isolation_level_to_string(transaction->isolation_level)));
   
   char* data_json = json_stringify(data);
-  json_free(data);
+  /* CHECKPOINT: json_free(data); */
   
   if (!data_json) {
     return 0;
@@ -1270,7 +1270,7 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
   /* Collect transaction data within the time range */
   json_value_t* transactions = json_create_array();
   if (!transactions) {
-    json_free(report);
+    /* CHECKPOINT: json_free(report); */
     pthread_mutex_unlock(&log->lock);
     return NULL;
   }
@@ -1302,13 +1302,13 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
       if (strcmp(type, LOG_ENTRY_STATE_CHANGE) == 0) {
         json_value_t* data = json_parse(data_json);
         if (!data || data->type != JSON_OBJECT) {
-          if (data) json_free(data);
+          if (data) /* CHECKPOINT: json_free(data); */
           continue;
         }
         
         json_value_t* state_val = json_object_get(data, "state");
         if (!state_val || state_val->type != JSON_STRING) {
-          json_free(data);
+          /* CHECKPOINT: json_free(data); */
           continue;
         }
         
@@ -1354,7 +1354,7 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
           }
         }
         
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
       }
       else if (strcmp(type, LOG_ENTRY_OPERATION) == 0) {
         /* Count operations */
@@ -1362,13 +1362,13 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
         
         json_value_t* data = json_parse(data_json);
         if (!data || data->type != JSON_OBJECT) {
-          if (data) json_free(data);
+          if (data) /* CHECKPOINT: json_free(data); */
           continue;
         }
         
         json_value_t* op_type_val = json_object_get(data, "type");
         if (!op_type_val || op_type_val->type != JSON_STRING) {
-          json_free(data);
+          /* CHECKPOINT: json_free(data); */
           continue;
         }
         
@@ -1381,13 +1381,13 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
           delete_count++;
         }
         
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
       }
       else if (strcmp(type, LOG_ENTRY_AUDIT) == 0) {
         /* Process audit entries */
         json_value_t* data = json_parse(data_json);
         if (!data || data->type != JSON_OBJECT) {
-          if (data) json_free(data);
+          if (data) /* CHECKPOINT: json_free(data); */
           continue;
         }
         
@@ -1397,7 +1397,7 @@ json_value_t* transaction_log_get_report(transaction_log_t* log, time_t start_ti
           error_count++;
         }
         
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
       }
     }
     
@@ -1457,7 +1457,7 @@ json_value_t* transaction_log_get_document_history(transaction_log_t* log,
   /* Array of document changes */
   json_value_t* changes = json_create_array();
   if (!changes) {
-    json_free(history);
+    /* CHECKPOINT: json_free(history); */
     pthread_mutex_unlock(&log->lock);
     return NULL;
   }
@@ -1482,7 +1482,7 @@ json_value_t* transaction_log_get_document_history(transaction_log_t* log,
       
       json_value_t* data = json_parse(data_json);
       if (!data || data->type != JSON_OBJECT) {
-        if (data) json_free(data);
+        if (data) /* CHECKPOINT: json_free(data); */
         continue;
       }
       
@@ -1492,13 +1492,13 @@ json_value_t* transaction_log_get_document_history(transaction_log_t* log,
       
       if (!op_collection || op_collection->type != JSON_STRING ||
         !op_document_id || op_document_id->type != JSON_STRING) {
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
         continue;
       }
       
       if (strcmp(op_collection->value.string, collection) != 0 ||
         strcmp(op_document_id->value.string, document_id) != 0) {
-        json_free(data);
+        /* CHECKPOINT: json_free(data); */
         continue;
       }
       
@@ -1527,7 +1527,7 @@ json_value_t* transaction_log_get_document_history(transaction_log_t* log,
         json_array_append(changes, change);
       }
       
-      json_free(data);
+      /* CHECKPOINT: json_free(data); */
     }
     
     fclose(file);

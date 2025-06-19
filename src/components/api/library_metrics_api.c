@@ -55,7 +55,7 @@ http_response_t* api_handle_library_metrics(api_context_t* ctx, http_request_t* 
   }
   
   char* response_str = json_stringify(metrics);
-  json_free(metrics);
+  /* CHECKPOINT: json_free(metrics); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -110,7 +110,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   /* Get metric type */
   json_value_t* metric_type_val = json_object_get(body, "metric_type");
   if (!metric_type_val || metric_type_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     BUFFER_FREE(library_name_copy);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"metric_type required\"}", "application/json");
@@ -121,7 +121,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   /* Get metric data */
   json_value_t* metric_data = json_object_get(body, "data");
   if (!metric_data) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     BUFFER_FREE(library_name_copy);
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"data required\"}", "application/json");
@@ -130,7 +130,7 @@ http_response_t* api_handle_record_library_metric(api_context_t* ctx, http_reque
   /* Record the metric */
   int success = library_metrics_record(ctx->db, library_name_copy, metric_type, metric_data);
   
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   BUFFER_FREE(library_name_copy);
   
   if (success) {
@@ -224,7 +224,7 @@ http_response_t* api_handle_query_library_metrics(api_context_t* ctx, http_reque
   }
   
   char* response_str = json_stringify(results);
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }

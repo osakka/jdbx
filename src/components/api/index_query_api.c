@@ -71,7 +71,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     BUFFER_FREE(collection);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -80,7 +80,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   json_value_t* field_val = json_object_get(body, "field");
   if (!field_val || field_val->type != JSON_STRING) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Field path is required\"}", "application/json");
   }
@@ -91,7 +91,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   json_value_t* value_val = json_object_get(body, "value");
   if (!value_val) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Search value is required\"}", "application/json");
   }
@@ -118,14 +118,14 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   } else {
     /* Complex types not supported */
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Unsupported value type\"}", "application/json");
   }
   
   if (!value_str) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
   }
@@ -147,7 +147,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   }
   
   /* Free the request body as we don't need it anymore */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   /* Execute index query */
   json_value_t* results = db_query_by_index(ctx->db, collection, field_path, value_str, limit, skip);
@@ -170,7 +170,7 @@ http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -199,7 +199,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     BUFFER_FREE(collection);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -208,7 +208,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   json_value_t* queries_val = json_object_get(body, "queries");
   if (!queries_val || queries_val->type != JSON_ARRAY || json_array_size(queries_val) == 0) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Queries array is required\"}", "application/json");
   }
@@ -236,7 +236,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   json_value_t* query = json_create_object();
   if (!query) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failed\"}", "application/json");
   }
@@ -256,13 +256,13 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   }
   
   /* Free the request body as we don't need it anymore */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   /* Execute database query */
   json_value_t* results = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
   
   /* Free resources */
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   BUFFER_FREE(collection);
   
   if (!results) {
@@ -274,7 +274,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   if (skip > 0 || limit > 0) {
     json_value_t* paginated = json_create_array();
     if (!paginated) {
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
       return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                    "{\"error\":\"Memory allocation failed\"}", "application/json");
     }
@@ -284,7 +284,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
       json_array_append(paginated, json_clone(json_array_get(results, i)));
     }
     
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     results = paginated;
   }
   
@@ -297,7 +297,7 @@ http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_reques
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");

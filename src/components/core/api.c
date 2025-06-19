@@ -886,7 +886,11 @@ http_response_t* api_handle_token_refresh(api_context_t* ctx, http_request_t* re
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -981,7 +985,11 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     LOG_ERROR("Failed to parse body or body not object.");
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -1131,7 +1139,11 @@ http_response_t* api_handle_collection_create(api_context_t* ctx, http_request_t
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -1317,7 +1329,11 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   /* Parse request body */
   json_value_t* parsed = json_parse(request->body);
   if (!parsed || parsed->type != JSON_OBJECT) {
-    if (parsed) /* CHECKPOINT: json_free(parsed); */
+    if (parsed) {
+
+        /* CHECKPOINT: json_free(parsed); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -1330,7 +1346,11 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
     doc = json_deep_copy(nested_doc);
     /* CHECKPOINT: json_free(parsed); */
     if (!doc || doc->type != JSON_OBJECT) {
-      if (doc) /* CHECKPOINT: json_free(doc); */
+      if (doc) {
+
+          /* CHECKPOINT: json_free(doc); */
+
+      }
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Invalid document in nested structure\"}", "application/json");
     }
@@ -2126,7 +2146,11 @@ http_response_t* api_handle_document_create(api_context_t* ctx, http_request_t* 
   /* Parse document */
   json_value_t* document = json_parse(request->body);
   if (!document || document->type != JSON_OBJECT) {
-    if (document) /* CHECKPOINT: json_free(document); */
+    if (document) {
+
+        /* CHECKPOINT: json_free(document); */
+
+    }
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid document\"}", "application/json");
@@ -2723,7 +2747,11 @@ http_response_t* api_handle_user_create(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -2873,7 +2901,11 @@ http_response_t* api_handle_user_update(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     jwt_free(jwt);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -3604,7 +3636,11 @@ http_response_t* api_handle_role_create(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -3849,7 +3885,11 @@ http_response_t* api_handle_role_update(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) /* CHECKPOINT: json_free(body); */
+    if (body) {
+
+        /* CHECKPOINT: json_free(body); */
+
+    }
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -4748,10 +4788,26 @@ http_response_t* api_handle_metrics_available(api_context_t* ctx, http_request_t
   json_value_t* histograms_array = json_create_array();
   
   if (!counters_array || !gauges_array || !timers_array || !histograms_array) {
-    if (counters_array) /* CHECKPOINT: json_free(counters_array); */
-    if (gauges_array) /* CHECKPOINT: json_free(gauges_array); */
-    if (timers_array) /* CHECKPOINT: json_free(timers_array); */
-    if (histograms_array) /* CHECKPOINT: json_free(histograms_array); */
+    if (counters_array) {
+
+        /* CHECKPOINT: json_free(counters_array); */
+
+    }
+    if (gauges_array) {
+
+        /* CHECKPOINT: json_free(gauges_array); */
+
+    }
+    if (timers_array) {
+
+        /* CHECKPOINT: json_free(timers_array); */
+
+    }
+    if (histograms_array) {
+
+        /* CHECKPOINT: json_free(histograms_array); */
+
+    }
     /* CHECKPOINT: json_free(response_obj); */
     /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);

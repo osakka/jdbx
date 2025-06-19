@@ -186,7 +186,7 @@ void analyze_query_pattern(const char* collection_name, json_value_t* query) {
                 /* TODO: Track field usage for adaptive indexing */
             }
         }
-        json_free(keys);
+        /* CHECKPOINT: json_free(keys); */
     }
 }
 

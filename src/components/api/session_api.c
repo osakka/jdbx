@@ -24,7 +24,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   json_object_set(query, "library", json_create_string("system"));
   json_object_set(query, "collection", json_create_string("sessions"));
   json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -34,7 +34,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     
     /* Return empty array */
     json_value_t* empty_response = json_create_object();
@@ -42,7 +42,7 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
     json_object_set(empty_response, "count", json_create_number(0));
     
     char* response_str = json_stringify(empty_response);
-    json_free(empty_response);
+    /* CHECKPOINT: json_free(empty_response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
@@ -83,10 +83,10 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   json_object_set(response_obj, "sessions", valid_sessions);
   json_object_set(response_obj, "count", json_create_number(json_array_size(valid_sessions)));
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   char* response_str = json_stringify(response_obj);
-  json_free(response_obj);
+  /* CHECKPOINT: json_free(response_obj); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -107,7 +107,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -117,7 +117,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     
     /* Return empty array */
     json_value_t* empty_response = json_create_object();
@@ -125,7 +125,7 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
     json_object_set(empty_response, "count", json_create_number(0));
     
     char* response_str = json_stringify(empty_response);
-    json_free(empty_response);
+    /* CHECKPOINT: json_free(empty_response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   }
@@ -166,10 +166,10 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   json_object_set(response_obj, "sessions", valid_sessions);
   json_object_set(response_obj, "count", json_create_number(json_array_size(valid_sessions)));
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   char* response_str = json_stringify(response_obj);
-  json_free(response_obj);
+  /* CHECKPOINT: json_free(response_obj); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
@@ -200,7 +200,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", "sessions", query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
@@ -210,7 +210,7 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
   /* Get documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Session not found\"}", "application/json");
   }
@@ -224,14 +224,14 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
     
     /* Invalidate session */
     if (rbac_db_invalidate_session(ctx->db, session_id)) {
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
       return create_http_response(HTTP_OK,
                    "{\"success\":true,\"message\":\"Logged out successfully\"}", 
                    "application/json");
     }
   }
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                "{\"error\":\"Failed to invalidate session\"}", "application/json");
 }
@@ -267,7 +267,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   /* Get library name from request */
   json_value_t* library_val = json_object_get(body, "library");
   if (!library_val || library_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Library name required\"}", "application/json");
   }
@@ -279,7 +279,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(library_query, "type", json_create_string("library"));
   json_object_set(library_query, "name", json_create_string(library_name));
   json_value_t* library_results = virtual_query(ctx->db, DOC_TYPE_NAME_LIBRARY, "system", VIRTUAL_COLLECTION_LIBRARIES, library_query);
-  json_free(library_query);
+  /* CHECKPOINT: json_free(library_query); */
   
   int library_exists = 0;
   if (library_results) {
@@ -287,11 +287,11 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     if (docs && docs->type == JSON_ARRAY && json_array_size(docs) > 0) {
       library_exists = 1;
     }
-    json_free(library_results);
+    /* CHECKPOINT: json_free(library_results); */
   }
   
   if (!library_exists) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Library not found\"}", "application/json");
   }
@@ -302,10 +302,10 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = virtual_query(ctx->db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to query sessions\"}", "application/json");
   }
@@ -313,8 +313,8 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   /* Get documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
-    json_free(results);
-    json_free(body);
+    /* CHECKPOINT: json_free(results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND,
                  "{\"error\":\"Session not found\"}", "application/json");
   }
@@ -324,8 +324,8 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_value_t* session_id_val = json_object_get(session, "uuid");
   
   if (!session_id_val || session_id_val->type != JSON_STRING) {
-    json_free(results);
-    json_free(body);
+    /* CHECKPOINT: json_free(results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Invalid session data\"}", "application/json");
   }
@@ -345,18 +345,18 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   
   /* Update session in database */
   json_value_t* update_result = virtual_update(ctx->db, session_id, update_doc);
-  json_free(update_doc);
+  /* CHECKPOINT: json_free(update_doc); */
   
   if (!update_result) {
-    json_free(results);
-    json_free(body);
+    /* CHECKPOINT: json_free(results); */
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to update session\"}", "application/json");
   }
   
-  json_free(update_result);
-  json_free(results);
-  json_free(body);
+  /* CHECKPOINT: json_free(update_result); */
+  /* CHECKPOINT: json_free(results); */
+  /* CHECKPOINT: json_free(body); */
   
   /* Return success response */
   json_value_t* response = json_create_object();
@@ -365,7 +365,7 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
   json_object_set(response, "message", json_create_string("Library switched successfully"));
   
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return create_http_response(HTTP_OK, response_str, "application/json");
 }

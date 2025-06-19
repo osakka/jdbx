@@ -44,7 +44,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   json_value_t* user_query = json_create_object();
   json_object_set(user_query, "uuid", json_create_string(user_id));
   json_value_t* user_results = virtual_query(db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-  json_free(user_query);
+  /* CHECKPOINT: json_free(user_query); */
   
   if (user_results) {
     json_value_t* documents = json_object_get(user_results, "documents");
@@ -56,7 +56,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
         LOG_DEBUG("Added username to session: %s", username_val->value.string);
       }
     }
-    json_free(user_results);
+    /* CHECKPOINT: json_free(user_results); */
   } else {
     LOG_DEBUG("User document not found for ID: %s", user_id);
     /* Default to "admin" if user not found */
@@ -89,7 +89,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
   /* Insert session using VIRTUAL LAYER (unified documents architecture) */
   LOG_DEBUG("Inserting session via virtual layer into unified documents");
   json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_SESSION, "system", "sessions", session_doc, "system");
-  json_free(session_doc);
+  /* CHECKPOINT: json_free(session_doc); */
   
   if (!result) {
     LOG_DEBUG("Failed to insert session");
@@ -106,7 +106,7 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
       memcpy(session_id_copy, actual_id, len);
     }
   }
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   if (!session_id_copy) {
     LOG_DEBUG("Failed to get session ID from insert result");
@@ -132,7 +132,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     TRACE_RBAC("RBAC_DB: No active session found for token.");
@@ -142,7 +142,7 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return NULL;
   }
   
@@ -181,11 +181,11 @@ char* rbac_db_validate_session(struct database* db, const char* token) {
       json_object_set(update, "last_seen", json_create_string(timestamp));
       
       virtual_update(db, session_id, update);
-      json_free(update);
+      /* CHECKPOINT: json_free(update); */
     }
   }
   
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   TRACE_RBAC("RBAC_DB: Session validated for user: %s", user_id ? user_id : "NULL");
   return user_id;
@@ -219,7 +219,7 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
   json_object_set(query, "active", json_create_boolean(1));
   
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!results) {
     return json_create_array();
@@ -228,13 +228,13 @@ json_value_t* rbac_db_get_user_sessions(struct database* db, const char* user_id
   /* Extract documents array */
   json_value_t* documents = json_object_get(results, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return json_create_array();
   }
   
   /* Clone the documents array */
   json_value_t* sessions = json_clone(documents);
-  json_free(results);
+  /* CHECKPOINT: json_free(results); */
   
   return sessions;
 }
@@ -257,7 +257,7 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
   json_object_set(update, "invalidated_at", json_create_string(timestamp));
   
   int result = virtual_update(db, session_id, update) != NULL;
-  json_free(update);
+  /* CHECKPOINT: json_free(update); */
   
   return result;
 }

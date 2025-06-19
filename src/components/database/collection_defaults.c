@@ -13,7 +13,7 @@ static void create_users_metadata(database_t* db) {
         json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, "users", COLLECTION_META_ID);
         if (existing) {
             LOG_DEBUG("Users collection metadata already exists");
-            json_free(existing);
+            /* CHECKPOINT: json_free(existing); */
             return;
         }
         
@@ -86,7 +86,7 @@ static void create_roles_metadata(database_t* db) {
         json_value_t* existing = db_get_document(db, STORAGE_LIBRARY, "roles", COLLECTION_META_ID);
         if (existing) {
             LOG_DEBUG("Roles collection metadata already exists");
-            json_free(existing);
+            /* CHECKPOINT: json_free(existing); */
             return;
         }
         

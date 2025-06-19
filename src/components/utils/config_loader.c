@@ -675,7 +675,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
     LOG_ERROR("Invalid JSON format in config file: %s (expected object, got %s)", 
          filepath, json_type_name(json->type));
     TRACE_API("Exiting config_load_json() - Invalid JSON format.");
-    json_free(json);
+    /* CHECKPOINT: json_free(json); */
     return 0;
   }
   
@@ -1697,7 +1697,7 @@ int config_load_json(const char* filepath, server_config_t* config) {
   }
   
   /* Free the JSON object */
-  json_free(json);
+  /* CHECKPOINT: json_free(json); */
   
   if (g_logger) {
     LOG_INFO("Configuration loaded successfully from %s", filepath);

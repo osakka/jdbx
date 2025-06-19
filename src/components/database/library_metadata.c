@@ -39,7 +39,7 @@ int library_system_init(database_t* db) {
         }
         LOG_INFO("Created system library");
     } else {
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         LOG_DEBUG("System library already exists");
     }
     library_metadata_free(system_lib);
@@ -62,7 +62,7 @@ int library_system_init(database_t* db) {
         }
         LOG_INFO("Created default library");
     } else {
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         LOG_DEBUG("Default library already exists");
     }
     library_metadata_free(default_lib);
@@ -189,7 +189,7 @@ library_metadata_t* library_metadata_load(database_t* db, const char* library_na
     
     library_metadata_t* metadata = BUFFER_ALLOC(sizeof(library_metadata_t));
     if (!metadata) {
-        json_free(lib_doc);
+        /* CHECKPOINT: json_free(lib_doc); */
         return NULL;
     }
     
@@ -228,7 +228,7 @@ library_metadata_t* library_metadata_load(database_t* db, const char* library_na
     
     /* TODO: Parse permissions, config, and access rules */
     
-    json_free(lib_doc);
+    /* CHECKPOINT: json_free(lib_doc); */
     return metadata;
 }
 
@@ -279,16 +279,16 @@ int library_metadata_save(database_t* db, const char* library_name, library_meta
     json_value_t* result;
     
     if (existing) {
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         result = virtual_update(db, library_name, lib_doc);
     } else {
         result = virtual_insert(db, "library", "system", "libraries", lib_doc, "system-admin");
     }
     
-    json_free(lib_doc);
+    /* CHECKPOINT: json_free(lib_doc); */
     
     if (result) {
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         return 1;
     }
     

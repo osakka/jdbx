@@ -33,7 +33,7 @@ http_response_t* api_handle_schema_get(api_context_t* ctx, http_request_t* reque
     char* response_str = json_stringify(response);
     
     /* Free resources */
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     
     return create_http_response(HTTP_OK, response_str, "application/json");
   } else if (strncmp(path, "/api/schemas/", 13) == 0) {
@@ -57,7 +57,7 @@ http_response_t* api_handle_schema_get(api_context_t* ctx, http_request_t* reque
     char* response_str = json_stringify(response);
     
     /* Free resources */
-    json_free(response);
+    /* CHECKPOINT: json_free(response); */
     BUFFER_FREE(collection_name);
     
     return create_http_response(HTTP_OK, response_str, "application/json");
@@ -77,7 +77,7 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -85,7 +85,7 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
   /* Extract collection name */
   json_value_t* collection_val = json_object_get(body, "collection");
   if (!collection_val || collection_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Collection name is required\"}", "application/json");
   }
@@ -95,7 +95,7 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
   /* Check if collection exists */
   db_collection_t* collection = db_get_collection(ctx->db, collection_name);
   if (!collection) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Collection not found\"}", "application/json");
   }
@@ -103,14 +103,14 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
   /* Extract schema from request body */
   json_value_t* schema_val = json_object_get(body, "schema");
   if (!schema_val || schema_val->type != JSON_OBJECT) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Schema definition is required\"}", "application/json");
   }
   
   /* Store JSON schema */
   if (!db_store_json_schema(ctx->db, collection_name, schema_val)) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to store schema\"}", "application/json");
   }
@@ -124,8 +124,8 @@ http_response_t* api_handle_schema_create(api_context_t* ctx, http_request_t* re
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   
   return create_http_response(HTTP_CREATED, response_str, "application/json");
 }
@@ -157,7 +157,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -166,7 +166,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   /* Extract schema from request body */
   json_value_t* schema_val = json_object_get(body, "schema");
   if (!schema_val || schema_val->type != JSON_OBJECT) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Schema definition is required\"}", "application/json");
@@ -174,7 +174,7 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   
   /* Update JSON schema */
   if (!db_store_json_schema(ctx->db, collection_name, schema_val)) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     BUFFER_FREE(collection_name);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to update schema\"}", "application/json");
@@ -189,8 +189,8 @@ http_response_t* api_handle_schema_update(api_context_t* ctx, http_request_t* re
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
   BUFFER_FREE(collection_name);
   
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -236,7 +236,7 @@ http_response_t* api_handle_schema_delete(api_context_t* ctx, http_request_t* re
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   BUFFER_FREE(collection_name);
   
   return create_http_response(HTTP_OK, response_str, "application/json");
@@ -252,7 +252,7 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -260,7 +260,7 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   /* Extract collection name */
   json_value_t* collection_val = json_object_get(body, "collection");
   if (!collection_val || collection_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Collection name is required\"}", "application/json");
   }
@@ -270,7 +270,7 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   /* Extract document to validate */
   json_value_t* document_val = json_object_get(body, "document");
   if (!document_val || document_val->type != JSON_OBJECT) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Document to validate is required\"}", "application/json");
   }
@@ -278,7 +278,7 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   /* Get JSON schema for collection */
   json_value_t* schema = db_get_json_schema(ctx->db, collection_name);
   if (!schema) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_NOT_FOUND, 
                  "{\"error\":\"Schema not found for collection\"}", "application/json");
   }
@@ -299,9 +299,9 @@ http_response_t* api_handle_schema_validate(api_context_t* ctx, http_request_t* 
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
-  json_free(body);
-  json_free(schema);
+  /* CHECKPOINT: json_free(response); */
+  /* CHECKPOINT: json_free(body); */
+  /* CHECKPOINT: json_free(schema); */
   
   if (error_msg) BUFFER_FREE(error_msg);
   

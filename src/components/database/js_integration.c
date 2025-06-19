@@ -42,7 +42,7 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
         }
         
         if (validation_errors) {
-            json_free(validation_errors);
+            /* CHECKPOINT: json_free(validation_errors); */
         }
     }
 
@@ -88,7 +88,7 @@ json_value_t* db_insert_document_with_js(database_t* db, const char* collection_
     
     /* 4. Clean up transformed document if it's different from original */
     if (transformed_document != document) {
-        json_free(transformed_document);
+        /* CHECKPOINT: json_free(transformed_document); */
     }
 
     LOG_DEBUG("JavaScript-enhanced document insertion completed for collection: %s", collection_name);
@@ -120,7 +120,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
     json_value_t *merged_doc = json_clone(existing_doc);
     if (!merged_doc) {
         LOG_ERROR("Cannot clone existing document for update.");
-        json_free(existing_doc);
+        /* CHECKPOINT: json_free(existing_doc); */
         return NULL;
     }
 
@@ -131,7 +131,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
         /* TODO: Implement proper JSON object merging with available functions */
     }
 
-    json_free(existing_doc);
+    /* CHECKPOINT: json_free(existing_doc); */
 
     /* 3. Execute validators if JavaScript engine is available */
     json_value_t *validation_errors = NULL;
@@ -142,7 +142,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
         
         if (!validation_result) {
             LOG_WARNING("Document update validation failed for collection: %s", collection_name);
-            json_free(merged_doc);
+            /* CHECKPOINT: json_free(merged_doc); */
             
             /* Create error response with validation details */
             json_value_t *error_response = json_create_object();
@@ -154,7 +154,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
         }
         
         if (validation_errors) {
-            json_free(validation_errors);
+            /* CHECKPOINT: json_free(validation_errors); */
         }
     }
 
@@ -167,7 +167,7 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
         
         if (!transformed_document) {
             LOG_ERROR("Document transformation failed for update in collection: %s", collection_name);
-            json_free(merged_doc);
+            /* CHECKPOINT: json_free(merged_doc); */
             return NULL;
         }
     }
@@ -177,9 +177,9 @@ json_value_t* db_update_document_with_js(database_t* db, const char* collection_
     
     /* 6. Clean up */
     if (transformed_document != merged_doc) {
-        json_free(transformed_document);
+        /* CHECKPOINT: json_free(transformed_document); */
     }
-    json_free(merged_doc);
+    /* CHECKPOINT: json_free(merged_doc); */
 
     LOG_DEBUG("JavaScript-enhanced document update completed for collection: %s", collection_name);
     return result;
@@ -209,7 +209,7 @@ int db_delete_document_with_js(database_t* db, const char* collection_name,
                                                                             document, "delete", user_id);
             if (delete_results) {
                 LOG_DEBUG("Executed JavaScript functions for document deletion.");
-                json_free(delete_results);
+                /* CHECKPOINT: json_free(delete_results); */
             }
         }
     }
@@ -219,7 +219,7 @@ int db_delete_document_with_js(database_t* db, const char* collection_name,
     
     /* 3. Clean up */
     if (document) {
-        json_free(document);
+        /* CHECKPOINT: json_free(document); */
     }
 
     LOG_DEBUG("JavaScript-enhanced document deletion completed for collection: %s", collection_name);
@@ -244,7 +244,7 @@ json_value_t* db_execute_collection_functions(database_t* db, const char* collec
     json_value_t *triggered_scripts = js_native_find_triggered_scripts(db, collection_name, 
                                                                       operation, input_data);
     if (!triggered_scripts || json_array_size(triggered_scripts) == 0) {
-        if (triggered_scripts) json_free(triggered_scripts);
+        if (triggered_scripts) /* CHECKPOINT: json_free(triggered_scripts); */
         return json_create_array(); /* No functions found */
     }
 
@@ -290,7 +290,7 @@ json_value_t* db_execute_collection_functions(database_t* db, const char* collec
         js_native_free_script_metadata(script);
     }
 
-    json_free(triggered_scripts);
+    /* CHECKPOINT: json_free(triggered_scripts); */
     return results;
 }
 
@@ -354,9 +354,15 @@ int db_collection_has_js_scripts(database_t* db, const char* collection_name) {
     if (transformers && json_array_size(transformers) > 0) has_scripts = 1;
     if (functions && json_array_size(functions) > 0) has_scripts = 1;
 
-    if (validators) json_free(validators);
-    if (transformers) json_free(transformers);
-    if (functions) json_free(functions);
+    if (validators) {
+        /* CHECKPOINT: json_free(validators); */
+    }
+    if (transformers) {
+        /* CHECKPOINT: json_free(transformers); */
+    }
+    if (functions) {
+        /* CHECKPOINT: json_free(functions); */
+    }
 
     return has_scripts;
 }

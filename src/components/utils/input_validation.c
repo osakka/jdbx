@@ -233,7 +233,7 @@ validation_error_t validate_json(const char* json_str, size_t json_len, json_val
     *result = json;
   } else {
     /* Otherwise, free the parsed JSON */
-    json_free(json);
+    /* CHECKPOINT: json_free(json); */
   }
   
   return VALIDATION_SUCCESS;

@@ -108,7 +108,7 @@ http_response_t* api_handle_index_list(api_context_t* ctx, http_request_t* reque
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -153,7 +153,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
     BUFFER_FREE(collection);
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -166,7 +166,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   if (!name_val || name_val->type != JSON_STRING || 
     !field_val || field_val->type != JSON_STRING) {
     BUFFER_FREE(collection);
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Index name and field are required\"}", "application/json");
   }
@@ -183,7 +183,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   index_t* index = db_create_index(ctx->db, collection, name, field, type);
   
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   if (!index) {
     BUFFER_FREE(collection);
@@ -207,7 +207,7 @@ http_response_t* api_handle_index_create(api_context_t* ctx, http_request_t* req
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_CREATED, response_str, "application/json");
@@ -261,7 +261,7 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
   char* response_str = json_stringify(index_json);
   
   /* Free resources */
-  json_free(index_json);
+  /* CHECKPOINT: json_free(index_json); */
   BUFFER_FREE(collection);
   BUFFER_FREE(index_name);
   
@@ -325,7 +325,7 @@ http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* req
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -400,7 +400,7 @@ http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* re
   char* response_str = json_stringify(response);
   
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -446,7 +446,7 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(stats);
   
   /* Free resources */
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   BUFFER_FREE(collection);
   BUFFER_FREE(index_name);
   

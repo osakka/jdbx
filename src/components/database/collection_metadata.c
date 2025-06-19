@@ -30,7 +30,7 @@ collection_metadata_t* collection_metadata_load(database_t* db, const char* coll
     
     collection_metadata_t* metadata = BUFFER_ALLOC(sizeof(collection_metadata_t));
     if (!metadata) {
-        json_free(meta_doc);
+        /* CHECKPOINT: json_free(meta_doc); */
         return NULL;
     }
     
@@ -309,10 +309,10 @@ int collection_metadata_save(database_t* db, const char* collection_name,
     
     /* Insert the metadata document */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_CONFIG, "system", VIRTUAL_COLLECTION_CONFIGS, meta_doc, SYSTEM_USER_ADMIN);
-    json_free(meta_doc);
+    /* CHECKPOINT: json_free(meta_doc); */
     
     if (result) {
-        json_free(result);
+        /* CHECKPOINT: json_free(result); */
         return 1;
     }
     

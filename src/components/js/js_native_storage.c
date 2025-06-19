@@ -134,13 +134,13 @@ void js_native_free_script_metadata(js_script_metadata_t *metadata) {
         BUFFER_FREE(metadata->script_code);
     }
     if (metadata->trigger_tags) {
-        json_free(metadata->trigger_tags);
+        /* CHECKPOINT: json_free(metadata->trigger_tags); */
     }
     if (metadata->rbac_permissions) {
-        json_free(metadata->rbac_permissions);
+        /* CHECKPOINT: json_free(metadata->rbac_permissions); */
     }
     if (metadata->execution_stats) {
-        json_free(metadata->execution_stats);
+        /* CHECKPOINT: json_free(metadata->execution_stats); */
     }
     
     BUFFER_FREE(metadata);
@@ -219,7 +219,7 @@ js_script_metadata_t* js_native_script_metadata_from_json(json_value_t *json) {
     /* Extract trigger tags */
     val = json_object_get(json, "trigger_tags");
     if (val) {
-        json_free(metadata->trigger_tags);
+        /* CHECKPOINT: json_free(metadata->trigger_tags); */
         metadata->trigger_tags = json_clone(val);
     }
 
@@ -261,14 +261,14 @@ js_script_metadata_t* js_native_script_metadata_from_json(json_value_t *json) {
     /* Extract RBAC permissions */
     val = json_object_get(json, "rbac_permissions");
     if (val) {
-        json_free(metadata->rbac_permissions);
+        /* CHECKPOINT: json_free(metadata->rbac_permissions); */
         metadata->rbac_permissions = json_clone(val);
     }
 
     /* Extract execution stats */
     val = json_object_get(json, "execution_stats");
     if (val) {
-        json_free(metadata->execution_stats);
+        /* CHECKPOINT: json_free(metadata->execution_stats); */
         metadata->execution_stats = json_clone(val);
     }
 
@@ -310,14 +310,14 @@ int js_native_store_script(database_t *db, const char *user_id, js_script_metada
     const char *collection_part = strrchr(collection_name, '/');
     const char *actual_collection = collection_part ? collection_part + 1 : collection_name;
     json_value_t *result = virtual_insert(db, script_type, "system", actual_collection, script_doc, user_id);
-    json_free(script_doc);
+    /* CHECKPOINT: json_free(script_doc); */
 
     if (!result) {
         LOG_ERROR("Cannot store JavaScript script in database.");
         return 0;
     }
 
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     LOG_INFO("JavaScript script stored successfully: %s (type: %s)", 
              metadata->id, js_script_type_to_string(metadata->type));
     return 1;
@@ -341,7 +341,7 @@ js_script_metadata_t* js_native_get_script(database_t *db, const char *script_id
         json_value_t *script_doc = db_get_document(db, STORAGE_LIBRARY, collections[i], script_id);
         if (script_doc) {
             js_script_metadata_t *metadata = js_native_script_metadata_from_json(script_doc);
-            json_free(script_doc);
+            /* CHECKPOINT: json_free(script_doc); */
             return metadata;
         }
     }
@@ -412,23 +412,23 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
     if (js_is_function_reference(code_val)) {
         /* Resolve the function reference */
         json_value_t* resolved = js_resolve_function(db, code_val);
-        json_free(code_val);
+        /* CHECKPOINT: json_free(code_val); */
         
         if (resolved) {
             /* Extract the actual code from resolved function */
             json_value_t* code_field = json_object_get(resolved, "code");
             if (code_field && code_field->type == JSON_STRING) {
                 char* resolved_code = BUFFER_STRDUP(code_field->value.string);
-                json_free(resolved);
+                /* CHECKPOINT: json_free(resolved); */
                 LOG_DEBUG("Resolved function reference to code: %s", metadata->id);
                 return resolved_code;
             }
-            json_free(resolved);
+            /* CHECKPOINT: json_free(resolved); */
         }
         LOG_ERROR("Failed to resolve function reference: %s", metadata->script_code);
         return NULL;
     }
-    json_free(code_val);
+    /* CHECKPOINT: json_free(code_val); */
     
     /* For inline functions, check if they need any embedded function resolution */
     json_value_t* script_doc = json_create_object();
@@ -436,7 +436,7 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
     
     /* Resolve any embedded function references in the script */
     json_value_t* resolved_doc = js_resolve_document_functions(db, script_doc);
-    json_free(script_doc);
+    /* CHECKPOINT: json_free(script_doc); */
     
     if (resolved_doc) {
         json_value_t* resolved_code_field = json_object_get(resolved_doc, "code");
@@ -446,17 +446,17 @@ static char* js_native_prepare_script_code(database_t *db, js_script_metadata_t 
                 json_value_t* code_field = json_object_get(resolved_code_field, "code");
                 if (code_field && code_field->type == JSON_STRING) {
                     char* final_code = BUFFER_STRDUP(code_field->value.string);
-                    json_free(resolved_doc);
+                    /* CHECKPOINT: json_free(resolved_doc); */
                     return final_code;
                 }
             } else if (resolved_code_field->type == JSON_STRING) {
                 /* Still a string, use as is */
                 char* final_code = BUFFER_STRDUP(resolved_code_field->value.string);
-                json_free(resolved_doc);
+                /* CHECKPOINT: json_free(resolved_doc); */
                 return final_code;
             }
         }
-        json_free(resolved_doc);
+        /* CHECKPOINT: json_free(resolved_doc); */
     }
     
     /* No resolution needed, return original code */
@@ -511,14 +511,14 @@ int js_native_record_execution_metrics(database_t *db, js_execution_context_t *c
 
     /* Insert metrics document using virtual layer */
     json_value_t *result = virtual_insert(db, "metric", "system", "metrics", metrics_doc, "system-metrics");
-    json_free(metrics_doc);
+    /* CHECKPOINT: json_free(metrics_doc); */
 
     if (!result) {
         LOG_ERROR("Cannot record JavaScript execution metrics.");
         return 0;
     }
 
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     /* Update global metrics for real-time monitoring */
     /* TODO: Implement proper metrics integration when metrics API is available */
@@ -552,7 +552,7 @@ json_value_t* js_native_find_triggered_scripts(database_t *db, const char *colle
         json_object_set(query, "collection_pattern", json_create_string(collection_name));
 
         json_value_t *scripts = db_query_documents(db, STORAGE_LIBRARY, collections[i], query);
-        json_free(query);
+        /* CHECKPOINT: json_free(query); */
 
         if (scripts && scripts->type == JSON_ARRAY) {
             for (size_t j = 0; j < json_array_size(scripts); j++) {
@@ -617,7 +617,7 @@ json_value_t* js_native_find_triggered_scripts(database_t *db, const char *colle
         }
         
         if (scripts) {
-            json_free(scripts);
+            /* CHECKPOINT: json_free(scripts); */
         }
     }
 
@@ -707,7 +707,7 @@ json_value_t* js_native_list_scripts(database_t *db, js_script_type_t type,
 
     /* Execute query */
     json_value_t *results = db_query_documents(db, STORAGE_LIBRARY, collection, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
 
     return results;
 }
@@ -817,12 +817,12 @@ json_value_t* js_native_get_global_metrics(database_t *db, time_t from_time, tim
     if (json_object_size(timestamp_filter) > 0) {
         json_object_set(query, "timestamp", timestamp_filter);
     } else {
-        json_free(timestamp_filter);
+        /* CHECKPOINT: json_free(timestamp_filter); */
     }
 
     /* Get execution metrics */
     json_value_t *metrics = db_query_documents(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
 
     if (!metrics) {
         return json_create_object(); /* Return empty object if no metrics */
@@ -927,17 +927,17 @@ int js_native_execute_validators(js_engine_t *engine, database_t *db, const char
         }
 
         if (output_data) {
-            json_free(output_data);
+            /* CHECKPOINT: json_free(output_data); */
         }
         js_native_free_script_metadata(script);
     }
 
-    json_free(triggered_scripts);
+    /* CHECKPOINT: json_free(triggered_scripts); */
 
     if (validation_errors) {
         *validation_errors = errors;
     } else {
-        json_free(errors);
+        /* CHECKPOINT: json_free(errors); */
     }
 
     return all_valid;
@@ -984,16 +984,16 @@ json_value_t* js_native_execute_transformers(js_engine_t *engine, database_t *db
                                                       transformed_doc, &output_data, &context);
 
         if (transform_result && output_data) {
-            json_free(transformed_doc);
+            /* CHECKPOINT: json_free(transformed_doc); */
             transformed_doc = output_data;
         } else if (output_data) {
-            json_free(output_data);
+            /* CHECKPOINT: json_free(output_data); */
         }
 
         js_native_free_script_metadata(script);
     }
 
-    json_free(triggered_scripts);
+    /* CHECKPOINT: json_free(triggered_scripts); */
     return transformed_doc;
 }
 
@@ -1048,14 +1048,14 @@ int js_native_update_script(database_t *db, const char *user_id, const char *scr
 
     /* Update in database using virtual layer */
     json_value_t *result = virtual_update(db, script_id, script_doc);
-    json_free(script_doc);
+    /* CHECKPOINT: json_free(script_doc); */
 
     if (!result) {
         LOG_ERROR("Cannot update JavaScript script in database.");
         return 0;
     }
 
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     LOG_INFO("JavaScript script updated successfully: %s (version: %d)", script_id, metadata->version);
     return 1;
 }
@@ -1131,7 +1131,7 @@ json_value_t* js_native_get_script_statistics(database_t *db, const char *script
 
     /* Get execution metrics for this script */
     json_value_t *metrics = db_query_documents(db, STORAGE_LIBRARY, JS_EXECUTION_METRICS_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
 
     if (!metrics) {
         return json_create_object(); /* Return empty object if no metrics */
@@ -1214,10 +1214,10 @@ json_value_t* js_native_execute_tagged_functions(js_engine_t *engine, database_t
     json_object_set(query, "trigger_tags", tag_filter);
 
     json_value_t *functions = db_query_documents(db, STORAGE_LIBRARY, JS_FUNCTIONS_COLLECTION, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
 
     if (!functions || json_array_size(functions) == 0) {
-        if (functions) json_free(functions);
+        if (functions) /* CHECKPOINT: json_free(functions); */
         return json_create_object(); /* No functions found */
     }
 
@@ -1263,6 +1263,6 @@ json_value_t* js_native_execute_tagged_functions(js_engine_t *engine, database_t
         js_native_free_script_metadata(function);
     }
 
-    json_free(functions);
+    /* CHECKPOINT: json_free(functions); */
     return results;
 }

@@ -444,7 +444,7 @@ void rbac_free_user(rbac_user_t* user) {
   if (user->id) BUFFER_FREE(user->id);
   if (user->username) BUFFER_FREE(user->username);
   if (user->password_hash) BUFFER_FREE(user->password_hash);
-  if (user->roles) json_free(user->roles);
+  if (user->roles) /* CHECKPOINT: json_free(user->roles); */
   
   BUFFER_FREE(user);
 }
@@ -506,7 +506,7 @@ void rbac_free_role(rbac_role_t* role) {
   /* Free role fields */
   if (role->id) BUFFER_FREE(role->id);
   if (role->name) BUFFER_FREE(role->name);
-  if (role->permissions) json_free(role->permissions);
+  if (role->permissions) /* CHECKPOINT: json_free(role->permissions); */
   
   BUFFER_FREE(role);
 }
@@ -615,7 +615,7 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
   json_object_set(user_query, "library", json_create_string("system"));
   
   json_value_t* user_results = virtual_query(rbac->db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, user_query);
-  json_free(user_query);
+  /* CHECKPOINT: json_free(user_query); */
   
   if (!user_results) {
     LOG_DEBUG("rbac_check_permission: No user results found for user_id='%s'", user_id);
@@ -626,21 +626,21 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
   
   json_value_t* user_docs = json_object_get(user_results, "documents");
   if (!user_docs || user_docs->type != JSON_ARRAY || json_array_size(user_docs) == 0) {
-    json_free(user_results);
+    /* CHECKPOINT: json_free(user_results); */
     return 0;
   }
   
   json_value_t* user = json_array_get(user_docs, 0);
   json_value_t* roles = json_object_get(user, "roles");
   if (!roles || roles->type != JSON_ARRAY) {
-    json_free(user_results);
+    /* CHECKPOINT: json_free(user_results); */
     return 0;
   }
   
   /* Create resource permission key */
   char* key = get_resource_permission_key(resource_type, resource_id);
   if (!key) {
-    json_free(user_results);
+    /* CHECKPOINT: json_free(user_results); */
     return 0;
   }
   
@@ -648,7 +648,7 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
   char* wildcard_key = get_resource_permission_key(resource_type, "*");
   if (!wildcard_key) {
     BUFFER_FREE(key);
-    json_free(user_results);
+    /* CHECKPOINT: json_free(user_results); */
     return 0;
   }
   
@@ -669,7 +669,7 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
     json_object_set(role_query, "library", json_create_string("system"));
     
     json_value_t* role_results = virtual_query(rbac->db, DOC_TYPE_NAME_ROLE, "system", VIRTUAL_COLLECTION_ROLES, role_query);
-    json_free(role_query);
+    /* CHECKPOINT: json_free(role_query); */
     
     if (!role_results) {
       continue;
@@ -677,14 +677,14 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
     
     json_value_t* role_docs = json_object_get(role_results, "documents");
     if (!role_docs || role_docs->type != JSON_ARRAY || json_array_size(role_docs) == 0) {
-      json_free(role_results);
+      /* CHECKPOINT: json_free(role_results); */
       continue;
     }
     
     json_value_t* role = json_array_get(role_docs, 0);
     json_value_t* permissions = json_object_get(role, "permissions");
     if (!permissions || permissions->type != JSON_OBJECT) {
-      json_free(role_results);
+      /* CHECKPOINT: json_free(role_results); */
       continue;
     }
     
@@ -694,7 +694,7 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
       int perm = (int)perm_val->value.number;
       if ((perm & permission) == permission) {
         has_permission = 1;
-        json_free(role_results);
+        /* CHECKPOINT: json_free(role_results); */
         break;
       }
     }
@@ -705,17 +705,17 @@ int rbac_check_permission(rbac_system_t* rbac, const char* user_id, rbac_resourc
       int perm = (int)perm_val->value.number;
       if ((perm & permission) == permission) {
         has_permission = 1;
-        json_free(role_results);
+        /* CHECKPOINT: json_free(role_results); */
         break;
       }
     }
     
-    json_free(role_results);
+    /* CHECKPOINT: json_free(role_results); */
   }
   
   BUFFER_FREE(key);
   BUFFER_FREE(wildcard_key);
-  json_free(user_results);
+  /* CHECKPOINT: json_free(user_results); */
   
   return has_permission;
 }

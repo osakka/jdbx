@@ -138,7 +138,7 @@ versioning_policy_t* versioning_policy_get_library(database_t* db, const char* l
     json_object_set(query, "name", json_create_string(library_name));
     
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_LIBRARY, "default", VIRTUAL_COLLECTION_LIBRARIES, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!results) {
         return policy;
@@ -157,7 +157,7 @@ versioning_policy_t* versioning_policy_get_library(database_t* db, const char* l
         }
     }
     
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return policy;
 }
 
@@ -185,7 +185,7 @@ versioning_policy_t* versioning_policy_get_collection(database_t* db, const char
     json_object_set(query, "name", json_create_string(collection_name));
     
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_COLLECTION, library_name ? library_name : "default", VIRTUAL_COLLECTION_COLLECTIONS, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!results) {
         return policy;
@@ -206,7 +206,7 @@ versioning_policy_t* versioning_policy_get_collection(database_t* db, const char
         }
     }
     
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return policy;
 }
 
@@ -324,7 +324,7 @@ int versioning_create_version(database_t* db, const char* library_name,
     
     /* Store version */
     json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_VERSION, library_name ? library_name : "system", VIRTUAL_COLLECTION_VERSIONS, version_doc, SYSTEM_USER_ADMIN);
-    json_free(version_doc);
+    /* CHECKPOINT: json_free(version_doc); */
     
     if (!result) {
         LOG_ERROR("Failed to create version for document %s", doc_id);
@@ -332,7 +332,7 @@ int versioning_create_version(database_t* db, const char* library_name,
         return -1;
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     
     /* Clean up old versions if needed */
     versioning_cleanup_old_versions(db, library_name, collection_name, doc_id, policy);
@@ -361,7 +361,7 @@ int versioning_cleanup_old_versions(database_t* db, const char* library_name,
     json_object_set(query, "collection", json_create_string(collection_name));
     
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_VERSION, library_name ? library_name : "system", VIRTUAL_COLLECTION_VERSIONS, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!results) {
         return -1;
@@ -369,7 +369,7 @@ int versioning_cleanup_old_versions(database_t* db, const char* library_name,
     
     json_value_t* documents = json_object_get(results, "documents");
     if (!documents || documents->type != JSON_ARRAY) {
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
         return 0;
     }
     
@@ -432,7 +432,7 @@ int versioning_cleanup_old_versions(database_t* db, const char* library_name,
     
     LOG_INFO("Cleaned up versions for document %s: %zu versions reviewed", document_id, version_count);
     
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     return 0;
 }
 
@@ -455,7 +455,7 @@ json_value_t* versioning_get_history(database_t* db, const char* library_name,
     json_object_set(query, "collection", json_create_string(collection_name));
     
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_VERSION, library_name ? library_name : "system", VIRTUAL_COLLECTION_VERSIONS, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     return results;
 }
@@ -484,7 +484,7 @@ int versioning_restore_version(database_t* db, const char* library_name,
     json_value_t* snapshot = json_object_get(version_doc, "snapshot");
     if (!snapshot) {
         LOG_ERROR("Version missing snapshot: %s", version_id);
-        json_free(version_doc);
+        /* CHECKPOINT: json_free(version_doc); */
         return -1;
     }
     
@@ -492,7 +492,7 @@ int versioning_restore_version(database_t* db, const char* library_name,
     json_value_t* doc_id_val = json_object_get(version_doc, "document_id");
     if (!doc_id_val || doc_id_val->type != JSON_STRING) {
         LOG_ERROR("Version missing document_id: %s", version_id);
-        json_free(version_doc);
+        /* CHECKPOINT: json_free(version_doc); */
         return -1;
     }
     const char* doc_id = doc_id_val->value.string;
@@ -501,22 +501,22 @@ int versioning_restore_version(database_t* db, const char* library_name,
     json_value_t* current = db_get_document(db, STORAGE_LIBRARY, STORAGE_COLLECTION, doc_id);
     if (current) {
         versioning_create_version(db, library_name, collection_name, current, "restore");
-        json_free(current);
+        /* CHECKPOINT: json_free(current); */
     }
     
     /* Restore the snapshot */
     json_value_t* restored = json_clone(snapshot);
     json_value_t* result = virtual_update(db, doc_id, restored);
     
-    json_free(restored);
-    json_free(version_doc);
+    /* CHECKPOINT: json_free(restored); */
+    /* CHECKPOINT: json_free(version_doc); */
     
     if (!result) {
         LOG_ERROR("Failed to restore version %s", version_id);
         return -1;
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     LOG_INFO("Restored document %s to version %s", doc_id, version_id);
     return 0;
 }

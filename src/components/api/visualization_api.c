@@ -290,8 +290,8 @@ http_response_t* api_handle_visualization_collection_stats(api_context_t* ctx, h
   char* result_str = json_stringify(result);
   
   /* Free resources */
-  json_free(result);
-  json_free(collections);
+  /* CHECKPOINT: json_free(result); */
+  /* CHECKPOINT: json_free(collections); */
   
   /* Create HTTP response */
   http_response_t* response = create_http_response(HTTP_OK, result_str, "application/json");
@@ -355,7 +355,7 @@ http_response_t* api_handle_visualization_document_types(api_context_t* ctx, htt
   char* result_str = json_stringify(result);
   
   /* Free resources */
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   BUFFER_FREE(collection);
   
   /* Create HTTP response */
@@ -424,7 +424,7 @@ http_response_t* api_handle_visualization_field_distribution(api_context_t* ctx,
   char* result_str = json_stringify(result);
   
   /* Free resources */
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   BUFFER_FREE(collection);
   BUFFER_FREE(field);
   

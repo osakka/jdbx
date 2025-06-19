@@ -32,7 +32,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
   /* Create buckets for time-based metrics */
   json_value_t* time_buckets = json_create_array();
   if (!time_buckets) {
-    json_free(metrics);
+    /* CHECKPOINT: json_free(metrics); */
     return NULL;
   }
   json_object_set(metrics, "time_series", time_buckets);
@@ -40,7 +40,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
   /* Create overall statistics */
   json_value_t* overall = json_create_object();
   if (!overall) {
-    json_free(metrics);
+    /* CHECKPOINT: json_free(metrics); */
     return NULL;
   }
   json_object_set(metrics, "overall", overall);
@@ -120,7 +120,7 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
     FILE* file = fopen(log->log_file, "r");
     if (!file) {
       pthread_mutex_unlock(&log->lock);
-      json_free(metrics);
+      /* CHECKPOINT: json_free(metrics); */
       return NULL;
     }
 
@@ -265,12 +265,12 @@ json_value_t* transaction_get_detailed_performance_metrics(transaction_manager_t
         }
       }
 
-      json_free(data);
+      /* CHECKPOINT: json_free(data); */
       BUFFER_FREE(line_copy);
     }
 
     /* Clean up */
-    json_free(tx_map);
+    /* CHECKPOINT: json_free(tx_map); */
     fclose(file);
   }
 

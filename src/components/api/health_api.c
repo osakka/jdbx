@@ -220,7 +220,7 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
   
   /* Free resources */
   BUFFER_FREE(health_json);
-  json_free(health);
+  /* CHECKPOINT: json_free(health); */
   
   return response;
 }
@@ -260,7 +260,7 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
   size_t buffer_size = 10240; /* Start with 10KB buffer */
   char* prom_buffer = (char*)BUFFER_ALLOC(buffer_size);
   if (!prom_buffer) {
-    json_free(root);
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -394,7 +394,7 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
         char* new_buffer = (char*)BUFFER_REALLOC(prom_buffer, buffer_size);
         if (!new_buffer) {
           BUFFER_FREE(prom_buffer);
-          json_free(root);
+          /* CHECKPOINT: json_free(root); */
           BUFFER_FREE(metrics_json);
           return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                        "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -409,7 +409,7 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
   
   /* Clean up */
   BUFFER_FREE(prom_buffer);
-  json_free(root);
+  /* CHECKPOINT: json_free(root); */
   BUFFER_FREE(metrics_json);
   
   return response;
@@ -450,7 +450,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   /* Create a new JSON object for the response */
   json_value_t* response_obj = json_create_object();
   if (!response_obj) {
-    json_free(root);
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -463,12 +463,12 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   json_value_t* histograms_array = json_create_array();
   
   if (!counters_array || !gauges_array || !timers_array || !histograms_array) {
-    if (counters_array) json_free(counters_array);
-    if (gauges_array) json_free(gauges_array);
-    if (timers_array) json_free(timers_array);
-    if (histograms_array) json_free(histograms_array);
-    json_free(response_obj);
-    json_free(root);
+    if (counters_array) /* CHECKPOINT: json_free(counters_array); */
+    if (gauges_array) /* CHECKPOINT: json_free(gauges_array); */
+    if (timers_array) /* CHECKPOINT: json_free(timers_array); */
+    if (histograms_array) /* CHECKPOINT: json_free(histograms_array); */
+    /* CHECKPOINT: json_free(response_obj); */
+    /* CHECKPOINT: json_free(root); */
     BUFFER_FREE(metrics_json);
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Memory allocation failure\"}", "application/json");
@@ -516,7 +516,7 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
       } else if (strcmp(type_val->value.string, "histogram") == 0) {
         json_array_append(histograms_array, metric_info);
       } else {
-        json_free(metric_info); /* Unknown type, free the object */
+        /* CHECKPOINT: json_free(metric_info); */ /* Unknown type, free the object */
       }
     }
   }
@@ -531,8 +531,8 @@ http_response_t* health_api_handle_metrics_available(api_context_t *ctx, http_re
   char* response_json = json_stringify(response_obj);
   
   /* Clean up JSON objects */
-  json_free(response_obj);
-  json_free(root);
+  /* CHECKPOINT: json_free(response_obj); */
+  /* CHECKPOINT: json_free(root); */
   BUFFER_FREE(metrics_json);
   
   if (!response_json) {
@@ -584,7 +584,7 @@ http_response_t* health_api_handle_metrics_export(api_context_t *ctx, http_reque
   /* Extract export path */
   json_value_t* export_path_val = json_object_get(req_body, "export_path");
   if (!export_path_val || export_path_val->type != JSON_STRING) {
-    json_free(req_body);
+    /* CHECKPOINT: json_free(req_body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"export_path is required in request body\"}", 
                  "application/json");
@@ -596,7 +596,7 @@ http_response_t* health_api_handle_metrics_export(api_context_t *ctx, http_reque
   int result = metrics_registry_export(g_metrics_registry, export_path);
   
   /* Clean up */
-  json_free(req_body);
+  /* CHECKPOINT: json_free(req_body); */
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,

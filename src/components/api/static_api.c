@@ -31,7 +31,7 @@ http_response_t* api_handle_admin_test(api_context_t* ctx, http_request_t* reque
 
   /* Convert to string */
   char* response_str = json_stringify(test_obj);
-  json_free(test_obj);
+  /* CHECKPOINT: json_free(test_obj); */
 
   /* Create response */
   http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -66,7 +66,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     printf("Invalid JSON body\n");
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
@@ -78,7 +78,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
 
   if (!username_val || username_val->type != JSON_STRING ||
     !password_val || password_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     printf("Missing username or password fields\n");
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Username and password required\"}", "application/json");
@@ -92,7 +92,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
   /* For demo purposes, just check for hardcoded admin credentials */
   /* In a real application, you'd use the RBAC system with proper roles */
   if (strcmp(username, "admin") != 0 || strcmp(password, "admin") != 0) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     printf("Invalid credentials\n");
     return create_http_response(HTTP_UNAUTHORIZED,
                  "{\"error\":\"Invalid credentials\"}", "application/json");
@@ -101,7 +101,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
   /* User authenticated, generate token */
   char* token = generate_static_auth_token(username);
   if (!token) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     printf("Failed to generate token\n");
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to generate token\"}", "application/json");
@@ -118,8 +118,8 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
 
   /* Serialize response */
   char* response_str = json_stringify(response_obj);
-  json_free(response_obj);
-  json_free(body);
+  /* CHECKPOINT: json_free(response_obj); */
+  /* CHECKPOINT: json_free(body); */
 
   printf("Login successful, sending response\n");
 
@@ -144,7 +144,7 @@ http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* requ
         response->content_length = strlen(updated_body);
       }
     }
-    json_free(json_response);
+    /* CHECKPOINT: json_free(json_response); */
   }
 
   /* Free token */

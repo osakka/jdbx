@@ -79,7 +79,7 @@ http_response_t* api_handle_session_terminate(api_context_t* ctx, http_request_t
         has_permission = 1;
       }
     }
-    json_free(session_doc);
+    /* CHECKPOINT: json_free(session_doc); */
   }
   
   /* If not own session, check admin permission */

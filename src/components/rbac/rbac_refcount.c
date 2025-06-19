@@ -18,8 +18,8 @@ rbac_refcount_t* rbac_refcount_init() {
   json_value_t* roles = json_create_object();
   
   if (!users || !roles) {
-    if (users) json_free(users);
-    if (roles) json_free(roles);
+    if (users) /* CHECKPOINT: json_free(users); */
+    if (roles) /* CHECKPOINT: json_free(roles); */
     BUFFER_FREE(rbac);
     return NULL;
   }
@@ -88,7 +88,7 @@ int rbac_refcount_save(rbac_refcount_t* rbac, const char* path) {
   char* json_str = json_stringify(rbac_json);
   
   /* Free the JSON object */
-  json_free(rbac_json);
+  /* CHECKPOINT: json_free(rbac_json); */
   
   if (!json_str) {
     return 0;
@@ -142,7 +142,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   BUFFER_FREE(json_str);
   
   if (!rbac_json || rbac_json->type != JSON_OBJECT) {
-    if (rbac_json) json_free(rbac_json);
+    if (rbac_json) /* CHECKPOINT: json_free(rbac_json); */
     return NULL;
   }
   
@@ -152,14 +152,14 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   
   if (!users || users->type != JSON_OBJECT || 
     !roles || roles->type != JSON_OBJECT) {
-    json_free(rbac_json);
+    /* CHECKPOINT: json_free(rbac_json); */
     return NULL;
   }
   
   /* Create a new RBAC system */
   rbac_refcount_t* rbac = (rbac_refcount_t*)BUFFER_ALLOC(sizeof(rbac_refcount_t));
   if (!rbac) {
-    json_free(rbac_json);
+    /* CHECKPOINT: json_free(rbac_json); */
     return NULL;
   }
   
@@ -168,7 +168,7 @@ rbac_refcount_t* rbac_refcount_load(const char* path) {
   rbac->roles = ref_json_create(json_clone(roles));
   
   /* Free the JSON object */
-  json_free(rbac_json);
+  /* CHECKPOINT: json_free(rbac_json); */
   
   if (!rbac->users || !rbac->roles) {
     if (rbac->users) ref_json_release(rbac->users);

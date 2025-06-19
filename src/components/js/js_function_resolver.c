@@ -99,7 +99,7 @@ static json_value_t* load_function_from_collection(database_t* db, const char* f
     json_object_set(query, "name", json_create_string(function_name));
     
     json_value_t* results = db_query_documents(db, STORAGE_LIBRARY, collection_path, query);
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
     
     if (!results) {
         LOG_ERROR("Failed to query functions collection: %s", collection_path);
@@ -109,20 +109,20 @@ static json_value_t* load_function_from_collection(database_t* db, const char* f
     json_value_t* documents = json_object_get(results, "documents");
     if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
         LOG_DEBUG("Function not found: %s in %s", function_name, collection_path);
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
         return NULL;
     }
     
     /* Get the first matching function */
     json_value_t* func_doc = json_array_get(documents, 0);
     if (!func_doc) {
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
         return NULL;
     }
     
     /* Clone the function document before freeing results */
     json_value_t* function_clone = json_clone(func_doc);
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
     
     return function_clone;
 }
@@ -153,7 +153,7 @@ json_value_t* js_resolve_function(database_t* db, json_value_t* function_spec) {
     if (js_is_function_reference(function_spec)) {
         char* function_id = extract_function_id(function_spec->value.string);
         if (!function_id) {
-            json_free(result);
+            /* CHECKPOINT: json_free(result); */
             return NULL;
         }
         
@@ -161,7 +161,7 @@ json_value_t* js_resolve_function(database_t* db, json_value_t* function_spec) {
         buffer_pool_free(function_id);
         
         if (!func_doc) {
-            json_free(result);
+            /* CHECKPOINT: json_free(result); */
             return NULL;
         }
         
@@ -171,8 +171,8 @@ json_value_t* js_resolve_function(database_t* db, json_value_t* function_spec) {
         
         if (!code || code->type != JSON_STRING) {
             LOG_ERROR("Function document missing 'code' field");
-            json_free(func_doc);
-            json_free(result);
+            /* CHECKPOINT: json_free(func_doc); */
+            /* CHECKPOINT: json_free(result); */
             return NULL;
         }
         
@@ -192,13 +192,13 @@ json_value_t* js_resolve_function(database_t* db, json_value_t* function_spec) {
             json_object_set(result, "description", json_clone(desc));
         }
         
-        json_free(func_doc);
+        /* CHECKPOINT: json_free(func_doc); */
         LOG_DEBUG("Resolved function reference");
         return result;
     }
     
     /* Not a function */
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return NULL;
 }
 

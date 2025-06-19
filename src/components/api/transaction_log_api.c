@@ -32,7 +32,7 @@ http_response_t* api_handle_transaction_logs(api_context_t* ctx, http_request_t*
   
   /* Convert to response */
   char* json_str = json_stringify(stats);
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   if (!json_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -62,7 +62,7 @@ http_response_t* api_handle_transaction_logs_configure(api_context_t* ctx, http_
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid JSON in request body\"}", "application/json");
   }
@@ -113,7 +113,7 @@ http_response_t* api_handle_transaction_logs_configure(api_context_t* ctx, http_
   
   /* Apply the configuration */
   int result = transaction_log_configure(log, log_level, audit_enabled, auto_archive, retention_days);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -133,7 +133,7 @@ http_response_t* api_handle_transaction_logs_configure(api_context_t* ctx, http_
   
   /* Convert to response */
   char* json_str = json_stringify(stats);
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   if (!json_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -163,7 +163,7 @@ http_response_t* api_handle_transaction_logs_archive(api_context_t* ctx, http_re
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid JSON in request body\"}", "application/json");
   }
@@ -171,7 +171,7 @@ http_response_t* api_handle_transaction_logs_archive(api_context_t* ctx, http_re
   /* Extract archive directory */
   json_value_t* archive_dir_val = json_object_get(body, "archive_dir");
   if (!archive_dir_val || archive_dir_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Missing or invalid archive_dir parameter\"}", "application/json");
   }
@@ -181,7 +181,7 @@ http_response_t* api_handle_transaction_logs_archive(api_context_t* ctx, http_re
   /* Perform the archive operation */
   transaction_log_t* log = db->transaction_manager->log;
   int result = transaction_log_archive(log, archive_dir);
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   if (!result) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -237,7 +237,7 @@ http_response_t* api_handle_transaction_logs_report(api_context_t* ctx, http_req
   
   /* Convert to response */
   char* json_str = json_stringify(report);
-  json_free(report);
+  /* CHECKPOINT: json_free(report); */
   
   if (!json_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -316,7 +316,7 @@ http_response_t* api_handle_transaction_logs_document_history(api_context_t* ctx
   
   /* Convert to response */
   char* json_str = json_stringify(history);
-  json_free(history);
+  /* CHECKPOINT: json_free(history); */
   
   if (!json_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 

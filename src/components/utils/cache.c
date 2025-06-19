@@ -67,7 +67,11 @@ static cache_entry_t* create_entry(const char* key, json_value_t* value, time_t 
 static void free_entry(cache_entry_t* entry) {
   if (entry) {
     if (entry->key) BUFFER_FREE(entry->key);
-    if (entry->value) json_free(entry->value);
+    if (entry->value) {
+
+        /* CHECKPOINT: json_free(entry->value); */
+
+    }
     BUFFER_FREE(entry);
   }
 }
@@ -437,7 +441,11 @@ int cache_put(cache_t* cache, const char* key, json_value_t* value, time_t ttl) 
     size_t old_size = existing->size;
 
     /* Free old value */
-    if (existing->value) json_free(existing->value);
+    if (existing->value) {
+
+        /* CHECKPOINT: json_free(existing->value); */
+
+    }
 
     /* Set new value */
     existing->value = json_clone(value);

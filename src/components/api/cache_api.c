@@ -68,7 +68,7 @@ http_response_t* api_handle_cache_stats(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(stats);
   
   /* Free JSON object */
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   /* Create response */
   http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -89,7 +89,7 @@ http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* 
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -172,7 +172,7 @@ http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* 
   }
   
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
   
   /* Create real cache statistics response */
   json_value_t* stats = json_create_object();
@@ -187,7 +187,7 @@ http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* 
   char* response_str = json_stringify(stats);
   
   /* Free JSON object */
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   /* Create response */
   http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -216,7 +216,7 @@ http_response_t* api_handle_cache_clear(api_context_t* ctx, http_request_t* requ
   char* response_str = json_stringify(response);
   
   /* Free JSON object */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -247,7 +247,7 @@ http_response_t* api_handle_cache_invalidate(api_context_t* ctx, http_request_t*
   char* response_str = json_stringify(response);
   
   /* Free JSON object */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   /* Create response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");

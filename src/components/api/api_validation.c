@@ -24,7 +24,7 @@ static http_response_t* validation_error_response(validation_error_t error, cons
   json_object_set(response, "message", json_create_string(response_message));
 
   http_response_t* http_response = http_response_json(response, 400);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   return http_response;
 }
@@ -155,7 +155,7 @@ http_response_t* api_validate_json_body(http_request_t* request, json_value_t** 
   if (json) {
     *json = parsed_json;
   } else {
-    json_free(parsed_json);
+    /* CHECKPOINT: json_free(parsed_json); */
   }
   
   return NULL; /* NULL means validation successful */

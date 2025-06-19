@@ -87,7 +87,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
     json_value_t* unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, unified_query);
-    json_free(unified_query);
+    /* CHECKPOINT: json_free(unified_query); */
     
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
@@ -103,15 +103,15 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
         if (role_uuid && role_uuid->type == JSON_STRING && admin_role_id_out) {
           *admin_role_id_out = BUFFER_STRDUP(role_uuid->value.string);
           TRACE_RBAC("Using existing admin role ID: %s", role_uuid->value.string);
-          json_free(results);
+          /* CHECKPOINT: json_free(results); */
           return 1; /* Success - role already exists */
         }
         
         LOG_ERROR("Admin role exists but has no ID.");
-        json_free(results);
+        /* CHECKPOINT: json_free(results); */
         return 0;
       }
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
     }
   } else {
     TRACE_RBAC("Bootstrap mode - skipping duplicate role check");
@@ -170,7 +170,7 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
   json_value_t* result = NULL;
   TRACE_RBAC("Inserting admin role into unified documents storage (default/documents)");
   result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, admin_role, "system-admin");
-  json_free(admin_role);
+  /* CHECKPOINT: json_free(admin_role); */
   
   if (!result) {
     LOG_ERROR("Cannot create admin role.");
@@ -187,11 +187,11 @@ int create_default_admin_role(struct database* db, char** admin_role_id_out) {
     }
   } else {
     LOG_ERROR("Cannot get _id from insert result.");
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return 0;
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   TRACE_RBAC("Admin role created successfully.");
   return 1;
@@ -205,16 +205,16 @@ int create_default_user_role(struct database* db) {
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string("user"));
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       TRACE_RBAC("User role already exists by name.");
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
       return 1;  /* OK for user role to exist */
     }
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
   }
   
   /* Create user role document - let database generate UUID */
@@ -253,7 +253,7 @@ int create_default_user_role(struct database* db) {
   
   /* Insert role */
   json_value_t* result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, user_role, "system-admin");
-  json_free(user_role);
+  /* CHECKPOINT: json_free(user_role); */
   
   if (!result) {
     LOG_ERROR("Cannot create user role.");
@@ -267,7 +267,7 @@ int create_default_user_role(struct database* db) {
     TRACE_RBAC("User role created with ID: %s", id_val->value.string);
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   TRACE_RBAC("User role created successfully.");
   return 1;
@@ -288,7 +288,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
     json_value_t* unified_query = rbac_build_user_query(RBAC_LIBRARY_SYSTEM);
     json_object_set(unified_query, "username", json_create_string(DEFAULT_ADMIN_USERNAME));
     json_value_t* results = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, unified_query);
-    json_free(unified_query);
+    /* CHECKPOINT: json_free(unified_query); */
     
     if (results) {
       json_value_t* documents = json_object_get(results, "documents");
@@ -323,7 +323,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
           json_value_t* role_unified_query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
           json_object_set(role_unified_query, "name", json_create_string(DEFAULT_ADMIN_ROLE));
           json_value_t* role_results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, role_unified_query);
-          json_free(role_unified_query);
+          /* CHECKPOINT: json_free(role_unified_query); */
           
           if (role_results) {
             json_value_t* role_docs = json_object_get(role_results, "documents");
@@ -342,21 +342,21 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
                 
                 /* Update the user document in unified storage */
                 virtual_update(db, user_id, updated_user);
-                json_free(updated_user);
+                /* CHECKPOINT: json_free(updated_user); */
                 
                 LOG_INFO("Admin user roles updated with role ID: %s", admin_role_id);
               }
             }
-            json_free(role_results);
+            /* CHECKPOINT: json_free(role_results); */
           }
         }
         }
       }
       
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
       return 1;  /* Admin user already exists, that's OK */
     }
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
   } else {
     TRACE_RBAC("Bootstrap mode - skipping duplicate user check");
   }
@@ -386,7 +386,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   char* password_hash = hash_password(initial_admin_pass);
   if (!password_hash) {
     LOG_ERROR("Cannot hash password.");
-    json_free(admin_user);
+    /* CHECKPOINT: json_free(admin_user); */
     return 0;
   }
   
@@ -411,7 +411,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   TRACE_RBAC("Creating admin user via generic virtual layer");
   json_value_t* user_result = virtual_insert(db, DOC_TYPE_NAME_USER, RBAC_SYSTEM_LIBRARY, 
                                            RBAC_USERS_COLLECTION_NAME, admin_user, "system-admin");
-  json_free(admin_user);
+  /* CHECKPOINT: json_free(admin_user); */
   
   if (!user_result) {
     LOG_ERROR("Cannot create admin user.");
@@ -420,7 +420,7 @@ int create_default_admin_user(struct database* db, const char* admin_role_id) {
   
   const char* user_id = json_get_string(json_object_get(user_result, "uuid"));
   TRACE_RBAC("Initial admin user '%s' created with ID: %s", initial_admin_user, user_id ? user_id : "(null).");
-  json_free(user_result);
+  /* CHECKPOINT: json_free(user_result); */
   return 1;
 }
 
@@ -438,7 +438,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_object_set(query, "username", json_create_string(username));
   
   json_value_t* result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (!result) {
     LOG_ERROR("Query failed.");
@@ -449,7 +449,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   json_value_t* documents = json_object_get(result, "documents");
   if (!documents || documents->type != JSON_ARRAY || json_array_size(documents) == 0) {
     TRACE_RBAC("User not found: %s", username);
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return NULL;
   }
   
@@ -460,7 +460,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
   rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("Cannot allocate memory for user.");
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     return NULL;
   }
   
@@ -481,7 +481,7 @@ rbac_user_t* rbac_database_get_user_by_username(struct database* db, const char*
     user->roles = json_create_array();
   }
   
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   TRACE_RBAC("User found with ID: %s", user->id);
   return user;
@@ -528,7 +528,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   
   /* Insert user */
   json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_doc, "system-admin");
-  json_free(user_doc);
+  /* CHECKPOINT: json_free(user_doc); */
   
   if (!insert_result) {
     LOG_ERROR("Cannot insert user.");
@@ -540,7 +540,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
   if (!actual_id) {
     LOG_ERROR("Cannot get user ID from insert result.");
-    json_free(insert_result);
+    /* CHECKPOINT: json_free(insert_result); */
     BUFFER_FREE(password_hash);
     return NULL;
   }
@@ -549,7 +549,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   rbac_user_t* user = (rbac_user_t*)BUFFER_ALLOC(sizeof(rbac_user_t));
   if (!user) {
     LOG_ERROR("Cannot allocate memory for user.");
-    json_free(insert_result);
+    /* CHECKPOINT: json_free(insert_result); */
     BUFFER_FREE(password_hash);
     return NULL;
   }
@@ -559,7 +559,7 @@ rbac_user_t* rbac_database_create_user(struct database* db, const char* username
   user->password_hash = password_hash;
   user->roles = json_create_array();
   
-  json_free(insert_result);
+  /* CHECKPOINT: json_free(insert_result); */
   
   TRACE_RBAC("User created with ID: %s", user->id);
   return user;
@@ -578,16 +578,16 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   json_value_t* query = rbac_build_role_query(RBAC_LIBRARY_SYSTEM);
   json_object_set(query, "name", json_create_string(rolename));
   json_value_t* results = virtual_query(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   if (results) {
     json_value_t* documents = json_object_get(results, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       LOG_ERROR("Role already exists: %s", rolename);
-      json_free(results);
+      /* CHECKPOINT: json_free(results); */
       return NULL;
     }
-    json_free(results);
+    /* CHECKPOINT: json_free(results); */
   }
   
   /* Create role document - let database generate UUID */
@@ -606,7 +606,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   
   /* Insert role */
   json_value_t* insert_result = virtual_insert(db, DOC_TYPE_NAME_ROLE, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_ROLES, role_doc, "system-admin");
-  json_free(role_doc);
+  /* CHECKPOINT: json_free(role_doc); */
   
   if (!insert_result) {
     LOG_ERROR("Cannot insert role.");
@@ -617,7 +617,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   const char* actual_id = json_get_string(json_object_get(insert_result, "uuid"));
   if (!actual_id) {
     LOG_ERROR("Cannot get role ID from insert result.");
-    json_free(insert_result);
+    /* CHECKPOINT: json_free(insert_result); */
     return NULL;
   }
   
@@ -625,7 +625,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   rbac_role_t* role = (rbac_role_t*)BUFFER_ALLOC(sizeof(rbac_role_t));
   if (!role) {
     LOG_ERROR("Cannot allocate memory for role.");
-    json_free(insert_result);
+    /* CHECKPOINT: json_free(insert_result); */
     return NULL;
   }
   
@@ -633,7 +633,7 @@ rbac_role_t* rbac_database_create_role(struct database* db, const char* rolename
   role->name = BUFFER_STRDUP(rolename);
   role->permissions = json_create_object();
   
-  json_free(insert_result);
+  /* CHECKPOINT: json_free(insert_result); */
   
   TRACE_RBAC("Role created with ID: %s", role->id);
   return role;
@@ -679,7 +679,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   json_object_set(cache_query, "uuid", json_create_string(cache_key));
   
   json_value_t* cache_result = virtual_query(db, "permission_cache", RBAC_LIBRARY_SYSTEM, "cache", cache_query);
-  json_free(cache_query);
+  /* CHECKPOINT: json_free(cache_query); */
   
   if (cache_result) {
     json_value_t* docs = json_object_get(cache_result, "documents");
@@ -702,19 +702,19 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
               if (perm->type == JSON_STRING && 
                 strcmp(perm->value.string, permission_str) == 0) {
                 TRACE_RBAC("Permission granted (cached).");
-                json_free(cache_result);
+                /* CHECKPOINT: json_free(cache_result); */
                 return 1;
               }
             }
           }
           
           TRACE_RBAC("Permission denied (cached).");
-          json_free(cache_result);
+          /* CHECKPOINT: json_free(cache_result); */
           return 0;
         }
       }
     }
-    json_free(cache_result);
+    /* CHECKPOINT: json_free(cache_result); */
   }
   
   /* Cache miss or expired - compute permissions */
@@ -728,7 +728,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   TRACE_RBAC("Querying user with _id: %s", user_id);
   
   json_value_t* user_result = virtual_query(db, DOC_TYPE_NAME_USER, RBAC_LIBRARY_SYSTEM, VIRTUAL_COLLECTION_USERS, user_query);
-  json_free(user_query);
+  /* CHECKPOINT: json_free(user_query); */
   
   if (!user_result) {
     LOG_ERROR("Cannot query user.");
@@ -739,7 +739,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
   if (!user_docs || user_docs->value.array.size == 0) {
     LOG_ERROR("User not found with id: %s", user_id);
     TRACE_RBAC("Query result: %s", json_stringify(user_result));
-    json_free(user_result);
+    /* CHECKPOINT: json_free(user_result); */
     return 0;
   }
   
@@ -785,7 +785,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
           TRACE_RBAC("Found exact permission: %d (checking for %d)", perm_mask, permission);
           if (perm_mask & permission) {
             has_permission = 1;
-            json_free(role_doc);
+            /* CHECKPOINT: json_free(role_doc); */
             break;
           }
         }
@@ -798,7 +798,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
           TRACE_RBAC("Found wildcard permission: %d (checking for %d)", perm_mask, permission);
           if (perm_mask & permission) {
             has_permission = 1;
-            json_free(role_doc);
+            /* CHECKPOINT: json_free(role_doc); */
             break;
           }
         }
@@ -819,7 +819,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
         }
       }
       
-      json_free(role_doc);
+      /* CHECKPOINT: json_free(role_doc); */
       
       if (has_permission) break;
     }
@@ -827,7 +827,7 @@ int rbac_database_check_permission(struct database* db, const char* user_id, rba
     TRACE_RBAC("User has no roles.");
   }
   
-  json_free(user_result);
+  /* CHECKPOINT: json_free(user_result); */
   
   TRACE_RBAC("Permission %s", has_permission ? "granted" : "denied");
   return has_permission;

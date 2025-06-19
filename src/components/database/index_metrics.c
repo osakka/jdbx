@@ -681,7 +681,7 @@ int index_metrics_export(const char* file_path) {
     
     /* Convert to string */
     char* json_str = json_stringify(metrics);
-    json_free(metrics);
+    /* CHECKPOINT: json_free(metrics); */
     
     if (!json_str) {
         return -1;

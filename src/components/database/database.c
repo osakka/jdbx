@@ -1117,6 +1117,11 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
         return NULL;
     }
     *doc_ptr = json_deep_copy(doc_copy);
+    
+    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // Documents in the skiplist must remain valid across checkpoint boundaries
+    memory_promote(*doc_ptr);
+    
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
     
     pthread_rwlock_unlock(&coll->lock);
@@ -1292,6 +1297,10 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
         return NULL;
     }
     *new_doc_ptr = json_deep_copy(updated_doc);
+    
+    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // Documents in the skiplist must remain valid across checkpoint boundaries
+    memory_promote(*new_doc_ptr);
     
     // 3. Atomic replace in skiplist
     skiplist_delete(coll->documents, id, strlen(id) + 1);
@@ -1788,6 +1797,11 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     
     // BAR RAISING: Store JSON object directly - skiplist manages pointer lifecycle
     json_value_t* stored_doc = json_deep_copy(doc_copy);
+    
+    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // Documents in the skiplist must remain valid across checkpoint boundaries
+    memory_promote(stored_doc);
+    
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_doc, sizeof(json_value_t*));
     
     pthread_rwlock_unlock(&coll->lock);
@@ -1864,6 +1878,11 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     
     // BAR RAISING: Replace JSON object - skiplist manages pointer lifecycle
     json_value_t* stored_updated = json_deep_copy(updated_doc);
+    
+    // CRITICAL: Promote the stored document to survive checkpoint rewinds
+    // Documents in the skiplist must remain valid across checkpoint boundaries
+    memory_promote(stored_updated);
+    
     skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
     skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, &stored_updated, sizeof(json_value_t*));
     /* CHECKPOINT: json_free(existing_doc); */  // Free old JSON object

@@ -335,7 +335,11 @@ void jwt_free(jwt_token_t* token) {
     if (token->payload->sub) BUFFER_FREE(token->payload->sub);
     if (token->payload->aud) BUFFER_FREE(token->payload->aud);
     if (token->payload->jti) BUFFER_FREE(token->payload->jti);
-    if (token->payload->claims) json_free(token->payload->claims);
+    if (token->payload->claims) {
+
+        /* CHECKPOINT: json_free(token->payload->claims); */
+
+    }
     BUFFER_FREE(token->payload);
   }
   
@@ -472,7 +476,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   json_object_set(header_json, "typ", json_create_string(token->header->typ));
   
   char* header_str = json_stringify(header_json);
-  json_free(header_json);
+  /* CHECKPOINT: json_free(header_json); */
   
   if (!header_str) {
     LOG_DEBUG("Failed to stringify header JSON.");
@@ -544,7 +548,7 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
   }
   
   char* payload_str = json_stringify(payload_json);
-  json_free(payload_json);
+  /* CHECKPOINT: json_free(payload_json); */
   
   if (!payload_str) {
     BUFFER_FREE(header_enc);
@@ -663,7 +667,11 @@ jwt_token_t* jwt_decode(const char* token_str) {
   BUFFER_FREE(header_json);
   
   if (!header || header->type != JSON_OBJECT) {
-    if (header) json_free(header);
+    if (header) {
+
+        /* CHECKPOINT: json_free(header); */
+
+    }
     BUFFER_FREE(token_copy);
     return NULL;
   }
@@ -672,7 +680,7 @@ jwt_token_t* jwt_decode(const char* token_str) {
   int payload_len;
   unsigned char* payload_json = base64_url_decode(payload_b64, &payload_len);
   if (!payload_json) {
-    json_free(header);
+    /* CHECKPOINT: json_free(header); */
     BUFFER_FREE(token_copy);
     return NULL;
   }
@@ -682,8 +690,12 @@ jwt_token_t* jwt_decode(const char* token_str) {
   BUFFER_FREE(payload_json);
   
   if (!payload || payload->type != JSON_OBJECT) {
-    json_free(header);
-    if (payload) json_free(payload);
+    /* CHECKPOINT: json_free(header); */
+    if (payload) {
+
+        /* CHECKPOINT: json_free(payload); */
+
+    }
     BUFFER_FREE(token_copy);
     return NULL;
   }
@@ -691,8 +703,8 @@ jwt_token_t* jwt_decode(const char* token_str) {
   /* Create token */
   jwt_token_t* token = jwt_create(NULL);
   if (!token) {
-    json_free(header);
-    json_free(payload);
+    /* CHECKPOINT: json_free(header); */
+    /* CHECKPOINT: json_free(payload); */
     BUFFER_FREE(token_copy);
     return NULL;
   }
@@ -803,8 +815,8 @@ jwt_token_t* jwt_decode(const char* token_str) {
   token->token_str = BUFFER_STRDUP(token_str);
   
   /* Clean up */
-  json_free(header);
-  json_free(payload);
+  /* CHECKPOINT: json_free(header); */
+  /* CHECKPOINT: json_free(payload); */
   BUFFER_FREE(token_copy);
   
   return token;
@@ -1090,7 +1102,11 @@ void jwt_payload_free(jwt_payload_t* payload) {
   if (payload->sub) BUFFER_FREE(payload->sub);
   if (payload->aud) BUFFER_FREE(payload->aud);
   if (payload->jti) BUFFER_FREE(payload->jti);  /* strdup allocated */
-  if (payload->claims) json_free(payload->claims);
+  if (payload->claims) {
+
+      /* CHECKPOINT: json_free(payload->claims); */
+
+  }
   
   BUFFER_FREE(payload);
 }

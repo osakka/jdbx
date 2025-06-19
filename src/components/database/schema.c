@@ -712,7 +712,7 @@ json_value_t* db_schema_to_json(schema_t* schema) {
   json_value_t* rules_array = json_create_array();
   if (!rules_array) {
     LOG_ERROR("Cannot create rules array.");
-    json_free(json);
+    /* CHECKPOINT: json_free(json); */
     return NULL;
   }
 
@@ -736,8 +736,8 @@ json_value_t* db_schema_to_json(schema_t* schema) {
     json_value_t* rule_obj = json_create_object();
     if (!rule_obj) {
       LOG_ERROR("Cannot create JSON object for rule %d.", rule_index);
-      json_free(rules_array);
-      json_free(json);
+      /* CHECKPOINT: json_free(rules_array); */
+      /* CHECKPOINT: json_free(json); */
       return NULL;
     }
 

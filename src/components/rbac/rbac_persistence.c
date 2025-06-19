@@ -44,7 +44,7 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
   /* Check if we need to create a default admin user */
   json_value_t* query = json_create_object();
   json_value_t* users_result = virtual_query(db, DOC_TYPE_NAME_USER, "system", VIRTUAL_COLLECTION_USERS, query);
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   
   /* Extract documents array from response object */
   json_value_t* users_documents = json_object_get(users_result, "documents");
@@ -71,12 +71,12 @@ int rbac_database_persist(database_t* db, rbac_system_t* rbac) {
       LOG_ERROR("Failed to create default admin user.");
     } else {
       LOG_INFO("Created default admin user.");
-      json_free(result);
+      /* CHECKPOINT: json_free(result); */
     }
   }
   
   if (users_result) {
-    json_free(users_result);
+    /* CHECKPOINT: json_free(users_result); */
   }
   
   return 1;

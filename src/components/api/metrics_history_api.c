@@ -83,7 +83,7 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
   
   /* Serialize response */
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -209,7 +209,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
     current_bucket = bucket_end;
   }
   
-  json_free(history);
+  /* CHECKPOINT: json_free(history); */
   
   /* Create response */
   json_value_t* response = json_create_object();
@@ -221,7 +221,7 @@ http_response_t* api_handle_metrics_aggregate(api_context_t* ctx, http_request_t
   
   /* Serialize response */
   char* response_str = json_stringify(response);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
@@ -297,7 +297,7 @@ http_response_t* api_handle_adaptive_indexing_metrics(api_context_t* ctx, http_r
   
   /* Serialize response */
   char* response_str = json_stringify(stats);
-  json_free(stats);
+  /* CHECKPOINT: json_free(stats); */
   
   if (!response_str) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 

@@ -345,7 +345,7 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
     result = transaction_query_documents(manager, transaction, collection, query);
 
     /* Free query JSON */
-    json_free(query);
+    /* CHECKPOINT: json_free(query); */
 
     if (!result) {
       return http_response_error("Failed to execute query", 500);
@@ -384,7 +384,7 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
     }
 
     /* Free document JSON (it's cloned in the transaction) */
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
 
     if (!result) {
       return http_response_error("Failed to insert document", 500);
@@ -422,7 +422,7 @@ http_response_t* api_handle_transaction_document_operation(api_context_t* ctx, h
     }
 
     /* Free document JSON */
-    json_free(document);
+    /* CHECKPOINT: json_free(document); */
 
     if (!result) {
       return http_response_error("Document not found or update failed", 404);

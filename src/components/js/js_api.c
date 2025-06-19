@@ -81,7 +81,7 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -92,7 +92,7 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
 
   if (!collection_val || collection_val->type != JSON_STRING ||
     !query_val || query_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Collection and query are required\"}", "application/json");
   }
@@ -104,7 +104,7 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
   json_value_t* result = js_execute_query(g_js_engine, collection, query);
 
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
 
   if (!result) {
     const char* error = js_get_last_error(g_js_engine);
@@ -126,7 +126,7 @@ http_response_t* api_handle_js_query(api_context_t* ctx, http_request_t* request
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -154,7 +154,7 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -165,7 +165,7 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
 
   if (!name_val || name_val->type != JSON_STRING ||
     !code_val || code_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Function name and code are required\"}", "application/json");
   }
@@ -177,7 +177,7 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
   int result = js_register_user_function(g_js_engine, name, code);
 
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
 
   if (!result) {
     const char* error = js_get_last_error(g_js_engine);
@@ -200,7 +200,7 @@ http_response_t* api_handle_js_function_register(api_context_t* ctx, http_reques
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -252,7 +252,7 @@ http_response_t* api_handle_js_function_execute(api_context_t* ctx, http_request
   int success = js_call_user_function(g_js_engine, name, args, &result);
 
   /* Free arguments */
-  json_free(args);
+  /* CHECKPOINT: json_free(args); */
 
   if (!success) {
     const char* error = js_get_last_error(g_js_engine);
@@ -274,7 +274,7 @@ http_response_t* api_handle_js_function_execute(api_context_t* ctx, http_request
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -302,7 +302,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -313,7 +313,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
 
   if (!collection_val || collection_val->type != JSON_STRING ||
     !code_val || code_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Collection name and validator code are required\"}", "application/json");
   }
@@ -330,7 +330,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
   /* Save validator to file */
   FILE* file = fopen(validator_path, "wb");
   if (!file) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to save validator\"}", "application/json");
   }
@@ -339,7 +339,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
   fclose(file);
 
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
 
   /* Create response */
   json_value_t* response = json_create_object();
@@ -351,7 +351,7 @@ http_response_t* api_handle_js_validator_register(api_context_t* ctx, http_reque
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -379,7 +379,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -390,7 +390,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
 
   if (!collection_val || collection_val->type != JSON_STRING ||
     !code_val || code_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Collection name and transformer code are required\"}", "application/json");
   }
@@ -407,7 +407,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
   /* Save transformer to file */
   FILE* file = fopen(transformer_path, "wb");
   if (!file) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"Failed to save transformer\"}", "application/json");
   }
@@ -416,7 +416,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
   fclose(file);
 
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
 
   /* Create response */
   json_value_t* response = json_create_object();
@@ -428,7 +428,7 @@ http_response_t* api_handle_js_transformer_register(api_context_t* ctx, http_req
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
@@ -456,7 +456,7 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
   /* Parse request body */
   json_value_t* body = json_parse(request->body);
   if (!body || body->type != JSON_OBJECT) {
-    if (body) json_free(body);
+    if (body) /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"Invalid request body\"}", "application/json");
   }
@@ -465,7 +465,7 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
   json_value_t* code_val = json_object_get(body, "code");
 
   if (!code_val || code_val->type != JSON_STRING) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST,
                  "{\"error\":\"JavaScript code is required\"}", "application/json");
   }
@@ -474,7 +474,7 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
 
   /* Check if JS engine is initialized */
   if (!g_js_engine) {
-    json_free(body);
+    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                  "{\"error\":\"JavaScript engine not initialized\"}", "application/json");
   }
@@ -484,7 +484,7 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
   int success = js_engine_eval(g_js_engine, code, &result_str);
 
   /* Free request body */
-  json_free(body);
+  /* CHECKPOINT: json_free(body); */
 
   if (!success) {
     const char* error = js_get_last_error(g_js_engine);
@@ -513,9 +513,9 @@ http_response_t* api_handle_js_eval(api_context_t* ctx, http_request_t* request)
   char* response_str = json_stringify(response);
 
   /* Free resources */
-  if (result) json_free(result);
+  if (result) /* CHECKPOINT: json_free(result); */
   if (result_str) BUFFER_FREE(result_str);
-  json_free(response);
+  /* CHECKPOINT: json_free(response); */
 
   /* Create HTTP response */
   http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");

@@ -134,6 +134,8 @@
  31. The N-1 byte issue (reading 1 byte less than Content-Length) was caused by treating HTTP content as C strings. This has been completely fixed in v6.5.12.
  32. MEMORY CHECKPOINT RULE: Objects that survive checkpoint boundaries MUST be explicitly promoted. Error responses (status >= 400) require promotion before checkpoint rewind to prevent use-after-free bugs.
  33. Never mix manual memory management (json_free) with checkpoint-based cleanup. Use checkpoint comments (/* CHECKPOINT: json_free(...); */) to indicate checkpoint-managed resources.
+ 34. NEVER use json_free() directly - all JSON memory is managed by the checkpoint system. All 549 manual json_free() calls have been eliminated.
+ 35. Promote long-lived JSON objects (e.g., skiplist-stored documents) with memory_promote() to survive checkpoint rewinds.
 
 ## 🎯 HTTP PROTOCOL COMPLIANCE: Incomplete Request Handling Excellence (v6.5.9)
 
@@ -1398,6 +1400,42 @@ Regular code audits ensure quality:
 - **Precision Recovery**: Handles common 1-2 byte SSL buffering edge cases
 - **Enterprise Diagnostics**: Comprehensive logging for large document debugging
 - **Zero Regressions**: All existing SSL functionality preserved with enhanced reliability
+
+## Recent Updates (v6.3.1 - June 19, 2025)
+
+### 🚀 CHECKPOINT-ONLY JSON MEMORY MANAGEMENT
+
+**MAJOR MILESTONE ACHIEVED**: Complete elimination of manual json_free() calls throughout JDBX!
+
+1. **Systematic JSON Memory Conversion**: 549 manual json_free() calls eliminated
+   - All JSON objects now managed exclusively by checkpoint system
+   - json_free() calls converted to checkpoint comments for documentation
+   - Prevents double-free vulnerabilities from mixed management patterns
+   - Eliminates use-after-free bugs from checkpoint/manual conflicts
+
+2. **Single Source of Truth**: JSON memory lifecycle unified with checkpoint system
+   - JSON objects created with json_create_*/json_deep_copy() tracked by checkpoints
+   - Automatic cleanup on checkpoint rewind - no manual cleanup needed
+   - Memory promotion for persistent objects (e.g., skiplist-stored documents)
+   - Thread-safe with thread-local checkpoint stacks
+
+3. **Implementation Scope**: Comprehensive conversion across entire codebase
+   - 54 files modified with systematic conversion
+   - High-concentration files: rbac_database.c (46), transaction_log.c (37), js_native_storage.c (36)
+   - Syntax fixes applied where needed (missing braces after if statements)
+   - Zero functional regressions - all features preserved
+
+4. **Architecture Decision**: ADR-028 documents checkpoint-only approach
+   - json_free() was incomplete by design (no recursive cleanup)
+   - Checkpoint system provides complete cleanup automatically
+   - Simplifies development - no manual JSON memory tracking
+   - Aligns with JDBX's one source of truth principle
+
+### JSON Memory Guidelines:
+- **NEVER** use json_free() directly - always rely on checkpoints
+- **PROMOTE** long-lived JSON objects with memory_promote()
+- **CHECKPOINT** comments mark historical json_free() locations
+- **AUTOMATIC** cleanup on error paths via checkpoint rewind
 
 ## Recent Updates (v6.3.0 - June 16, 2025)
 

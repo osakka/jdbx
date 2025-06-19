@@ -72,7 +72,7 @@ json_value_t* config_load_from_database(database_t* db) {
     
     if (config->type != JSON_OBJECT) {
         LOG_ERROR("Invalid configuration document type.");
-        json_free(config);
+        /* CHECKPOINT: json_free(config); */
         return NULL;
     }
     
@@ -80,13 +80,13 @@ json_value_t* config_load_from_database(database_t* db) {
     json_value_t* settings = json_object_get(config, "settings");
     if (!settings || settings->type != JSON_OBJECT) {
         LOG_ERROR("Configuration missing settings object.");
-        json_free(config);
+        /* CHECKPOINT: json_free(config); */
         return NULL;
     }
     
     /* Return cloned settings */
     json_value_t* result = json_clone(settings);
-    json_free(config);
+    /* CHECKPOINT: json_free(config); */
     
     return result;
 }
@@ -115,21 +115,21 @@ int config_save_to_database(database_t* db, json_value_t* config) {
     
     if (existing) {
         /* Update existing using virtual layer */
-        json_free(existing);
+        /* CHECKPOINT: json_free(existing); */
         result = virtual_update(db, CONFIG_DOCUMENT_ID, doc);
     } else {
         /* Insert new using virtual layer */
         result = virtual_insert(db, DOC_TYPE_NAME_CONFIG, "system", VIRTUAL_COLLECTION_CONFIGS, doc, "system");
     }
     
-    json_free(doc);
+    /* CHECKPOINT: json_free(doc); */
     
     if (!result) {
         LOG_ERROR("Cannot save configuration to database.");
         return -1;
     }
     
-    json_free(result);
+    /* CHECKPOINT: json_free(result); */
     LOG_INFO("Configuration saved to database.");
     return 0;
 }
@@ -334,10 +334,10 @@ int config_apply_database_settings(server_config_t* config, database_t* db) {
     }
     
     if (old_config) {
-        json_free(old_config);
+        /* CHECKPOINT: json_free(old_config); */
     }
     
-    json_free(db_config);
+    /* CHECKPOINT: json_free(db_config); */
     pthread_mutex_unlock(&config_mutex);
     
     LOG_INFO("Applied configuration from database.");
@@ -433,7 +433,7 @@ void config_cleanup(void) {
     
     /* Free cached config */
     if (cached_config) {
-        json_free(cached_config);
+        /* CHECKPOINT: json_free(cached_config); */
         cached_config = NULL;
     }
     

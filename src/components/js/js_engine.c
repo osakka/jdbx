@@ -537,7 +537,7 @@ static JSValue js_db_get_collection(JSContext *ctx, JSValueConst this_val, int a
   JSValue result = json_to_js(ctx, documents);
   
   /* Free JSON value */
-  json_free(documents);
+  /* CHECKPOINT: json_free(documents); */
   
   return result;
 }
@@ -570,7 +570,7 @@ static JSValue js_db_query_documents(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *documents = db_query_documents(engine->db, STORAGE_LIBRARY, collection_name, query);
   
   /* Free query */
-  json_free(query);
+  /* CHECKPOINT: json_free(query); */
   JS_FreeCString(ctx, collection_name);
   
   if (!documents) {
@@ -581,7 +581,7 @@ static JSValue js_db_query_documents(JSContext *ctx, JSValueConst this_val, int 
   JSValue result = json_to_js(ctx, documents);
   
   /* Free JSON value */
-  json_free(documents);
+  /* CHECKPOINT: json_free(documents); */
   
   return result;
 }
@@ -622,7 +622,7 @@ static JSValue js_db_get_document(JSContext *ctx, JSValueConst this_val, int arg
   JSValue result = json_to_js(ctx, document);
   
   /* Free JSON value */
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   
   return result;
 }
@@ -655,7 +655,7 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *result = virtual_insert(engine->db, DOC_TYPE_NAME_DOCUMENT, VIRTUAL_LIBRARY_DEFAULT, collection_name, document, SYSTEM_USER_JS);
   
   /* Free resources */
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   JS_FreeCString(ctx, collection_name);
   
   if (!result) {
@@ -666,7 +666,7 @@ static JSValue js_db_insert_document(JSContext *ctx, JSValueConst this_val, int 
   JSValue js_result = json_to_js(ctx, result);
   
   /* Free JSON value */
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   return js_result;
 }
@@ -700,7 +700,7 @@ static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int 
   json_value_t *result = virtual_update(engine->db, document_id, document);
   
   /* Free resources */
-  json_free(document);
+  /* CHECKPOINT: json_free(document); */
   JS_FreeCString(ctx, collection_name);
   JS_FreeCString(ctx, document_id);
   
@@ -712,7 +712,7 @@ static JSValue js_db_update_document(JSContext *ctx, JSValueConst this_val, int 
   JSValue js_result = json_to_js(ctx, result);
   
   /* Free JSON value */
-  json_free(result);
+  /* CHECKPOINT: json_free(result); */
   
   return js_result;
 }
