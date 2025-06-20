@@ -1,6 +1,48 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 20, 2025 (v6.5.13 - Static File Serving Integration Fix)
+**Last Updated**: June 20, 2025 (v7.0.0 - Integrated WAL Architecture - CLEAN CUT!)
+
+## 🏆 INTEGRATED WAL ARCHITECTURE - ONE SOURCE OF TRUTH! (v7.0.0)
+
+**JDBX has achieved the ultimate architectural bar-raising solution by integrating Write-Ahead Logging directly into the database file format, creating a true single-file database with ZERO backward compatibility.**
+
+### 🚨 **CLEAN CUT IMPLEMENTATION:**
+- **NO BACKWARD COMPATIBILITY**: Version 2 format ONLY - clean break from past
+- **NO MIGRATION PATHS**: Delete old databases and start fresh
+- **NO DUAL MODES**: Single implementation, single source of truth
+- **NO SEPARATE WAL FILES**: Everything integrated into one `.jdbx` file
+
+### 🚀 **INTEGRATED WAL ARCHITECTURE:**
+- **256 WAL Pages**: 1MB circular buffer embedded in database file
+- **File Layout**: Header → Bitmap → WAL → Root → Data (in that order)
+- **Automatic Recovery**: WAL replay on startup if needed
+- **Checkpoint Support**: Flush WAL to data pages on demand
+- **Zero Coordination**: No file synchronization issues
+
+### 📁 **TRUE SINGLE FILE DATABASE:**
+```
+Before (v1): database.jdbx + database.wal (two files)
+After (v7):  database.jdbx ONLY (one file!)
+```
+
+### 🏗️ **TECHNICAL IMPLEMENTATION:**
+- **Header Enhanced**: Added WAL pointers (start_page, current_page, checkpoint_page)
+- **New Page Type**: PAGE_TYPE_WAL for dedicated WAL pages
+- **Circular Buffer**: 256 pages with automatic wraparound
+- **Clean Codebase**: Removed ALL separate WAL file handling
+
+### 📊 **ARCHITECTURAL BENEFITS:**
+- ✅ **Atomic Operations**: Everything in one file = true atomicity
+- ✅ **Performance**: Single mmap region, better cache locality
+- ✅ **Simplicity**: One file to backup, restore, manage
+- ✅ **Reliability**: No orphaned WAL files or sync issues
+- ✅ **Enterprise Ready**: Production-grade single-file solution
+
+### 🏆 **BAR-RAISING ACHIEVEMENT:**
+- **Like SQLite**: Single file database everyone knows and loves
+- **But Better**: Integrated from day one, not bolted on
+- **Clean Architecture**: No legacy code, no compatibility burden
+- **Future Proof**: Room for growth within unified format
 
 ## 🐛 STATIC FILE SERVING INTEGRATION FIX (v6.5.13)
 
