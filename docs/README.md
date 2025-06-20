@@ -2,7 +2,7 @@
 
 **Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
-**Version**: 6.5.13 | **Status**: Production Ready - UI Functionality Restored & Memory Excellence
+**Version**: 7.0.0 | **Status**: Production Ready - Integrated WAL Architecture with Single Source of Truth
 
 ## 🚀 Quick Start
 

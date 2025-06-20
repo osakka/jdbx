@@ -5,6 +5,30 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - 2025-06-20
+
+### Added
+- Integrated Write-Ahead Logging (WAL) directly into JDBX codebase
+- ADR-038: Integrated WAL Architecture documentation
+- Proper integration between WAL and checkpoint memory system
+
+### Changed
+- **BREAKING**: WAL is now part of JDBX, not an external library
+- Unified build process without external dependencies
+- WAL memory management now uses JDBX buffer pool
+- Consistent error handling across WAL and core components
+
+### Removed
+- External WAL library dependency
+- Separate WAL build process
+- External library management complexity
+
+### Technical Impact
+- Single source of truth: All functionality in one codebase
+- Better performance through tighter integration
+- Simplified deployment with single artifact
+- Unified testing and debugging framework
+
 ## [6.5.14] - 2025-06-20
 
 ### Added
@@ -298,6 +322,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified architecture eliminates data duplication
 - Enhanced scalability with unified approach
 
+## [5.1.0] - 2025-06-15
+
+### Added
+- TRUE Unified Documents Architecture - Preview implementation
+- Initial virtual collections based on document fields
+- Storage/Virtual function separation groundwork
+
+### Changed
+- Began migration to unified documents model
+- Updated UI for unified architecture compatibility
+
+### Technical Notes
+- Preparation release for v6.0.0 unified architecture
+- Testing and validation of core concepts
+
 ## Earlier Versions
 
-For changes prior to v6.0.0, please refer to git history and commit messages.
+### v3.x Series (May-June 2025)
+- Lock-free architecture implementation
+- Adaptive indexing system
+- Field-level operations
+- SSL/TLS support
+- JavaScript integration enhancements
+
+### v2.x Series (May 2025)
+- Database-based RBAC
+- Binary persistence layer
+- Performance optimizations
+- UI enhancements
+
+### v1.x Series (May 2025)
+- Initial release
+- Core document database functionality
+- RESTful API
+- QuickJS integration
+- Basic RBAC
+
+For detailed changes in earlier versions, please refer to git history and commit messages.
