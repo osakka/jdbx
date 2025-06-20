@@ -1,7 +1,7 @@
 # JDBX Architectural Decision Timeline
 
-**Version**: 6.3.7  
-**Last Updated**: June 19, 2025  
+**Version**: 6.5.13  
+**Last Updated**: June 20, 2025  
 **Maintainer**: JDBX Development Team  
 
 ## Overview
@@ -22,7 +22,7 @@ This document provides a comprehensive timeline of architectural decisions made 
 ## Timeline of Architectural Decisions
 
 ### 🎯 **ADR-035: Client Connection Memory Lifecycle Fix** (June 19, 2025)
-**Status**: Accepted | **Impact**: Critical | **Version**: 6.3.7
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.13
 
 **Decision**: Remove memory promotion for client connections - they are request-scoped, not checkpoint-scoped.
 

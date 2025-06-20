@@ -5,7 +5,7 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.3.7] - 2025-06-19
+## [6.5.13] - 2025-06-20
 
 ### Fixed
 - **CRITICAL**: Deterministic server crash at operation 5 completely resolved
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Client connections are now properly classified as request-scoped, not checkpoint-scoped
 - Memory management patterns follow single source of truth principles
-- Updated CLAUDE.md with v6.3.7 memory lifecycle principles
+- Updated CLAUDE.md with v6.5.13 memory lifecycle principles
 - Production readiness achieved with enterprise-grade stability
 
 ### Technical Impact

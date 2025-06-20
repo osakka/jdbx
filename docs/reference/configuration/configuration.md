@@ -1,7 +1,7 @@
 # JDBX Configuration Reference
 
-**Version**: 6.3.7  
-**Last Updated**: June 19, 2025
+**Version**: 6.5.13  
+**Last Updated**: June 20, 2025
 
 Complete configuration reference for JDBX with three-tier configuration system and enterprise security.
 

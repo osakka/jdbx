@@ -1,8 +1,8 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 19, 2025 (v6.3.7 - Client Connection Memory Lifecycle Fix)
+**Last Updated**: June 20, 2025 (v6.5.13 - Client Connection Memory Lifecycle Fix)
 
-## 🎯 CLIENT CONNECTION MEMORY LIFECYCLE FIX (v6.3.7)
+## 🎯 CLIENT CONNECTION MEMORY LIFECYCLE FIX (v6.5.13)
 
 **JDBX has eliminated deterministic server crashes at operation 5 by fixing a critical memory management violation in client connection lifecycle, achieving enterprise-grade stability for unlimited concurrent operations.**
 

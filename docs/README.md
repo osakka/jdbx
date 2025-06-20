@@ -2,7 +2,7 @@
 
 **Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
-**Version**: 6.3.7 | **Status**: Documentation Emergency Stabilization Complete
+**Version**: 6.5.13 | **Status**: Production Ready - Memory Management Excellence
 
 ## 🚀 Quick Start
 
@@ -95,7 +95,7 @@ Working code examples and templates
 
 ## 🏷️ **Documentation by Version**
 
-- **v6.3.7** (Current) - Client Connection Memory Lifecycle Fix with Enterprise Stability
+- **v6.5.13** (Current) - Client Connection Memory Lifecycle Fix with Enterprise Stability
 - **v6.4.0** - RBAC Database Single Source of Truth Complete
 - **v6.3.0** - Revolutionary Memory Manager with Checkpoint-Based Allocation
 - **v6.2.1** - Documentation Excellence with Professional Standards
@@ -127,6 +127,6 @@ Help improve this documentation:
 
 ---
 
-**Documentation Version**: 6.3.7  
-**Last Updated**: June 18, 2025  
+**Documentation Version**: 6.5.13  
+**Last Updated**: June 20, 2025  
 **Contributors**: Technical Writing Team, JDBX Maintainers
