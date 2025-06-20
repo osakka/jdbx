@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [6.5.13] - 2025-06-20
 
 ### Fixed
+- **CRITICAL**: Static file serving integration restored complete UI functionality
+- Fixed authentication redirect loops - users no longer kicked out after login
+- Restored proper serving of HTML/CSS/JS files (was returning "No matching route")
+- Added static file routing check before API dispatch in handle_client.c
 - **CRITICAL**: Deterministic server crash at operation 5 completely resolved
 - Fixed memory management violation in client connection lifecycle
 - Removed improper memory_promote() for request-scoped client connections
@@ -16,22 +20,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Eliminated memory manager confusion causing crashes after 4-5 operations
 
 ### Added
+- ADR-036: Static File Serving Integration Fix documenting UI restoration
 - ADR-035: Client Connection Memory Lifecycle Fix with comprehensive analysis
-- ADR-TIMELINE: Comprehensive architectural decision timeline across project history
-- ADR-028: Checkpoint-Based Memory Manager foundational architecture
+- ADR-034: Memory Promotion for Global Structures systematic approach
 - ADR-033: Checkpoint-Only JSON Memory Management systematic conversion
+- ADR-032: Metrics Thread CPU Usage Fix eliminating 100% CPU consumption
+- ADR-TIMELINE: Comprehensive architectural decision timeline across project history
 - Memory scope classification guidelines for developers
 - Comprehensive validation testing for operation stability
 - Clean workspace management with organized test script archival
 - Maintainable architectural decision tracking with git commit references
 
 ### Changed
+- Request routing now checks is_admin_route() before API dispatch
+- Utilized existing serve_admin_file() function that wasn't being called
 - Client connections are now properly classified as request-scoped, not checkpoint-scoped
 - Memory management patterns follow single source of truth principles
-- Updated CLAUDE.md with v6.5.13 memory lifecycle principles
+- Updated CLAUDE.md with v6.5.13 static file serving fix
 - Production readiness achieved with enterprise-grade stability
 
 ### Technical Impact
+- ✅ UI Functionality: Complete restoration of web interface
+- ✅ Static Files: All CSS/JS/HTML serving correctly (200 OK)
+- ✅ Authentication Flow: Login → Dashboard working without loops
 - ✅ Operation 5+: Now work consistently (was 100% crash)
 - ✅ Extended Testing: 10+ operations all successful
 - ✅ Memory Consistency: No promotion/free violations

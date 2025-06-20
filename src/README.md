@@ -3,7 +3,7 @@
 **Version**: 6.5.13  
 **Last Updated**: June 20, 2025
 
-This directory contains the source code for the JDBX project with revolutionary checkpoint-based memory management, client connection memory lifecycle fix, comprehensive security infrastructure, zero-warning build quality, and professional documentation standards.
+This directory contains the source code for the JDBX project with revolutionary checkpoint-based memory management, static file serving integration, client connection memory lifecycle fix, comprehensive security infrastructure, zero-warning build quality, and professional documentation standards.
 
 ## Structure
 

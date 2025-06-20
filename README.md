@@ -17,7 +17,7 @@
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
 **Latest Version**: 6.5.13 (June 20, 2025)  
-**Status**: 🚀 **Production Ready** - Enterprise-grade stability with revolutionary memory management
+**Status**: 🚀 **Production Ready** - Enterprise-grade stability with complete UI functionality restored
 
 ## Architecture
 
@@ -27,12 +27,13 @@ JDBX is a high-performance document database built specifically for JSON data, f
 
 ## Features
 
-### 🎯 **v6.5.13 - Client Connection Memory Lifecycle Fix**
-- **CRITICAL**: Eliminated deterministic server crash at operation 5
-- **Memory Management**: Fixed improper memory promotion of request-scoped client connections
-- **Enterprise Stability**: Server handles unlimited operations without memory corruption
-- **Single Source of Truth**: Request-scoped memory uses normal allocation lifecycle
-- **Production Ready**: Critical reliability blocker eliminated with comprehensive validation
+### 🐛 **v6.5.13 - Static File Serving & Memory Lifecycle Fixes**
+- **UI RESTORATION**: Fixed authentication redirect loops by properly routing static files
+- **STATIC FILE SERVING**: HTML/CSS/JS files now served correctly (was "No matching route")
+- **REQUEST ROUTING**: Added is_admin_route() check before API dispatch
+- **MEMORY MANAGEMENT**: Eliminated deterministic server crash at operation 5
+- **CLIENT CONNECTIONS**: Fixed improper memory promotion of request-scoped connections
+- **ENTERPRISE STABILITY**: UI fully functional with unlimited operations support
 
 ### 📚 **v6.5.1 - Documentation Excellence Audit**
 - **📊 PROFESSIONAL TAXONOMY**: Diátaxis Framework implementation with industry-standard 9-category organization
