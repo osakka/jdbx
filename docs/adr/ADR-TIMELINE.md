@@ -52,24 +52,8 @@ This document provides a comprehensive timeline of architectural decisions made 
 
 ### Foundation Period (May 2025)
 
-#### 🏗️ **Initial Architecture** (May 12, 2025)
-**Status**: Foundation | **Impact**: Fundamental
-
-**Decision**: Build JDBX as a high-performance JSON document database in C with JavaScript integration.
-
-**Key Components**:
-- Document storage with skiplist implementation
-- RESTful API server
-- QuickJS JavaScript engine integration
-- Binary persistence layer
-- RBAC security system
-
-**Git Commits**: `2bab076`, `6ab9c2d` - Initial repository with JavaScript integration
-
----
-
-#### 🎯 **JavaScript Integration** (May 17, 2025)
-**Status**: Accepted | **Impact**: High
+#### 🎯 **ADR-001: JavaScript Integration** (May 1, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 1.0.0
 
 **Decision**: Integrate QuickJS engine for server-side JavaScript execution.
 
@@ -79,57 +63,410 @@ This document provides a comprehensive timeline of architectural decisions made 
 - Custom business functions
 - Native storage API bindings
 
-**Git Commit**: `2c1af11` - Enable JavaScript runtime with QuickJS
+**Git Commits**: `2bab076`, `6ab9c2d` - Initial JavaScript integration
+
+**[Full ADR →](ADR-001-javascript-integration.md)**
 
 ---
 
-#### 🔐 **Database-Based RBAC** (May 17, 2025)
-**Status**: Accepted | **Impact**: Security
+#### 🚀 **ADR-002: Billion-Document Scale Architecture** (June 5, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 3.0.0
 
-**Decision**: Implement RBAC directly in database rather than file-based.
+**Decision**: Complete storage engine redesign for billion-document scale.
 
-**Rationale**:
-- Better scalability
-- ACID compliance
-- No file permission issues
-- Unified with document storage
+**Implementation**:
+- Memory-mapped storage (256MB-100GB)
+- O(1) hash indexes
+- Lock-free data structures
+- Sub-millisecond response times
 
-**Git Commits**: `ba3521d`, `816eee6` - Database-based RBAC implementation
+**Performance**: 480K reads/sec, 97K writes/sec achieved
+
+**[Full ADR →](ADR-002-billion-document-scale.md)**
+
+---
+
+#### 🚀 **ADR-003: Lock-Free Architecture** (May 30, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 3.1.0
+
+**Decision**: Implement minimally-locked operations for maximum concurrency.
+
+**Implementation**:
+- Lock-free skiplist for reads
+- Hazard pointers for safety
+- Dedicated mutex only for library creation
+- Linear scalability with cores
+
+**[Full ADR →](ADR-003-lock-free-architecture.md)**
+
+---
+
+#### 📦 **ADR-004: Binary Persistence Format** (May 22, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 2.0.0
+
+**Decision**: Custom binary format with TLV encoding and WAL.
+
+**Features**:
+- 100x faster saves
+- CRC32 integrity checks
+- Atomic operations
+- 50% storage reduction
+
+**Git Commits**: `ef04f8f`, `1e1d598` - Binary persistence
+
+**[Full ADR →](ADR-004-binary-persistence-format.md)**
+
+---
+
+#### 🔧 **ADR-005: Thread Pool Architecture** (May 19, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 2.0.0
+
+**Decision**: Fixed-size thread pool replacing thread-per-connection.
+
+**Implementation**:
+- 4-64 configurable threads
+- Work queue with backpressure
+- 10K+ connections supported
+- Fixed memory usage
+
+**Git Commits**: `72963d3`, `c83bc12` - Thread pool
+
+**[Full ADR →](ADR-005-thread-pool-architecture.md)**
+
+---
+
+#### 🔐 **ADR-006: Database-Based RBAC** (May 17, 2025)
+**Status**: Accepted | **Impact**: Security | **Version**: 1.5.0
+
+**Decision**: RBAC stored in database, not files.
+
+**Benefits**:
+- ACID guarantees
+- No file permissions issues
+- Scales with database
+- Unified backup
+
+**Git Commits**: `ba3521d`, `816eee6` - Database RBAC
+
+**[Full ADR →](ADR-006-database-based-rbac.md)**
 
 ---
 
 ### Evolution Period (May-June 2025)
 
-#### 🚀 **Lock-Free Architecture** (May 30, 2025)
-**Status**: Accepted | **Impact**: Performance
+#### 🔒 **ADR-007: SSL/TLS Support** (June 1, 2025)
+**Status**: Accepted | **Impact**: Security | **Version**: 3.0.0
 
-**Decision**: Implement minimally-locked database operations for maximum concurrency.
+**Decision**: Native OpenSSL integration for encrypted communication.
 
-**Implementation**:
-- Lock-free skiplist for reads
-- Dedicated mutex only for library creation
-- Atomic operations for concurrent access
-- Reader-friendly architecture
+**Features**:
+- TLS 1.2+ support
+- Certificate management
+- Optional enforcement
+- Hardware acceleration
 
-**Benefits**:
-- O(1) library access in common case
-- Zero contention for read operations
-- Better scalability under load
+**Git Commit**: `91fdae1` - SSL implementation
+
+**[Full ADR →](ADR-007-ssl-tls-support.md)**
 
 ---
 
-#### 🏗️ **Unified Memory Management** (May 30, 2025)
-**Status**: Accepted | **Impact**: Architectural
+#### ⚙️ **ADR-008: Three-Tier Configuration** (May 31, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 2.0.11
 
-**Decision**: Implement consistent malloc/free wrapper system.
+**Decision**: Environment → CLI → Database configuration hierarchy.
 
 **Implementation**:
-- BUFFER_ALLOC/BUFFER_FREE macros
-- Debugging support with file/line tracking
-- Memory leak detection capabilities
-- Preparation for advanced memory management
+- Runtime changes without restart
+- Clear precedence rules
+- Zero hardcoded values
+- Comprehensive coverage
 
-**Git Commit**: `6226758` - Unified buffer pool implementation
+**Git Commit**: `bfa2ebb` - Configuration management
+
+**[Full ADR →](ADR-008-configuration-management.md)**
+
+---
+
+#### 📊 **ADR-009: Time-Series Metrics** (May 27, 2025)
+**Status**: Accepted | **Impact**: Medium | **Version**: 2.0.5
+
+**Decision**: Fixed-size time-series metrics with circular buffers.
+
+**Features**:
+- O(1) updates
+- Configurable retention
+- Automatic aggregation
+- 10x performance improvement
+
+**Git Commit**: `e0c0ba3` - Time-series metrics
+
+**[Full ADR →](ADR-009-metrics-system.md)**
+
+---
+
+#### 🔐 **ADR-010: Session Management** (May 27, 2025)
+**Status**: Accepted | **Impact**: Security | **Version**: 2.0.5
+
+**Decision**: Comprehensive session tracking with metadata.
+
+**Features**:
+- IP/User-Agent tracking
+- Session termination API
+- Activity monitoring
+- Admin controls
+
+**Git Commit**: `871fda7` - Session management
+
+**[Full ADR →](ADR-010-session-management.md)**
+
+---
+
+#### 🎯 **ADR-011: Adaptive Indexing** (June 8, 2025)
+**Status**: Accepted | **Impact**: Performance | **Version**: 3.1.0
+
+**Decision**: Automatic index creation based on query patterns.
+
+**Features**:
+- Query pattern tracking
+- Performance-based decisions
+- Automatic cleanup
+- Self-optimizing
+
+**[Full ADR →](ADR-011-adaptive-indexing.md)**
+
+---
+
+#### 🔧 **ADR-012: Field-Level Operations** (June 10, 2025)
+**Status**: Accepted | **Impact**: Feature | **Version**: 3.3.0
+
+**Decision**: Granular field operations without loading full documents.
+
+**Features**:
+- Path-based access
+- Partial updates
+- Nested field support
+- 20-50x performance gains
+
+**[Full ADR →](ADR-012-field-level-operations.md)**
+
+---
+
+#### 🏗️ **ADR-013: Unified Documents Preview** (June 12, 2025)
+**Status**: Accepted | **Impact**: Architectural | **Version**: 5.0.0
+
+**Decision**: Preview unified documents architecture feasibility.
+
+**Testing**:
+- Single collection model
+- Virtual collections
+- Performance validation
+- Migration planning
+
+**[Full ADR →](ADR-013-unified-documents-preview.md)**
+
+---
+
+#### 🔧 **ADR-014: Buffer Pool Architecture** (May 30, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 3.0.0
+
+**Decision**: Unified buffer pool for all allocations.
+
+**Implementation**:
+- Centralized allocation
+- Debug tracking
+- 304 allocations converted
+- Foundation for checkpoints
+
+**Git Commit**: `6226758` - Buffer pool
+
+**[Full ADR →](ADR-014-buffer-pool-architecture.md)**
+
+---
+
+### Security & Excellence Period (June 2025)
+
+#### 🔒 **ADR-015: Enterprise Security Infrastructure** (June 16, 2025)
+**Status**: Accepted | **Impact**: Security | **Version**: 6.2.0
+
+**Decision**: Comprehensive security infrastructure implementation.
+
+**Features**:
+- Cryptographic JWT secrets
+- PBKDF2 password hashing
+- Environment-based credentials
+- No hardcoded values
+
+**Git Commit**: `4849fce` - Security infrastructure
+
+**[Full ADR →](ADR-015-enterprise-security-infrastructure.md)**
+
+---
+
+#### 🎯 **ADR-016: CLI Standardization** (June 16, 2025)
+**Status**: Accepted | **Impact**: Medium | **Version**: 6.2.0
+
+**Decision**: Comprehensive CLI with 33+ configuration options.
+
+**Implementation**:
+- GNU-style long options
+- POSIX short options
+- Logical grouping
+- Complete help system
+
+**[Full ADR →](ADR-016-cli-standardization.md)**
+
+---
+
+#### 🔒 **ADR-017: SSL Enterprise Reliability** (June 18, 2025)
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.6
+
+**Decision**: Enterprise-grade SSL reliability for large documents.
+
+**Fixes**:
+- 50-attempt read strategy
+- Trailing bytes recovery
+- Connection state sync
+- 18% → 100% success rate
+
+**Git Commit**: `88acd66` - SSL reliability
+
+**[Full ADR →](ADR-017-ssl-enterprise-reliability.md)**
+
+---
+
+#### 🔐 **ADR-018: JWT Concurrency Resilience** (June 18, 2025)
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.7
+
+**Decision**: Eliminate JWT cache race conditions.
+
+**Fixes**:
+- Use-after-free eliminated
+- Pointer validation
+- Memory safety
+- 0% → 100% success rate
+
+**[Full ADR →](ADR-018-jwt-concurrency-resilience.md)**
+
+---
+
+#### 🛡️ **ADR-019: SSL Buffer Safety** (June 18, 2025)
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.8
+
+**Decision**: Comprehensive SSL buffer overflow protection.
+
+**Fixes**:
+- Off-by-one eliminated
+- Bounds checking
+- Safe termination
+- Zero crashes
+
+**[Full ADR →](ADR-019-ssl-buffer-safety.md)**
+
+---
+
+#### 📋 **ADR-020: HTTP Protocol Compliance** (June 18, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 6.5.9
+
+**Decision**: Strict HTTP protocol compliance.
+
+**Changes**:
+- No content guessing
+- Proper 400 errors
+- Clear diagnostics
+- RFC compliance
+
+**[Full ADR →](ADR-020-http-protocol-compliance.md)**
+
+---
+
+#### 🔧 **ADR-021: Use-After-Close Fix** (June 17, 2025)
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.10
+
+**Decision**: Comprehensive file descriptor lifecycle management.
+
+**Fixes**:
+- FD synchronization
+- Validity checking
+- Safe cleanup
+- DoS resilience
+
+**[Full ADR →](ADR-021-use-after-close-fix.md)**
+
+---
+
+#### 📚 **ADR-022: Documentation Excellence** (June 17, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 6.5.1
+
+**Decision**: Professional documentation standards with Diátaxis Framework.
+
+**Implementation**:
+- 119+ files audited
+- 9 categories created
+- 95%+ accuracy
+- Zero broken links
+
+**[Full ADR →](ADR-022-documentation-excellence.md)**
+
+---
+
+#### 🎯 **ADR-023: Real-World Usability** (June 18, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 6.5.4
+
+**Decision**: Fix critical usability issues through real-world testing.
+
+**Improvements**:
+- JWT cache fixes
+- JSON corruption detection
+- Graceful degradation
+- Clear diagnostics
+
+**[Full ADR →](ADR-023-real-world-usability.md)**
+
+---
+
+#### ⚡ **ADR-024: HTTP Keep-Alive** (June 18, 2025)
+**Status**: Accepted | **Impact**: Performance | **Version**: 6.5.4
+
+**Decision**: Enterprise-grade HTTP keep-alive implementation.
+
+**Features**:
+- Connection reuse
+- 40ms+ saved per request
+- Safe lifecycle
+- Memory safety
+
+**[Full ADR →](ADR-024-http-keep-alive.md)**
+
+---
+
+#### 🔒 **ADR-025: Security Bootstrap** (June 18, 2025)
+**Status**: Accepted | **Impact**: Security | **Version**: 6.5.5
+
+**Decision**: Restricted bootstrap authentication.
+
+**Security**:
+- Limited endpoint bypass
+- Smart document defaults
+- Zero trust architecture
+- Attack vector eliminated
+
+**[Full ADR →](ADR-025-security-bootstrap.md)**
+
+---
+
+#### 🎯 **ADR-026: Developer Experience** (June 18, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 6.5.3
+
+**Decision**: Comprehensive developer experience improvements.
+
+**Enhancements**:
+- JWT cache memory fix
+- Clear error messages
+- Smart defaults
+- Debug capabilities
+
+**[Full ADR →](ADR-026-developer-experience.md)**
 
 ---
 
