@@ -1,4 +1,4 @@
-# ADR-035: Static File Serving Integration Fix
+# ADR-036: Static File Serving Integration Fix
 
 ## Status
 **ACCEPTED** - Implemented June 20, 2025

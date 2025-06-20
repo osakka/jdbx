@@ -238,7 +238,7 @@ rbac_system_t* rbac_load(const char* path) {
 
 /* Create user */
 rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const char* password) {
-  TRACE_RBAC("RBAC_TRACE: rbac_create_user called with rbac=%p, username=%s", rbac, username ? username : "NULL");
+  TRACE_RBAC("rbac_create_user called with rbac=%p, username=%s", rbac, username ? username : "NULL");
   
   if (!rbac || !username || !password) {
     LOG_DEBUG("Invalid parameters in rbac_create_user");
@@ -247,7 +247,7 @@ rbac_user_t* rbac_create_user(rbac_system_t* rbac, const char* username, const c
   
   /* If database is available, use database backend */
   if (rbac->db) {
-    TRACE_RBAC("RBAC_TRACE: Using database backend for user creation.");
+    TRACE_RBAC("Using database backend for user creation.");
     return rbac_db_create_user(rbac->db, username, password);
   }
   
@@ -290,7 +290,7 @@ rbac_user_t* rbac_get_user(rbac_system_t* rbac, const char* user_id) {
 
 /* Get user by username */
 rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username) {
-  TRACE_RBAC("RBAC_TRACE: rbac_get_user_by_username called with rbac=%p, username=%s", rbac, username ? username : "NULL");
+  TRACE_RBAC("rbac_get_user_by_username called with rbac=%p, username=%s", rbac, username ? username : "NULL");
   
   if (!rbac || !username) {
     LOG_DEBUG("Invalid parameters in rbac_get_user_by_username");
@@ -299,7 +299,7 @@ rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username
   
   /* If database is available, use database backend */
   if (rbac->db) {
-    TRACE_RBAC("RBAC_TRACE: Using database backend for user lookup.");
+    TRACE_RBAC("Using database backend for user lookup.");
     return rbac_db_get_user_by_username(rbac->db, username);
   }
   
@@ -314,7 +314,7 @@ rbac_user_t* rbac_get_user_by_username(rbac_system_t* rbac, const char* username
  * This fixes the segmentation fault issue with the original implementation
  */
 int verify_password(const char* password, const char* password_hash) {
-  TRACE_RBAC("RBAC: verify_password called - password=%s, hash=%s", 
+  TRACE_RBAC("verify_password called - password=%s, hash=%s", 
        password ? password : "NULL", 
        password_hash ? password_hash : "NULL");
   
@@ -327,7 +327,7 @@ int verify_password(const char* password, const char* password_hash) {
   
   /* Check if hash is in the $pbkdf2$ format: $pbkdf2$iterations$salt$hash */
   if (strncmp(password_hash, "$pbkdf2$", 8) == 0) {
-    TRACE_RBAC("RBAC: Password hash is in PBKDF2 format.");
+    TRACE_RBAC("Password hash is in PBKDF2 format.");
     
     /* Parse the hash */
     int iterations;
@@ -339,7 +339,7 @@ int verify_password(const char* password, const char* password_hash) {
       return 0; /* Invalid format */
     }
     
-    TRACE_RBAC("RBAC: PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
+    TRACE_RBAC("PBKDF2 params - iterations=%d, salt=%.10s..., hash=%.10s...", 
          iterations, salt_hex, stored_hash_hex);
     
     /* Convert salt from hex to binary */
@@ -391,7 +391,7 @@ int verify_password(const char* password, const char* password_hash) {
 
 /* Authenticate user */
 int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char* password) {
-  TRACE_RBAC("RBAC_TRACE: rbac_authenticate_user called with username=%s", username ? username : "NULL");
+  TRACE_RBAC("rbac_authenticate_user called with username=%s", username ? username : "NULL");
   
   if (!rbac || !username || !password) {
     LOG_DEBUG("Invalid parameters in rbac_authenticate_user");
@@ -399,14 +399,14 @@ int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char
   }
   
   /* Get user by username */
-  TRACE_RBAC("RBAC_TRACE: Getting user by username.");
+  TRACE_RBAC("Getting user by username.");
   rbac_user_t* user = rbac_get_user_by_username(rbac, username);
   if (!user) {
-    TRACE_RBAC("RBAC_TRACE: User not found: %s", username);
+    TRACE_RBAC("User not found: %s", username);
     return 0;
   }
   
-  TRACE_RBAC("RBAC_TRACE: User found, verifying password.");
+  TRACE_RBAC("User found, verifying password.");
   
   /* Safety check */
   if (!user) {
@@ -421,12 +421,12 @@ int rbac_authenticate_user(rbac_system_t* rbac, const char* username, const char
     return 0;
   }
   
-  TRACE_RBAC("RBAC_TRACE: Password hash: %s", hash);
+  TRACE_RBAC("Password hash: %s", hash);
   
   /* Verify password */
   int result = verify_password(password, hash);
   
-  TRACE_RBAC("RBAC_TRACE: Password verification result: %d", result);
+  TRACE_RBAC("Password verification result: %d", result);
   
   /* Clean up */
   rbac_free_user(user);

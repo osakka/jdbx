@@ -128,7 +128,7 @@ static rbac_user_t* user_doc_to_rbac_user(json_value_t* user_doc) {
     }
   }
   
-  TRACE_RBAC("RBAC_DB: Successfully created rbac_user_t - id: %s, username: %s, roles: %zu",
+  TRACE_RBAC("Successfully created rbac_user_t - id: %s, username: %s, roles: %zu",
        user->id, user->username, user->roles->value.array.size);
   
   return user;
@@ -457,7 +457,7 @@ rbac_user_t* rbac_db_get_user(database_t* db, const char* user_id) {
 
 /* Get a user from the database by username */
 rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) {
-  TRACE_RBAC("RBAC_DB: rbac_db_get_user_by_username called with username: %s", username);
+  TRACE_RBAC("rbac_db_get_user_by_username called with username: %s", username);
   
   if (!db || !username) {
     LOG_ERROR("Invalid parameters - db=%p, username=%s", db, username ? username : "NULL");
@@ -481,12 +481,12 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   /* Get documents array from result */
   json_value_t* documents = json_object_get(result, "documents");
   if (!documents || documents->type != JSON_ARRAY || documents->value.array.size == 0) {
-    TRACE_RBAC("RBAC_DB: No users found matching username: %s", username);
+    TRACE_RBAC("No users found matching username: %s", username);
     /* CHECKPOINT: json_free(result); */
     return NULL;
   }
   
-  TRACE_RBAC("RBAC_DB: Found %zu users matching username: %s", documents->value.array.size, username);
+  TRACE_RBAC("Found %zu users matching username: %s", documents->value.array.size, username);
   
   /* Get first matching user */
   json_value_t* user_doc = documents->value.array.items[0];
@@ -494,7 +494,7 @@ rbac_user_t* rbac_db_get_user_by_username(database_t* db, const char* username) 
   /* Convert to rbac_user_t */
   rbac_user_t* user = user_doc_to_rbac_user(user_doc);
   if (user) {
-    TRACE_RBAC("RBAC_DB: Successfully converted user document to rbac_user_t - id: %s", user->id);
+    TRACE_RBAC("Successfully converted user document to rbac_user_t - id: %s", user->id);
   } else {
     LOG_ERROR("Cannot convert user document to rbac_user_t.");
   }
@@ -1184,7 +1184,7 @@ int rbac_db_revoke_permission(database_t* db, const char* role_id, rbac_resource
 /* Check if a user has a permission for a resource in the database */
 int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_type_t resource_type,
               const char* resource_id, rbac_permission_t permission) {
-  TRACE_RBAC("RBAC_DB: check_permission called - user_id=%s, resource_type=%d, resource_id=%s, permission=%d",
+  TRACE_RBAC("check_permission called - user_id=%s, resource_type=%d, resource_id=%s, permission=%d",
        user_id, resource_type, resource_id, permission);
        
   if (!db || !user_id || !resource_id) {
@@ -1199,7 +1199,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     return 0;
   }
   
-  TRACE_RBAC("RBAC_DB: User document retrieved for %s", user_id);
+  TRACE_RBAC("User document retrieved for %s", user_id);
   
   /* Get user roles */
   json_value_t* roles = json_object_get(user_doc, "roles");
@@ -1209,7 +1209,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     return 0;
   }
   
-  TRACE_RBAC("RBAC_DB: User %s has %zu roles", user_id, roles->value.array.size);
+  TRACE_RBAC("User %s has %zu roles", user_id, roles->value.array.size);
   
   /* Create resource permission key */
   char* key = get_resource_permission_key(resource_type, resource_id);
@@ -1226,7 +1226,7 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     return 0;
   }
   
-  TRACE_RBAC("RBAC_DB: Looking for permission keys: %s or %s", key, wildcard_key);
+  TRACE_RBAC("Looking for permission keys: %s or %s", key, wildcard_key);
   
   /* Check permission in each role */
   int has_permission = 0;
@@ -1241,24 +1241,24 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     /* Get role document using virtual layer */
     json_value_t* role_doc = virtual_get_role_by_uuid(db, role_id);
     if (!role_doc || role_doc->type != JSON_OBJECT) {
-      TRACE_RBAC("RBAC_DB: Role %s not found or invalid", role_id);
+      TRACE_RBAC("Role %s not found or invalid", role_id);
       continue;
     }
     
-    TRACE_RBAC("RBAC_DB: Checking permissions in role %s", role_id);
+    TRACE_RBAC("Checking permissions in role %s", role_id);
     
     /* Get role permissions */
     json_value_t* permissions = json_object_get(role_doc, "permissions");
     if (!permissions || permissions->type != JSON_OBJECT) {
-      TRACE_RBAC("RBAC_DB: Role %s has no permissions or invalid format", role_id);
+      TRACE_RBAC("Role %s has no permissions or invalid format", role_id);
       /* CHECKPOINT: json_free(role_doc); */
       continue;
     }
     
     /* Log all permission keys in the role */
-    TRACE_RBAC("RBAC_DB: Role %s has %zu permission entries", role_id, permissions->value.object.size);
+    TRACE_RBAC("Role %s has %zu permission entries", role_id, permissions->value.object.size);
     for (size_t j = 0; j < permissions->value.object.size; j++) {
-      TRACE_RBAC("RBAC_DB: Permission key: %s", permissions->value.object.entries[j].key);
+      TRACE_RBAC("Permission key: %s", permissions->value.object.entries[j].key);
     }
     
     /* Check specific resource permission */
@@ -1267,13 +1267,13 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
       int perm;
       if (perm_val->type == JSON_INTEGER) {
         perm = (int)perm_val->value.integer;
-        TRACE_RBAC("RBAC_DB: Found INTEGER permission for key %s: %d (checking for %d)", key, perm, permission);
+        TRACE_RBAC("Found INTEGER permission for key %s: %d (checking for %d)", key, perm, permission);
       } else {
         perm = (int)perm_val->value.number;
-        TRACE_RBAC("RBAC_DB: Found NUMBER permission for key %s: %d (checking for %d)", key, perm, permission);
+        TRACE_RBAC("Found NUMBER permission for key %s: %d (checking for %d)", key, perm, permission);
       }
       if ((perm & permission) == permission) {
-        TRACE_RBAC("RBAC_DB: Permission granted!");
+        TRACE_RBAC("Permission granted!");
         has_permission = 1;
         /* CHECKPOINT: json_free(role_doc); */
         break;
@@ -1282,27 +1282,27 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
     
     /* Check wildcard resource permission */
     perm_val = json_object_get(permissions, wildcard_key);
-    TRACE_RBAC("RBAC_DB: Looking up wildcard key %s, result: %p", wildcard_key, perm_val);
+    TRACE_RBAC("Looking up wildcard key %s, result: %p", wildcard_key, perm_val);
     if (perm_val) {
-      TRACE_RBAC("RBAC_DB: Wildcard permission value type: %d (JSON_NUMBER=%d)", perm_val->type, JSON_NUMBER);
+      TRACE_RBAC("Wildcard permission value type: %d (JSON_NUMBER=%d)", perm_val->type, JSON_NUMBER);
     }
     if (perm_val && (perm_val->type == JSON_NUMBER || perm_val->type == JSON_INTEGER)) {
       int perm;
       if (perm_val->type == JSON_INTEGER) {
         perm = (int)perm_val->value.integer;
-        TRACE_RBAC("RBAC_DB: Found INTEGER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+        TRACE_RBAC("Found INTEGER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
       } else {
         perm = (int)perm_val->value.number;
-        TRACE_RBAC("RBAC_DB: Found NUMBER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
+        TRACE_RBAC("Found NUMBER permission for wildcard key %s: %d (checking for %d)", wildcard_key, perm, permission);
       }
       if ((perm & permission) == permission) {
-        TRACE_RBAC("RBAC_DB: Permission granted via wildcard!");
+        TRACE_RBAC("Permission granted via wildcard!");
         has_permission = 1;
         /* CHECKPOINT: json_free(role_doc); */
         break;
       }
     } else {
-      TRACE_RBAC("RBAC_DB: No permission found for wildcard key %s", wildcard_key);
+      TRACE_RBAC("No permission found for wildcard key %s", wildcard_key);
     }
     
     /* CHECKPOINT: json_free(role_doc); */
@@ -1322,6 +1322,6 @@ int rbac_db_check_permission(database_t* db, const char* user_id, rbac_resource_
 int rbac_db_migrate_from_file(database_t* db, rbac_system_t* rbac) {
   (void)db;
   (void)rbac;
-  LOG_WARNING("RBAC_db_migrate_from_file is deprecated and will be removed in a future release.");
+  LOG_WARNING("rbac_db_migrate_from_file is deprecated and will be removed in a future release.");
   return 0; /* Always fail - migration is no longer supported */
 }

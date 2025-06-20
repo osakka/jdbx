@@ -44,7 +44,7 @@ System design and technical deep-dives
 - **[Core Concepts](architecture/core-concepts/)** - Unified documents, buffer pool, threading model
 - **[Security Architecture](architecture/security/)** - RBAC design, authentication, field-level security
 - **[Performance Architecture](architecture/performance/)** - Memory management, optimization strategies
-- **[Architecture Decision Records](architecture/adr/)** - Complete ADRs documenting all major decisions
+- **[Architecture Decision Records](adr/)** - Complete ADRs documenting all major decisions
 - **[Technical Reports](architecture/reports/)** - Achievement reports and implementation milestones
 - **[Design Decisions](architecture/design-decisions/)** - Implementation patterns and choices
 

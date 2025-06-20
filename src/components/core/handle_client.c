@@ -748,7 +748,7 @@ void handle_client(void* client_data) {
                       buffer[total_bytes_read] = '\0';
                     }
                     if (g_logger) {
-                      LOG_INFO("ULTIMATE SUCCESS: Recovered all %zu trailing bytes!", bytes_missing);
+                      LOG_INFO("Recovered all %zu trailing bytes", bytes_missing);
                     }
                     continue;  /* SUCCESS - continue to process complete request */
                   }

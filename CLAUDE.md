@@ -1150,6 +1150,57 @@ The JDBX server implements a comprehensive three-tier configuration system:
 - **DEFAULTS**: Reasonable defaults (4-16 threads) suitable for most deployments
 - **SCALABLE**: Can be adjusted per deployment size and resource requirements
 
+## Logging Configuration Guidelines
+
+The JDBX server implements enterprise-grade logging with runtime configuration and trace-level debugging:
+
+### Log Levels:
+1. **ERROR** (Level 1): Critical failures preventing operation - Production SREs/On-call
+2. **WARNING** (Level 2): Important issues needing attention - Production SREs/Operations
+3. **INFO** (Level 3): Key operational events - Production default, Operations teams
+4. **DEBUG** (Level 4): Detailed troubleshooting - Development default, Developers
+5. **TRACE** (Level 5): Very detailed execution flow - Development deep dive per-module
+
+### Configuration Methods:
+- **Environment Variables**: `JDBX_LOG_LEVEL=DEBUG`, `JDBX_TRACE_CATEGORIES=database,api,auth`
+- **Command Line Flags**: `--log-level=DEBUG`, `--trace-categories=database,memory`
+- **Runtime API**: `PUT /api/system/logging` with JSON payload for live configuration changes
+
+### Trace Categories:
+- **DATABASE**: Query building, index selection
+- **RBAC**: Role validation, permission checks
+- **API**: Route matching, parameter validation
+- **AUTH**: Token validation, authentication flows
+- **TRANSACTION**: Transaction boundaries, rollback operations
+- **BINARY**: Binary format operations
+- **JAVASCRIPT**: JavaScript engine execution
+- **NETWORK**: Packet-level network details
+- **METRICS**: Metrics collection and aggregation
+- **MEMORY**: Allocation/deallocation tracking
+
+### Logging Standards:
+- **Format**: `timestamp [pid:tid] [level] function.file line: message`
+- **Thread-Safe**: All logging operations protected by mutex
+- **Performance**: Disabled log levels have near-zero CPU overhead
+- **No Redundant Prefixes**: File/function/line info automatically included
+- **Actionable Messages**: Concise, present/past tense, include relevant context
+
+### Runtime Log Configuration:
+```bash
+# Get current configuration
+curl -X GET https://localhost:5000/api/system/logging
+
+# Change log level to DEBUG
+curl -X PUT https://localhost:5000/api/system/logging \
+  -H "Content-Type: application/json" \
+  -d '{"level": "DEBUG"}'
+
+# Enable database and API tracing
+curl -X PUT https://localhost:5000/api/system/logging \
+  -H "Content-Type: application/json" \
+  -d '{"level": "TRACE", "trace_categories": ["database", "api"]}'
+```
+
 ## Build and Run Guidelines
 
 1. ONLY BUILD USING THE MAKEFILE in src/ directory:

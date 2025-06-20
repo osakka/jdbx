@@ -90,42 +90,42 @@ void init_register_config(server_config_t* config);
 /* Standard log message for initialization success */
 #define INIT_LOG_SUCCESS(component, message, ...) \
     if (g_logger) { \
-        LOG_INFO("[INIT:%s] SUCCESS: " message, component, ##__VA_ARGS__); \
+        LOG_INFO(message, ##__VA_ARGS__); \
     } else { \
-        printf("[INIT:%s] SUCCESS: " message "\n", component, ##__VA_ARGS__); \
+        printf(message "\n", ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization failure */
 #define INIT_LOG_FAILURE(component, message, ...) \
     if (g_logger) { \
-        LOG_ERROR("[INIT:%s] FAILURE: " message, component, ##__VA_ARGS__); \
+        LOG_ERROR(message, ##__VA_ARGS__); \
     } else { \
-        fprintf(stderr, "[INIT:%s] FAILURE: " message "\n", component, ##__VA_ARGS__); \
+        fprintf(stderr, message "\n", ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization progress */
 #define INIT_LOG_PROGRESS(component, message, ...) \
     if (g_logger) { \
-        LOG_INFO("[INIT:%s] " message, component, ##__VA_ARGS__); \
+        LOG_INFO(message, ##__VA_ARGS__); \
     } else { \
-        printf("[INIT:%s] " message "\n", component, ##__VA_ARGS__); \
+        printf(message "\n", ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization warnings */
 #define INIT_LOG_WARNING(component, message, ...) \
     if (g_logger) { \
-        LOG_WARNING("[INIT:%s] WARNING: " message, component, ##__VA_ARGS__); \
+        LOG_WARNING(message, ##__VA_ARGS__); \
     } else { \
-        fprintf(stderr, "[INIT:%s] WARNING: " message "\n", component, ##__VA_ARGS__); \
+        fprintf(stderr, message "\n", ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization debug information */
 #define INIT_LOG_DEBUG(component, message, ...) \
     if (g_logger) { \
-        LOG_DEBUG("[INIT:%s] " message, component, ##__VA_ARGS__); \
+        LOG_DEBUG(message, ##__VA_ARGS__); \
     } else { \
         if (g_verbose_mode) { \
-            printf("[INIT:%s] DEBUG: " message "\n", component, ##__VA_ARGS__); \
+            printf("DEBUG: " message "\n", ##__VA_ARGS__); \
         } \
     }
 

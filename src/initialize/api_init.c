@@ -2,6 +2,7 @@
 #include "api/api.h"
 #include "api/rbac_api.h"
 #include "api/health_api.h"
+#include "api/logging_api.h"
 #include "js/js_api.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,6 +103,11 @@ init_status_t init_api(server_config_t* config, database_t* database,
   INIT_LOG_PROGRESS("API", "Registering configuration API endpoints");
   register_config_api_routes(api_ctx);
   INIT_LOG_SUCCESS("API", "Configuration API endpoints registered");
+  
+  /* Register logging API endpoints */
+  INIT_LOG_PROGRESS("API", "Registering logging API endpoints");
+  register_logging_api_endpoints(api_ctx);
+  INIT_LOG_SUCCESS("API", "Logging API endpoints registered");
   
   /* TODO: Register batch API endpoints */
   /* Batch API will be integrated into main API routes */
