@@ -14,7 +14,7 @@
 
 > 🚀 **This codebase was developed using [Extreme Vibe Coding (XVC)](https://github.com/osakka/xvc)** 🚀
 >
-> JDBX is a testament to the power of XVC methodology - the entire codebase, including architecture, implementation, testing, and documentation, was created through structured AI-human collaboration. This represents approximately 3 months of intensive development that would traditionally require 12-18 months of solo developer effort.
+> JDBX is a testament to the power of XVC methodology - the entire codebase, including architecture, implementation, testing, and documentation, was created through structured human-model collaboration using reasoning models built on human knowledge. This represents approximately 3 months of intensive development that would traditionally require 12-18 months of solo developer effort.
 >
 > **Learn more about XVC**: https://github.com/osakka/xvc
 
