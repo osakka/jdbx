@@ -5,6 +5,31 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.14] - 2025-06-20
+
+### Added
+- Enterprise-grade logging standards with runtime configuration capability
+- Logging configuration API endpoints (`GET/PUT /api/system/logging`) 
+- Comprehensive logging standards document (docs/development/logging-standards.md)
+- Per-module trace categories for targeted debugging (10 categories)
+- Runtime log level adjustment via API, CLI flags, and environment variables
+- Thread-safe logging with near-zero overhead for disabled levels
+- ADR-037: Enterprise Logging Standards Implementation
+
+### Changed
+- Removed all redundant log prefixes ([INIT:], RBAC:, SUCCESS:, etc.) from 50+ messages
+- Converted fprintf() debug statements to proper LOG_DEBUG() calls
+- Standardized log format: `timestamp [pid:tid] [level] function.file line: message`
+- Fixed overly verbose messages ("ULTIMATE SUCCESS:" → clear, professional messages)
+- Updated INIT macros to remove component and status prefixes
+- Enhanced trace system with independent per-module control
+
+### Fixed
+- Inconsistent logging patterns across 8 key files
+- Debug output using fprintf instead of logging framework
+- 47 instances of redundant RBAC/API prefixes in trace messages
+- Mixed logging approaches violating single source of truth
+
 ## [6.5.13] - 2025-06-20
 
 ### Fixed

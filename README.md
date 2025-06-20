@@ -16,8 +16,8 @@
 
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
-**Latest Version**: 6.5.13 (June 20, 2025)  
-**Status**: 🚀 **Production Ready** - Enterprise-grade stability with complete UI functionality restored
+**Latest Version**: 6.5.14 (June 20, 2025)  
+**Status**: 🚀 **Production Ready** - Enterprise logging standards with runtime configuration
 
 ## Architecture
 
@@ -26,6 +26,14 @@ JDBX is a high-performance document database built specifically for JSON data, f
 </div>
 
 ## Features
+
+### 📚 **v6.5.14 - Enterprise Logging Standards**
+- **🎯 UNIFIED STANDARDS**: Comprehensive logging standards with consistent format across all components
+- **⚡ RUNTIME CONFIGURATION**: Dynamic log level changes via API (`/api/system/logging`) without restart
+- **🔍 TRACE CATEGORIES**: 10 per-module trace categories for targeted debugging
+- **🧹 MESSAGE CLEANUP**: Removed 50+ redundant prefixes ([INIT:], RBAC:, SUCCESS:) from log messages
+- **👥 AUDIENCE-FOCUSED**: Clear separation of production (ERROR/WARNING/INFO) and development (DEBUG/TRACE) levels
+- **🚀 ZERO OVERHEAD**: Near-zero CPU impact for disabled log levels with thread-safe implementation
 
 ### 🐛 **v6.5.13 - Static File Serving & Memory Lifecycle Fixes**
 - **UI RESTORATION**: Fixed authentication redirect loops by properly routing static files

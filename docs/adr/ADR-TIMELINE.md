@@ -62,7 +62,44 @@ This document provides a comprehensive timeline of architectural decisions made 
 
 **Validation**: Full UI functionality restored, static files serving correctly
 
-**Git Commits**: TBD (to be added after commit)
+**Git Commits**: `be4c3ef` (static file fix), `7e89d2a` (UI authentication loops)
+
+---
+
+### 📚 **ADR-037: Enterprise Logging Standards Implementation** (June 20, 2025)
+**Status**: Accepted | **Impact**: High | **Version**: 6.5.14
+
+**Decision**: Implement comprehensive logging standards with runtime configuration and trace-level debugging.
+
+**Context**: Inconsistent logging patterns, redundant prefixes, and lack of runtime configuration hampered production troubleshooting.
+
+**Implementation**:
+- Created comprehensive logging standards document
+- Removed all redundant prefixes ([INIT:], RBAC:, SUCCESS:, etc.)
+- Implemented runtime configuration API (`/api/system/logging`)
+- Enhanced trace-level functionality with 10 per-module categories
+- Fixed 50+ log messages across 8 key files
+
+**Standards Achieved**:
+- Format: `timestamp [pid:tid] [level] function.file line: message`
+- Audience-focused levels (ERROR/WARNING/INFO for production, DEBUG/TRACE for development)
+- Runtime configuration via API/CLI/ENV
+- Thread-safe implementation with mutex protection
+- Near-zero overhead for disabled levels
+
+**Files Modified**:
+- `docs/development/logging-standards.md` - New comprehensive standards
+- `src/components/api/logging_api.c` - Runtime configuration API
+- `src/include/init.h` - Fixed INIT macros
+- `src/components/rbac/rbac.c` - Removed 13 RBAC prefixes
+- `src/components/rbac/rbac_db.c` - Removed 23 RBAC_DB prefixes
+- `src/components/api/rbac_api.c` - Removed 11 RBAC_API prefixes
+- `src/components/core/handle_client.c` - Fixed verbose messages
+- `src/initialize/socket.c` - Converted fprintf to LOG_DEBUG
+
+**Validation**: Zero-warning build, runtime configuration working, consistent logging across all components
+
+**Git Commits**: `19a3f42` (logging standards and implementation)
 
 ---
 
