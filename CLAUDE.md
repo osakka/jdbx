@@ -1,6 +1,35 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 20, 2025 (v6.5.13 - Client Connection Memory Lifecycle Fix)
+**Last Updated**: June 20, 2025 (v6.5.13 - Static File Serving Integration Fix)
+
+## 🐛 STATIC FILE SERVING INTEGRATION FIX (v6.5.13)
+
+**JDBX has restored complete UI functionality by fixing critical static file routing that caused authentication redirect loops, ensuring proper integration between static content and API endpoints.**
+
+### 🚨 **CRITICAL UI ISSUE RESOLVED:**
+- **AUTHENTICATION LOOPS ELIMINATED**: Users no longer kicked out after successful login
+- **STATIC FILE SERVING RESTORED**: HTML/CSS/JS files properly served (was "No matching route")
+- **REQUEST ROUTING FIXED**: Static files checked before API dispatch
+- **UI FUNCTIONALITY**: Complete restoration of web interface capabilities
+
+### 🔧 **ROOT CAUSE ANALYSIS:**
+- **Problem**: All requests routed directly to API dispatcher, bypassing static file handler
+- **Impact**: `/login.html`, `/js/theme.js`, `/css/styles.css` returned 404 errors
+- **Result**: Authentication succeeded but UI redirected to non-existent login page
+- **Fix**: Added `is_admin_route()` check before API dispatch in `handle_client.c`
+
+### 📊 **UI RESTORATION VALIDATION:**
+- ✅ **Static Files**: All CSS/JS/HTML files serving correctly (200 OK)
+- ✅ **Authentication Flow**: Login → Dashboard working without loops
+- ✅ **Zero API Regression**: All API endpoints continue functioning
+- ✅ **Performance Impact**: Minimal - one additional function call
+- ✅ **Production Ready**: Complete UI/API integration restored
+
+### 🏆 **ARCHITECTURAL ACHIEVEMENT:**
+- **Existing Code Utilization**: `serve_admin_file()` was present but not called
+- **Surgical Fix**: Single routing change restored all functionality
+- **Request Order**: Static → API maintains proper precedence
+- **Single Source of Truth**: No duplicate static file implementations
 
 ## 🎯 CLIENT CONNECTION MEMORY LIFECYCLE FIX (v6.5.13)
 

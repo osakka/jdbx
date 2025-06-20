@@ -1145,17 +1145,29 @@ void handle_client(void* client_data) {
           requests_processed + 1);
     }
     
-    response = api_dispatch_request(client->api_ctx, request);
-    
-    if (g_logger) {
-      TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
-          (void*)response, response ? (int)response->status : -1);
+    /* Check if this is a static file request (not API) */
+    if (request->method == HTTP_GET && is_admin_route(request->path)) {
+      response = serve_admin_file(request->path);
+      if (response && g_logger) {
+        TRACE_NET("STATIC_FILE_SERVED: path=%s, status=%d", 
+            request->path, response->status);
+      }
     }
     
-    /* If no response from API handler, return 404 */
+    /* If no static file response, try API dispatch */
+    if (!response) {
+      response = api_dispatch_request(client->api_ctx, request);
+      
+      if (g_logger) {
+        TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
+            (void*)response, response ? (int)response->status : -1);
+      }
+    }
+    
+    /* If no response from either handler, return 404 */
     if (!response) {
       if (g_logger) {
-        TRACE_NET("API_DISPATCH: No response from API handler, returning 404.");
+        TRACE_NET("NO_HANDLER: No response from static file or API handler, returning 404.");
       }
       response = create_http_response(HTTP_NOT_FOUND, 
         "{\"error\":\"Not found\"}", "application/json");

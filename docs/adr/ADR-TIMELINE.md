@@ -41,6 +41,31 @@ This document provides a comprehensive timeline of architectural decisions made 
 
 ---
 
+### 🐛 **ADR-036: Static File Serving Integration Fix** (June 20, 2025)
+**Status**: Accepted | **Impact**: Critical | **Version**: 6.5.13
+
+**Decision**: Route static file requests through `serve_admin_file()` before API dispatch to fix UI authentication loops.
+
+**Context**: UI completely unusable - users logged in successfully but were immediately kicked out due to missing static files.
+
+**Root Cause**: All requests routed directly to API dispatcher, bypassing static file serving code that existed but wasn't being called.
+
+**Implementation**:
+- Modified `src/components/core/handle_client.c` to check `is_admin_route()` first
+- Route static files through existing `serve_admin_file()` function
+- Maintain API routing for non-static requests
+
+**Symptoms Fixed**:
+- `/login.html` returning "No matching route" → 200 OK
+- `/js/theme.js`, `/css/styles.css` failing → 200 OK
+- Authentication redirect loops → Working UI flow
+
+**Validation**: Full UI functionality restored, static files serving correctly
+
+**Git Commits**: TBD (to be added after commit)
+
+---
+
 ### 🔒 **ADR-034: Memory Promotion for Global Structures** (June 19, 2025)
 **Status**: Accepted | **Impact**: High | **Version**: 6.3.6
 
