@@ -248,7 +248,7 @@ http_response_t* api_handle_rbac_get_users(api_context_t* ctx, http_request_t* r
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("user"));
   json_object_set(query, "library", json_create_string("system"));
-  json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(ctx->db, query);
   /* CHECKPOINT: json_free(query); */
   
   if (!result || result->type != JSON_OBJECT) {
@@ -697,7 +697,7 @@ http_response_t* api_handle_rbac_get_roles(api_context_t* ctx, http_request_t* r
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("role"));
   json_object_set(query, "library", json_create_string("system"));
-  json_value_t* result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(ctx->db, query);
   /* CHECKPOINT: json_free(query); */
   
   if (!result || result->type != JSON_OBJECT) {
@@ -1437,7 +1437,7 @@ http_response_t* api_handle_rbac_get_permissions(api_context_t* ctx, http_reques
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("role"));
   json_object_set(query, "library", json_create_string("system"));
-  json_value_t* roles_result = db_query_documents(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* roles_result = storage_query_documents(ctx->db, query);
   /* CHECKPOINT: json_free(query); */
   
   if (!roles_result) {

@@ -8,13 +8,13 @@
 
 /* JDBX Format Constants */
 #define JDBX_MAGIC "JDBX"
-#define JDBX_VERSION 1
+#define JDBX_VERSION 2  /* Version 2: Integrated WAL - CLEAN CUT! */
 #define JDBX_PAGE_SIZE 4096
 #define JDBX_HEADER_SIZE JDBX_PAGE_SIZE
 #define JDBX_PAGE_HEADER_SIZE 48
 #define JDBX_MAX_KEY_SIZE 1024
 #define JDBX_CACHE_SIZE 1000
-#define JDBX_WAL_MAGIC "JWAL"
+#define JDBX_WAL_PAGES 256  /* 1MB WAL ring buffer (256 * 4KB) */
 
 /* Page types */
 typedef enum {
@@ -25,7 +25,8 @@ typedef enum {
     PAGE_TYPE_BTREE_INTERNAL = 4,
     PAGE_TYPE_BTREE_LEAF = 5,
     PAGE_TYPE_OVERFLOW = 6,
-    PAGE_TYPE_COLLECTION_META = 7
+    PAGE_TYPE_COLLECTION_META = 7,
+    PAGE_TYPE_WAL = 8  /* Integrated WAL page */
 } page_type_t;
 
 /* Page flags */
@@ -37,7 +38,7 @@ typedef enum {
 /* File header - exactly one page */
 typedef struct __attribute__((packed)) {
     char magic[4];                  /* "JDBX" */
-    uint32_t version;               /* Format version */
+    uint32_t version;               /* Format version (2 = integrated WAL) */
     uint32_t page_size;             /* Page size (4096) */
     uint64_t total_pages;           /* Total pages in file */
     uint64_t free_pages;            /* Number of free pages */
@@ -45,8 +46,14 @@ typedef struct __attribute__((packed)) {
     uint64_t bitmap_start_page;     /* Page allocation bitmap */
     uint64_t transaction_id;        /* Global transaction counter */
     uint64_t last_checkpoint;       /* Last checkpoint txn id */
+    /* Integrated WAL fields - CLEAN CUT! */
+    uint64_t wal_start_page;        /* First WAL page */
+    uint64_t wal_current_page;      /* Current WAL page for writing */
+    uint64_t wal_current_offset;    /* Offset within current WAL page */
+    uint64_t wal_checkpoint_page;   /* Last checkpointed WAL page */
+    uint64_t wal_sequence;          /* Global WAL sequence number */
     uint32_t checksum;              /* CRC32 of header */
-    uint8_t reserved[4016];         /* Future use */
+    uint8_t reserved[3968];         /* Future use */
 } jdbx_header_t;
 
 /* Every page has this header */
@@ -90,9 +97,19 @@ typedef struct __attribute__((packed)) {
     uint64_t updated_at;            /* Last update timestamp */
 } jdbx_collection_meta_t;
 
-/* WAL entry */
+/* WAL page header - for integrated WAL pages */
 typedef struct __attribute__((packed)) {
-    char magic[4];                  /* "JWAL" */
+    page_header_t header;           /* Standard page header */
+    uint64_t wal_sequence_start;    /* First sequence in this page */
+    uint64_t wal_sequence_end;      /* Last sequence in this page */
+    uint32_t entry_count;           /* Number of entries */
+    uint32_t used_bytes;            /* Bytes used for entries */
+    /* Followed by WAL entries */
+} wal_page_t;
+
+/* WAL entry - stored within WAL pages */
+typedef struct __attribute__((packed)) {
+    uint64_t sequence;              /* WAL sequence number */
     uint64_t transaction_id;        /* Transaction ID */
     uint64_t page_id;               /* Page being modified */
     uint32_t size;                  /* Size of data */
@@ -132,14 +149,9 @@ typedef struct {
     pthread_mutex_t alloc_lock;     /* Allocation lock */
     uint64_t hint_page;             /* Next page hint */
     
-    /* Write-ahead log */
-    struct {
-        int fd;                     /* WAL file descriptor */
-        void* mmap_base;            /* WAL mmap base */
-        size_t size;                /* WAL size */
-        uint64_t offset;            /* Current offset */
-        pthread_mutex_t lock;       /* WAL lock */
-    } wal;
+    /* Integrated WAL state - CLEAN CUT! */
+    pthread_mutex_t wal_lock;       /* WAL write lock */
+    wal_page_t* current_wal_page;   /* Cached current WAL page */
     
     /* Statistics */
     struct {
@@ -209,6 +221,11 @@ int jdbx_btree_iterator_next(jdbx_btree_iterator_t* iter,
                              void** key, size_t* key_len,
                              void** value, size_t* value_len);
 void jdbx_btree_iterator_destroy(jdbx_btree_iterator_t* iter);
+
+/* Integrated WAL operations - CLEAN CUT! */
+int jdbx_wal_write(jdbx_page_manager_t* pm, uint64_t page_id, 
+                   const void* page_data, size_t size);
+int jdbx_wal_recover(jdbx_page_manager_t* pm);
 
 /* Utility functions */
 uint32_t jdbx_crc32(const void* data, size_t size);

@@ -1,5 +1,6 @@
 /*
- * JDBX Page Manager - Core file and page management
+ * JDBX Page Manager V2 - CLEAN CUT with Integrated WAL
+ * ONE SOURCE OF TRUTH - Single file database with built-in WAL
  */
 
 #define _GNU_SOURCE  /* For mremap */
@@ -53,6 +54,7 @@ uint32_t jdbx_crc32(const void* data, size_t size) {
 /* Update header checksum */
 static void update_header_checksum(jdbx_page_manager_t* pm) {
     pm->header->checksum = 0;
+    /* Calculate checksum up to but not including checksum field */
     size_t checksum_size = offsetof(jdbx_header_t, checksum);
     pm->header->checksum = jdbx_crc32(pm->header, checksum_size);
 }
@@ -76,11 +78,67 @@ static size_t calculate_bitmap_pages(uint64_t total_pages) {
     return (total_pages + bits_per_page - 1) / bits_per_page;
 }
 
-/* Initialize a new JDBX file */
+/* Get pointer to a page */
+static inline void* jdbx_get_page_ptr(jdbx_page_manager_t* pm, uint64_t page_id) {
+    assert(page_id < pm->header->total_pages);
+    return (uint8_t*)pm->mmap_base + (page_id * JDBX_PAGE_SIZE);
+}
+
+/* Initialize integrated WAL pages */
+static int init_integrated_wal(jdbx_page_manager_t* pm) {
+    LOG_INFO("Initializing integrated WAL with %d pages", JDBX_WAL_PAGES);
+    
+    /* WAL starts after bitmap pages */
+    uint64_t bitmap_end = pm->header->bitmap_start_page + pm->bitmap_pages;
+    pm->header->wal_start_page = bitmap_end;
+    
+    /* Initialize each WAL page */
+    for (uint64_t i = 0; i < JDBX_WAL_PAGES; i++) {
+        uint64_t page_num = pm->header->wal_start_page + i;
+        wal_page_t* wal_page = (wal_page_t*)jdbx_get_page_ptr(pm, page_num);
+        
+        /* Clear the page */
+        memset(wal_page, 0, JDBX_PAGE_SIZE);
+        
+        /* Set up WAL page header */
+        wal_page->header.type = PAGE_TYPE_WAL;
+        wal_page->header.page_id = page_num;
+        wal_page->header.transaction_id = pm->header->transaction_id;
+        wal_page->wal_sequence_start = 0;
+        wal_page->wal_sequence_end = 0;
+        wal_page->entry_count = 0;
+        wal_page->used_bytes = sizeof(wal_page_t);
+        
+        /* Calculate and set checksum */
+        wal_page->header.checksum = jdbx_crc32(wal_page, JDBX_PAGE_SIZE);
+        
+        /* Mark page as used in bitmap */
+        size_t byte_idx = page_num / 64;
+        size_t bit_idx = page_num % 64;
+        pm->bitmap[byte_idx] |= (1ULL << bit_idx);
+    }
+    
+    /* Set WAL pointers in header */
+    pm->header->wal_current_page = pm->header->wal_start_page;
+    pm->header->wal_current_offset = sizeof(wal_page_t);
+    pm->header->wal_checkpoint_page = pm->header->wal_start_page;
+    pm->header->wal_sequence = 1;
+    
+    /* Root directory comes after WAL */
+    pm->header->root_directory_page = bitmap_end + JDBX_WAL_PAGES;
+    
+    LOG_INFO("WAL initialized: pages %llu-%llu", 
+             pm->header->wal_start_page, 
+             pm->header->wal_start_page + JDBX_WAL_PAGES - 1);
+    
+    return 0;
+}
+
+/* Initialize a new JDBX file - CLEAN CUT VERSION */
 static int init_new_file(jdbx_page_manager_t* pm, size_t initial_size) {
     /* Calculate initial pages */
     uint64_t total_pages = initial_size / JDBX_PAGE_SIZE;
-    if (total_pages < 100) total_pages = 100; /* Minimum 100 pages */
+    if (total_pages < 1000) total_pages = 1000; /* Minimum 1000 pages */
     
     /* Expand file to initial size */
     if (ftruncate(pm->fd, total_pages * JDBX_PAGE_SIZE) != 0) {
@@ -104,7 +162,7 @@ static int init_new_file(jdbx_page_manager_t* pm, size_t initial_size) {
     pm->header = (jdbx_header_t*)pm->mmap_base;
     memset(pm->header, 0, JDBX_HEADER_SIZE);
     memcpy(pm->header->magic, JDBX_MAGIC, 4);
-    pm->header->version = JDBX_VERSION;
+    pm->header->version = JDBX_VERSION; /* Version 2 - Integrated WAL */
     pm->header->page_size = JDBX_PAGE_SIZE;
     pm->header->total_pages = total_pages;
     pm->header->bitmap_start_page = 1; /* Right after header */
@@ -113,37 +171,41 @@ static int init_new_file(jdbx_page_manager_t* pm, size_t initial_size) {
     
     /* Calculate bitmap pages needed */
     size_t bitmap_pages = calculate_bitmap_pages(total_pages);
-    
-    /* Root directory comes after bitmap */
-    pm->header->root_directory_page = 1 + bitmap_pages;
-    
-    /* Free pages = total - header - bitmap - root directory */
-    pm->header->free_pages = total_pages - 1 - bitmap_pages - 1;
-    
-    /* Update header checksum */
-    update_header_checksum(pm);
-    
-    LOG_DEBUG("Created header checksum: 0x%08x", pm->header->checksum);
-    
-    /* Initialize bitmap */
     pm->bitmap = (uint64_t*)((uint8_t*)pm->mmap_base + JDBX_PAGE_SIZE);
     pm->bitmap_pages = bitmap_pages;
     
-    /* Mark used pages in bitmap: header, bitmap pages, root directory */
-    for (uint64_t i = 0; i < 1 + bitmap_pages + 1; i++) {
+    /* Mark header and bitmap pages as used */
+    for (uint64_t i = 0; i < 1 + bitmap_pages; i++) {
         size_t byte_idx = i / 64;
         size_t bit_idx = i % 64;
         pm->bitmap[byte_idx] |= (1ULL << bit_idx);
     }
     
+    /* Initialize integrated WAL */
+    if (init_integrated_wal(pm) != 0) {
+        jdbx_error("Failed to initialize integrated WAL");
+        return -1;
+    }
+    
     /* Initialize root directory page */
-    page_header_t* root_dir = (page_header_t*)((uint8_t*)pm->mmap_base + 
-                              pm->header->root_directory_page * JDBX_PAGE_SIZE);
+    page_header_t* root_dir = (page_header_t*)jdbx_get_page_ptr(pm, 
+                              pm->header->root_directory_page);
     memset(root_dir, 0, JDBX_PAGE_SIZE);
     root_dir->type = PAGE_TYPE_DIRECTORY;
     root_dir->page_id = pm->header->root_directory_page;
     root_dir->transaction_id = pm->header->transaction_id;
     root_dir->checksum = jdbx_crc32(root_dir, JDBX_PAGE_SIZE);
+    
+    /* Mark root directory as used */
+    size_t byte_idx = pm->header->root_directory_page / 64;
+    size_t bit_idx = pm->header->root_directory_page % 64;
+    pm->bitmap[byte_idx] |= (1ULL << bit_idx);
+    
+    /* Calculate free pages */
+    pm->header->free_pages = total_pages - 1 - bitmap_pages - JDBX_WAL_PAGES - 1;
+    
+    /* Update header checksum */
+    update_header_checksum(pm);
     
     /* Sync to disk */
     if (msync(pm->mmap_base, pm->mapped_size, MS_SYNC) != 0) {
@@ -151,16 +213,18 @@ static int init_new_file(jdbx_page_manager_t* pm, size_t initial_size) {
         return -1;
     }
     
-    LOG_INFO("Created new JDBX file with %llu pages (%zu MB)", 
+    LOG_INFO("Created new JDBX V2 file with %llu pages (%zu MB)", 
              (unsigned long long)total_pages,
              (total_pages * JDBX_PAGE_SIZE) / (1024 * 1024));
+    LOG_INFO("Layout: Header(1) + Bitmap(%zu) + WAL(%d) + Root(1) + Data(%llu)",
+             bitmap_pages, JDBX_WAL_PAGES, pm->header->free_pages);
     
     return 0;
 }
 
-/* Create a new JDBX file */
+/* Create a new JDBX file - CLEAN CUT VERSION */
 jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
-    jdbx_page_manager_t* pm =BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
+    jdbx_page_manager_t* pm = BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
     if (!pm) {
         jdbx_error("Failed to allocate page manager");
         return NULL;
@@ -174,7 +238,7 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
         return NULL;
     }
     
-    /* Initialize new file */
+    /* Initialize new file with integrated WAL */
     if (init_new_file(pm, initial_size) != 0) {
         close(pm->fd);
         unlink(path);
@@ -185,11 +249,11 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
     /* Initialize locks */
     pthread_rwlock_init(&pm->cache_lock, NULL);
     pthread_mutex_init(&pm->alloc_lock, NULL);
-    pthread_mutex_init(&pm->wal.lock, NULL);
+    pthread_mutex_init(&pm->wal_lock, NULL);
     
     /* Initialize cache */
     pm->cache_capacity = JDBX_CACHE_SIZE;
-    pm->cache =BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
+    pm->cache = BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
     if (!pm->cache) {
         jdbx_error("Failed to allocate cache");
         munmap(pm->mmap_base, pm->mapped_size);
@@ -199,64 +263,13 @@ jdbx_page_manager_t* jdbx_create(const char* path, size_t initial_size) {
         return NULL;
     }
     
-    /* Create WAL file */
-    char wal_path[1024];
-    size_t path_len = strlen(path);
-    if (path_len >= 5 && strcmp(path + path_len - 5, ".jdbx") == 0) {
-        /* Replace .jdbx with .wal */
-        snprintf(wal_path, sizeof(wal_path), "%.*s.wal", (int)(path_len - 5), path);
-    } else {
-        /* Add .wal to path */
-        snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
-    }
-    pm->wal.fd = open(wal_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (pm->wal.fd < 0) {
-        jdbx_error("Failed to create WAL file: %s", strerror(errno));
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        unlink(path);
-        BUFFER_FREE(pm);
-        return NULL;
-    }
-    
-    /* Initialize WAL with minimal size */
-    pm->wal.size = 1024 * 1024; /* 1MB initial WAL */
-    if (ftruncate(pm->wal.fd, pm->wal.size) != 0) {
-        jdbx_error("Failed to initialize WAL: %s", strerror(errno));
-        close(pm->wal.fd);
-        unlink(wal_path);
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        unlink(path);
-        BUFFER_FREE(pm);
-        return NULL;
-    }
-    
-    /* Memory map WAL */
-    pm->wal.mmap_base = mmap(NULL, pm->wal.size,
-                            PROT_READ | PROT_WRITE, MAP_SHARED,
-                            pm->wal.fd, 0);
-    if (pm->wal.mmap_base == MAP_FAILED) {
-        jdbx_error("Failed to mmap WAL: %s", strerror(errno));
-        close(pm->wal.fd);
-        unlink(wal_path);
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        unlink(path);
-        BUFFER_FREE(pm);
-        return NULL;
-    }
-    
-    LOG_INFO("Created JDBX database: %s", path);
+    LOG_INFO("Created JDBX V2 database: %s (single file with integrated WAL)", path);
     return pm;
 }
 
-/* Open existing JDBX file */
+/* Open existing JDBX file - CLEAN CUT VERSION */
 jdbx_page_manager_t* jdbx_open(const char* path) {
-    jdbx_page_manager_t* pm =BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
+    jdbx_page_manager_t* pm = BUFFER_CALLOC(1, sizeof(jdbx_page_manager_t));
     if (!pm) {
         jdbx_error("Failed to allocate page manager");
         return NULL;
@@ -265,8 +278,7 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     /* Open existing file */
     pm->fd = open(path, O_RDWR);
     if (pm->fd < 0) {
-        jdbx_error("Failed to open file %s: %s (errno=%d)", path, strerror(errno), errno);
-        LOG_ERROR("jdbx_open: Failed to open %s: %s", path, strerror(errno));
+        jdbx_error("Failed to open file %s: %s", path, strerror(errno));
         BUFFER_FREE(pm);
         return NULL;
     }
@@ -305,8 +317,10 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
         return NULL;
     }
     
+    /* CLEAN CUT - Only support version 2 */
     if (pm->header->version != JDBX_VERSION) {
-        jdbx_error("Unsupported JDBX version: %u", pm->header->version);
+        jdbx_error("Unsupported JDBX version: %u (only version 2 supported)", 
+                   pm->header->version);
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         BUFFER_FREE(pm);
@@ -317,28 +331,11 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     uint32_t expected_checksum = pm->header->checksum;
     pm->header->checksum = 0;
     size_t checksum_size = offsetof(jdbx_header_t, checksum);
-    
-    /* Debug: print all header fields */
-    LOG_DEBUG("Header during verify: magic=%c%c%c%c, version=%u, page_size=%u, total_pages=%llu, "
-              "free_pages=%llu, root_dir=%llu, bitmap_start=%llu, txn_id=%llu, last_ckpt=%llu",
-              pm->header->magic[0], pm->header->magic[1], pm->header->magic[2], pm->header->magic[3],
-              pm->header->version, pm->header->page_size, 
-              (unsigned long long)pm->header->total_pages,
-              (unsigned long long)pm->header->free_pages,
-              (unsigned long long)pm->header->root_directory_page,
-              (unsigned long long)pm->header->bitmap_start_page,
-              (unsigned long long)pm->header->transaction_id,
-              (unsigned long long)pm->header->last_checkpoint);
-    
     uint32_t actual_checksum = jdbx_crc32(pm->header, checksum_size);
     pm->header->checksum = expected_checksum;
     
-    LOG_DEBUG("Verifying header checksum: expected=0x%08x, actual=0x%08x (size: %zu bytes)", 
-              expected_checksum, actual_checksum, checksum_size);
-    
     if (actual_checksum != expected_checksum) {
-        jdbx_error("Header checksum mismatch: expected=0x%08x, actual=0x%08x", 
-                   expected_checksum, actual_checksum);
+        jdbx_error("Header checksum mismatch");
         munmap(pm->mmap_base, pm->mapped_size);
         close(pm->fd);
         BUFFER_FREE(pm);
@@ -353,11 +350,11 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
     /* Initialize locks */
     pthread_rwlock_init(&pm->cache_lock, NULL);
     pthread_mutex_init(&pm->alloc_lock, NULL);
-    pthread_mutex_init(&pm->wal.lock, NULL);
+    pthread_mutex_init(&pm->wal_lock, NULL);
     
     /* Initialize cache */
     pm->cache_capacity = JDBX_CACHE_SIZE;
-    pm->cache =BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
+    pm->cache = BUFFER_CALLOC(pm->cache_capacity, sizeof(cache_entry_t));
     if (!pm->cache) {
         jdbx_error("Failed to allocate cache");
         munmap(pm->mmap_base, pm->mapped_size);
@@ -366,330 +363,235 @@ jdbx_page_manager_t* jdbx_open(const char* path) {
         return NULL;
     }
     
-    /* Open WAL file */
-    char wal_path[1024];
-    size_t path_len = strlen(path);
-    if (path_len >= 5 && strcmp(path + path_len - 5, ".jdbx") == 0) {
-        /* Replace .jdbx with .wal */
-        snprintf(wal_path, sizeof(wal_path), "%.*s.wal", (int)(path_len - 5), path);
-    } else {
-        /* Add .wal to path */
-        snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
-    }
-    pm->wal.fd = open(wal_path, O_RDWR | O_CREAT, 0644);
-    if (pm->wal.fd < 0) {
-        jdbx_error("Failed to open WAL file: %s", strerror(errno));
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        BUFFER_FREE(pm);
-        return NULL;
+    /* Perform WAL recovery if needed */
+    if (pm->header->wal_current_page != pm->header->wal_checkpoint_page ||
+        pm->header->last_checkpoint < pm->header->transaction_id) {
+        LOG_INFO("WAL recovery needed: checkpoint=%llu, current=%llu",
+                 pm->header->last_checkpoint, pm->header->transaction_id);
+        if (jdbx_wal_recover(pm) != 0) {
+            LOG_ERROR("WAL recovery failed");
+            /* Continue anyway - database might still be usable */
+        }
     }
     
-    /* Get WAL size */
-    if (fstat(pm->wal.fd, &st) != 0) {
-        jdbx_error("Failed to stat WAL: %s", strerror(errno));
-        close(pm->wal.fd);
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        BUFFER_FREE(pm);
-        return NULL;
-    }
-    
-    pm->wal.size = st.st_size;
-    if (pm->wal.size == 0) {
-        pm->wal.size = 1024 * 1024; /* 1MB minimum */
-        ftruncate(pm->wal.fd, pm->wal.size);
-    }
-    
-    /* Memory map WAL */
-    pm->wal.mmap_base = mmap(NULL, pm->wal.size,
-                            PROT_READ | PROT_WRITE, MAP_SHARED,
-                            pm->wal.fd, 0);
-    if (pm->wal.mmap_base == MAP_FAILED) {
-        jdbx_error("Failed to mmap WAL: %s", strerror(errno));
-        close(pm->wal.fd);
-        BUFFER_FREE(pm->cache);
-        munmap(pm->mmap_base, pm->mapped_size);
-        close(pm->fd);
-        BUFFER_FREE(pm);
-        return NULL;
-    }
-    
-    LOG_INFO("Opened JDBX database: %s (%llu pages)",
-             path, (unsigned long long)pm->header->total_pages);
-    
+    LOG_INFO("Opened JDBX V2 database: %s", path);
     return pm;
 }
 
-/* Find free page in bitmap */
-static uint64_t find_free_page(jdbx_page_manager_t* pm) {
-    size_t bitmap_size = pm->bitmap_pages * JDBX_PAGE_SIZE / sizeof(uint64_t);
-    
-    /* Start from hint page */
-    uint64_t start_idx = pm->hint_page / 64;
-    
-    for (size_t i = 0; i < bitmap_size; i++) {
-        size_t idx = (start_idx + i) % bitmap_size;
-        uint64_t word = pm->bitmap[idx];
-        
-        if (word != 0xFFFFFFFFFFFFFFFFULL) {
-            /* Found word with free bit */
-            for (int bit = 0; bit < 64; bit++) {
-                if (!(word & (1ULL << bit))) {
-                    uint64_t page_id = idx * 64 + bit;
-                    if (page_id < pm->header->total_pages) {
-                        pm->hint_page = page_id + 1;
-                        return page_id;
-                    }
-                }
-            }
-        }
-    }
-    
-    return 0; /* No free pages */
-}
-
-/* Allocate a new page */
-uint64_t jdbx_alloc_page(jdbx_page_manager_t* pm, page_type_t type) {
-    pthread_mutex_lock(&pm->alloc_lock);
-    
-    /* Find free page */
-    uint64_t page_id = find_free_page(pm);
-    if (page_id == 0) {
-        /* Need to expand file */
-        uint64_t new_pages = pm->header->total_pages / 10; /* Grow by 10% */
-        if (new_pages < 100) new_pages = 100;
-        
-        uint64_t old_total = pm->header->total_pages;
-        uint64_t new_total = old_total + new_pages;
-        
-        /* Expand file */
-        if (ftruncate(pm->fd, new_total * JDBX_PAGE_SIZE) != 0) {
-            jdbx_error("Failed to expand file: %s", strerror(errno));
-            pthread_mutex_unlock(&pm->alloc_lock);
-            return 0;
-        }
-        
-        /* Remap if needed */
-        if (new_total * JDBX_PAGE_SIZE > pm->mapped_size) {
-            void* new_base = mremap(pm->mmap_base, pm->mapped_size,
-                                   new_total * JDBX_PAGE_SIZE, MREMAP_MAYMOVE);
-            if (new_base == MAP_FAILED) {
-                jdbx_error("Failed to remap: %s", strerror(errno));
-                pthread_mutex_unlock(&pm->alloc_lock);
-                return 0;
-            }
-            
-            pm->mmap_base = new_base;
-            pm->mapped_size = new_total * JDBX_PAGE_SIZE;
-            pm->file_size = pm->mapped_size;
-            
-            /* Update pointers */
-            pm->header = (jdbx_header_t*)pm->mmap_base;
-            pm->bitmap = (uint64_t*)((uint8_t*)pm->mmap_base + 
-                                    pm->header->bitmap_start_page * JDBX_PAGE_SIZE);
-        }
-        
-        /* Update header */
-        pm->header->total_pages = new_total;
-        pm->header->free_pages += new_pages;
-        update_header_checksum(pm);
-        
-        /* Use first new page */
-        page_id = old_total;
-    }
-    
-    /* Mark page as used */
-    size_t byte_idx = page_id / 64;
-    size_t bit_idx = page_id % 64;
-    pm->bitmap[byte_idx] |= (1ULL << bit_idx);
-    pm->header->free_pages--;
-    
-    /* Update transaction ID and checksum */
-    pm->header->transaction_id++;
-    update_header_checksum(pm);
-    
-    /* Initialize page header */
-    page_header_t* page = (page_header_t*)((uint8_t*)pm->mmap_base + 
-                                          page_id * JDBX_PAGE_SIZE);
-    memset(page, 0, JDBX_PAGE_SIZE);
-    page->type = type;
-    page->page_id = page_id;
-    page->transaction_id = pm->header->transaction_id;
-    
-    pthread_mutex_unlock(&pm->alloc_lock);
-    
-    LOG_DEBUG("Allocated page %llu of type %d", 
-              (unsigned long long)page_id, type);
-    
-    return page_id;
-}
-
-/* Free a page */
-void jdbx_free_page(jdbx_page_manager_t* pm, uint64_t page_id) {
-    if (page_id == 0 || page_id >= pm->header->total_pages) {
-        jdbx_error("Invalid page ID: %llu", (unsigned long long)page_id);
-        return;
-    }
-    
-    pthread_mutex_lock(&pm->alloc_lock);
-    
-    /* Clear bit in bitmap */
-    size_t byte_idx = page_id / 64;
-    size_t bit_idx = page_id % 64;
-    pm->bitmap[byte_idx] &= ~(1ULL << bit_idx);
-    pm->header->free_pages++;
-    update_header_checksum(pm);
-    
-    /* Update hint */
-    if (page_id < pm->hint_page) {
-        pm->hint_page = page_id;
-    }
-    
-    pthread_mutex_unlock(&pm->alloc_lock);
-    
-    LOG_DEBUG("Freed page %llu", (unsigned long long)page_id);
-}
-
-/* Get page from cache or disk */
-page_header_t* jdbx_get_page(jdbx_page_manager_t* pm, uint64_t page_id) {
-    if (page_id >= pm->header->total_pages) {
-        jdbx_error("Invalid page ID: %llu", (unsigned long long)page_id);
-        return NULL;
-    }
-    
-    /* Direct pointer to page */
-    page_header_t* page = (page_header_t*)((uint8_t*)pm->mmap_base + 
-                                          page_id * JDBX_PAGE_SIZE);
-    
-    /* Update statistics */
-    __atomic_fetch_add(&pm->stats.page_reads, 1, __ATOMIC_RELAXED);
-    
-    return page;
-}
-
-/* Get page for writing (WAL integration) */
-page_header_t* jdbx_get_page_for_write(jdbx_page_manager_t* pm, uint64_t page_id) {
-    page_header_t* page = jdbx_get_page(pm, page_id);
-    if (!page) return NULL;
-    
-    pthread_mutex_lock(&pm->wal.lock);
-    
-    /* Write to WAL first */
-    if (pm->wal.offset + sizeof(wal_entry_t) + JDBX_PAGE_SIZE > pm->wal.size) {
-        /* Extend WAL */
-        size_t new_size = pm->wal.size * 2;
-        if (ftruncate(pm->wal.fd, new_size) != 0) {
-            jdbx_error("Failed to extend WAL: %s", strerror(errno));
-            pthread_mutex_unlock(&pm->wal.lock);
-            return NULL;
-        }
-        
-        void* new_base = mremap(pm->wal.mmap_base, pm->wal.size,
-                               new_size, MREMAP_MAYMOVE);
-        if (new_base == MAP_FAILED) {
-            jdbx_error("Failed to remap WAL: %s", strerror(errno));
-            pthread_mutex_unlock(&pm->wal.lock);
-            return NULL;
-        }
-        
-        pm->wal.mmap_base = new_base;
-        pm->wal.size = new_size;
-    }
-    
-    /* Write WAL entry */
-    wal_entry_t* wal_entry = (wal_entry_t*)((uint8_t*)pm->wal.mmap_base + 
-                                            pm->wal.offset);
-    memcpy(wal_entry->magic, JDBX_WAL_MAGIC, 4);
-    wal_entry->transaction_id = pm->header->transaction_id;
-    wal_entry->page_id = page_id;
-    wal_entry->size = JDBX_PAGE_SIZE;
-    
-    /* Copy page data to WAL */
-    memcpy(wal_entry + 1, page, JDBX_PAGE_SIZE);
-    wal_entry->checksum = jdbx_crc32(wal_entry + 1, JDBX_PAGE_SIZE);
-    
-    pm->wal.offset += sizeof(wal_entry_t) + JDBX_PAGE_SIZE;
-    
-    pthread_mutex_unlock(&pm->wal.lock);
-    
-    /* Update statistics */
-    __atomic_fetch_add(&pm->stats.page_writes, 1, __ATOMIC_RELAXED);
-    
-    return page;
-}
-
-/* Sync changes to disk */
-int jdbx_sync(jdbx_page_manager_t* pm) {
-    /* Sync main file */
-    if (msync(pm->mmap_base, pm->mapped_size, MS_SYNC) != 0) {
-        jdbx_error("Failed to sync main file: %s", strerror(errno));
+/* Write to integrated WAL */
+int jdbx_wal_write(jdbx_page_manager_t* pm, uint64_t page_id, 
+                   const void* page_data, size_t size) {
+    if (size > JDBX_PAGE_SIZE) {
+        jdbx_error("WAL entry too large: %zu", size);
         return -1;
     }
     
-    /* Sync WAL */
-    if (msync(pm->wal.mmap_base, pm->wal.size, MS_SYNC) != 0) {
-        jdbx_error("Failed to sync WAL: %s", strerror(errno));
+    pthread_mutex_lock(&pm->wal_lock);
+    
+    /* Get current WAL page */
+    wal_page_t* wal_page = (wal_page_t*)jdbx_get_page_ptr(pm, 
+                                        pm->header->wal_current_page);
+    
+    /* Check if entry fits in current page */
+    size_t entry_size = sizeof(wal_entry_t) + size;
+    size_t available = JDBX_PAGE_SIZE - wal_page->used_bytes;
+    
+    if (entry_size > available) {
+        /* Move to next WAL page */
+        uint64_t next_page = pm->header->wal_current_page + 1;
+        if (next_page >= pm->header->wal_start_page + JDBX_WAL_PAGES) {
+            /* Wrap around to beginning of WAL */
+            next_page = pm->header->wal_start_page;
+        }
+        
+        /* Check if we're about to overwrite uncheckpointed data */
+        if (next_page == pm->header->wal_checkpoint_page) {
+            pthread_mutex_unlock(&pm->wal_lock);
+            LOG_ERROR("WAL is full - checkpoint needed");
+            return -1;
+        }
+        
+        /* Initialize next WAL page */
+        pm->header->wal_current_page = next_page;
+        wal_page = (wal_page_t*)jdbx_get_page_ptr(pm, next_page);
+        wal_page->wal_sequence_start = pm->header->wal_sequence;
+        wal_page->wal_sequence_end = pm->header->wal_sequence;
+        wal_page->entry_count = 0;
+        wal_page->used_bytes = sizeof(wal_page_t);
+    }
+    
+    /* Write WAL entry */
+    uint8_t* entry_ptr = (uint8_t*)wal_page + wal_page->used_bytes;
+    wal_entry_t* entry = (wal_entry_t*)entry_ptr;
+    
+    entry->sequence = pm->header->wal_sequence++;
+    entry->transaction_id = pm->header->transaction_id;
+    entry->page_id = page_id;
+    entry->size = size;
+    entry->checksum = jdbx_crc32(page_data, size);
+    
+    /* Copy page data */
+    memcpy(entry_ptr + sizeof(wal_entry_t), page_data, size);
+    
+    /* Update WAL page metadata */
+    wal_page->wal_sequence_end = entry->sequence;
+    wal_page->entry_count++;
+    wal_page->used_bytes += entry_size;
+    
+    /* Update WAL page checksum */
+    wal_page->header.checksum = jdbx_crc32(wal_page, JDBX_PAGE_SIZE);
+    
+    /* Sync WAL page */
+    if (msync(wal_page, JDBX_PAGE_SIZE, MS_SYNC) != 0) {
+        pthread_mutex_unlock(&pm->wal_lock);
+        jdbx_error("Failed to sync WAL page: %s", strerror(errno));
+        return -1;
+    }
+    
+    pthread_mutex_unlock(&pm->wal_lock);
+    return 0;
+}
+
+/* Recover from integrated WAL */
+int jdbx_wal_recover(jdbx_page_manager_t* pm) {
+    uint64_t entries_processed = 0;
+    uint64_t entries_applied = 0;
+    
+    LOG_INFO("Starting WAL recovery");
+    
+    /* Start from checkpoint page and process to current page */
+    uint64_t current_page = pm->header->wal_checkpoint_page;
+    
+    while (1) {
+        wal_page_t* wal_page = (wal_page_t*)jdbx_get_page_ptr(pm, current_page);
+        
+        /* Verify WAL page */
+        if (wal_page->header.type != PAGE_TYPE_WAL) {
+            LOG_WARNING("Invalid WAL page type at %llu", current_page);
+            break;
+        }
+        
+        /* Process entries in this page */
+        uint64_t offset = sizeof(wal_page_t);
+        
+        for (uint32_t i = 0; i < wal_page->entry_count; i++) {
+            wal_entry_t* entry = (wal_entry_t*)((uint8_t*)wal_page + offset);
+            
+            /* Verify entry */
+            if (entry->transaction_id > pm->header->last_checkpoint) {
+                /* Apply the page update */
+                void* data_ptr = (uint8_t*)entry + sizeof(wal_entry_t);
+                uint32_t checksum = jdbx_crc32(data_ptr, entry->size);
+                
+                if (checksum != entry->checksum) {
+                    LOG_ERROR("WAL entry checksum mismatch");
+                    return -1;
+                }
+                
+                /* Apply to actual page */
+                void* page_ptr = jdbx_get_page_ptr(pm, entry->page_id);
+                memcpy(page_ptr, data_ptr, entry->size);
+                entries_applied++;
+            }
+            
+            entries_processed++;
+            offset += sizeof(wal_entry_t) + entry->size;
+        }
+        
+        /* Move to next page */
+        if (current_page == pm->header->wal_current_page) {
+            break; /* Reached current page */
+        }
+        
+        current_page++;
+        if (current_page >= pm->header->wal_start_page + JDBX_WAL_PAGES) {
+            current_page = pm->header->wal_start_page; /* Wrap around */
+        }
+    }
+    
+    LOG_INFO("WAL recovery complete: %llu entries processed, %llu applied",
+             entries_processed, entries_applied);
+    
+    /* Update checkpoint */
+    pm->header->last_checkpoint = pm->header->transaction_id;
+    pm->header->wal_checkpoint_page = pm->header->wal_current_page;
+    update_header_checksum(pm);
+    
+    return 0;
+}
+
+/* Sync database to disk */
+int jdbx_sync(jdbx_page_manager_t* pm) {
+    if (!pm || !pm->mmap_base) return -1;
+    
+    /* Sync entire database */
+    if (msync(pm->mmap_base, pm->mapped_size, MS_SYNC) != 0) {
+        jdbx_error("Failed to sync database: %s", strerror(errno));
         return -1;
     }
     
     return 0;
 }
 
-/* Checkpoint - apply WAL and clear it */
+/* Checkpoint - flush WAL to data pages */
 int jdbx_checkpoint(jdbx_page_manager_t* pm) {
-    pthread_mutex_lock(&pm->wal.lock);
+    pthread_mutex_lock(&pm->wal_lock);
     
-    /* Already applied since we use mmap */
+    /* Already checkpointed? */
+    if (pm->header->wal_checkpoint_page == pm->header->wal_current_page &&
+        pm->header->last_checkpoint == pm->header->transaction_id) {
+        pthread_mutex_unlock(&pm->wal_lock);
+        return 0;
+    }
+    
+    LOG_INFO("Starting checkpoint");
+    
+    /* Update checkpoint in header */
     pm->header->last_checkpoint = pm->header->transaction_id;
+    pm->header->wal_checkpoint_page = pm->header->wal_current_page;
     update_header_checksum(pm);
-    pm->wal.offset = 0;
     
-    /* Clear WAL */
-    memset(pm->wal.mmap_base, 0, pm->wal.size);
+    /* Sync entire database */
+    if (msync(pm->mmap_base, pm->mapped_size, MS_SYNC) != 0) {
+        pthread_mutex_unlock(&pm->wal_lock);
+        jdbx_error("Failed to sync database: %s", strerror(errno));
+        return -1;
+    }
     
-    pthread_mutex_unlock(&pm->wal.lock);
+    pthread_mutex_unlock(&pm->wal_lock);
     
-    LOG_INFO("Checkpoint complete at transaction %llu",
-             (unsigned long long)pm->header->transaction_id);
-    
-    return jdbx_sync(pm);
+    LOG_INFO("Checkpoint complete");
+    return 0;
 }
 
 /* Close database */
 void jdbx_close(jdbx_page_manager_t* pm) {
     if (!pm) return;
     
-    /* Final checkpoint */
+    /* Perform final checkpoint */
     jdbx_checkpoint(pm);
     
-    /* Clean up WAL */
-    if (pm->wal.mmap_base && pm->wal.mmap_base != MAP_FAILED) {
-        munmap(pm->wal.mmap_base, pm->wal.size);
-    }
-    if (pm->wal.fd >= 0) {
-        close(pm->wal.fd);
+    /* Free cache */
+    if (pm->cache) {
+        BUFFER_FREE(pm->cache);
     }
     
-    /* Clean up main file */
+    /* Unmap file */
     if (pm->mmap_base && pm->mmap_base != MAP_FAILED) {
         munmap(pm->mmap_base, pm->mapped_size);
     }
+    
+    /* Close file */
     if (pm->fd >= 0) {
         close(pm->fd);
     }
     
-    /* Clean up cache */
-    BUFFER_FREE(pm->cache);
-    
     /* Destroy locks */
     pthread_rwlock_destroy(&pm->cache_lock);
     pthread_mutex_destroy(&pm->alloc_lock);
-    pthread_mutex_destroy(&pm->wal.lock);
-    
-    LOG_INFO("Closed JDBX database");
+    pthread_mutex_destroy(&pm->wal_lock);
     
     BUFFER_FREE(pm);
+    
+    LOG_INFO("JDBX database closed");
 }

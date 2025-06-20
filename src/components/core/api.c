@@ -467,10 +467,25 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
       }
       decoded_value[decoded_len] = '\0';
       
-      /* Add to JSON object */
-      json_value_t* str_value = json_create_string(decoded_value);
-      if (str_value) {
-        json_object_set(obj, key, str_value);
+      /* Special handling for 'query' parameter - parse as JSON if possible */
+      if (strcmp(key, "query") == 0 && decoded_value[0] == '{') {
+        json_value_t* parsed_query = json_parse(decoded_value);
+        if (parsed_query) {
+          /* Use the parsed JSON object directly */
+          json_object_set(obj, key, parsed_query);
+        } else {
+          /* Fallback to string if parsing fails */
+          json_value_t* str_value = json_create_string(decoded_value);
+          if (str_value) {
+            json_object_set(obj, key, str_value);
+          }
+        }
+      } else {
+        /* Regular string value */
+        json_value_t* str_value = json_create_string(decoded_value);
+        if (str_value) {
+          json_object_set(obj, key, str_value);
+        }
       }
     }
     pair = strtok(NULL, "&");
@@ -1302,14 +1317,30 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
     }
   } else if (request->query) {
     /* Parse URL query parameters into JSON object */
-    query = parse_url_query_to_json(request->query);
+    json_value_t* parsed_params = parse_url_query_to_json(request->query);
+    if (parsed_params) {
+      /* Check if there's a 'query' parameter with JSON */
+      json_value_t* query_param = json_object_get(parsed_params, "query");
+      if (query_param && query_param->type == JSON_OBJECT) {
+        /* Use the nested query object */
+        query = json_deep_copy(query_param);
+        /* CHECKPOINT: json_free(parsed_params); */
+      } else {
+        /* Use the parsed parameters as the query */
+        query = parsed_params;
+      }
+    }
   }
   
-  /* Query documents from unified collection using virtual layer - single source of truth */
-  json_value_t* documents = virtual_query(ctx->db, "document", "default", "documents", query);
-  if (query) {
-    /* CHECKPOINT: json_free(query); */
+  /* If no query provided, create empty query object */
+  if (!query) {
+    query = json_create_object();
   }
+  
+  /* Query documents from unified collection using storage layer - single source of truth */
+  json_value_t* documents = storage_query_documents(ctx->db, query);
+  
+  /* CHECKPOINT: json_free(query); */
   
   if (!documents) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
