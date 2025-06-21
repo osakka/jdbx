@@ -55,6 +55,9 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
 /* Invalidate cache entries for a specific user */
 void jwt_cache_invalidate_user(const char* user_id);
 
+/* Invalidate a specific token from cache */
+void jwt_cache_invalidate_token(const char* token);
+
 /* Get cache statistics */
 void jwt_cache_get_stats(uint64_t* hits, uint64_t* misses, uint64_t* evictions);
 

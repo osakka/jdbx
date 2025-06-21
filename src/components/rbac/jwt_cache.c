@@ -443,6 +443,42 @@ void jwt_cache_invalidate_user(const char* user_id) {
     }
 }
 
+/* Invalidate a specific token from cache */
+void jwt_cache_invalidate_token(const char* token) {
+    if (!g_jwt_cache || !token) return;
+    
+    char token_hash[65];  /* SHA256 = 64 hex chars + null terminator */
+    hash_token(token, token_hash);
+    unsigned int bucket = get_bucket_index(token_hash);
+    
+    pthread_rwlock_wrlock(&g_jwt_cache->lock);
+    
+    jwt_cache_entry_t** prev = &g_jwt_cache->buckets[bucket];
+    jwt_cache_entry_t* entry = g_jwt_cache->buckets[bucket];
+    
+    while (entry) {
+        if (entry->token_hash && strcmp(entry->token_hash, token_hash) == 0) {
+            /* Found the token - remove it */
+            *prev = entry->next;
+            lru_remove(g_jwt_cache, entry);
+            
+            const char* username = entry->username ? entry->username : "unknown";
+            LOG_INFO("Invalidated JWT cache entry for token of user: %s", username);
+            
+            free_cache_entry(entry);
+            g_jwt_cache->current_entries--;
+            
+            pthread_rwlock_unlock(&g_jwt_cache->lock);
+            return;
+        }
+        prev = &entry->next;
+        entry = entry->next;
+    }
+    
+    pthread_rwlock_unlock(&g_jwt_cache->lock);
+    LOG_DEBUG("Token not found in JWT cache for invalidation");
+}
+
 /* Get cache statistics */
 void jwt_cache_get_stats(uint64_t* hits, uint64_t* misses, uint64_t* evictions) {
     if (!g_jwt_cache) return;
