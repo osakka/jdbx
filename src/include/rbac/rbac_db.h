@@ -242,5 +242,6 @@ char* rbac_db_create_session(struct database* db, const char* user_id, const cha
 char* rbac_db_validate_session(struct database* db, const char* token);
 int rbac_db_revoke_session(struct database* db, const char* session_id);
 int rbac_db_invalidate_session(struct database* db, const char* session_id);
+int rbac_db_invalidate_sessions_by_token(struct database* db, const char* token);
 
 #endif /* RBAC_DB_H */

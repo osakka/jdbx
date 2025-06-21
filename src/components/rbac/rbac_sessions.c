@@ -261,3 +261,51 @@ int rbac_db_invalidate_session(struct database* db, const char* session_id) {
   
   return result;
 }
+
+/* Invalidate all sessions with a given token */
+int rbac_db_invalidate_sessions_by_token(struct database* db, const char* token) {
+  LOG_INFO("RBAC_DB: Invalidating all sessions with token");
+  
+  if (!db || !token) {
+    return 0;
+  }
+  
+  /* Query for all sessions with this token */
+  json_value_t* query = json_create_object();
+  json_object_set(query, "token", json_create_string(token));
+  json_object_set(query, "active", json_create_boolean(1));
+  
+  json_value_t* results = virtual_query(db, DOC_TYPE_NAME_SESSION, "system", VIRTUAL_COLLECTION_SESSIONS, query);
+  /* CHECKPOINT: json_free(query); */
+  
+  if (!results) {
+    return 0;
+  }
+  
+  /* Extract documents array */
+  json_value_t* documents = json_object_get(results, "documents");
+  if (!documents || documents->type != JSON_ARRAY) {
+    /* CHECKPOINT: json_free(results); */
+    return 0;
+  }
+  
+  int count = 0;
+  size_t num_sessions = json_array_size(documents);
+  
+  /* Invalidate each session */
+  for (size_t i = 0; i < num_sessions; i++) {
+    json_value_t* session = json_array_get(documents, i);
+    json_value_t* session_id_val = json_object_get(session, "uuid");
+    
+    if (session_id_val && session_id_val->type == JSON_STRING) {
+      if (rbac_db_invalidate_session(db, session_id_val->value.string)) {
+        count++;
+      }
+    }
+  }
+  
+  /* CHECKPOINT: json_free(results); */
+  
+  LOG_INFO("RBAC_DB: Invalidated %d sessions with the token", count);
+  return count > 0;
+}

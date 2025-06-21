@@ -306,6 +306,10 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   if (session_results) {
     json_value_t* documents = json_object_get(session_results, "documents");
+    if (g_logger) {
+      size_t doc_count = (documents && documents->type == JSON_ARRAY) ? documents->value.array.size : 0;
+      LOG_INFO("Session query returned %zu documents for token", doc_count);
+    }
     if (documents && documents->type == JSON_ARRAY && documents->value.array.size > 0) {
       session_found = 1;
       json_value_t* session = json_array_get(documents, 0);
@@ -351,7 +355,15 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   int result = jwt_verify(token, ctx->jwt_secret);
   
-  if (result) {
+  /* Log the authentication decision */
+  if (g_logger) {
+    LOG_INFO("Authentication check - client=%s, jwt_valid=%s, session_found=%s, user=%s", 
+        client_ip, result ? "yes" : "no", session_found ? "yes" : "no", 
+        session_user ? session_user : "unknown");
+  }
+  
+  /* Require BOTH valid JWT and active session */
+  if (result && session_found) {
     if (g_logger) {
       LOG_INFO("Authentication successful - client=%s, token_valid=yes, session_found=%s, user=%s", 
           client_ip, session_found ? "yes" : "no", session_user);
@@ -451,5 +463,5 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
   
   BUFFER_FREE(token);
   
-  return result;
+  return result && session_found;
 }

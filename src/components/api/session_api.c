@@ -3,9 +3,11 @@
 #include "database/database.h"
 #include "database/virtual_layer.h"
 #include "rbac/rbac_database.h"
+#include "rbac/rbac_db.h"
 #include "utils/json.h"
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
+#include "rbac/jwt_cache.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,15 +217,24 @@ http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) 
                  "{\"error\":\"Session not found\"}", "application/json");
   }
   
-  /* Get first session */
+  /* Get the session (there should only be one with this token) */
   json_value_t* session = json_array_get(documents, 0);
   json_value_t* session_id_val = json_object_get(session, "uuid");
+  json_value_t* user_id_val = json_object_get(session, "user_id");
   
   if (session_id_val && session_id_val->type == JSON_STRING) {
-    const char* session_id = session_id_val->value.string;
+    /* Invalidate the specific token from JWT cache */
+    jwt_cache_invalidate_token(token);
+    LOG_INFO("Invalidated JWT cache for token");
     
-    /* Invalidate session */
-    if (rbac_db_invalidate_session(ctx->db, session_id)) {
+    /* Also invalidate all cache entries for the user */
+    if (user_id_val && user_id_val->type == JSON_STRING) {
+      jwt_cache_invalidate_user(user_id_val->value.string);
+      LOG_INFO("Invalidated all JWT cache entries for user: %s", user_id_val->value.string);
+    }
+    
+    /* Invalidate ALL sessions with this token */
+    if (rbac_db_invalidate_sessions_by_token(ctx->db, token)) {
       /* CHECKPOINT: json_free(results); */
       return create_http_response(HTTP_OK,
                    "{\"success\":true,\"message\":\"Logged out successfully\"}", 
