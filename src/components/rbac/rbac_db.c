@@ -296,6 +296,20 @@ rbac_user_t* rbac_db_create_user(database_t* db, const char* username, const cha
     return NULL;
   }
   
+  /* Get the actual document ID from insert result */
+  json_value_t* doc_uuid = json_object_get(insert_result, "uuid");
+  if (!doc_uuid || doc_uuid->type != JSON_STRING) {
+    LOG_ERROR("Failed to get document UUID from insert result");
+    /* CHECKPOINT: json_free(insert_result); */
+    BUFFER_FREE(id);
+    BUFFER_FREE(password_hash);
+    return NULL;
+  }
+  
+  /* Use the actual document UUID instead of generated one */
+  BUFFER_FREE(id);
+  id = BUFFER_STRDUP(doc_uuid->value.string);
+  
   /* CHECKPOINT: json_free(insert_result); */
   
   /* Create user structure */
@@ -573,6 +587,19 @@ rbac_role_t* rbac_db_create_role(database_t* db, const char* name) {
     BUFFER_FREE(id);
     return NULL;
   }
+  
+  /* Get the actual document ID from insert result */
+  json_value_t* doc_uuid = json_object_get(insert_result, "uuid");
+  if (!doc_uuid || doc_uuid->type != JSON_STRING) {
+    LOG_ERROR("Failed to get document UUID from insert result");
+    /* CHECKPOINT: json_free(insert_result); */
+    BUFFER_FREE(id);
+    return NULL;
+  }
+  
+  /* Use the actual document UUID instead of generated one */
+  BUFFER_FREE(id);
+  id = BUFFER_STRDUP(doc_uuid->value.string);
   
   /* CHECKPOINT: json_free(insert_result); */
   
