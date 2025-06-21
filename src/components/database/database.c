@@ -641,6 +641,11 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
         return NULL;
     }
     
+    // BAR RAISING: Promote query to survive checkpoint operations
+    // Without promotion, query can be freed during skiplist iteration
+    // causing crashes when accessing query fields in the matching loop
+    json_promote(query);
+    
     pthread_rwlock_rdlock(&g_db.lock);
     library_t* lib = get_or_create_library(STORAGE_LIBRARY);
     if (!lib) {
