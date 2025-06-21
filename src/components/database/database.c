@@ -707,15 +707,33 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
                             break;
                         }
                         
-                        // Simple string comparison for now
-                        if (query_value->type == JSON_STRING && doc_field->type == JSON_STRING) {
-                            if (strcmp(json_get_string(query_value), json_get_string(doc_field)) != 0) {
-                                matches_query = false;
-                                break;
-                            }
-                        } else if (query_value->type != doc_field->type) {
+                        // Compare values based on type
+                        if (query_value->type != doc_field->type) {
                             matches_query = false;
                             break;
+                        }
+                        
+                        // Type-specific comparisons
+                        switch (query_value->type) {
+                            case JSON_STRING:
+                                if (strcmp(json_get_string(query_value), json_get_string(doc_field)) != 0) {
+                                    matches_query = false;
+                                }
+                                break;
+                            case JSON_BOOLEAN:
+                                if (query_value->value.boolean != doc_field->value.boolean) {
+                                    matches_query = false;
+                                }
+                                break;
+                            case JSON_NUMBER:
+                                if (query_value->value.number != doc_field->value.number) {
+                                    matches_query = false;
+                                }
+                                break;
+                            default:
+                                // For complex types, we don't support comparison yet
+                                matches_query = false;
+                                break;
                         }
                     }
                 }
