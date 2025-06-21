@@ -538,54 +538,94 @@ json_value_t* metrics_get_historical(time_t start_time, time_t end_time, const c
     return NULL;
   }
   
-  /* Create query for time range */
+  /* Query for metric documents - only filter by name if specific metric requested */
   json_value_t* query = json_create_object();
-  json_value_t* timestamp_query = json_create_object();
-  json_object_set(timestamp_query, "$gte", json_create_integer(start_time));
-  json_object_set(timestamp_query, "$lte", json_create_integer(end_time));
-  json_object_set(query, "timestamp", timestamp_query);
   
-  /* Query metrics */
-  json_value_t* result = db_query_documents(g_metrics_persistence->db, 
-                       STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  /* If specific metric requested, add name filter */
+  if (metric_name) {
+    json_object_set(query, "name", json_create_string(metric_name));
+  }
+  
+  char* query_str = json_stringify(query);
+  LOG_DEBUG("Querying metrics with: %s", query_str ? query_str : "NULL");
+  if (query_str) BUFFER_FREE(query_str);
+  
+  /* Query metrics using virtual query to handle library filtering correctly */
+  json_value_t* result = virtual_query(g_metrics_persistence->db, "metric", "system", "metrics", query);
   /* CHECKPOINT: json_free(query); */
   
   if (!result) {
+    LOG_ERROR("Failed to query metric documents");
     return NULL;
   }
   
   json_value_t* documents = json_object_get(result, "documents");
   if (!documents || documents->type != JSON_ARRAY) {
+    LOG_ERROR("Invalid query result format");
     /* CHECKPOINT: json_free(result); */
     return NULL;
   }
   
-  /* Create response array */
-  json_value_t* response = json_create_array();
+  LOG_DEBUG("Found %zu metric documents", json_array_size(documents));
   
-  /* Process each snapshot */
+  /* Create response array or object */
+  json_value_t* response = metric_name ? json_create_array() : json_create_object();
+  
+  /* Process each metric document */
   for (size_t i = 0; i < documents->value.array.size; i++) {
     json_value_t* doc = json_array_get(documents, i);
-    json_value_t* timestamp = json_object_get(doc, "timestamp");
-    json_value_t* metrics = json_object_get(doc, "metrics");
+    json_value_t* name_val = json_object_get(doc, "name");
+    json_value_t* data_array = json_object_get(doc, "data");
     
-    if (timestamp && metrics) {
-      json_value_t* point = json_create_object();
-      json_object_set(point, "timestamp", json_deep_copy(timestamp));
+    if (name_val && name_val->type == JSON_STRING && data_array && data_array->type == JSON_ARRAY) {
+      const char* name = json_get_string(name_val);
       
-      if (metric_name) {
-        /* Get specific metric */
-        json_value_t* metric_value = json_object_get(metrics, metric_name);
-        if (metric_value) {
-          json_object_set(point, "value", json_deep_copy(metric_value));
-          json_array_append(response, point);
-        } else {
-          /* CHECKPOINT: json_free(point); */
+      /* Create filtered array for time range */
+      json_value_t* filtered_data = json_create_array();
+      
+      /* Process each data point in the time series */
+      for (size_t j = 0; j < json_array_size(data_array); j++) {
+        json_value_t* data_point = json_array_get(data_array, j);
+        json_value_t* timestamp_val = json_object_get(data_point, "timestamp");
+        
+        if (timestamp_val && timestamp_val->type == JSON_INTEGER) {
+          time_t point_time = (time_t)json_get_integer(timestamp_val);
+          
+          /* Check if within time range */
+          if (point_time >= start_time && point_time <= end_time) {
+            if (metric_name) {
+              /* For specific metric, add simplified data points */
+              json_value_t* point = json_create_object();
+              json_object_set(point, "timestamp", json_create_integer(point_time));
+              
+              /* Copy all fields except timestamp using json_object_foreach */
+              const char* key;
+              json_value_t* val;
+              json_object_foreach(data_point, key, val) {
+                if (strcmp(key, "timestamp") != 0) {
+                  json_object_set(point, key, json_deep_copy(val));
+                }
+              }
+              
+              json_array_append(filtered_data, point);
+            } else {
+              /* For all metrics, keep full data structure */
+              json_array_append(filtered_data, json_deep_copy(data_point));
+            }
+          }
         }
+      }
+      
+      /* Add to response */
+      if (metric_name) {
+        /* For specific metric, merge all data points into single array */
+        for (size_t j = 0; j < json_array_size(filtered_data); j++) {
+          json_array_append(response, json_array_get(filtered_data, j));
+        }
+        /* CHECKPOINT: json_free(filtered_data); */
       } else {
-        /* Get all metrics */
-        json_object_set(point, "metrics", json_deep_copy(metrics));
-        json_array_append(response, point);
+        /* For all metrics, organize by metric name */
+        json_object_set(response, name, filtered_data);
       }
     }
   }

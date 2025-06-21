@@ -65,9 +65,8 @@ http_response_t* api_handle_metrics_history(api_context_t* ctx, http_request_t* 
   /* Get historical metrics */
   json_value_t* history = metrics_get_historical(start_time, end_time, metric_name);
   if (!history) {
-    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
-                 "{\"error\":\"Failed to retrieve metrics history\"}", 
-                 "application/json");
+    /* Return empty array if no history found */
+    history = metric_name ? json_create_array() : json_create_object();
   }
   
   /* Create response object */
