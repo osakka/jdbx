@@ -368,6 +368,11 @@ int rbac_db_delete_user(database_t* db, const char* user_id) {
     actual_doc_id = BUFFER_STRDUP(user_id);
   }
   
+  /* Promote user_doc to survive any checkpoint operations during role cleanup */
+  if (user_doc) {
+    json_promote(user_doc);
+  }
+  
   /* Get user roles */
   json_value_t* roles_val = json_object_get(user_doc, "roles");
   if (roles_val && roles_val->type == JSON_ARRAY) {

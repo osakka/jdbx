@@ -488,12 +488,13 @@ static void* accept_thread_func(void* arg) {
         continue;
       }
       
-      /* BAR RAISING: Client connections are request-scoped, not checkpoint-scoped
-       * They should NOT be promoted as they're allocated and freed within a single
-       * request lifecycle. Promoting them causes memory manager confusion when
-       * handle_client tries to BUFFER_FREE() promoted memory. 
-       * Single source of truth: request-scoped memory uses normal allocation. */
-      /* memory_promote(client); - REMOVED: Fixes deterministic crash at operation 5 */
+      /* BAR RAISING: Client connections must be promoted when using SSL
+       * SSL holds references to client structure that survive checkpoint operations
+       * Without promotion, SSL_free() crashes accessing freed client memory
+       * See CLAUDE.md v6.3.3 - SSL MEMORY PROMOTION FOR UI STABILITY */
+      if (config->use_ssl) {
+        memory_promote(client);
+      }
       
       /* Initialize client connection with memory safety */
       memset(client, 0, sizeof(client_conn_t)); /* Zero entire structure */

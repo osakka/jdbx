@@ -241,6 +241,14 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                 pthread_rwlock_unlock(&g_jwt_cache->lock);
                 
                 if (claims_copy) {
+                    /* Promote the duplicated payload to survive checkpoint rewinds */
+                    memory_promote(claims_copy);
+                    if (claims_copy->iss) memory_promote(claims_copy->iss);
+                    if (claims_copy->sub) memory_promote(claims_copy->sub);
+                    if (claims_copy->aud) memory_promote(claims_copy->aud);
+                    if (claims_copy->jti) memory_promote(claims_copy->jti);
+                    if (claims_copy->claims) json_promote(claims_copy->claims);
+                    
                     LOG_INFO("JWT cache hit for user: %s", username);
                     return claims_copy;
                 } else {

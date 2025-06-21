@@ -241,6 +241,13 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
             cp->last_alloc = cp->last_alloc->next;
         }
         
+        /* Clear checkpoint pointers in hazard-protected allocations before freeing checkpoint */
+        memory_header_t* hazard_header = hazard_list;
+        while (hazard_header) {
+            hazard_header->checkpoint = NULL;
+            hazard_header = hazard_header->next;
+        }
+        
         /* Unlock before destroying */
         pthread_spin_unlock(&cp->lock);
         
@@ -309,8 +316,16 @@ void memory_checkpoint_commit(memory_checkpoint_t* checkpoint) {
     /* Clear checkpoint association from all allocations */
     memory_header_t* header = checkpoint->first_alloc;
     while (header) {
+        memory_header_t* next = header->next;
+        
+        /* Validate header before accessing */
+        if ((uintptr_t)header < 0x1000 || header->magic != MEMORY_MAGIC) {
+            /* Invalid or freed allocation - skip */
+            break;
+        }
+        
         header->checkpoint = NULL;
-        header = header->next;
+        header = next;
     }
     
     /* Mark as committed */

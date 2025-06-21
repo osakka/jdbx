@@ -8,8 +8,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-BASE_URL="https://localhost:5000"
-CURL_OPTS="-s -k"
+if [[ "$USE_HTTP" == "1" ]]; then
+    BASE_URL="http://localhost:5000"
+    CURL_OPTS="-s"
+else
+    BASE_URL="https://localhost:5000"
+    CURL_OPTS="-s -k"
+fi
 ADMIN_USER="admin"
 ADMIN_PASS="secure123456789"
 
