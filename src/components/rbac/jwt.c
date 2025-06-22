@@ -6,6 +6,9 @@
 #include <string.h>
 #include <time.h>
 #include <stdint.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/err.h>
 
 /* Simple Base64 encoding table */
 static const char base64_chars[] = 
@@ -158,118 +161,45 @@ static unsigned char* base64_url_decode(const char* input, int* output_length) {
   return output;
 }
 
-/* Simple SHA-256 implementation for JWT */
-static void simple_sha256(const char* input, size_t input_len, unsigned char* output) {
-  /* This is a placeholder for a real SHA-256 implementation
-    In a real implementation, we would use OpenSSL or another crypto library */
-  size_t i;
+/* Note: Using OpenSSL HMAC directly for JWT signing - no separate SHA-256 function needed */
+
+/* Secure HMAC-SHA256 implementation using OpenSSL */
+static int secure_hmac_sha256(const char* key, size_t key_len, 
+                              const char* data, size_t data_len, 
+                              unsigned char* output) {
+  unsigned int output_len = 32; /* SHA-256 HMAC produces 32 bytes */
   
-  /* Initialize hash values (first 32 bits of the fractional parts of the square roots of the first 8 primes) */
-  uint32_t h0 = 0x6a09e667;
-  uint32_t h1 = 0xbb67ae85;
-  uint32_t h2 = 0x3c6ef372;
-  uint32_t h3 = 0xa54ff53a;
-  uint32_t h4 = 0x510e527f;
-  uint32_t h5 = 0x9b05688c;
-  uint32_t h6 = 0x1f83d9ab;
-  uint32_t h7 = 0x5be0cd19;
+  unsigned char* result = HMAC(EVP_sha256(), key, (int)key_len, 
+                               (const unsigned char*)data, data_len, 
+                               output, &output_len);
   
-  /* Simplified hash calculation */
-  /* Just mix the input bytes with the initial hash values */
-  for (i = 0; i < input_len; i++) {
-    uint8_t byte = input[i];
-    h0 = (h0 ^ byte) + ((h0 << 5) | (h0 >> 27));
-    h1 = (h1 ^ byte) + ((h1 << 7) | (h1 >> 25));
-    h2 = (h2 ^ byte) + ((h2 << 9) | (h2 >> 23));
-    h3 = (h3 ^ byte) + ((h3 << 13) | (h3 >> 19));
-    h4 = (h4 ^ byte) + ((h4 << 17) | (h4 >> 15));
-    h5 = (h5 ^ byte) + ((h5 << 19) | (h5 >> 13));
-    h6 = (h6 ^ byte) + ((h6 << 23) | (h6 >> 9));
-    h7 = (h7 ^ byte) + ((h7 << 29) | (h7 >> 3));
+  if (!result) {
+    LOG_ERROR("HMAC-SHA256 computation failed: %s", ERR_error_string(ERR_get_error(), NULL));
+    return -1;
   }
   
-  /* Convert hash values to bytes */
-  for (i = 0; i < 4; i++) {
-    output[i]   = (h0 >> (24 - i * 8)) & 0xFF;
-    output[i + 4] = (h1 >> (24 - i * 8)) & 0xFF;
-    output[i + 8] = (h2 >> (24 - i * 8)) & 0xFF;
-    output[i + 12] = (h3 >> (24 - i * 8)) & 0xFF;
-    output[i + 16] = (h4 >> (24 - i * 8)) & 0xFF;
-    output[i + 20] = (h5 >> (24 - i * 8)) & 0xFF;
-    output[i + 24] = (h6 >> (24 - i * 8)) & 0xFF;
-    output[i + 28] = (h7 >> (24 - i * 8)) & 0xFF;
-  }
+  return (int)output_len;
 }
 
-/* Simple HMAC-SHA256 for JWT signing */
-static void hmac_sha256(const char* key, size_t key_len, 
-            const char* data, size_t data_len, 
-            unsigned char* output) {
-  /* This is a very simplified HMAC implementation
-    In a real implementation, use OpenSSL HMAC functions */
-  
-  /* Prepare key */
-  unsigned char k_ipad[64] = {0};
-  unsigned char k_opad[64] = {0};
-  unsigned char key_hash[32] = {0};
-  
-  if (key_len > 64) {
-    /* Hash the key if it's too long */
-    /* Using our simple SHA256 implementation */
-    simple_sha256(key, key_len, key_hash);
-    key = (const char*)key_hash;
-    key_len = 32;
-  }
-  
-  /* XOR key with ipad and opad values */
-  size_t i;
-  for (i = 0; i < key_len; i++) {
-    k_ipad[i] = key[i] ^ 0x36;
-    k_opad[i] = key[i] ^ 0x5c;
-  }
-  for (; i < 64; i++) {
-    k_ipad[i] = 0x36;
-    k_opad[i] = 0x5c;
-  }
-  
-  /* Perform inner hash */
-  unsigned char inner_hash[32];
-  
-  /* Concatenate k_ipad with data */
-  size_t total_len = 64 + data_len;
-  char* inner_data = BUFFER_ALLOC(total_len);
-  if (!inner_data) return;
-  
-  memcpy(inner_data, k_ipad, 64);
-  memcpy(inner_data + 64, data, data_len);
-  
-  /* Hash inner_data */
-  simple_sha256(inner_data, total_len, inner_hash);
-  BUFFER_FREE(inner_data);
-  
-  /* Perform outer hash */
-  /* Concatenate k_opad with inner_hash */
-  char outer_data[96]; /* 64 + 32 */
-  memcpy(outer_data, k_opad, 64);
-  memcpy(outer_data + 64, inner_hash, 32);
-
-  /* Hash outer_data */
-  simple_sha256(outer_data, 96, output);
-}
-
-/* Sign JWT token */
+/* Sign JWT token with secure HMAC-SHA256 */
 static char* jwt_sign(const char* header_payload, const char* secret, const char* alg) {
   unsigned char digest[32]; /* SHA-256 output size */
   
   /* For simplicity, we only support HS256 */
   if (strcmp(alg, "HS256") != 0) {
-    return NULL; /* Unsupported algorithm */
+    LOG_WARNING("Unsupported JWT algorithm: %s (only HS256 supported)", alg);
+    return NULL;
   }
   
-  /* Compute HMAC */
-  hmac_sha256(secret, strlen(secret), 
-        header_payload, strlen(header_payload), 
-        digest);
+  /* Compute secure HMAC-SHA256 */
+  int result = secure_hmac_sha256(secret, strlen(secret), 
+                                  header_payload, strlen(header_payload), 
+                                  digest);
+  
+  if (result < 0) {
+    LOG_ERROR("Failed to compute HMAC-SHA256 for JWT signing");
+    return NULL;
+  }
   
   /* Base64url encode */
   return base64_url_encode(digest, 32);
