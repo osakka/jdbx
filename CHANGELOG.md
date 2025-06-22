@@ -20,12 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **ROOT CAUSE FIX**: JSON deep copy race conditions causing server crashes
+- **CRITICAL**: Storage insert/query mismatch - insert storing pointers while query expected strings
 - Reference counter race conditions with atomic operations
 - Rate limiter token bucket race conditions
 - JavaScript engine concurrent execution issues
 - Metrics persistence TOCTOU vulnerabilities
 - File cache thread safety issues
 - SSL context creation race conditions
+- Authentication failures due to "invalid or corrupted document" errors
 
 ### Changed
 - Document storage now uses JSON strings instead of object pointers

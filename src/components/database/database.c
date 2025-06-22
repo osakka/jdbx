@@ -1854,23 +1854,17 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     }
     json_object_set(doc_copy, "modified_at", json_create_integer(now));
     
-    // BAR RAISING: Store JSON object directly - skiplist manages pointer lifecycle
-    // CRITICAL FIX: Must allocate persistent pointer storage, not use stack address!
-    json_value_t** doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
-    if (!doc_ptr) {
+    // CRITICAL THREAD SAFETY: Store JSON string instead of object pointer
+    // This eliminates race conditions during concurrent json_deep_copy operations
+    char* json_str = json_stringify(doc_copy);
+    if (!json_str) {
         pthread_rwlock_unlock(&coll->lock);
         /* CHECKPOINT: json_free(doc_copy); */
         return NULL;
     }
-    *doc_ptr = json_deep_copy(doc_copy);
     
-    // CRITICAL: Mark skiplist documents as hazard-protected
-    // The skiplist uses hazard pointers for safe memory reclamation
-    // Mark both the pointer storage and the document as hazard-protected
-    memory_mark_hazard_protected(doc_ptr, NULL);
-    memory_mark_hazard_protected(*doc_ptr, NULL);
-    
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
+    // Store the JSON string in skiplist - each thread will parse its own copy
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, json_str, strlen(json_str) + 1);
     
     pthread_rwlock_unlock(&coll->lock);
     

@@ -33,6 +33,9 @@
 #include <time.h>
 #include <openssl/sha.h>
 #include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/kdf.h>
 #include <pthread.h>
 
 /* 
@@ -44,97 +47,12 @@
 #define HASH_LENGTH 32
 #define PBKDF2_ITERATIONS 10000 /* Restored to production value */
 
-/* Simple HMAC-SHA-256 implementation */
-static void hmac_sha256(const unsigned char* key, size_t key_len,
-            const unsigned char* data, size_t data_len,
-            unsigned char* output) {
-  unsigned char ipad[64];
-  unsigned char opad[64];
-  unsigned char inner_hash[32];
-  
-  /* Initialize pads with key */
-  memset(ipad, 0x36, 64);
-  memset(opad, 0x5c, 64);
-  
-  for (size_t i = 0; i < key_len && i < 64; i++) {
-    ipad[i] ^= key[i];
-    opad[i] ^= key[i];
-  }
-  
-  /* Inner hash: SHA-256(key ^ ipad || data) */
-  unsigned int inner_hash_value = 0x67452301; /* Initial hash value */
-  
-  /* Simulate hashing key ^ ipad */
-  for (size_t i = 0; i < 64; i++) {
-    inner_hash_value = ((inner_hash_value << 5) + inner_hash_value) + ipad[i];
-  }
-  
-  /* Simulate hashing data */
-  for (size_t i = 0; i < data_len; i++) {
-    inner_hash_value = ((inner_hash_value << 5) + inner_hash_value) + data[i];
-  }
-  
-  /* Convert inner hash to bytes */
-  for (size_t i = 0; i < 32; i++) {
-    inner_hash[i] = (inner_hash_value >> (i % 4) * 8) & 0xFF;
-  }
-  
-  /* Outer hash: SHA-256(key ^ opad || inner_hash) */
-  unsigned int outer_hash_value = 0x67452301; /* Initial hash value */
-  
-  /* Simulate hashing key ^ opad */
-  for (size_t i = 0; i < 64; i++) {
-    outer_hash_value = ((outer_hash_value << 5) + outer_hash_value) + opad[i];
-  }
-  
-  /* Simulate hashing inner_hash */
-  for (size_t i = 0; i < 32; i++) {
-    outer_hash_value = ((outer_hash_value << 5) + outer_hash_value) + inner_hash[i];
-  }
-  
-  /* Convert outer hash to bytes */
-  for (size_t i = 0; i < 32; i++) {
-    output[i] = (outer_hash_value >> (i % 4) * 8) & 0xFF;
-  }
-}
 
-/* PBKDF2 with HMAC-SHA-256 implementation */
+/* OpenSSL PBKDF2-HMAC-SHA-256 implementation - ONE SOURCE OF TRUTH */
 static void pbkdf2_hmac_sha256(const char* password, const unsigned char* salt, size_t salt_len,
                int iterations, size_t output_len, unsigned char* output) {
-  unsigned char digest[32];
-  unsigned char block[salt_len + 4];
-  
-  /* Copy salt to block */
-  memcpy(block, salt, salt_len);
-  
-  /* For each block */
-  for (unsigned int i = 1; i <= (output_len + 31) / 32; i++) {
-    /* Add block index to salt */
-    block[salt_len] = (i >> 24) & 0xFF;
-    block[salt_len + 1] = (i >> 16) & 0xFF;
-    block[salt_len + 2] = (i >> 8) & 0xFF;
-    block[salt_len + 3] = i & 0xFF;
-    
-    /* Initial HMAC */
-    hmac_sha256((const unsigned char*)password, strlen(password), block, salt_len + 4, digest);
-    
-    /* Copy first iteration result to output */
-    memcpy(output + (i - 1) * 32, digest, (i * 32 <= output_len) ? 32 : output_len - (i - 1) * 32);
-    
-    /* Additional iterations */
-    unsigned char work[32];
-    memcpy(work, digest, 32);
-    
-    for (int j = 1; j < iterations; j++) {
-      hmac_sha256((const unsigned char*)password, strlen(password), work, 32, digest);
-      memcpy(work, digest, 32);
-      
-      /* XOR result into output */
-      for (size_t k = 0; k < 32 && (i - 1) * 32 + k < output_len; k++) {
-        output[(i - 1) * 32 + k] ^= digest[k];
-      }
-    }
-  }
+  PKCS5_PBKDF2_HMAC(password, strlen(password), salt, (int)salt_len,
+                    iterations, EVP_sha256(), (int)output_len, output);
 }
 
 /* Generate a random salt */
@@ -326,6 +244,8 @@ int verify_password(const char* password, const char* password_hash) {
        password ? password : "NULL", 
        password_hash ? password_hash : "NULL");
   
+  LOG_DEBUG("verify_password called - hash format: %.10s...", password_hash);
+  
   if (!password || !password_hash) {
     LOG_DEBUG("verify_password - NULL password or hash.");
     return 0;
@@ -373,7 +293,8 @@ int verify_password(const char* password, const char* password_hash) {
         return 1;
     }
     
-    LOG_DEBUG("PBKDF2 password verification failed");
+    LOG_DEBUG("PBKDF2 password verification failed - computed: %.10s... stored: %.10s...", 
+              computed_hex, stored_hash_hex);
     return 0;
   } else {
     /* Legacy hash format - attempt to match directly */

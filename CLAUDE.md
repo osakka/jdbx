@@ -50,10 +50,17 @@ result = json_parse(doc_str);                  // Independent JSON objects
 ```
 
 ### 📚 **DOCUMENTATION & ARCHITECTURE**
-- **ADR-029**: Unified Threading Model architectural decision record
+- **ADR-043**: Unified Threading Model architectural decision record
+- **ADR-044**: JSON String Storage Fix for consistency between insert/query operations
 - **Threading Guidelines**: Comprehensive development guidelines for thread safety
 - **Test Suite**: Complete concurrent testing framework in `tests/concurrent/`
 - **Zero Ambiguity**: Clear patterns for all future threading requirements
+
+### 🔧 **CRITICAL JSON STORAGE FIX (Applied June 22, 2025)**
+- **Issue**: `storage_insert_document` was storing JSON object pointers while queries expected strings
+- **Impact**: All documents appeared as "invalid or corrupted", preventing authentication
+- **Fix**: Updated insert function to store JSON strings, matching query expectations
+- **Result**: Authentication and document operations now work correctly
 
 ## 🔒 CRITICAL JWT SECURITY FIX (v7.0.3)
 
