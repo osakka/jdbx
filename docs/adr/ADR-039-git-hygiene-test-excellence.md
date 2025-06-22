@@ -1,8 +1,9 @@
 # ADR-039: Git Hygiene and Test Excellence
 
-Date: June 21, 2025
-Status: Accepted
-Author: JDBX Development Team
+**Date**: June 21, 2025  
+**Status**: Accepted  
+**Version**: 7.0.1  
+**Impact**: Process
 
 ## Context
 

@@ -1,9 +1,9 @@
 # Installation Guide
 
-**Version**: 6.5.0  
-**Last Updated**: June 17, 2025
+**Version**: 7.0.1  
+**Last Updated**: June 22, 2025
 
-This guide covers installing JDBX v6.5.0 with revolutionary memory management, authentication security excellence, and unified documents architecture.
+This guide covers installing JDBX v7.0.1 with memory checkpoint safety enhancements, integrated WAL architecture, revolutionary memory management, authentication security excellence, and unified documents architecture.
 
 ## System Requirements
 
@@ -101,7 +101,7 @@ JDBX uses a three-tier configuration system:
 3. **Database Configuration** (highest priority)
 
 #### Environment Configuration File
-Create `/opt/jdbx/share/config/jdbx.env`:
+Create `/opt/jdbx/build/var/jdbx.env`:
 ```bash
 # Database configuration
 JDBX_DB_PATH=/opt/jdbx/build/var/jdbx.jdbx

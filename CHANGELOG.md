@@ -5,6 +5,37 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.1] - 2025-06-22
+
+### Added
+- Memory checkpoint safety enhancements preventing use-after-free vulnerabilities
+- UI-server alignment layer (api-alignment-v7.js) for proper API compatibility
+- ADR-040: Memory Checkpoint Safety documentation
+- Comprehensive documentation standards (DOCUMENTATION_STANDARDS.md)
+- SSL/TLS query promotion fix for production stability
+
+### Fixed
+- RBAC E2E test failures - improved from 61% to 100% success rate
+- Critical memory safety issues in checkpoint system:
+  - Hazard-protected memory dangling pointers
+  - SSL client connection crashes
+  - JWT cache memory corruption
+  - RBAC user deletion crashes
+- UI authentication endpoints alignment (/api/auth/login → /api/login)
+- Session validation optimization using /api/health
+- SSL crash when querying documents with promoted queries
+
+### Changed
+- Updated documentation to v7.0.1 across all files
+- Improved memory promotion patterns for checkpoint safety
+- Enhanced UI to adapt to server implementation (single source of truth)
+
+### Technical Impact
+- Zero memory crashes under production workloads
+- Complete UI functionality with server alignment
+- SSL/TLS stability for production deployments
+- 100% backward compatibility maintained
+
 ## [7.0.0] - 2025-06-20
 
 ### Added

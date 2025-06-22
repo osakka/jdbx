@@ -19,14 +19,7 @@ cd /opt/jdbx/src
 make
 ```
 
-## Step 2: Start the Server
-
-```bash
-cd /opt/jdbx
-build/jdbx_runtime.sh start
-```
-
-## Step 3: Configure Bootstrap Admin
+## Step 2: Configure Bootstrap Admin
 
 ```bash
 export JDBX_BOOTSTRAP_ADMIN_USER=admin
@@ -34,10 +27,17 @@ export JDBX_BOOTSTRAP_ADMIN_PASS=secure123456789
 export JDBX_DEFAULT_ADMIN_EMAIL=admin@example.com
 ```
 
+## Step 3: Start the Server
+
+```bash
+cd /opt/jdbx
+build/jdbx_runtime.sh start
+```
+
 ## Step 4: Login and Get Token
 
 ```bash
-curl -X POST https://localhost:5000/api/auth/login \
+curl -X POST https://localhost:5000/api/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",
@@ -85,7 +85,7 @@ You now have a working JDBX server with:
 ## Troubleshooting
 
 **Server won't start?**
-- Check logs: `cat /opt/jdbx/var/jdbxd.log`
+- Check logs: `cat /opt/jdbx/build/var/jdbx.log`
 - Verify port 5000 is available: `netstat -an | grep 5000`
 
 **Authentication fails?**

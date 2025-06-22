@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 6.5.12  
-**Last Updated**: June 18, 2025  
+**Version**: 7.0.1  
+**Last Updated**: June 22, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v6.5.12 with HTTP protocol compliance, enterprise-grade authentication security excellence, collection ownership protection, and revolutionary memory management.
+Complete REST API documentation for JDBX v7.0.1 with memory checkpoint safety enhancements, integrated WAL architecture, HTTP protocol compliance, enterprise-grade authentication security excellence, collection ownership protection, and revolutionary memory management.
 
 ## Authentication
 
@@ -12,11 +12,11 @@ JDBX uses JWT (JSON Web Tokens) for authentication with database-backed RBAC.
 
 ### Login
 ```http
-POST /api/auth/login
+POST /api/login
 Content-Type: application/json
 
 {
-  "username": "admin",
+  "username": "admin", 
   "password": "secure_password"
 }
 ```
@@ -73,8 +73,28 @@ Regular Users:
 
 ### Token Refresh
 ```http
-POST /api/auth/refresh
+POST /api/refresh
 Authorization: Bearer <current_token>
+```
+
+### Change Password
+```http
+PUT /api/auth/password
+Authorization: Bearer <current_token>
+Content-Type: application/json
+
+{
+  "current_password": "old_password",
+  "new_password": "new_secure_password"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
+}
 ```
 
 ## Document Operations
