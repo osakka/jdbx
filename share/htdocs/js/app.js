@@ -1456,9 +1456,17 @@ async function deleteSpecificLibrary(libraryName) {
 async function switchLibrary(libraryName) {
     try {
         // First, make API call to switch library on server side
-        await apiRequest(`/api/auth/library/${libraryName}`, {
+        const response = await apiRequest(`/api/auth/library/${libraryName}`, {
             method: 'POST'
         });
+        
+        // CRITICAL: Extract and update the JWT token from the response
+        const data = response.data || response;
+        if (data.token) {
+            // Update both localStorage and the global authToken variable
+            localStorage.setItem('jdbx_auth_token', data.token);
+            authToken = data.token;
+        }
         
         // Update local state only after successful server switch
         currentLibrary = libraryName;
