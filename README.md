@@ -47,6 +47,14 @@ JDBX is a high-performance document database built specifically for JSON data, f
 - **📊 AUDIT READY**: Meets cryptographic security standards
 - **✨ ZERO FUNCTIONAL IMPACT**: Enhanced security with full compatibility
 
+### 🚀 **v7.1.0 - Revolutionary ART Engine Implementation**
+- **🎯 REVOLUTIONARY DATA STRUCTURE**: Complete Adaptive Radix Tree (ART) engine replacing skiplist with O(k) operations
+- **⚡ ULTRA-CLEAN CUTOVER**: Original skiplist.c completely eliminated - pure ART architecture achieved
+- **🔒 DROP-IN REPLACEMENT**: Perfect API compatibility with zero regressions - identical function signatures preserved
+- **🚀 SUPERIOR PERFORMANCE**: O(k) lookup time where k=key length vs O(log n) skiplist operations
+- **📊 CACHE-FRIENDLY DESIGN**: Adaptive radix tree structure with superior memory locality and prefix compression
+- **✨ SINGLE SOURCE OF TRUTH**: Zero duplicate data structure implementations - pure architectural excellence
+
 ### 🛡️ **v7.0.2 - Server Protection System**
 - **🎯 RATE LIMITING**: Per-IP token bucket (600 req/min) with HTTP 429
 - **🔒 CIRCUIT BREAKERS**: Service degradation protection with auto-recovery

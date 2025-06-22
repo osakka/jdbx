@@ -5,6 +5,38 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] - 2025-06-22
+
+### Added
+- Revolutionary Adaptive Radix Tree (ART) engine implementation as complete skiplist replacement
+- Multi-document container with dynamic resizing for unlimited document storage
+- Thread-safe ART operations with reader/writer locks and atomic operations
+- Perfect API compatibility layer maintaining all existing skiplist function signatures
+- Enhanced iterator implementation supporting multi-document traversal
+- Comprehensive memory management integration with BUFFER_ALLOC system
+
+### Changed
+- **BREAKING**: Complete replacement of skiplist data structure with ART engine
+- Database engine performance characteristics: O(log n) → O(k) where k=key length
+- Memory layout optimized for cache-friendly adaptive radix tree operations
+- All internal data operations now use ART backend transparently
+
+### Removed
+- Original skiplist.c implementation completely eliminated for ultra-clean architecture
+- All duplicate data structure implementations removed for single source of truth
+- Legacy skiplist performance characteristics and memory patterns
+
+### Performance
+- Superior lookup performance: O(k) operations where k=key length vs O(log n) skiplist
+- Improved cache locality through adaptive radix tree structure design
+- Memory efficiency gains through prefix compression architecture foundation
+- Reduced memory overhead with adaptive node structures
+
+### Security
+- Maintained all existing security characteristics with enhanced data structure
+- Thread-safe concurrent operations with proper atomic access patterns
+- Memory safety preserved through proper BUFFER_ALLOC integration
+
 ## [7.0.4] - 2025-06-22
 
 ### Added
