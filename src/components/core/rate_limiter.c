@@ -27,19 +27,27 @@ rate_limiter_t* rate_limiter_init(database_t* db) {
         return NULL;
     }
     
+    /* Initialize mutex for thread safety */
+    if (pthread_mutex_init(&limiter->mutex, NULL) != 0) {
+        LOG_ERROR("Failed to initialize rate limiter mutex");
+        BUFFER_FREE(limiter);
+        return NULL;
+    }
+    
     limiter->db = db;
     limiter->last_cleanup = time(NULL);
     
     // Load configuration from database or use defaults
     rate_limiter_reload_config(limiter);
     
-    LOG_INFO("Rate limiter initialized with database backend");
+    LOG_INFO("Rate limiter initialized with database backend and thread safety");
     return limiter;
 }
 
 // Destroy rate limiter
 void rate_limiter_destroy(rate_limiter_t* limiter) {
     if (limiter) {
+        pthread_mutex_destroy(&limiter->mutex);
         BUFFER_FREE(limiter);
     }
 }
@@ -107,6 +115,9 @@ void rate_limiter_reload_config(rate_limiter_t* limiter) {
 // Check if request is allowed (token bucket algorithm)
 int rate_limiter_check_request(rate_limiter_t* limiter, const char* ip_address) {
     if (!limiter || !limiter->db || !ip_address) return 1; // Allow if not configured
+    
+    /* CRITICAL: Lock mutex for thread-safe rate limiting */
+    pthread_mutex_lock(&limiter->mutex);
     
     // Query for existing rate limit document for this IP
     json_value_t* query = json_create_object();
@@ -186,10 +197,12 @@ int rate_limiter_check_request(rate_limiter_t* limiter, const char* ip_address) 
             limiter->last_cleanup = now;
         }
         
+        pthread_mutex_unlock(&limiter->mutex);
         return 1; // Request allowed
     }
     
     LOG_WARNING("Rate limit exceeded for IP: %s (tokens: %.2f)", ip_address, tokens);
+    pthread_mutex_unlock(&limiter->mutex);
     return 0; // Request denied
 }
 
@@ -205,13 +218,18 @@ void rate_limiter_record_request(rate_limiter_t* limiter, const char* ip_address
 circuit_state_t circuit_breaker_get_state(rate_limiter_t* limiter, const char* service_name) {
     if (!limiter || !limiter->db || !service_name) return CIRCUIT_CLOSED;
     
+    pthread_mutex_lock(&limiter->mutex);
+    
     // Create document ID for this service's circuit breaker
     char doc_id[256];
     snprintf(doc_id, sizeof(doc_id), "circuit-%s", service_name);
     
     // Get circuit breaker document
     json_value_t* doc = storage_get_document(limiter->db, doc_id);
-    if (!doc) return CIRCUIT_CLOSED; // No document means circuit is closed
+    if (!doc) {
+        pthread_mutex_unlock(&limiter->mutex);
+        return CIRCUIT_CLOSED; // No document means circuit is closed
+    }
     
     json_value_t* state_val = json_object_get(doc, "state");
     json_value_t* last_failure_val = json_object_get(doc, "last_failure");
@@ -219,6 +237,7 @@ circuit_state_t circuit_breaker_get_state(rate_limiter_t* limiter, const char* s
     
     if (!state_val) {
         // json_free(doc); // CHECKPOINT: json_free(doc);
+        pthread_mutex_unlock(&limiter->mutex);
         return CIRCUIT_CLOSED;
     }
     
@@ -255,6 +274,7 @@ circuit_state_t circuit_breaker_get_state(rate_limiter_t* limiter, const char* s
     }
     
     // json_free(doc); // CHECKPOINT: json_free(doc);
+    pthread_mutex_unlock(&limiter->mutex);
     return (circuit_state_t)state;
 }
 

@@ -682,15 +682,20 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     size_t value_len;
     
     while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&doc_ptr_data, &value_len)) {
-        if (!doc_ptr_data || value_len != sizeof(json_value_t*)) continue;
+        if (!doc_ptr_data || value_len == 0) continue;
         
-        /* CRITICAL SAFETY: Validate pointer before dereferencing to prevent segfaults */
+        /* CRITICAL THREAD SAFETY: Parse JSON string stored in skiplist */
         json_value_t* doc = NULL;
         if (doc_ptr_data) {
-            doc = *(json_value_t**)doc_ptr_data;
+            // We now store JSON strings, not pointers
+            char* json_str = (char*)doc_ptr_data;
+            doc = json_parse(json_str);
         }
         if (!doc || doc->type != JSON_OBJECT) {
             LOG_DEBUG("Skipping invalid or corrupted document in storage iteration");
+            if (doc) {
+                /* CHECKPOINT: json_free(doc); */
+            }
             continue;
         }
         
@@ -759,7 +764,10 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
             }
         }
         
-        // Reference counting handles memory lifecycle automatically
+        /* CRITICAL: Free the parsed JSON document */
+        if (doc) {
+            /* CHECKPOINT: json_free(doc); */
+        }
     }
     
     skiplist_iterator_destroy(iter);
@@ -1080,9 +1088,16 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     (void)db; // Use global database
     
     // UNIFIED DOCUMENTS: Store ALL documents directly in the single unified collection
-    // Generate UUID for document
+    // Generate UUID for document - use simple thread-safe approach
     char uuid[64];
-    snprintf(uuid, sizeof(uuid), "doc-%ld-%u", time(NULL), rand());
+    unsigned int random_val;
+    
+    // Use current time and thread ID for uniqueness
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    random_val = (unsigned int)(ts.tv_nsec ^ (uintptr_t)pthread_self() ^ 0x54321);
+    
+    snprintf(uuid, sizeof(uuid), "doc-%ld-%u", time(NULL), random_val);
     
     // Create document copy with mandatory unified fields
     json_value_t* doc_copy = json_deep_copy(document);
@@ -1133,22 +1148,31 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
     pthread_rwlock_wrlock(&coll->lock);
     pthread_rwlock_unlock(&g_db.lock);
     
-    // BAR RAISING: Buffer pool managed JSON storage - allocate persistent pointer
-    json_value_t** doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
-    if (!doc_ptr) {
+    // CRITICAL THREAD SAFETY: Store serialized JSON string instead of JSON object pointer
+    // This prevents concurrent access to JSON structures during deep copy operations
+    char* doc_str = json_stringify(doc_copy);
+    if (!doc_str) {
         pthread_rwlock_unlock(&coll->lock);
         /* CHECKPOINT: json_free(doc_copy); */
         return NULL;
     }
-    *doc_ptr = json_deep_copy(doc_copy);
+    
+    // Store the serialized string in the skiplist
+    size_t str_len = strlen(doc_str) + 1;
+    char* stored_str = (char*)BUFFER_ALLOC(str_len);
+    if (!stored_str) {
+        BUFFER_FREE(doc_str);
+        pthread_rwlock_unlock(&coll->lock);
+        /* CHECKPOINT: json_free(doc_copy); */
+        return NULL;
+    }
+    memcpy(stored_str, doc_str, str_len);
+    BUFFER_FREE(doc_str);
     
     // CRITICAL: Mark skiplist documents as hazard-protected
-    // The skiplist uses hazard pointers for safe memory reclamation
-    // Mark both the pointer storage and the document as hazard-protected
-    memory_mark_hazard_protected(doc_ptr, NULL);
-    memory_mark_hazard_protected(*doc_ptr, NULL);
+    memory_mark_hazard_protected(stored_str, NULL);
     
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, doc_ptr, sizeof(json_value_t*));
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, stored_str, str_len);
     
     pthread_rwlock_unlock(&coll->lock);
     
@@ -1250,17 +1274,18 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
     // Find existing document in unified collection
     size_t value_len;
     void* raw_data = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
-    if (!raw_data || value_len != sizeof(json_value_t*)) {
+    if (!raw_data || value_len == 0) {
         if (raw_data) BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
     
-    // Extract JSON object from buffer pool managed pointer
-    json_value_t** doc_ptr = (json_value_t**)raw_data;
-    json_value_t* existing_doc = *doc_ptr;
+    // CRITICAL THREAD SAFETY: Parse JSON string from skiplist
+    char* json_str = (char*)raw_data;
+    json_value_t* existing_doc = json_parse(json_str);
+    BUFFER_FREE(raw_data);  // Free the search result immediately after parsing
+    
     if (!existing_doc) {
-        BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
@@ -1302,56 +1327,44 @@ json_value_t* db_update_document(database_t* db, const char* library, const char
     // Update modified timestamp
     json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
     
-    // BAR RAISING: Buffer pool managed JSON storage - atomic replace with proper lifecycle management
-    // 1. Get reference to old data before deletion
-    size_t old_ptr_size;
-    void* old_ptr_data = skiplist_search(coll->documents, id, strlen(id) + 1, &old_ptr_size);
-    json_value_t** old_doc_ptr = NULL;
-    json_value_t* old_json = NULL;
-    
-    if (old_ptr_data && old_ptr_size == sizeof(json_value_t*)) {
-        old_doc_ptr = (json_value_t**)old_ptr_data;
-        old_json = *old_doc_ptr;
-    }
-    
-    // 2. Allocate new buffer pool managed pointer  
-    json_value_t** new_doc_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
-    if (!new_doc_ptr) {
-        if (old_ptr_data) BUFFER_FREE(old_ptr_data);  // Free the second search result
+    // CRITICAL THREAD SAFETY: Serialize updated document to JSON string
+    char* updated_str = json_stringify(updated_doc);
+    if (!updated_str) {
         pthread_rwlock_unlock(&coll->lock);
         /* CHECKPOINT: json_free(updated_doc); */
+        /* CHECKPOINT: json_free(existing_doc); */
         return NULL;
     }
-    *new_doc_ptr = json_deep_copy(updated_doc);
     
-    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
-    // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(new_doc_ptr);     // Promote the pointer storage
-    memory_promote(*new_doc_ptr);    // Promote the document itself
+    // Store the new JSON string
+    size_t str_len = strlen(updated_str) + 1;
+    char* stored_str = (char*)BUFFER_ALLOC(str_len);
+    if (!stored_str) {
+        BUFFER_FREE(updated_str);
+        pthread_rwlock_unlock(&coll->lock);
+        /* CHECKPOINT: json_free(updated_doc); */
+        /* CHECKPOINT: json_free(existing_doc); */
+        return NULL;
+    }
+    memcpy(stored_str, updated_str, str_len);
+    BUFFER_FREE(updated_str);
+    
+    // CRITICAL: Mark as hazard-protected
+    memory_mark_hazard_protected(stored_str, NULL);
     
     // 3. Atomic replace in skiplist
     skiplist_delete(coll->documents, id, strlen(id) + 1);
-    skiplist_insert(coll->documents, id, strlen(id) + 1, new_doc_ptr, sizeof(json_value_t*));
-    
-    // 4. Free old resources after successful replacement
-    if (old_json) {
-        /* CHECKPOINT: json_free(old_json); */
-    }
-    if (old_doc_ptr) {
-        BUFFER_FREE(old_doc_ptr);
-    }
-    if (old_ptr_data) {
-        BUFFER_FREE(old_ptr_data);  // Free the second search result
-    }
+    skiplist_insert(coll->documents, id, strlen(id) + 1, stored_str, str_len);
     
     pthread_rwlock_unlock(&coll->lock);
     
-    BUFFER_FREE(raw_data);  // Free the first search result allocation
-    
     LOG_INFO("Updated document '%s' in unified collection (library='%s', type='%s')", id, library, collection);
     
-    // Note: old_doc leaked to prevent race conditions (as per existing pattern)
-    return json_deep_copy(updated_doc);
+    // Return a copy and free the originals
+    json_value_t* result = json_deep_copy(updated_doc);
+    /* CHECKPOINT: json_free(existing_doc); */
+    /* CHECKPOINT: json_free(updated_doc); */
+    return result;
 }
 
 int db_delete_document(database_t* db, const char* library, const char* collection, const char* id) {
@@ -1377,15 +1390,18 @@ int db_delete_document(database_t* db, const char* library, const char* collecti
     // Find and verify document in unified collection
     size_t value_len;
     void* raw_data = skiplist_search(coll->documents, id, strlen(id) + 1, &value_len);
-    if (!raw_data || value_len != sizeof(json_value_t*)) {
+    if (!raw_data || value_len == 0) {
         if (raw_data) BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return 0;
     }
     
-    json_value_t* existing_doc = *(json_value_t**)raw_data;
+    // CRITICAL THREAD SAFETY: Parse JSON string from skiplist
+    char* json_str = (char*)raw_data;
+    json_value_t* existing_doc = json_parse(json_str);
+    BUFFER_FREE(raw_data);  // Free the search result immediately after parsing
+    
     if (!existing_doc) {
-        BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return 0;
     }
@@ -1396,16 +1412,14 @@ int db_delete_document(database_t* db, const char* library, const char* collecti
     if (!doc_library || !doc_type || 
         strcmp(json_get_string(doc_library), library) != 0 ||
         strcmp(json_get_string(doc_type), collection) != 0) {
-        BUFFER_FREE(raw_data);  // Free the search result
+        /* CHECKPOINT: json_free(existing_doc); */
         pthread_rwlock_unlock(&coll->lock);
         return 0;
     }
     
-    // Delete document from unified collection and free JSON object
+    // Delete document from unified collection
     /* CHECKPOINT: json_free(existing_doc); */
     int result = skiplist_delete(coll->documents, id, strlen(id) + 1);
-    
-    BUFFER_FREE(raw_data);  // Free the search result
     pthread_rwlock_unlock(&coll->lock);
     
     if (result) {
@@ -1487,15 +1501,17 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
     LOG_DEBUG("Starting document iteration in unified collection");
     
     while (skiplist_iterator_next(iter, (void**)&key, &key_len, (void**)&ref_data, &value_len)) {
-        if (!ref_data || value_len != sizeof(json_value_t*)) continue;
+        if (!ref_data || value_len == 0) continue;
         
-        /* CRITICAL SAFETY: Validate pointer before dereferencing to prevent segfaults */
-        json_value_t* doc = NULL;
-        if (ref_data) {
-            doc = *(json_value_t**)ref_data;
-        }
+        // CRITICAL THREAD SAFETY: Parse JSON string instead of accessing JSON object pointer
+        // This prevents concurrent access to JSON structures during deep copy operations
+        char* doc_str = (char*)ref_data;
+        json_value_t* doc = json_parse(doc_str);
         if (!doc || doc->type != JSON_OBJECT) {
             LOG_DEBUG("Skipping invalid or corrupted document in iteration");
+            if (doc) {
+                /* CHECKPOINT: json_free(doc); */
+            }
             continue;
         }
         
@@ -1504,6 +1520,7 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
         if (!doc_library || strcmp(json_get_string(doc_library), library) != 0) {
             LOG_DEBUG("Document filtered out by library: wanted='%s', got='%s'", 
                       library, doc_library ? json_get_string(doc_library) : "(null)");
+            /* CHECKPOINT: json_free(doc); */
             continue;
         }
         
@@ -1553,6 +1570,9 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
                 }
             }
         }
+        
+        // Clean up the parsed JSON document
+        /* CHECKPOINT: json_free(doc); */
     }
     
     skiplist_iterator_destroy(iter);
@@ -1712,10 +1732,13 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
     
     int indexed_count = 0;
     while (skiplist_iterator_next(doc_iter, &doc_key, &doc_key_len, &doc_value, &doc_value_len)) {
-        if (!doc_value || doc_value_len != sizeof(json_value_t*)) continue;
+        if (!doc_value || doc_value_len == 0) continue;
         
         const char* doc_id = (const char*)doc_key;
-        json_value_t* doc = *(json_value_t**)doc_value;
+        
+        // CRITICAL THREAD SAFETY: Parse JSON string instead of accessing JSON object pointer
+        char* json_str = (char*)doc_value;
+        json_value_t* doc = json_parse(json_str);
         if (!doc) continue;
         
         /* Extract field value for indexing */
@@ -1730,6 +1753,8 @@ index_t* db_create_index(database_t* db, const char* collection_path, const char
                 indexed_count++;
             }
         }
+        
+        /* CHECKPOINT: json_free(doc); */
     }
     
     skiplist_iterator_destroy(doc_iter);
@@ -1807,9 +1832,16 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     pthread_rwlock_wrlock(&coll->lock);
     pthread_rwlock_unlock(&g_db.lock);
     
-    // Generate UUID
+    // Generate UUID - use simple thread-safe approach
     char uuid[64];
-    snprintf(uuid, sizeof(uuid), "doc-%ld-%u", time(NULL), rand());
+    unsigned int random_val;
+    
+    // Use current time and thread ID for uniqueness
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    random_val = (unsigned int)(ts.tv_nsec ^ (uintptr_t)pthread_self());
+    
+    snprintf(uuid, sizeof(uuid), "doc-%ld-%u", time(NULL), random_val);
     
     // Create document copy preserving ALL existing fields
     json_value_t* doc_copy = json_deep_copy(document);
@@ -1875,15 +1907,18 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     // Find existing document
     size_t value_len;
     void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
-    if (!raw_data || value_len != sizeof(json_value_t*)) {
+    if (!raw_data || value_len == 0) {
         if (raw_data) BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
     
-    json_value_t* existing_doc = *(json_value_t**)raw_data;
+    // CRITICAL THREAD SAFETY: Parse JSON string from skiplist
+    char* json_str = (char*)raw_data;
+    json_value_t* existing_doc = json_parse(json_str);
+    BUFFER_FREE(raw_data);  // Free the search result immediately after parsing
+    
     if (!existing_doc) {
-        BUFFER_FREE(raw_data);  // Free the search result
         pthread_rwlock_unlock(&coll->lock);
         return NULL;
     }
@@ -1912,32 +1947,43 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     // Update timestamp
     json_object_set(updated_doc, "modified_at", json_create_integer(time(NULL)));
     
-    // BAR RAISING: Replace JSON object - skiplist manages pointer lifecycle
-    // CRITICAL FIX: Must allocate persistent pointer storage, not use stack address!
-    json_value_t** updated_ptr = (json_value_t**)BUFFER_ALLOC(sizeof(json_value_t*));
-    if (!updated_ptr) {
-        BUFFER_FREE(raw_data);
+    // CRITICAL THREAD SAFETY: Serialize updated document to JSON string
+    char* updated_str = json_stringify(updated_doc);
+    if (!updated_str) {
         pthread_rwlock_unlock(&coll->lock);
         /* CHECKPOINT: json_free(updated_doc); */
+        /* CHECKPOINT: json_free(existing_doc); */
         return NULL;
     }
-    *updated_ptr = json_deep_copy(updated_doc);
     
-    // CRITICAL: Promote both the pointer storage AND the document to survive checkpoint rewinds
-    // Documents in the skiplist must remain valid across checkpoint boundaries
-    memory_promote(updated_ptr);     // Promote the pointer storage
-    memory_promote(*updated_ptr);    // Promote the document itself
+    // Store the new JSON string
+    size_t str_len = strlen(updated_str) + 1;
+    char* stored_str = (char*)BUFFER_ALLOC(str_len);
+    if (!stored_str) {
+        BUFFER_FREE(updated_str);
+        pthread_rwlock_unlock(&coll->lock);
+        /* CHECKPOINT: json_free(updated_doc); */
+        /* CHECKPOINT: json_free(existing_doc); */
+        return NULL;
+    }
+    memcpy(stored_str, updated_str, str_len);
+    BUFFER_FREE(updated_str);
+    
+    // CRITICAL: Mark as hazard-protected
+    memory_mark_hazard_protected(stored_str, NULL);
     
     skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
-    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, updated_ptr, sizeof(json_value_t*));
-    /* CHECKPOINT: json_free(existing_doc); */  // Free old JSON object
+    skiplist_insert(coll->documents, uuid, strlen(uuid) + 1, stored_str, str_len);
     
-    BUFFER_FREE(raw_data);  // Free the search result
     pthread_rwlock_unlock(&coll->lock);
     
     LOG_INFO("Storage: Updated document '%s' directly in unified collection", uuid);
     
-    return json_deep_copy(updated_doc);
+    // Return a copy and free the originals
+    json_value_t* result = json_deep_copy(updated_doc);
+    /* CHECKPOINT: json_free(existing_doc); */
+    /* CHECKPOINT: json_free(updated_doc); */
+    return result;
 }
 
 /**
@@ -1969,32 +2015,18 @@ int storage_delete_document(database_t* db, const char* uuid) {
     // With write lock held, search for the document first
     size_t value_len;
     void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
-    if (!raw_data || value_len != sizeof(json_value_t*)) {
+    if (!raw_data || value_len == 0) {
+        if (raw_data) BUFFER_FREE(raw_data);
         pthread_rwlock_unlock(&coll->lock);
         LOG_DEBUG("Storage: Document '%s' not found", uuid);
         return 0;
     }
     
-    // Extract the document pointer before deletion
-    json_value_t** doc_ptr = (json_value_t**)raw_data;
-    if (!doc_ptr || !*doc_ptr) {
-        BUFFER_FREE(raw_data);  // Free the search result
-        pthread_rwlock_unlock(&coll->lock);
-        LOG_ERROR("Storage: Invalid document pointer for UUID '%s'", uuid);
-        return 0;
-    }
-    
-    // Extract pointers before deletion
-    json_value_t* doc = *doc_ptr;
-    void* ptr_to_free = doc_ptr;  // The pointer storage from raw_data
-    (void)doc;         // Will be used when hazard pointer system is fully integrated
-    (void)ptr_to_free; // Will be used when hazard pointer system is fully integrated
+    // For deletion, we don't need to parse the JSON, just verify it exists
+    BUFFER_FREE(raw_data);  // Free the search result
     
     // Now delete from skiplist while we still hold the write lock
     int result = skiplist_delete(coll->documents, uuid, strlen(uuid) + 1);
-    
-    // 🔧 FIX: Free the search result allocation
-    BUFFER_FREE(raw_data);  // This was allocated by skiplist_search
     
     // 🔧 FIX: Defer memory cleanup to prevent use-after-free
     if (result) {
@@ -2051,11 +2083,15 @@ json_value_t* storage_get_document(database_t* db, const char* uuid) {
     void* raw_data = skiplist_search(coll->documents, uuid, strlen(uuid) + 1, &value_len);
     json_value_t* result = NULL;
     
-    if (raw_data && value_len == sizeof(json_value_t*)) {
-        json_value_t* doc = *(json_value_t**)raw_data;
-        if (doc) {
-            result = json_deep_copy(doc);
+    if (raw_data && value_len > 0) {
+        // CRITICAL THREAD SAFETY: Parse JSON string instead of accessing JSON object pointer
+        // This prevents concurrent access to JSON structures during deep copy operations
+        char* doc_str = (char*)raw_data;
+        result = json_parse(doc_str);
+        if (result) {
             LOG_DEBUG("Storage: Found document '%s' in unified collection", uuid);
+        } else {
+            LOG_ERROR("Storage: Failed to parse JSON for document '%s'", uuid);
         }
         BUFFER_FREE(raw_data);  // Free the search result allocation
     } else {

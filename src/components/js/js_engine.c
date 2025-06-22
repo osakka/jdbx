@@ -166,6 +166,13 @@ js_engine_t* js_engine_init(database_t *db) {
     return NULL;
   }
   
+  /* Initialize mutex for thread safety */
+  if (pthread_mutex_init(&engine->mutex, NULL) != 0) {
+    LOG_ERROR("Failed to initialize JavaScript engine mutex");
+    BUFFER_FREE(engine);
+    return NULL;
+  }
+  
   /* Initialize fields */
   engine->db = db;
   engine->last_error = NULL;
@@ -255,6 +262,9 @@ void js_engine_free(js_engine_t *engine) {
       engine->rt = NULL;
     }
     
+    /* Destroy mutex */
+    pthread_mutex_destroy(&engine->mutex);
+    
     /* Free the engine structure itself */
     BUFFER_FREE(engine);
   }
@@ -269,8 +279,12 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     return 0;
   }
   
+  /* CRITICAL: Lock mutex for thread-safe JavaScript execution */
+  pthread_mutex_lock(&engine->mutex);
+  
   if (!engine->ctx) {
     js_set_error(engine, "JavaScript context not initialized");
+    pthread_mutex_unlock(&engine->mutex);
     return 0;
   }
   
@@ -315,6 +329,7 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
     
     JS_FreeValue(engine->ctx, exception);
     JS_FreeValue(engine->ctx, val);
+    pthread_mutex_unlock(&engine->mutex);
     return 0;
   }
   
@@ -343,6 +358,7 @@ int js_engine_eval(js_engine_t *engine, const char *script, char **result) {
   }
   
   JS_FreeValue(engine->ctx, val);
+  pthread_mutex_unlock(&engine->mutex);
   return 1;
 }
 

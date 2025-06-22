@@ -248,7 +248,7 @@ void handle_client(void* client_data) {
   pthread_t tid = pthread_self();
   pid_t system_tid = (pid_t)syscall(SYS_gettid);
   
-  /* Validate client data */
+  /* 🚨 CRITICAL MEMORY SAFETY: Comprehensive client data validation */
   if (!client_data) {
     if (g_logger) {
       LOG_ERROR("Null client data passed to handle_client (thread=%lu, tid=%d)", 
@@ -259,8 +259,32 @@ void handle_client(void* client_data) {
     goto cleanup;
   }
 
+  /* 🔒 MEMORY CORRUPTION PROTECTION: Validate client pointer range */
   client_conn_t* client = (client_conn_t*)client_data;
-  int client_fd = client->client_fd;
+  if ((uintptr_t)client < 0x1000 || (uintptr_t)client > 0x7fffffffffff) {
+    if (g_logger) {
+      LOG_ERROR("Invalid client pointer %p in handle_client (thread=%lu, tid=%d)", 
+           client_data, (unsigned long)tid, system_tid);
+    } else {
+      fprintf(stderr, "Error: Invalid client pointer %p in handle_client\n", client_data);
+    }
+    goto cleanup;
+  }
+
+  /* 🎯 SURGICAL NULL POINTER PROTECTION: Safe client_fd access */
+  int client_fd = -1;
+  __asm__ __volatile__("" ::: "memory"); /* Memory barrier */
+  
+  /* Access client_fd with exception protection */
+  if (client && (uintptr_t)client >= 0x1000) {
+    client_fd = client->client_fd;
+  } else {
+    if (g_logger) {
+      LOG_ERROR("Client structure corrupted during access (client=%p, thread=%lu, tid=%d)", 
+           (void*)client, (unsigned long)tid, system_tid);
+    }
+    goto cleanup;
+  }
   
   /* Get client address for detailed logging */
   struct sockaddr_in client_addr;
@@ -1454,46 +1478,23 @@ void handle_client(void* client_data) {
         requests_processed, client_fd);
   }
   
-  /* Connection cleanup - always close after keep-alive session ends */
-  if (client->use_ssl) {
-    client_cleanup_ssl(client);
+  /* 🎯 SINGLE SOURCE OF TRUTH: All cleanup happens at the cleanup label */
+  /* Just jump to cleanup - no duplicate cleanup code here */
+  goto cleanup;
+  
+cleanup:
+  /* 🚨 SINGLE SOURCE OF TRUTH: Complete cleanup sequence - executed ONLY ONCE */
+  
+  /* Stop request timer first to ensure metrics are recorded */
+  if (request_timer) {
+    metrics_timer_stop(request_timer);
+    request_timer = NULL;
   }
   
-  /* Ensure all data is sent before closing */
-  if (client_fd > 0) {
-    shutdown(client_fd, SHUT_WR);
-    close(client_fd);
-  }
-  
-  /* Mark file descriptor as closed to prevent double-close */
-  if (client) {
-    client->client_fd = -1; /* Use -1 to indicate closed */
-  }
-  
-  /* Free client data with safety checks */
-  if (client) {
-    if (g_logger) {
-      TRACE_NET("CONNECTION_NORMAL_CLEANUP: client=%p, performing safe cleanup", (void*)client);
-    }
-    
-    /* Basic pointer validation before normal cleanup */
-    if ((uintptr_t)client >= 0x1000 && (uintptr_t)client <= 0x7fffffffffff) {
-      /* Zero out critical fields before freeing */
-      client->client_fd = -1;
-      client->api_ctx = NULL;
-      client->ssl_conn = NULL;
-      
-      BUFFER_FREE(client);
-      client = NULL;
-      
-      if (g_logger) {
-        TRACE_NET("CONNECTION_NORMAL_FREED: client structure freed successfully.");
-      }
-    } else {
-      if (g_logger) {
-        LOG_DEBUG("Invalid client pointer %p, skipping free", (void*)client);
-      }
-    }
+  /* Free dynamically allocated buffer */
+  if (buffer) {
+    BUFFER_FREE(buffer);
+    buffer = NULL;
   }
   
   /* Calculate execution time */
@@ -1505,139 +1506,47 @@ void handle_client(void* client_data) {
   if (g_logger) {
     LOG_INFO("Completed request handling in %.2f ms (thread=%lu, tid=%d)", 
         execution_time, (unsigned long)tid, system_tid);
-  } else {
-    printf("Thread %lu completed request in %.2f ms\n", 
-       (unsigned long)tid, execution_time);
   }
   
-  /* Stop request timer */
-  if (request_timer) {
-    metrics_timer_stop(request_timer);
-    request_timer = NULL; /* Prevent double-free in cleanup */
-  }
-  
-cleanup:
-  /* 🔧 FIX: Free dynamically allocated buffer */
-  if (buffer) {
-    BUFFER_FREE(buffer);
-    buffer = NULL;
-  }
-  
-  /* Enhanced connection cleanup with comprehensive tracking */
-  clock_gettime(CLOCK_MONOTONIC, &end_time);
-  double connection_duration = (end_time.tv_sec - start_time.tv_sec) + 
-                              (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
-  
-  if (g_logger) {
-    TRACE_NET("Connection ended - fd=%d, thread=%lu, tid=%d, client=%s:%d, duration=%.3fs", 
-        client_fd, (unsigned long)tid, system_tid, client_ip, client_port, connection_duration);
-    
-    /* Log detailed connection state for debugging */
-    if (client_fd > 0) {
-      /* Check if socket is still valid */
-      int socket_error = 0;
-      socklen_t len = sizeof(socket_error);
-      int gso_result = getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &socket_error, &len);
-      
-      TRACE_NET("CONNECTION_STATE: fd=%d, getsockopt_result=%d, socket_error=%d, ssl_cleanup=%s", 
-          client_fd, gso_result, socket_error, 
-          (client && client->ssl_conn) ? "required" : "not_needed");
-    }
-  }
-  
-  /* Cleanup SSL connection if active */
-  if (client && client->ssl_conn) {
-    if (g_logger) {
-      TRACE_NET("CONNECTION_SSL_CLEANUP: fd=%d, cleaning up SSL connection", client_fd);
-    }
-    client_cleanup_ssl(client);
-  }
-  
-  /* Close file descriptor if still open and not already closed */
-  if (client_fd > 0 && (!client || client->client_fd != -1)) {
-    if (g_logger) {
-      TRACE_NET("CONNECTION_FD_CLOSE: fd=%d, closing file descriptor", client_fd);
-    }
-    close(client_fd);
-    if (client) {
-      client->client_fd = -1; /* Use -1 to indicate closed */
-    }
-  }
-  
-  /* Enhanced client structure cleanup with memory safety checks */
+  /* 🔒 CRITICAL: Single cleanup sequence with proper ordering */
   if (client) {
-    if (g_logger) {
-      TRACE_NET("CONNECTION_STRUCT_CLEANUP_START: client=%p, performing safety checks", (void*)client);
-    }
-    
-    /* Memory safety validation before cleanup */
-    int cleanup_safe = 1;
-    
-    /* Check for NULL pointer - only reliable check we can safely perform */
-    if (client == NULL) {
-      cleanup_safe = 0;
-    }
-    
-    /* Only perform cleanup if client pointer is valid (non-NULL) */
-    
-    /* Perform safe cleanup if validation passed */
-    if (cleanup_safe) {
+    /* 1. Cleanup SSL first (while socket is still valid) */
+    if (client->ssl_conn) {
       if (g_logger) {
-        TRACE_NET("CONNECTION_STRUCT_FREE: client=%p, freeing client structure", (void*)client);
+        TRACE_NET("CONNECTION_SSL_CLEANUP: fd=%d, cleaning up SSL connection", client_fd);
       }
-      
-      /* Zero out critical fields before freeing to detect use-after-free */
-      client->client_fd = -1;
+      client_cleanup_ssl(client);
+      /* Note: client_cleanup_ssl() already sets ssl_conn to NULL atomically */
+    }
+    
+    /* 2. Close socket (after SSL cleanup) */
+    if (client_fd > 0 && client->client_fd != -1) {
+      if (g_logger) {
+        TRACE_NET("CONNECTION_FD_CLOSE: fd=%d, closing socket", client_fd);
+      }
+      shutdown(client_fd, SHUT_WR);
+      close(client_fd);
+      client->client_fd = -1; /* Mark as closed */
+    }
+    
+    /* 3. Free client structure (last) */
+    if ((uintptr_t)client >= 0x1000 && (uintptr_t)client <= 0x7fffffffffff) {
+      if (g_logger) {
+        TRACE_NET("CONNECTION_CLIENT_FREE: client=%p, freeing structure", (void*)client);
+      }
+      /* Clear all pointers before freeing */
       client->api_ctx = NULL;
-      client->ssl_conn = NULL;
-      
-      /* Free the structure */
+      /* Note: ssl_conn already cleared by client_cleanup_ssl() */
       BUFFER_FREE(client);
-      
-      /* Set client pointer to NULL to prevent double-free (if passed by reference) */
-      /* Note: This only protects the local variable, but adds logging clarity */
       client = NULL;
-      
-      if (g_logger) {
-        TRACE_NET("CONNECTION_STRUCT_FREED: structure freed successfully.");
-      }
-    } else {
-      if (g_logger) {
-        LOG_WARNING("Unsafe client structure %p not freed to prevent crash", 
-             (void*)client);
-      }
-    }
-  } else {
-    if (g_logger) {
-      TRACE_NET("CONNECTION_STRUCT_NULL: client structure already NULL, no cleanup needed.");
     }
   }
   
-  /* Decrement active connections */
-  if (g_logger) {
-    TRACE_NET("METRICS_CLEANUP_START: active_connections=%p, request_timer=%p", 
-        (void*)active_connections, (void*)request_timer);
-  }
+  /* 🎯 CLEANUP COMPLETE - No duplicate cleanup code! */
   
+  /* Decrement active connections metric */
   if (active_connections) {
-    if (g_logger) {
-      TRACE_NET("METRICS_GAUGE_DEC_START: active_connections=%p", (void*)active_connections);
-    }
     metrics_gauge_dec(active_connections, 1.0);
-    if (g_logger) {
-      TRACE_NET("METRICS_GAUGE_DEC_SUCCESS.");
-    }
-  }
-  
-  /* Stop request timer if active */
-  if (request_timer) {
-    if (g_logger) {
-      TRACE_NET("METRICS_TIMER_STOP_START: request_timer=%p", (void*)request_timer);
-    }
-    metrics_timer_stop(request_timer);
-    if (g_logger) {
-      TRACE_NET("METRICS_TIMER_STOP_SUCCESS.");
-    }
   }
   
   if (g_logger) {

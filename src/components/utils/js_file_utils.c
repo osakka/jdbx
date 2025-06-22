@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <limits.h> /* For PATH_MAX */
 #include <time.h>  /* For caching timestamps */
+#include <pthread.h> /* For thread safety */
 
 /* strlcpy and strlcat implementations if not available in libc */
 #if !defined(HAVE_STRLCPY) && !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__APPLE__)
@@ -95,19 +96,27 @@ static size_t cache_used = 0;
 static char cache_file_path[PATH_MAX] = "./js_file_cache.dat";
 static int cache_modified = 0;
 
+/* CRITICAL: Thread safety mutex for file cache and search paths */
+static pthread_mutex_t js_file_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* Add a path to the list of known search paths */
 static void add_search_path(const char *path) {
+  pthread_mutex_lock(&js_file_cache_mutex);
   if (num_search_paths < JS_FILE_MAX_SEARCH_PATHS) {
     search_paths[num_search_paths] = BUFFER_STRDUP(path);
     num_search_paths++;
   }
+  pthread_mutex_unlock(&js_file_cache_mutex);
 }
 
 /* Initialize search paths */
 static void init_search_paths() {
+  pthread_mutex_lock(&js_file_cache_mutex);
   if (num_search_paths > 0) {
+    pthread_mutex_unlock(&js_file_cache_mutex);
     return; /* Already initialized */
   }
+  pthread_mutex_unlock(&js_file_cache_mutex);
   
   /* Add current directory */
   add_search_path(".");
@@ -164,7 +173,10 @@ static void load_cache() {
 
 /* Save the path cache to disk */
 void js_file_save_cache() {
+  pthread_mutex_lock(&js_file_cache_mutex);
+  
   if (!cache_modified) {
+    pthread_mutex_unlock(&js_file_cache_mutex);
     return;
   }
   
@@ -172,6 +184,7 @@ void js_file_save_cache() {
   if (!f) {
     LOG_WARNING("Cannot save JavaScript file path cache to %s: %s", 
         cache_file_path, strerror(errno));
+    pthread_mutex_unlock(&js_file_cache_mutex);
     return;
   }
   
@@ -182,11 +195,15 @@ void js_file_save_cache() {
   
   fclose(f);
   cache_modified = 0;
+  
+  pthread_mutex_unlock(&js_file_cache_mutex);
 }
 
 /* Add an entry to the path cache */
 static void cache_add(const char *original, const char *resolved) {
   size_t idx;
+  
+  pthread_mutex_lock(&js_file_cache_mutex);
   
   /* Check if we already have this entry */
   for (idx = 0; idx < cache_used; idx++) {
@@ -195,6 +212,7 @@ static void cache_add(const char *original, const char *resolved) {
       strlcpy(file_cache[idx].resolved_path, resolved, sizeof(file_cache[idx].resolved_path));
       file_cache[idx].timestamp = time(NULL);
       cache_modified = 1;
+      pthread_mutex_unlock(&js_file_cache_mutex);
       return;
     }
   }
@@ -220,12 +238,17 @@ static void cache_add(const char *original, const char *resolved) {
   strlcpy(file_cache[idx].resolved_path, resolved, sizeof(file_cache[idx].resolved_path));
   file_cache[idx].timestamp = time(NULL);
   cache_modified = 1;
+  
+  pthread_mutex_unlock(&js_file_cache_mutex);
 }
 
 /* Look up a path in the cache */
 static int cache_lookup(const char *original, char *resolved, size_t resolved_size) {
   /* Initialize cache if needed */
   static int cache_initialized = 0;
+  
+  pthread_mutex_lock(&js_file_cache_mutex);
+  
   if (!cache_initialized) {
     load_cache();
     cache_initialized = 1;
@@ -234,17 +257,21 @@ static int cache_lookup(const char *original, char *resolved, size_t resolved_si
   for (size_t i = 0; i < cache_used; i++) {
     if (strcmp(file_cache[i].original_path, original) == 0) {
       strlcpy(resolved, file_cache[i].resolved_path, resolved_size);
+      pthread_mutex_unlock(&js_file_cache_mutex);
       return 1;
     }
   }
   
+  pthread_mutex_unlock(&js_file_cache_mutex);
   return 0;
 }
 
 /* Set the cache file path */
 void js_file_set_cache_path(const char* path) {
   if (path) {
+    pthread_mutex_lock(&js_file_cache_mutex);
     strlcpy(cache_file_path, path, sizeof(cache_file_path));
+    pthread_mutex_unlock(&js_file_cache_mutex);
   }
 }
 
@@ -308,9 +335,16 @@ int js_file_find(const char* filename, char* resolved_path, size_t path_size) {
   }
   
   /* Look in all known search paths */
-  for (size_t i = 0; i < num_search_paths; i++) {
+  pthread_mutex_lock(&js_file_cache_mutex);
+  size_t local_num_search_paths = num_search_paths;
+  pthread_mutex_unlock(&js_file_cache_mutex);
+  
+  for (size_t i = 0; i < local_num_search_paths; i++) {
     char test_path[PATH_MAX];
+    
+    pthread_mutex_lock(&js_file_cache_mutex);
     snprintf(test_path, sizeof(test_path), "%s/%s", search_paths[i], filename);
+    pthread_mutex_unlock(&js_file_cache_mutex);
     
     struct stat st;
     if (stat(test_path, &st) == 0 && S_ISREG(st.st_mode)) {
@@ -340,9 +374,16 @@ void js_file_log_not_found(const char* original_path, log_level_t level) {
   logger_log(level, __FILE__, __LINE__, __func__, 
        "Searched in the following locations:");
   
-  for (size_t i = 0; i < num_search_paths; i++) {
+  pthread_mutex_lock(&js_file_cache_mutex);
+  size_t local_num_search_paths = num_search_paths;
+  pthread_mutex_unlock(&js_file_cache_mutex);
+  
+  for (size_t i = 0; i < local_num_search_paths; i++) {
     char test_path[PATH_MAX];
+    
+    pthread_mutex_lock(&js_file_cache_mutex);
     snprintf(test_path, sizeof(test_path), "%s/%s", search_paths[i], original_path);
+    pthread_mutex_unlock(&js_file_cache_mutex);
     
     logger_log(level, __FILE__, __LINE__, __func__, " - %s", test_path);
   }

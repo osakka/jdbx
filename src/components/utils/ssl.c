@@ -54,11 +54,18 @@ struct ssl_context_t {
 struct ssl_connection_t {
   SSL *ssl;
   int connected;
+  pthread_mutex_t ssl_op_mutex; /* Protects SSL operations for thread safety */
 };
 
 /* Global initialization flag */
 static int g_ssl_initialized = 0;
 static pthread_mutex_t g_ssl_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Global SSL operation mutex for OpenSSL 3.x thread safety */
+static pthread_mutex_t g_ssl_global_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* 🚨 CRITICAL: Global crypto mutex for ALL OpenSSL operations including libcrypto */
+static pthread_mutex_t g_openssl_crypto_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Get the last OpenSSL error as a string */
 static char *get_openssl_error(void) {
@@ -85,12 +92,14 @@ ssl_error_t ssl_library_init(void) {
     return SSL_SUCCESS;
   }
   
-  /* OpenSSL 3.x requires explicit initialization for thread safety */
+  /* 🚨 CRITICAL: OpenSSL 3.x initialization with threading support */
   if (OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | 
                        OPENSSL_INIT_LOAD_CRYPTO_STRINGS |
                        OPENSSL_INIT_ADD_ALL_CIPHERS |
                        OPENSSL_INIT_ADD_ALL_DIGESTS |
-                       OPENSSL_INIT_ATFORK, NULL) == 0) {
+                       OPENSSL_INIT_ATFORK |
+                       OPENSSL_INIT_ASYNC |
+                       OPENSSL_INIT_ENGINE_RDRAND, NULL) == 0) {
     char *err = get_openssl_error();
     LOG_ERROR("Failed to initialize OpenSSL: %s", err ? err : "Unknown error");
     if (err) BUFFER_FREE(err);
@@ -98,12 +107,14 @@ ssl_error_t ssl_library_init(void) {
     return SSL_ERROR_INIT;
   }
   
-  /* For older OpenSSL compatibility */
-  SSL_load_error_strings();
-  OpenSSL_add_ssl_algorithms();
+  /* Note: Legacy SSL_load_error_strings() and OpenSSL_add_ssl_algorithms()
+   * are deprecated in OpenSSL 3.x and handled by OPENSSL_init_ssl() */
+  
+  /* 🚨 CRITICAL: Initialize OpenSSL random number generator for thread safety */
+  RAND_poll();
   
   g_ssl_initialized = 1;
-  LOG_INFO("SSL library initialized with thread safety.");
+  LOG_INFO("SSL library initialized with thread safety and RAND initialized.");
   
   pthread_mutex_unlock(&g_ssl_init_mutex);
   return SSL_SUCCESS;
@@ -115,11 +126,12 @@ void ssl_library_cleanup(void) {
     return;
   }
   
-  ERR_free_strings();
-  EVP_cleanup();
+  /* Note: In OpenSSL 3.x, ERR_free_strings() and EVP_cleanup() are deprecated.
+   * OpenSSL 3.x handles cleanup automatically via OPENSSL_cleanup() 
+   * which is called at program exit. Manual cleanup can cause issues. */
   
   g_ssl_initialized = 0;
-  LOG_INFO("SSL library cleaned up.");
+  LOG_INFO("SSL library cleanup completed (OpenSSL 3.x handles automatic cleanup).");
 }
 
 /* Reinitialize SSL after fork */
@@ -299,10 +311,14 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
   
   *conn = NULL;
   
-  /* Create a new SSL connection - protect with mutex for thread safety */
-  pthread_mutex_lock(&ctx->ssl_new_mutex);
+  /* 🚨 ENHANCED SSL THREADING PROTECTION: Multiple layers of safety */
+  pthread_mutex_lock(&g_ssl_global_mutex);
+  pthread_mutex_lock(&ctx->ssl_new_mutex); /* Double protection for OpenSSL 3.x */
+  
   SSL *ssl = SSL_new(ctx->ssl_ctx);
+  
   pthread_mutex_unlock(&ctx->ssl_new_mutex);
+  pthread_mutex_unlock(&g_ssl_global_mutex);
   
   if (!ssl) {
     char *error = get_openssl_error();
@@ -311,8 +327,10 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
     return SSL_ERROR_INIT;
   }
   
-  /* Set the socket file descriptor */
-  if (!SSL_set_fd(ssl, fd)) {
+  /* Set the socket file descriptor - SSL_set_fd() is safe on new SSL objects */
+  int set_fd_result = SSL_set_fd(ssl, fd);
+  
+  if (!set_fd_result) {
     char *error = get_openssl_error();
     LOG_ERROR("set SSL file descriptor: %s", error ? error : "Unknown error");
     BUFFER_FREE(error);
@@ -328,10 +346,18 @@ ssl_error_t ssl_connection_create(ssl_context_t *ctx, int fd, ssl_connection_t *
     return SSL_ERROR_MEMORY;
   }
   
-  /* CRITICAL: SSL connections must survive checkpoint rewinds as they're used
-   * across multiple requests in keep-alive sessions. OpenSSL maintains internal
-   * references that would become dangling if the connection is freed by checkpoint. */
-  memory_promote(new_conn);
+  /* NOTE: SSL connections are per-request and should NOT be promoted.
+   * They will be properly cleaned up when the request completes.
+   * Keep-alive reuses the TCP socket, not the SSL connection object. */
+  /* DO NOT PROMOTE: memory_promote(new_conn); */
+  
+  /* Initialize mutex for thread-safe SSL operations */
+  if (pthread_mutex_init(&new_conn->ssl_op_mutex, NULL) != 0) {
+    LOG_ERROR("initialize SSL connection mutex.");
+    BUFFER_FREE(new_conn);
+    SSL_free(ssl);
+    return SSL_ERROR_INIT;
+  }
   
   new_conn->ssl = ssl;
   new_conn->connected = 0;
@@ -346,6 +372,9 @@ void ssl_connection_free(ssl_connection_t *conn) {
     return;
   }
   
+  /* 🚨 CRITICAL SSL FREE PROTECTION: Prevent use-after-free crashes */
+  pthread_mutex_lock(&g_ssl_global_mutex);
+  
   if (conn->ssl) {
     /* Check if SSL object is still valid before shutdown */
     if (conn->connected) {
@@ -355,10 +384,15 @@ void ssl_connection_free(ssl_connection_t *conn) {
       conn->connected = 0;
     }
     
-    /* Free the SSL object */
+    /* Free the SSL object with additional protection */
     SSL_free(conn->ssl);
     conn->ssl = NULL;  /* Prevent double-free */
   }
+  
+  pthread_mutex_unlock(&g_ssl_global_mutex);
+  
+  /* Destroy the mutex */
+  pthread_mutex_destroy(&conn->ssl_op_mutex);
   
   BUFFER_FREE(conn);
 }
@@ -375,7 +409,10 @@ ssl_error_t ssl_handshake(ssl_connection_t *conn) {
   const int max_handshake_attempts = 25;  /* Increased for intensive load scenarios */
   
   while (handshake_attempts < max_handshake_attempts) {
+    /* 🚨 CRITICAL: Protect SSL_accept with crypto mutex for OpenSSL 3.x thread safety */
+    pthread_mutex_lock(&g_openssl_crypto_mutex);
     int result = SSL_accept(conn->ssl);
+    pthread_mutex_unlock(&g_openssl_crypto_mutex);
     
     if (result == 1) {
       /* ✅ HANDSHAKE SUCCESS: Connection fully established */
@@ -389,7 +426,10 @@ ssl_error_t ssl_handshake(ssl_connection_t *conn) {
     }
     
     if (result <= 0) {
+      /* 🚨 CRITICAL: Protect SSL_get_error with crypto mutex for thread safety */
+      pthread_mutex_lock(&g_openssl_crypto_mutex);
       int error = SSL_get_error(conn->ssl, result);
+      pthread_mutex_unlock(&g_openssl_crypto_mutex);
       
       /* 🔄 RETRY CONDITIONS: Handle non-blocking handshake states */
       if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
@@ -453,11 +493,16 @@ ssl_error_t ssl_read(ssl_connection_t *conn, void *buffer, size_t size, size_t *
   
   *bytes_read = 0;
   
-  /* Read data */
+  /* 🚨 CRITICAL: Protect SSL_read with crypto mutex for OpenSSL 3.x libcrypto thread safety */
+  pthread_mutex_lock(&g_openssl_crypto_mutex);
   int result = SSL_read(conn->ssl, buffer, (int)size);
+  int error = 0;
   if (result <= 0) {
-    int error = SSL_get_error(conn->ssl, result);
-    
+    error = SSL_get_error(conn->ssl, result);
+  }
+  pthread_mutex_unlock(&g_openssl_crypto_mutex);
+  
+  if (result <= 0) {
     /* Handle non-fatal errors - these require retry */
     if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
       /* For non-blocking sockets, we need to indicate this is a retry situation */
@@ -505,27 +550,10 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
     return SSL_ERROR_INVALID_PARAM;
   }
   
-  /* 🎯 ULTIMATE CONNECTION VALIDATION: Smart connection state check */
+  /* 🎯 CONNECTION VALIDATION: Check if SSL connection is established */
   if (!conn->connected) {
-    /* 🚀 SURGICAL RECOVERY: Try to verify if connection is actually usable */
-    if (conn->ssl) {
-      /* Check if SSL object is still valid by testing its state */
-      int ssl_state = SSL_get_shutdown(conn->ssl);
-      if (ssl_state == 0) {
-        /* SSL is not shutdown - connection might still be usable for writing */
-        if (g_logger) {
-          LOG_WARNING("SSL marked disconnected but SSL object suggests connection may be usable - attempting write");
-        }
-        /* Temporarily mark as connected for this write attempt */
-        conn->connected = 1;
-      } else {
-        LOG_ERROR("SSL connection not established (shutdown state: %d).", ssl_state);
-        return SSL_ERROR_HANDSHAKE;
-      }
-    } else {
-      LOG_ERROR("SSL connection not established (no SSL object).");
-      return SSL_ERROR_HANDSHAKE;
-    }
+    LOG_ERROR("SSL connection not established.");
+    return SSL_ERROR_HANDSHAKE;
   }
   
   *bytes_written = 0;
@@ -535,7 +563,15 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
   /* Keep trying until all data is written */
   while (total_written < size) {
     int to_write = (int)(size - total_written);
+    
+    /* 🚨 CRITICAL: Protect SSL_write with crypto mutex for OpenSSL 3.x libcrypto thread safety */
+    pthread_mutex_lock(&g_openssl_crypto_mutex);
     int result = SSL_write(conn->ssl, buffer + total_written, to_write);
+    int ssl_error = 0;
+    if (result <= 0) {
+      ssl_error = SSL_get_error(conn->ssl, result);
+    }
+    pthread_mutex_unlock(&g_openssl_crypto_mutex);
     
     if (result > 0) {
       /* Some data was written */
@@ -546,9 +582,7 @@ ssl_error_t ssl_write(ssl_connection_t *conn, const void *data, size_t size, siz
                  to_write, result, total_written, size);
       }
     } else {
-      /* Handle error */
-      int ssl_error = SSL_get_error(conn->ssl, result);
-      
+      /* Handle error - already got ssl_error inside mutex */
       switch (ssl_error) {
         case SSL_ERROR_WANT_WRITE:
         case SSL_ERROR_WANT_READ: {

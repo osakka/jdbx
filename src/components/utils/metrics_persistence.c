@@ -162,18 +162,23 @@ static void* metrics_persistence_thread(void* arg) {
     
     time_t now = time(NULL);
     
+    /* CRITICAL: Hold lock during entire snapshot/cleanup check and operation */
+    pthread_mutex_lock(&mp->lock);
+    
     /* Check if it's time to save a snapshot */
     if (now - mp->last_snapshot >= METRICS_SNAPSHOT_INTERVAL) {
       LOG_DEBUG("Saving metrics snapshot.");
-      save_metrics_snapshot(mp);
       mp->last_snapshot = now;
-    }
-    
-    /* Check if it's time to cleanup old metrics */
-    if (now - mp->last_cleanup >= METRICS_CLEANUP_INTERVAL) {
+      pthread_mutex_unlock(&mp->lock);
+      save_metrics_snapshot(mp);
+    } else if (now - mp->last_cleanup >= METRICS_CLEANUP_INTERVAL) {
+      /* Check if it's time to cleanup old metrics */
       LOG_DEBUG("Cleanup started.");
-      cleanup_old_metrics(mp);
       mp->last_cleanup = now;
+      pthread_mutex_unlock(&mp->lock);
+      cleanup_old_metrics(mp);
+    } else {
+      pthread_mutex_unlock(&mp->lock);
     }
     
     /* Sleep for a reasonable time - check every 5 seconds instead of 10 times per second */

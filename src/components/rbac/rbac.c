@@ -32,6 +32,8 @@
 #include <string.h>
 #include <time.h>
 #include <openssl/sha.h>
+#include <openssl/rand.h>
+#include <pthread.h>
 
 /* 
  * More secure password hashing implementation with salt and PBKDF2
@@ -137,11 +139,17 @@ static void pbkdf2_hmac_sha256(const char* password, const unsigned char* salt, 
 
 /* Generate a random salt */
 static void generate_salt(unsigned char* salt, size_t length) {
-  /* In a production system, this would use a cryptographically secure random source */
-  srand((unsigned int)time(NULL) + rand());
-  
-  for (size_t i = 0; i < length; i++) {
-    salt[i] = rand() & 0xFF;
+  /* Use OpenSSL's cryptographically secure random number generator */
+  if (RAND_bytes(salt, (int)length) != 1) {
+    /* Fallback to time-based generation if OpenSSL fails */
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    unsigned int seed = (unsigned int)(ts.tv_nsec ^ (uintptr_t)pthread_self());
+    
+    for (size_t i = 0; i < length; i++) {
+      seed = seed * 1103515245 + 12345; /* Linear congruential generator */
+      salt[i] = (seed >> 16) & 0xFF;
+    }
   }
 }
 

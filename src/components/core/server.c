@@ -32,7 +32,6 @@ static int g_signal_pipe[2] = {-1, -1};
 /* SSL context is now stored in server config - no global variable needed */
 
 /* Forward declarations */
-static int initialize_thread_pool(server_config_t* config);
 /* SSL initialization is handled by socket initialization - no duplicate function needed */
 /* SSL cleanup is handled by socket cleanup - no separate function needed */
 static void* accept_thread_func(void* arg);
@@ -178,22 +177,18 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
     }
   }
   
-  /* Initialize thread pool */
-  if (g_logger) {
-    LOG_INFO("Initializing thread pool.");
-  }
-  
-  if (initialize_thread_pool(config) != 0) {
+  /* Thread pool already initialized in init_threads() - verify it exists */
+  if (!config->thread_pool) {
     if (g_logger) {
-      LOG_ERROR("Failed to initialize thread pool");
+      LOG_ERROR("Thread pool not initialized - must call init_threads() first");
     } else {
-      fprintf(stderr, "Error: Failed to initialize thread pool\n");
+      fprintf(stderr, "Error: Thread pool not initialized\n");
     }
     return SERVER_THREAD_ERROR;
   }
   
   if (g_logger) {
-    LOG_INFO("Thread pool initialized.");
+    LOG_INFO("Using pre-initialized thread pool.");
   }
   
   /* Start accept loop in the current thread */
@@ -270,35 +265,6 @@ server_status_t server_initialize_and_run(server_config_t* config, api_context_t
 /**
  * Initialize thread pool
  */
-static int initialize_thread_pool(server_config_t* config) {
-  if (!config) {
-    fprintf(stderr, "Error: NULL server configuration\n");
-    return -1;
-  }
-  
-  /* Calculate thread pool size based on configuration */
-  int min_threads = 4; /* Default minimum */
-  int max_threads = config->max_connections > 0 ? config->max_connections : 16;
-  
-  thread_pool_config_t pool_config = {
-    .min_threads = min_threads,
-    .max_threads = max_threads,
-    .queue_size = max_threads * 4, /* Queue size proportional to max threads */
-    .idle_timeout = 60 /* 1 minute idle timeout */
-  };
-  
-  /* Create thread pool */
-  config->thread_pool = thread_pool_create_config(&pool_config);
-  if (!config->thread_pool) {
-    fprintf(stderr, "Error: Failed to create thread pool\n");
-    return -1;
-  }
-  
-  printf("Thread pool created with %d-%d threads\n", 
-      pool_config.min_threads, pool_config.max_threads);
-  
-  return 0;
-}
 
 /**
  * Accept thread function

@@ -2,6 +2,7 @@
 #define REF_COUNTER_H
 
 #include <stddef.h>
+#include <stdatomic.h>
 
 /**
  * Reference counting system for shared objects.
@@ -14,7 +15,7 @@
  */
 typedef struct ref_counted {
     void* object;            /* Pointer to the actual object */
-    size_t ref_count;        /* Number of references to this object */
+    atomic_size_t ref_count; /* ATOMIC: Number of references to this object */
     void (*free_fn)(void*);  /* Function to call when freeing the object */
 } ref_counted_t;
 

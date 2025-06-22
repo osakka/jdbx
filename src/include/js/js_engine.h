@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /* QuickJS headers - only included when QuickJS support is enabled */
 #ifdef USE_QUICKJS
@@ -14,6 +15,7 @@
 
 /* JS context for database operations */
 typedef struct {
+    pthread_mutex_t mutex;  /* CRITICAL: Thread safety mutex */
 #ifdef USE_QUICKJS
     JSRuntime *rt;        /* JavaScript runtime */
     JSContext *ctx;       /* JavaScript context */

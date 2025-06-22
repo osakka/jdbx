@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <stdint.h>
+#include <pthread.h>
 #include "database/database.h"
 #include "utils/json.h"
 
@@ -23,6 +24,7 @@ typedef struct {
 
 // Rate limiter instance (uses database for storage)
 typedef struct {
+    pthread_mutex_t mutex;       // CRITICAL: Thread safety mutex
     database_t* db;              // Database for document storage
     rate_limiter_config_t config; // Current configuration
     time_t last_cleanup;         // Last cleanup timestamp

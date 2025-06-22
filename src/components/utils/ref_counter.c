@@ -17,7 +17,7 @@ ref_counted_t* ref_counter_create(void* object, void (*free_fn)(void*)) {
   }
   
   rc->object = object;
-  rc->ref_count = 1; /* Start with a reference count of 1 */
+  atomic_init(&rc->ref_count, 1); /* Start with a reference count of 1 */
   rc->free_fn = free_fn;
   
   DEBUG_PRINT("Created reference counter %p for object %p", (void*)rc, object);
@@ -32,8 +32,9 @@ size_t ref_counter_acquire(ref_counted_t* rc) {
     return 0;
   }
   
-  rc->ref_count++;
-  return rc->ref_count;
+  /* CRITICAL: Thread-safe atomic increment */
+  size_t new_count = atomic_fetch_add(&rc->ref_count, 1) + 1;
+  return new_count;
 }
 
 /**
@@ -45,16 +46,19 @@ size_t ref_counter_release(ref_counted_t* rc) {
     return 0;
   }
   
+  /* CRITICAL: Thread-safe atomic decrement and check */
+  size_t old_count = atomic_load(&rc->ref_count);
   DEBUG_PRINT("Releasing reference counter %p with count %zu for object %p", 
-      (void*)rc, rc->ref_count, rc->object);
+      (void*)rc, old_count, rc->object);
   
-  if (rc->ref_count > 0) {
-    rc->ref_count--;
+  if (old_count == 0) {
+    return 0; /* Already at zero, prevent underflow */
   }
   
-  DEBUG_PRINT("After decrement, count is %zu", rc->ref_count);
+  size_t new_count = atomic_fetch_sub(&rc->ref_count, 1) - 1;
+  DEBUG_PRINT("After decrement, count is %zu", new_count);
   
-  if (rc->ref_count == 0) {
+  if (new_count == 0) {
     void* object_to_free = rc->object;
     void (*free_fn)(void*) = rc->free_fn;
     
@@ -75,7 +79,7 @@ size_t ref_counter_release(ref_counted_t* rc) {
     return 0;
   }
   
-  return rc->ref_count;
+  return new_count;
 }
 
 /**
@@ -86,7 +90,8 @@ size_t ref_counter_count(ref_counted_t* rc) {
     return 0;
   }
   
-  return rc->ref_count;
+  /* Thread-safe atomic read */
+  return atomic_load(&rc->ref_count);
 }
 
 /**

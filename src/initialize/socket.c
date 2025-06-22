@@ -90,17 +90,17 @@ init_status_t init_socket(server_config_t* config) {
 
   INIT_LOG_SUCCESS("SOCKET", "Socket bound successfully");
 
-  /* Set up to listen for connections */
-  INIT_LOG_PROGRESS("SOCKET", "Setting socket to listen state");
+  /* Set up to listen for connections with proper backlog for concurrent load */
+  INIT_LOG_PROGRESS("SOCKET", "Setting socket to listen state with backlog=512");
   
-  if (listen(socket_fd, 10) < 0) {
+  if (listen(socket_fd, 512) < 0) {
     INIT_LOG_FAILURE("SOCKET", "Failed to listen on socket: %s (errno=%d)", 
             strerror(errno), errno);
     close(socket_fd);
     return INIT_SOCKET_ERROR;
   }
 
-  INIT_LOG_SUCCESS("SOCKET", "Socket listening successfully");
+  INIT_LOG_SUCCESS("SOCKET", "Socket listening successfully (backlog=512)");
 
   /* Verify socket state */
   int acceptconn = 0;
