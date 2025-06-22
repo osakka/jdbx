@@ -1,10 +1,10 @@
-# JDBX Unified API Reference (v6.0.0)
+# JDBX Unified API Reference (v7.0.4)
 
 **Complete API documentation for JDBX TRUE Unified Documents Architecture**
 
 ## 🏆 Overview
 
-JDBX v6.0.0 introduces revolutionary TRUE unified documents architecture where **ALL entities** (users, roles, libraries, configs, metrics) are stored as documents in a single collection. This provides unprecedented simplicity while maintaining enterprise-grade performance.
+JDBX v7.0.4 implements enterprise-grade unified documents architecture where **ALL entities** (users, roles, libraries, configs, metrics) are stored as documents in a single collection. This provides unprecedented simplicity while maintaining enterprise-grade performance with 100% thread safety and cryptographic security.
 
 ### 🎯 Key Concepts
 

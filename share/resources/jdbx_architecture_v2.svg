@@ -55,8 +55,8 @@
   <rect width="1600" height="1200" fill="url(#bg_gradient)"/>
   
   <!-- Title -->
-  <text x="800" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="700" text-anchor="middle" fill="#111827">JDBX v6.5.12</text>
-  <text x="800" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#6B7280">Enterprise Document Database with Unified Architecture</text>
+  <text x="800" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="700" text-anchor="middle" fill="#111827">JDBX v7.0.4</text>
+  <text x="800" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#6B7280">Enterprise Document Database with Unified Threading and Security</text>
   
   <!-- Client Layer -->
   <g transform="translate(0, 120)">

@@ -26,7 +26,7 @@
   <rect width="1400" height="1100" fill="url(#bg_gradient)" opacity="0.95"/>
   
   <!-- Title and Version -->
-  <text x="700" y="40" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#00539C">JDBX Database Architecture v6.5.12</text>
+  <text x="700" y="40" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#00539C">JDBX Database Architecture v7.0.4</text>
   <text x="700" y="70" font-family="Arial, sans-serif" font-size="18" font-style="italic" text-anchor="middle" fill="#666666">High-performance document database with unified storage and virtual collections</text>
   
   <!-- Achievement Badges -->

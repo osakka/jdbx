@@ -1,4 +1,4 @@
-# ADR-029: Unified Threading Model and JSON String Storage
+# ADR-043: Unified Threading Model and JSON String Storage
 
 **Status**: Accepted  
 **Date**: 2025-06-22  

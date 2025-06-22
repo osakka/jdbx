@@ -251,7 +251,7 @@ perf record -g ./bin/jdbxd
 
 ## References
 
-- [ADR-029: Unified Threading Model](../architecture/ADR-029-unified-threading-model.md)
+- [ADR-043: Unified Threading Model](../architecture/ADR-043-unified-threading-model.md)
 - [JDBX Memory Manager](../architecture/ADR-026-checkpoint-memory-manager.md)
 - [Concurrent Test Suite](../../tests/concurrent/)
 - [POSIX Threads Reference](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/pthread.h.html)
