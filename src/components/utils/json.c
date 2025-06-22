@@ -22,6 +22,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <math.h>
 
 /* Maximum recursion depth to prevent stack overflow */
 #define MAX_JSON_RECURSION_DEPTH 20  /* Reduced from 100 to prevent stack overflow */

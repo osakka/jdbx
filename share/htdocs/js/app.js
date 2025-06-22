@@ -457,10 +457,10 @@ async function apiRequest(endpoint, options = {}) {
         // Log request details for debugging
         if (options.method === 'PUT' || options.method === 'POST') {
             // console.log('API Request:', url, {
-                method: fetchOptions.method,
-                headers: fetchOptions.headers,
-                body: fetchOptions.body ? fetchOptions.body.substring(0, 200) + '...' : 'No body'
-            });
+            //     method: fetchOptions.method,
+            //     headers: fetchOptions.headers,
+            //     body: fetchOptions.body ? fetchOptions.body.substring(0, 200) + '...' : 'No body'
+            // });
         } else {
             // console.log('API Request:', url, fetchOptions);
         }
@@ -5719,8 +5719,14 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         const [health, cacheStats] = await Promise.all([
-            apiRequest('/api/health').catch(err => { // console.error('Health API error:', err); return null; }),
-            apiRequest('/api/cache/stats').catch(err => { // console.error('Cache stats API error:', err); return null; })
+            apiRequest('/api/health').catch(err => { 
+                // console.error('Health API error:', err); 
+                return null; 
+            }),
+            apiRequest('/api/cache/stats').catch(err => { 
+                // console.error('Cache stats API error:', err); 
+                return null; 
+            })
         ]);
         
         const collections = allCollections;
@@ -5745,12 +5751,12 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
         
         // console.log('Found metrics documents:', {
-            operations: !!operationsDoc,
-            performance: !!performanceDoc,
-            cache: !!cacheDoc,
-            memory: !!memoryDoc,
-            connections: !!connectionsDoc
-        });
+        //     operations: !!operationsDoc,
+        //     performance: !!performanceDoc,
+        //     cache: !!cacheDoc,
+        //     memory: !!memoryDoc,
+        //     connections: !!connectionsDoc
+        // });
         
         // Get real document counts from collections
         let totalDocs = 0;
@@ -5842,11 +5848,11 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         const avgResponseTimeElement = document.getElementById('avgResponseTime');
         
         // console.log('DOM elements found:', {
-            totalOps: !!totalOpsElement,
-            readOps: !!readOpsElement,
-            writeOps: !!writeOpsElement,
-            avgResponseTime: !!avgResponseTimeElement
-        });
+        //     totalOps: !!totalOpsElement,
+        //     readOps: !!readOpsElement,
+        //     writeOps: !!writeOpsElement,
+        //     avgResponseTime: !!avgResponseTimeElement
+        // });
         
         if (totalOpsElement) {
             totalOpsElement.textContent = totalOps > 0 ? formatNumber(totalOps) : '0';
@@ -6010,10 +6016,10 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             }
             
             // console.log('Extracted operations per second data:', {
-                labels: labels,
-                readData: readData,
-                writeData: writeData
-            });
+            //     labels: labels,
+            //     readData: readData,
+            //     writeData: writeData
+            // });
         }
         
         // Extract response time data from performance metrics
