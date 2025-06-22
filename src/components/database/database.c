@@ -641,10 +641,29 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
         return NULL;
     }
     
-    // BAR RAISING: Promote query to survive checkpoint operations
-    // Without promotion, query can be freed during skiplist iteration
-    // causing crashes when accessing query fields in the matching loop
-    json_promote(query);
+    // SELECTIVE QUERY PROMOTION: Only promote query if it contains complex nested structures
+    // that might be accessed during skiplist iteration. Simple queries can use automatic cleanup.
+    // This reduces memory accumulation while maintaining stability for complex queries.
+    bool query_needs_promotion = false;
+    
+    // Check if query has nested structures that require promotion
+    if (query && json_get_type(query) == JSON_OBJECT) {
+        json_value_t* type_field = json_object_get(query, "type");
+        json_value_t* nested_queries = json_object_get(query, "$and");
+        if (!nested_queries) nested_queries = json_object_get(query, "$or");
+        
+        // Promote complex queries with nested logic or multiple field filters
+        if (nested_queries || json_object_size(query) > 3) {
+            query_needs_promotion = true;
+        }
+    }
+    
+    if (query_needs_promotion) {
+        json_promote(query);
+        LOG_DEBUG("Promoted complex query to survive checkpoint operations");
+    } else {
+        LOG_TRACE("Simple query will use automatic checkpoint cleanup");
+    }
     
     pthread_rwlock_rdlock(&g_db.lock);
     library_t* lib = get_or_create_library(STORAGE_LIBRARY);

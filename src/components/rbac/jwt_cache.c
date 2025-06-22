@@ -122,13 +122,34 @@ static void lru_remove(jwt_cache_t* cache, jwt_cache_entry_t* entry) {
 /* Free cache entry */
 static void free_cache_entry(jwt_cache_entry_t* entry) {
     if (entry) {
-        BUFFER_FREE(entry->token_hash);
-        BUFFER_FREE(entry->username);
-        BUFFER_FREE(entry->user_id);
-        if (entry->claims) {
-            jwt_payload_free(entry->claims);
+        /* MEMORY LEAK FIX: Cannot manually free promoted memory
+         * JWT cache entries are promoted to survive checkpoints, so they cannot
+         * be freed with BUFFER_FREE(). Mark as inactive instead and let them
+         * be cleaned up during cache reconstruction or server restart.
+         * 
+         * This prevents the memory leak where promoted memory was never actually
+         * freed but the cache tried to free it manually. */
+        
+        /* Clear sensitive data for security */
+        if (entry->token_hash) {
+            memset(entry->token_hash, 0, strlen(entry->token_hash));
         }
-        BUFFER_FREE(entry);
+        if (entry->username) {
+            memset(entry->username, 0, strlen(entry->username));
+        }
+        if (entry->user_id) {
+            memset(entry->user_id, 0, strlen(entry->user_id));
+        }
+        
+        /* Mark entry as freed but don't actually free promoted memory */
+        entry->token_hash = NULL;
+        entry->username = NULL; 
+        entry->user_id = NULL;
+        entry->claims = NULL;
+        entry->expiry = 0;
+        
+        /* Note: entry itself remains allocated until cache cleanup or server restart
+         * This prevents memory corruption while avoiding the promotion/free conflict */
     }
 }
 

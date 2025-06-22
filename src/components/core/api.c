@@ -853,25 +853,70 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
       http_response_t* result = ctx->routes[i].handler(ctx, request);
       if (g_logger) LOG_DEBUG("Handler function returned: %p", (void*)result);
       
-      /* CRITICAL: ALL responses must be promoted before checkpoint operations
-       * as they survive beyond the checkpoint boundary. This includes:
-       * - Error responses (promoted before rewind)
-       * - Success responses (promoted before commit)
-       * - Static file responses with large HTML/JS/CSS content
-       * Without promotion, response memory can be freed and reused, causing
-       * corruption when the response data is accessed later. */
+      /* SELECTIVE RESPONSE PROMOTION: Only promote responses that truly need 
+       * to survive checkpoint operations. Most responses are immediately transmitted
+       * and should use automatic checkpoint cleanup to prevent memory leaks.
+       * 
+       * Promotion criteria:
+       * - Large responses (>64KB) that might be transmitted asynchronously
+       * - Streaming responses or chunked transfer
+       * - Static files that require keep-alive transmission
+       * 
+       * This fixes the critical memory leak where ALL responses were promoted,
+       * causing unbounded memory growth under concurrent load. */
+      bool needs_promotion = false;
+      
       if (request_checkpoint && result) {
-          /* Promote the response structure and its contents */
-          memory_promote(result);
-          if (result->body) memory_promote(result->body);
-          if (result->content_type) memory_promote(result->content_type);
+          /* Check if response needs promotion to survive checkpoint operations */
+          
+          /* Large response bodies that might be transmitted asynchronously */
+          if (result->body && strlen(result->body) > 65536) {  /* 64KB threshold */
+              needs_promotion = true;
+          }
+          
+          /* Static file responses (typically large HTML/CSS/JS files) */
+          if (result->content_type && 
+              (strstr(result->content_type, "text/html") ||
+               strstr(result->content_type, "text/css") ||
+               strstr(result->content_type, "application/javascript") ||
+               strstr(result->content_type, "text/javascript"))) {
+              /* Only promote if large enough to warrant async transmission */
+              if (result->body && strlen(result->body) > 32768) {  /* 32KB for static files */
+                  needs_promotion = true;
+              }
+          }
+          
+          /* Streaming or chunked responses (future extension point) */
           if (result->headers) {
-              memory_promote(result->headers);
               for (size_t j = 0; j < result->num_headers; j++) {
-                  if (result->headers[j]) {
-                      memory_promote(result->headers[j]);
+                  if (result->headers[j] && 
+                      (strstr(result->headers[j], "Transfer-Encoding: chunked") ||
+                       strstr(result->headers[j], "Content-Encoding: gzip"))) {
+                      needs_promotion = true;
+                      break;
                   }
               }
+          }
+          
+          /* Apply selective promotion */
+          if (needs_promotion) {
+              memory_promote(result);
+              if (result->body) memory_promote(result->body);
+              if (result->content_type) memory_promote(result->content_type);
+              if (result->headers) {
+                  memory_promote(result->headers);
+                  for (size_t j = 0; j < result->num_headers; j++) {
+                      if (result->headers[j]) {
+                          memory_promote(result->headers[j]);
+                      }
+                  }
+              }
+              LOG_DEBUG("Promoted large response (body_size=%zu) to survive checkpoint", 
+                       result->body ? strlen(result->body) : 0);
+          } else {
+              /* Most responses use automatic checkpoint cleanup - no promotion needed */
+              LOG_TRACE("Response will use automatic checkpoint cleanup (body_size=%zu)", 
+                       result->body ? strlen(result->body) : 0);
           }
       }
       
@@ -1351,9 +1396,11 @@ static http_response_t* api_handle_unified_documents_query(api_context_t* ctx, h
       /* Check if there's a 'query' parameter with JSON */
       json_value_t* query_param = json_object_get(parsed_params, "query");
       if (query_param && query_param->type == JSON_OBJECT) {
-        /* Use the nested query object */
-        query = json_deep_copy(query_param);
-        /* CHECKPOINT: json_free(parsed_params); */
+        /* MEMORY LEAK FIX: Use query_param directly instead of deep copy
+         * Query only used within request scope - no need for deep copy
+         * that might get promoted and cause memory accumulation */
+        query = query_param;
+        /* Note: parsed_params will be cleaned up by checkpoint system */
       } else {
         /* Use the parsed parameters as the query */
         query = parsed_params;
@@ -1411,15 +1458,12 @@ static http_response_t* api_handle_unified_documents_create(api_context_t* ctx, 
   json_value_t* doc = NULL;
   json_value_t* nested_doc = json_object_get(parsed, "document");
   if (nested_doc) {
-    /* Extract document from nested structure */
-    doc = json_deep_copy(nested_doc);
-    /* CHECKPOINT: json_free(parsed); */
+    /* MEMORY LEAK FIX: Use nested_doc directly instead of deep copy
+     * Document only used within request scope for processing
+     * Deep copy was causing memory accumulation when promoted */
+    doc = nested_doc;
+    /* Note: parsed will be cleaned up by checkpoint system */
     if (!doc || doc->type != JSON_OBJECT) {
-      if (doc) {
-
-          /* CHECKPOINT: json_free(doc); */
-
-      }
       return create_http_response(HTTP_BAD_REQUEST, 
                    "{\"error\":\"Invalid document in nested structure\"}", "application/json");
     }

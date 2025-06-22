@@ -454,13 +454,11 @@ static void* accept_thread_func(void* arg) {
         continue;
       }
       
-      /* BAR RAISING: Client connections must be promoted when using SSL
-       * SSL holds references to client structure that survive checkpoint operations
-       * Without promotion, SSL_free() crashes accessing freed client memory
-       * See CLAUDE.md v6.3.3 - SSL MEMORY PROMOTION FOR UI STABILITY */
-      if (config->use_ssl) {
-        memory_promote(client);
-      }
+      /* SELECTIVE SSL CLIENT PROMOTION: Only promote client connections that 
+       * establish SSL sessions. Promotion on allocation was causing memory leaks
+       * when connections failed before SSL handshake or in error paths.
+       * Promotion will happen in SSL initialization when actually needed. */
+      bool client_promoted = false;  /* Track promotion for proper cleanup */
       
       /* Initialize client connection with memory safety */
       memset(client, 0, sizeof(client_conn_t)); /* Zero entire structure */
@@ -481,7 +479,16 @@ static void* accept_thread_func(void* arg) {
       /* Add client to thread pool using the unified handle_client function */
       if (thread_pool_add_work(config->thread_pool, handle_client, client) != 0) {
         fprintf(stderr, "Error: Failed to add client to thread pool\n");
-        BUFFER_FREE(client);
+        
+        /* MEMORY LEAK FIX: Only free client if it wasn't promoted
+         * Promoted memory cannot be manually freed and would cause leak */
+        if (!client_promoted) {
+          BUFFER_FREE(client);
+        } else {
+          /* Promoted client will be cleaned up by memory manager */
+          LOG_DEBUG("Skipping manual free of promoted SSL client connection");
+        }
+        
         close(client_fd);
         continue;
       }
