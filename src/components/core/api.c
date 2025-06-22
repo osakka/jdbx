@@ -42,6 +42,7 @@
 #include "api/virtual_collections_api.h"
 #include "core/server.h"
 #include "database/database.h"
+#include "core/rate_limiter.h"
 #include "database/document_storage.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
@@ -65,6 +66,9 @@ extern logger_config_t* g_logger;
 metrics_registry_t* g_metrics_registry = NULL;
 logger_config_t* g_logger = NULL;
 #endif
+
+/* External rate limiter instance */
+extern rate_limiter_t* g_rate_limiter;
 
 /* Forward declarations */
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request);
@@ -737,6 +741,31 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
   
   printf("API dispatch: Processing request for path '%s'\n", request->path);
   printf("API context: Routes=%p, num_routes=%d\n", (void*)ctx->routes, ctx->num_routes);
+  
+  /* Check rate limiting before processing request */
+  if (g_rate_limiter && request->remote_addr) {
+    if (!rate_limiter_check_request(g_rate_limiter, request->remote_addr)) {
+      if (g_logger) LOG_WARNING("Rate limit exceeded for IP: %s on path: %s", 
+                               request->remote_addr, request->path);
+      
+      /* Rewind checkpoint before returning error */
+      if (request_checkpoint) {
+          memory_checkpoint_rewind(request_checkpoint);
+          request_checkpoint = NULL;
+      }
+      
+      http_response_t* response = create_http_response(HTTP_TOO_MANY_REQUESTS, 
+                                   "{\"error\":\"Rate limit exceeded\"}", "application/json");
+      /* Add Retry-After header */
+      response->headers = BUFFER_ALLOC(sizeof(char*) * 2);
+      response->headers[0] = BUFFER_STRDUP("Retry-After: 60");
+      response->num_headers = 1;
+      
+      return response;
+    }
+    
+    /* Token already consumed in rate_limiter_check_request */
+  }
   
   if (g_logger) LOG_DEBUG("Dispatching request: %s %s (searching %d routes)", 
               request->method == HTTP_GET ? "GET" : 

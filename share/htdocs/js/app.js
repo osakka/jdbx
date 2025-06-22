@@ -80,16 +80,8 @@ async function getActualDatabaseSize() {
         
         return actualSize;
     } catch (error) {
-        console.warn('Failed to get actual database size from unified API, using cached value:', error);
-        // Fallback to old collections API
-        try {
-            const fallbackResponse = await apiRequest('/api/collections');
-            const collections = Array.isArray(fallbackResponse) ? fallbackResponse : (fallbackResponse?.collections || []);
-            const totalSize = collections.reduce((sum, collection) => sum + (collection.total_size || 0), 0);
-            return Math.max(totalSize, 20480);
-        } catch (fallbackError) {
-            return window.currentDatabaseSizeBytes || 20480;
-        }
+        // Return cached value or minimum size if API fails
+        return window.currentDatabaseSizeBytes || 20480;
     }
 }
 
@@ -106,10 +98,10 @@ async function validateSession() {
     const currentToken = localStorage.getItem('jdbx_auth_token');
     authToken = currentToken; // Update global variable
     
-    console.log('Session validation starting, token present:', !!currentToken);
+    // console.log('Session validation starting, token present:', !!currentToken);
     
     if (!currentToken) {
-        console.log('No auth token, redirecting to login');
+        // console.log('No auth token, redirecting to login');
         window.location.href = '/login.html';
         return false;
     }
@@ -125,8 +117,8 @@ async function validateSession() {
         });
         
         if (response.status === 401) {
-            console.log('Session invalid (401), redirecting to login');
-            console.log('Token was:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
+            // console.log('Session invalid (401), redirecting to login');
+            // console.log('Token was:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
             // Clear tokens
             localStorage.removeItem('jdbx_auth_token');
             localStorage.removeItem('jdbx_refresh_token');
@@ -146,7 +138,7 @@ async function validateSession() {
         
         return response.ok;
     } catch (error) {
-        console.error('Session validation error:', error);
+        // console.error('Session validation error:', error);
         // On network error, don't log out immediately
         return true;
     }
@@ -168,14 +160,14 @@ startSessionValidation();
 window.addEventListener('DOMContentLoaded', function() {
     const rbacView = document.getElementById('rbac-view');
     if (rbacView) {
-        console.log('Initial RBAC view content length:', rbacView.innerHTML.length);
-        console.log('Initial RBAC view text:', rbacView.textContent.substring(0, 50));
+        // console.log('Initial RBAC view content length:', rbacView.innerHTML.length);
+        // console.log('Initial RBAC view text:', rbacView.textContent.substring(0, 50));
         
         // Monitor for the admin text issue
         setInterval(() => {
             if (rbacView.textContent.trim() === 'admin') {
-                console.error('DETECTED: RBAC view contains only "admin"!');
-                console.trace('Stack trace for admin text:');
+                // console.error('DETECTED: RBAC view contains only "admin"!');
+                // console.trace('Stack trace for admin text:');
             }
         }, 1000);
     }
@@ -199,17 +191,17 @@ function detectIDConflicts() {
     Object.entries(idMap).forEach(([id, elements]) => {
         if (elements.length > 1) {
             conflictsFound = true;
-            console.error(`🚨 ID CONFLICT DETECTED: "${id}" used ${elements.length} times:`);
+            // console.error(`🚨 ID CONFLICT DETECTED: "${id}" used ${elements.length} times:`);
             elements.forEach(el => {
-                console.error(`   - <${el.tagName}> ${el.className ? `class="${el.className}"` : ''}`, el);
+                // console.error(`   - <${el.tagName}> ${el.className ? `class="${el.className}"` : ''}`, el);
             });
         }
     });
     
     if (conflictsFound) {
-        console.error('⚠️  ID conflicts can cause serious bugs! See FRONTEND_BEST_PRACTICES.md');
+        // console.error('⚠️  ID conflicts can cause serious bugs! See FRONTEND_BEST_PRACTICES.md');
     } else {
-        console.log('✅ No ID conflicts detected');
+        // console.log('✅ No ID conflicts detected');
     }
     
     return !conflictsFound;
@@ -250,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Verify RBAC view structure
     const rbacView = document.getElementById('rbac-view');
     if (rbacView && rbacView.children.length === 0) {
-        console.error('RBAC view is empty! Reloading page...');
+        // console.error('RBAC view is empty! Reloading page...');
         window.location.reload();
         return;
     }
@@ -302,15 +294,15 @@ function switchView(view) {
     // Show selected view with minimal delay to prevent snap
     const viewElement = document.getElementById(`${view}-view`);
     if (viewElement) {
-        console.log(`Switching to view: ${view}`);
-        console.log(`View element found:`, viewElement);
-        console.log(`View element content length:`, viewElement.innerHTML.length);
-        console.log(`View element text preview:`, viewElement.textContent.substring(0, 100));
+        // console.log(`Switching to view: ${view}`);
+        // console.log(`View element found:`, viewElement);
+        // console.log(`View element content length:`, viewElement.innerHTML.length);
+        // console.log(`View element text preview:`, viewElement.textContent.substring(0, 100));
         
         // Special check for RBAC view
         if (view === 'rbac' && viewElement.textContent.trim() === 'admin') {
-            console.error('ERROR: RBAC view contains only "admin" when switching!');
-            console.error('This should not happen. View HTML length:', viewElement.innerHTML.length);
+            // console.error('ERROR: RBAC view contains only "admin" when switching!');
+            // console.error('This should not happen. View HTML length:', viewElement.innerHTML.length);
         }
         
         // Use requestAnimationFrame for smoother transition
@@ -356,7 +348,7 @@ function switchView(view) {
                                 loadDocuments(currentCollection, true);
                             }
                         } catch (error) {
-                            console.warn('Browser polling error (non-critical):', error.message);
+                            // console.warn('Browser polling error (non-critical):', error.message);
                             // Don't stop polling on error, just log it
                         }
                     }, POLLING_INTERVALS.browser);
@@ -374,7 +366,7 @@ function switchView(view) {
                 // Add safeguard to ensure RBAC view isn't just text
                 const rbacView = document.getElementById('rbac-view');
                 if (rbacView && rbacView.textContent.trim() === 'admin') {
-                    console.error('RBAC view contains only "admin" text! Reloading page...');
+                    // console.error('RBAC view contains only "admin" text! Reloading page...');
                     window.location.reload();
                     return;
                 }
@@ -464,13 +456,13 @@ async function apiRequest(endpoint, options = {}) {
         
         // Log request details for debugging
         if (options.method === 'PUT' || options.method === 'POST') {
-            console.log('API Request:', url, {
+            // console.log('API Request:', url, {
                 method: fetchOptions.method,
                 headers: fetchOptions.headers,
                 body: fetchOptions.body ? fetchOptions.body.substring(0, 200) + '...' : 'No body'
             });
         } else {
-            console.log('API Request:', url, fetchOptions);
+            // console.log('API Request:', url, fetchOptions);
         }
         
         const response = await fetch(url, fetchOptions);
@@ -505,7 +497,7 @@ async function apiRequest(endpoint, options = {}) {
             return response;
         }
     } catch (error) {
-        console.error('API Error:', error);
+        // console.error('API Error:', error);
         throw error;
     }
 }
@@ -595,7 +587,7 @@ function initializeDashboard() {
                 }
             });
             } catch (error) {
-                console.error('Error initializing collections chart:', error);
+                // console.error('Error initializing collections chart:', error);
                 collectionsChart = null;
             }
         }
@@ -645,7 +637,7 @@ function initializeDashboard() {
                 }
             });
             } catch (error) {
-                console.error('Error initializing connections chart:', error);
+                // console.error('Error initializing connections chart:', error);
                 connectionsChart = null;
             }
         }
@@ -706,7 +698,7 @@ function initializeDashboard() {
                 }
             });
             } catch (error) {
-                console.error('Error initializing response times chart:', error);
+                // console.error('Error initializing response times chart:', error);
                 responseTimesChart = null;
             }
         }
@@ -750,7 +742,7 @@ async function loadDashboard(isPolling = false) {
         previousData.lastUpdate = Date.now();
         
     } catch (error) {
-        console.error('Error loading dashboard:', error);
+        // console.error('Error loading dashboard:', error);
         // Don't stop polling on error
         if (!isPolling) {
             showNotification('Failed to load dashboard data', 'error');
@@ -774,7 +766,7 @@ function hasDataChanged(newData) {
 
 async function loadCollections() {
     try {
-        console.log('Loading collections from unified documents API...');
+        // console.log('Loading collections from unified documents API...');
         
         // Also load libraries for library information
         if (libraries.length === 0) {
@@ -782,9 +774,9 @@ async function loadCollections() {
                 const librariesResponse = await apiRequest('/api/libraries');
                 let librariesData = Array.isArray(librariesResponse) ? librariesResponse : (librariesResponse?.libraries || []);
                 libraries = librariesData;
-                console.log('Libraries data:', librariesData);
+                // console.log('Libraries data:', librariesData);
             } catch (error) {
-                console.warn('Failed to load libraries:', error);
+                // console.warn('Failed to load libraries:', error);
                 libraries = [{name: 'default'}]; // Fallback to default library
             }
         }
@@ -797,15 +789,15 @@ async function loadCollections() {
                 if (collectionsResponse && collectionsResponse.collections) {
                     collectionsData = collectionsData.concat(collectionsResponse.collections);
                 }
-                console.log(`Collections data for ${library.name}:`, collectionsResponse);
+                // console.log(`Collections data for ${library.name}:`, collectionsResponse);
             } catch (error) {
-                console.warn(`Failed to load collections for library ${library.name}:`, error);
+                // console.warn(`Failed to load collections for library ${library.name}:`, error);
             }
         }
         
-        console.log('All collections data from unified API:', collectionsData);
+        // console.log('All collections data from unified API:', collectionsData);
         
-        console.log('Loaded collections from unified API:', collectionsData);
+        // console.log('Loaded collections from unified API:', collectionsData);
         
         // Normalize the collections data format for unified API
         collectionsData = collectionsData.map(item => {
@@ -825,7 +817,7 @@ async function loadCollections() {
                                     collection.library === 'system';
             }
             
-            console.log(`Collection ${collection.library}/${collection.name}: documentCount=${collection.documentCount}`);
+            // console.log(`Collection ${collection.library}/${collection.name}: documentCount=${collection.documentCount}`);
             
             return collection;
         });
@@ -869,7 +861,7 @@ async function loadCollections() {
             try {
                 const docCountFromInfo = typeof collectionInfo === 'object' ? collectionInfo.documentCount : null;
                 
-                console.log(`Collection ${collectionName}: docCountFromInfo=${docCountFromInfo}, collectionInfo=`, collectionInfo);
+                // console.log(`Collection ${collectionName}: docCountFromInfo=${docCountFromInfo}, collectionInfo=`, collectionInfo);
                 
                 // If we already have the count from the API, use it for efficiency
                 let docCount = docCountFromInfo !== null && docCountFromInfo !== undefined ? docCountFromInfo : 0;
@@ -895,7 +887,7 @@ async function loadCollections() {
                 previousData.collectionsData[collectionName] = collectionKey;
                 
             } catch (error) {
-                console.error(`Error loading collection ${collectionName}:`, error);
+                // console.error(`Error loading collection ${collectionName}:`, error);
             }
         }
         
@@ -923,7 +915,7 @@ async function loadCollections() {
         return { collections, totalDocuments, totalSize };
         
     } catch (error) {
-        console.error('Error loading collections:', error);
+        // console.error('Error loading collections:', error);
         throw error;
     }
 }
@@ -972,7 +964,7 @@ async function loadSystemHealth() {
             document.getElementById('uptime').textContent = 'N/A';
         }
     } catch (error) {
-        console.error('Error loading system health:', error);
+        // console.error('Error loading system health:', error);
     }
 }
 
@@ -1015,7 +1007,7 @@ function updateCollectionsChart(collections) {
         }
         collectionsChart.update();
     } catch (error) {
-        console.error('Error updating collections chart:', error);
+        // console.error('Error updating collections chart:', error);
     }
 }
 
@@ -1027,7 +1019,7 @@ async function loadMetricsData() {
             updateResponseTimesChart(response.metrics.performance);
         }
     } catch (error) {
-        console.error('Error loading metrics data:', error);
+        // console.error('Error loading metrics data:', error);
     }
 }
 
@@ -1053,7 +1045,7 @@ function updateConnectionsChart(connectionsData) {
         }
         connectionsChart.update();
     } catch (error) {
-        console.error('Error updating connections chart:', error);
+        // console.error('Error updating connections chart:', error);
     }
 }
 
@@ -1079,7 +1071,7 @@ function updateResponseTimesChart(performanceData) {
         }
         responseTimesChart.update();
     } catch (error) {
-        console.error('Error updating response times chart:', error);
+        // console.error('Error updating response times chart:', error);
     }
 }
 
@@ -1134,7 +1126,7 @@ async function loadLibraryStatistics() {
                     </div>
                 `;
             } catch (error) {
-                console.error(`Failed to load stats for library ${library.name}:`, error);
+                // console.error(`Failed to load stats for library ${library.name}:`, error);
                 // Add placeholder card for libraries with errors
                 statsHtml += `
                     <div class="col-md-4 col-lg-3 mb-3">
@@ -1153,7 +1145,7 @@ async function loadLibraryStatistics() {
         statsPanel.innerHTML = statsHtml || '<div class="col-12 text-center text-muted">No libraries found</div>';
         
     } catch (error) {
-        console.error('Error loading library statistics:', error);
+        // console.error('Error loading library statistics:', error);
         const statsPanel = document.getElementById('libraryStatsPanel');
         if (statsPanel) {
             statsPanel.innerHTML = '<div class="col-12 text-center text-danger">Failed to load library statistics</div>';
@@ -1181,11 +1173,11 @@ async function loadDashboardMetrics() {
     try {
         // Fetch metrics data from _metrics collection
         const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
-            console.error('Failed to fetch metrics data:', err);
+            // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
         
-        console.log('Dashboard metrics data:', metricsData);
+        // console.log('Dashboard metrics data:', metricsData);
         
         // Extract metrics documents by type
         // Deduplicate documents by ID (temporary fix for server bug)
@@ -1211,7 +1203,7 @@ async function loadDashboardMetrics() {
             updateResponseTimesChart(performanceDoc);
         }
     } catch (error) {
-        console.error('Error loading dashboard metrics:', error);
+        // console.error('Error loading dashboard metrics:', error);
     }
 }
 
@@ -1223,7 +1215,7 @@ async function initializeBrowser() {
         await loadLibraries();  // Load libraries first
         // Collections are loaded within loadLibraries, no need to call again
     } catch (error) {
-        console.error('Error initializing browser:', error);
+        // console.error('Error initializing browser:', error);
         showNotification('Failed to initialize browser', 'error');
     }
 }
@@ -1233,7 +1225,7 @@ async function loadLibraries() {
     try {
         // Use the correct libraries API endpoint that the server provides
         const response = await apiRequest('/api/libraries');
-        console.log('Libraries API response:', response);
+        // console.log('Libraries API response:', response);
         
         if (response && response.libraries) {
             libraries = response.libraries.map(lib => ({
@@ -1245,23 +1237,23 @@ async function loadLibraries() {
                 template: lib.template || 'standard'
             }));
             
-            console.log('Processed libraries:', libraries);
+            // console.log('Processed libraries:', libraries);
             
             // Load collections first, then render library selector with counts
             await loadBrowserCollections();
             renderLibrarySelector();
         } else {
-            console.warn('Invalid libraries response format:', response);
+            // console.warn('Invalid libraries response format:', response);
             throw new Error('Invalid response format');
         }
     } catch (error) {
-        console.error('Error loading libraries:', error);
+        // console.error('Error loading libraries:', error);
         // Fallback to default libraries
         libraries = [
             { name: 'default', description: 'Default library for general use' },
             { name: 'system', description: 'System library for internal operations' }
         ];
-        console.log('Using fallback libraries:', libraries);
+        // console.log('Using fallback libraries:', libraries);
         renderLibrarySelector();
     }
 }
@@ -1275,7 +1267,7 @@ function renderLibrarySelector() {
     selector.innerHTML = libraries.map(lib => {
         const libCollections = allCollections.filter(c => c.library === lib.name);
         const collectionCount = libCollections.length;
-        console.log(`Library ${lib.name} has ${collectionCount} collections:`, libCollections);
+        // console.log(`Library ${lib.name} has ${collectionCount} collections:`, libCollections);
         return `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
             ${lib.name} (${collectionCount} collections)
         </option>`;
@@ -1385,7 +1377,7 @@ async function createNewLibrary() {
             switchLibrary(libraryName);
         }
     } catch (error) {
-        console.error('Error creating library:', error);
+        // console.error('Error creating library:', error);
         showNotification('Failed to create library', 'error');
     }
 }
@@ -1414,7 +1406,7 @@ async function deleteLibrary() {
             switchLibrary('default');
         }
     } catch (error) {
-        console.error('Error deleting library:', error);
+        // console.error('Error deleting library:', error);
         showNotification('Failed to delete library', 'error');
     }
 }
@@ -1447,7 +1439,7 @@ async function deleteSpecificLibrary(libraryName) {
             }
         }
     } catch (error) {
-        console.error('Error deleting library:', error);
+        // console.error('Error deleting library:', error);
         showNotification('Failed to delete library', 'error');
     }
 }
@@ -1482,7 +1474,7 @@ async function switchLibrary(libraryName) {
         showNotification(`Switched to library: ${libraryName}`, 'success');
         
     } catch (error) {
-        console.error('Error switching library:', error);
+        // console.error('Error switching library:', error);
         showNotification(`Failed to switch library: ${error.message}`, 'error');
         return; // Don't update UI if server switch failed
     }
@@ -1543,24 +1535,24 @@ async function loadBrowserCollections() {
             availableLibraries = ['system', 'default'];
         }
         
-        console.log('Loading collections for libraries:', availableLibraries);
+        // console.log('Loading collections for libraries:', availableLibraries);
         
         // Load collections from all libraries
         let allRawCollections = [];
         for (const library of availableLibraries) {
             try {
                 const collectionsResponse = await apiRequest(`/api/collections?library=${library}`);
-                console.log(`Collections API response for ${library}:`, collectionsResponse);
+                // console.log(`Collections API response for ${library}:`, collectionsResponse);
                 
                 if (collectionsResponse && collectionsResponse.collections) {
                     allRawCollections = allRawCollections.concat(collectionsResponse.collections);
                 }
             } catch (error) {
-                console.warn(`Failed to load collections for library ${library}:`, error);
+                // console.warn(`Failed to load collections for library ${library}:`, error);
             }
         }
         
-        console.log('All collections loaded:', allRawCollections);
+        // console.log('All collections loaded:', allRawCollections);
         
         // Use the collections we loaded from all libraries
         let rawCollections = allRawCollections;
@@ -1594,7 +1586,7 @@ async function loadBrowserCollections() {
             }
         });
         
-        console.log('Processed collections:', allCollections);
+        // console.log('Processed collections:', allCollections);
         
         // Load schemas separately
         try {
@@ -1607,7 +1599,7 @@ async function loadBrowserCollections() {
                 schemas = [];
             }
         } catch (error) {
-            console.warn('Failed to load schemas:', error);
+            // console.warn('Failed to load schemas:', error);
             schemas = [];
         }
         
@@ -1618,7 +1610,7 @@ async function loadBrowserCollections() {
         
         await renderCollections();
     } catch (error) {
-        console.error('Error loading collections:', error);
+        // console.error('Error loading collections:', error);
         document.getElementById('collectionsList').innerHTML = `
             <div class="text-center text-muted p-4">
                 <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
@@ -1631,10 +1623,10 @@ async function loadBrowserCollections() {
 
 // Filter collections by current library
 function filterCollectionsByLibrary() {
-    console.log('Filtering collections for library:', currentLibrary);
-    console.log('All collections before filtering:', allCollections);
+    // console.log('Filtering collections for library:', currentLibrary);
+    // console.log('All collections before filtering:', allCollections);
     collections = allCollections.filter(item => item.library === currentLibrary);
-    console.log('Filtered collections:', collections);
+    // console.log('Filtered collections:', collections);
 }
 
 async function renderCollections() {
@@ -1647,7 +1639,7 @@ async function renderCollections() {
             const response = await apiRequest('/api/schemas');
             schemas = response.schemas || [];
         } catch (error) {
-            console.error('Failed to fetch schemas:', error);
+            // console.error('Failed to fetch schemas:', error);
             schemas = [];
         }
     }
@@ -1754,9 +1746,9 @@ async function updateCollectionCounts() {
             const collectionName = typeof collection === 'string' ? collection : collection.name;
             // Use the full path which includes library prefix
             const collectionPath = collection.fullPath || `${currentLibrary}/${collectionName}`;
-            console.log(`Requesting count for collection: ${collectionPath} (${i+1}/${collections.length})`);
+            // console.log(`Requesting count for collection: ${collectionPath} (${i+1}/${collections.length})`);
             const response = await apiRequest(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
-            console.log(`Received response for ${collectionPath}:`, response ? 'success' : 'null');
+            // console.log(`Received response for ${collectionPath}:`, response ? 'success' : 'null');
             const count = response && response.documents ? response.documents.length : 0;
             
             // Check if count has changed before updating DOM (prevent flicker)
@@ -1785,7 +1777,7 @@ async function updateCollectionCounts() {
                         const badge = item.querySelector('.badge');
                         if (badge) {
                             badge.textContent = count.toString();
-                            console.log(`Updated count for ${collectionName}: ${previousData.collectionsData[countKey]} → ${count}`);
+                            // console.log(`Updated count for ${collectionName}: ${previousData.collectionsData[countKey]} → ${count}`);
                         }
                     }
                 });
@@ -1793,7 +1785,7 @@ async function updateCollectionCounts() {
                 // Store the new count for future comparison
                 previousData.collectionsData[countKey] = count;
             } else {
-                console.log(`No change in count for ${collectionName}: ${count}`);
+                // console.log(`No change in count for ${collectionName}: ${count}`);
             }
             
             // Add small delay between requests to prevent connection overload
@@ -1802,7 +1794,7 @@ async function updateCollectionCounts() {
             }
         } catch (error) {
             const collectionName = typeof collection === 'string' ? collection : collection.name;
-            console.error(`Error getting count for ${collectionName}:`, error);
+            // console.error(`Error getting count for ${collectionName}:`, error);
             // Continue with other collections even if one fails
         }
     }
@@ -1903,7 +1895,7 @@ async function loadDocuments(collectionPath, isPolling = false) {
         }
         
     } catch (error) {
-        console.error('Error loading documents:', error);
+        // console.error('Error loading documents:', error);
         if (!isPolling) {
             showNotification('Failed to load documents', 'error');
         }
@@ -2215,7 +2207,7 @@ async function executeQuery() {
         // Optionally close query builder after execution
         // toggleQueryBuilder();
     } catch (error) {
-        console.error('Query error:', error);
+        // console.error('Query error:', error);
         showNotification('Query failed: ' + (error.message || 'Unknown error'), 'error');
     }
 }
@@ -2334,7 +2326,7 @@ async function validateDocumentRealtime(content) {
         updateValidationDisplay(validationResults);
         
     } catch (error) {
-        console.error('Validation error:', error);
+        // console.error('Validation error:', error);
         updateValidationDisplay({
             valid: false,
             error: 'Validation Error',
@@ -2360,7 +2352,7 @@ async function getCollectionValidators(collection) {
     } catch (error) {
         // Validators collection might not exist, which is fine
         if (error.message && !error.message.includes('404') && !error.message.includes('Not found')) {
-            console.error('Error loading validators:', error);
+            // console.error('Error loading validators:', error);
         }
         return [];
     }
@@ -2518,8 +2510,8 @@ async function runValidators(document, validators) {
         scriptCount: results.executionMetrics.validatorCount,
         successCount: results.executionMetrics.successCount,
         errorCount: results.executionMetrics.errorCount,
-        collection: currentCollection || 'unknown',
-        timestamp: new Date().toISOString()
+        collection: currentCollection || 'unknown'
+        // Server will add timestamp
     });
     
     return results;
@@ -2835,10 +2827,11 @@ function recordScriptPerformanceMetrics(metrics) {
         performanceMetrics[operationType] = [];
     }
     
+    // Let server handle timestamp generation
     performanceMetrics[operationType].push({
         ...metrics,
-        id: Date.now() + Math.random(),
-        timestamp: new Date().toISOString()
+        id: Date.now() + Math.random()
+        // Server will add timestamp
     });
     
     // Keep only last 100 entries per operation type
@@ -2850,12 +2843,12 @@ function recordScriptPerformanceMetrics(metrics) {
     try {
         localStorage.setItem('jdbx_performance_metrics', JSON.stringify(performanceMetrics));
     } catch (e) {
-        console.warn('Failed to store performance metrics:', e);
+        // console.warn('Failed to store performance metrics:', e);
     }
     
     // Send to server for permanent storage (async, don't block UI)
     sendPerformanceMetricsToServer(metrics).catch(err => {
-        console.warn('Failed to send performance metrics to server:', err);
+        // console.warn('Failed to send performance metrics to server:', err);
     });
 }
 
@@ -2876,7 +2869,7 @@ async function sendPerformanceMetricsToServer(metrics) {
         }
     } catch (error) {
         // Silently fail - performance metrics are nice-to-have
-        console.debug('Performance metrics not sent to server:', error.message);
+        // console.debug('Performance metrics not sent to server:', error.message);
     }
 }
 
@@ -2888,7 +2881,7 @@ function loadPerformanceMetrics() {
             performanceMetrics = JSON.parse(stored);
         }
     } catch (e) {
-        console.warn('Failed to load performance metrics:', e);
+        // console.warn('Failed to load performance metrics:', e);
         performanceMetrics = {
             validation: [],
             transformation: [],
@@ -3033,7 +3026,7 @@ function initializePerformanceMonitoring() {
         );
     });
     
-    console.log('Performance monitoring initialized');
+    // console.log('Performance monitoring initialized');
 }
 
 // ===== SCRIPT VERSIONING SYSTEM =====
@@ -3108,8 +3101,7 @@ async function createScriptVersion(scriptDocument, changeType = 'patch', changeD
                 author: scriptDocument.author
             },
             metadata: {
-                created_at: new Date().toISOString(),
-                created_by: getCurrentUser(),
+                // Server will handle created_at and created_by
                 file_size: new Blob([scriptDocument.code]).size,
                 code_lines: scriptDocument.code.split('\n').length,
                 dependencies: extractDependencies(scriptDocument.code)
@@ -3133,7 +3125,7 @@ async function createScriptVersion(scriptDocument, changeType = 'patch', changeD
                     current_version: newVersion,
                     version_count: versions.length + 1,
                     last_updated: new Date().toISOString(),
-                    last_updated_by: getCurrentUser()
+                    // Server will handle last_updated_by
                 }
             };
             
@@ -3154,7 +3146,7 @@ async function createScriptVersion(scriptDocument, changeType = 'patch', changeD
         throw new Error(response.error || 'Failed to create version');
         
     } catch (error) {
-        console.error('Error creating script version:', error);
+        // console.error('Error creating script version:', error);
         return {
             success: false,
             error: error.message
@@ -3193,7 +3185,7 @@ async function loadScriptVersions(scriptId) {
         return [];
         
     } catch (error) {
-        console.error('Error loading script versions:', error);
+        // console.error('Error loading script versions:', error);
         return [];
     }
 }
@@ -3234,7 +3226,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
                 rolled_back_to: targetVersion,
                 rollback_reason: rollbackReason,
                 rollback_date: new Date().toISOString(),
-                rollback_by: getCurrentUser()
+                // Server will handle rollback_by
             },
             updated_at: new Date().toISOString()
         };
@@ -3266,7 +3258,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
         throw new Error(updateResponse.error || 'Failed to save rolled back script');
         
     } catch (error) {
-        console.error('Error during rollback:', error);
+        // console.error('Error during rollback:', error);
         return {
             success: false,
             error: error.message
@@ -3357,9 +3349,7 @@ function getCollectionNameForScriptType(scriptType) {
 }
 
 // Get current user (placeholder - would integrate with actual auth)
-function getCurrentUser() {
-    return 'current_user'; // This would be replaced with actual user from session
-}
+// getCurrentUser removed - server handles user attribution
 
 // Get performance data for a script
 function getScriptPerformanceData(scriptId) {
@@ -3375,7 +3365,7 @@ function getScriptPerformanceData(scriptId) {
 
 // Initialize versioning system
 function initializeVersioningSystem() {
-    console.log('Script versioning system initialized');
+    // console.log('Script versioning system initialized');
     
     // Load any cached version data
     try {
@@ -3384,7 +3374,7 @@ function initializeVersioningSystem() {
             scriptVersions = JSON.parse(cached);
         }
     } catch (e) {
-        console.warn('Failed to load cached version data:', e);
+        // console.warn('Failed to load cached version data:', e);
         scriptVersions = {};
     }
 }
@@ -3809,7 +3799,7 @@ async function loadCurrentVersion() {
             currentVersionLabel.style.display = 'inline';
         }
     } catch (error) {
-        console.error('Error loading current version:', error);
+        // console.error('Error loading current version:', error);
         const currentVersionLabel = document.getElementById('currentVersionLabel');
         currentVersionLabel.style.display = 'none';
     }
@@ -3869,7 +3859,7 @@ async function createVersionFromModal() {
         bootstrap.Modal.getInstance(document.getElementById('createVersionModal')).hide();
         
     } catch (error) {
-        console.error('Error creating version:', error);
+        // console.error('Error creating version:', error);
         showMessage('Failed to create version: ' + error.message, 'error');
     }
 }
@@ -3898,7 +3888,7 @@ async function showVersionHistory() {
         const versions = await loadScriptVersions(currentDocument);
         content.innerHTML = renderVersionHistory(versions);
     } catch (error) {
-        console.error('Error loading version history:', error);
+        // console.error('Error loading version history:', error);
         content.innerHTML = `
             <div class="alert alert-danger">
                 <i class="bi bi-exclamation-triangle"></i>
@@ -3946,7 +3936,7 @@ function rollbackToVersionWithConfirm(scriptId, version) {
             bootstrap.Modal.getInstance(document.getElementById('versionHistoryModal')).hide();
             
         } catch (error) {
-            console.error('Error during rollback:', error);
+            // console.error('Error during rollback:', error);
             showMessage('Rollback failed: ' + error.message, 'error');
         }
     };
@@ -4370,7 +4360,7 @@ async function executeImportScripts() {
                             
                             await apiRequest('/api/documents', 'POST', versionData);
                         } catch (versionError) {
-                            console.warn(`Failed to import version ${version.version}:`, versionError);
+                            // console.warn(`Failed to import version ${version.version}:`, versionError);
                         }
                     }
                 }
@@ -4421,15 +4411,15 @@ function showImportResults(results) {
     showMessage(message, type);
     
     // Show detailed results
-    console.group('Import Results');
+    // console.group('Import Results');
     results.forEach(result => {
         if (result.success) {
-            console.log(`✓ ${result.scriptName} (${result.versionsImported} versions)`);
+            // console.log(`✓ ${result.scriptName} (${result.versionsImported} versions)`);
         } else {
-            console.error(`✗ ${result.scriptName}: ${result.error}`);
+            // console.error(`✗ ${result.scriptName}: ${result.error}`);
         }
     });
-    console.groupEnd();
+    // console.groupEnd();
 }
 
 async function processBatchOperation(scriptIds, operation) {
@@ -4473,13 +4463,13 @@ function showBatchResults(operation, results) {
     
     // Show detailed results if there were failures
     if (failed > 0) {
-        console.group(`${operation} - Detailed Results`);
+        // console.group(`${operation} - Detailed Results`);
         results.forEach(result => {
             if (!result.success) {
-                console.error(`Failed: ${result.scriptId} - ${result.error}`);
+                // console.error(`Failed: ${result.scriptId} - ${result.error}`);
             }
         });
-        console.groupEnd();
+        // console.groupEnd();
     }
 }
 
@@ -4584,7 +4574,7 @@ async function loadTransformersForPreview() {
     } catch (error) {
         // Transformers collection might not exist, which is fine
         if (error.message && !error.message.includes('404') && !error.message.includes('Not found')) {
-            console.error('Error loading transformers:', error);
+            // console.error('Error loading transformers:', error);
         }
         currentTransformers = [];
     }
@@ -4678,8 +4668,8 @@ async function runTransformers(document) {
         scriptCount: currentTransformers.length,
         successCount,
         errorCount,
-        collection: currentCollection || 'unknown',
-        timestamp: new Date().toISOString()
+        collection: currentCollection || 'unknown'
+        // Server will add timestamp
     });
     
     return {
@@ -4766,7 +4756,7 @@ function showTransformationPreview() {
         }
         
     }).catch(error => {
-        console.error('Failed to run transformers:', error);
+        // console.error('Failed to run transformers:', error);
         showNotification('Failed to generate transformation preview', 'error');
     });
 }
@@ -4889,7 +4879,6 @@ async function createNewCollection() {
         const collectionMetadata = {
             type: 'collection',
             library: currentLibrary,
-            collection_name: collectionName,
             name: collectionName,
             description: `Collection created via Admin UI`,
             permissions: {
@@ -4917,14 +4906,14 @@ async function createNewCollection() {
         // Now create the first document in the actual collection
         const collectionPath = `${currentLibrary}/${collectionName}`;
         const initialDocument = {
-            uuid: 'welcome-doc',
+            // Let server generate proper UUID - never hardcode UUIDs!
             name: 'Welcome Document',
             message: `Welcome to the ${collectionName} collection in library ${currentLibrary}!`,
-            created_at: new Date().toISOString(),
-            collection_info: {
-                created_by: 'Admin UI',
-                description: `Initial document for ${collectionName} collection`
-            }
+            type: collectionName.endsWith('s') ? collectionName.slice(0, -1) : 'document',
+            library: currentLibrary,
+            collection: collectionName,
+            // Server will set created_at and owner automatically
+            description: `Initial document for ${collectionName} collection`
         };
         
         const response = await apiRequest(`/api/documents`, {
@@ -4946,7 +4935,7 @@ async function createNewCollection() {
             showNotification(response.error || 'Failed to create collection', 'error');
         }
     } catch (error) {
-        console.error('Error creating collection:', error);
+        // console.error('Error creating collection:', error);
         showNotification(`Failed to create collection: ${error.message}`, 'error');
     }
 }
@@ -4998,7 +4987,7 @@ async function saveDocument() {
             selectDocument(currentDocument);
         }
     } catch (error) {
-        console.error('Error saving document:', error);
+        // console.error('Error saving document:', error);
         showNotification('Failed to save document: ' + error.message, 'error');
     }
 }
@@ -5045,7 +5034,7 @@ async function deleteDocument() {
             if (deleteBtn) deleteBtn.disabled = true;
             
         } catch (error) {
-            console.error('Error deleting document:', error);
+            // console.error('Error deleting document:', error);
             showNotification('Failed to delete document: ' + error.message, 'error');
         }
     }
@@ -5091,7 +5080,7 @@ async function createDocument() {
             selectDocument(currentDocument);
         }
     } catch (error) {
-        console.error('Error creating document:', error);
+        // console.error('Error creating document:', error);
         showNotification('Failed to create document: ' + error.message, 'error');
     }
 }
@@ -5105,7 +5094,7 @@ function copyToClipboard() {
 
 // ===== METRICS FUNCTIONALITY =====
 function initializeMetrics() {
-    console.log('initializeMetrics called');
+    // console.log('initializeMetrics called');
     
     // Initialize performance monitoring
     initializePerformanceMonitoring();
@@ -5666,9 +5655,9 @@ function initializeMetrics() {
     }
 
     // Force immediate load with a small delay to ensure DOM is ready
-    console.log('Scheduling loadMetrics...');
+    // console.log('Scheduling loadMetrics...');
     setTimeout(() => {
-        console.log('Calling loadMetrics from initializeMetrics');
+        // console.log('Calling loadMetrics from initializeMetrics');
         loadMetrics();
         
         // Initialize performance dashboard
@@ -5678,7 +5667,7 @@ function initializeMetrics() {
 }
 
 async function loadMetrics(timeRange = '1h', isPolling = false) {
-    console.log('loadMetrics called with timeRange:', timeRange, 'isPolling:', isPolling);
+    // console.log('loadMetrics called with timeRange:', timeRange, 'isPolling:', isPolling);
     try {
         // Calculate time range for historical data
         const now = Math.floor(Date.now() / 1000);
@@ -5707,7 +5696,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         // Get current metrics and historical data in parallel
-        console.log('Fetching metrics data...');
+        // console.log('Fetching metrics data...');
         
         // Load collections from all libraries for metrics dashboard
         let allCollections = { collections: [] };
@@ -5721,31 +5710,31 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                             allCollections.collections = allCollections.collections.concat(libCollections.collections);
                         }
                     } catch (err) {
-                        console.warn(`Failed to load collections for library ${library.name}:`, err);
+                        // console.warn(`Failed to load collections for library ${library.name}:`, err);
                     }
                 }
             }
         } catch (err) {
-            console.error('Failed to load libraries for collections:', err);
+            // console.error('Failed to load libraries for collections:', err);
         }
         
         const [health, cacheStats] = await Promise.all([
-            apiRequest('/api/health').catch(err => { console.error('Health API error:', err); return null; }),
-            apiRequest('/api/cache/stats').catch(err => { console.error('Cache stats API error:', err); return null; })
+            apiRequest('/api/health').catch(err => { // console.error('Health API error:', err); return null; }),
+            apiRequest('/api/cache/stats').catch(err => { // console.error('Cache stats API error:', err); return null; })
         ]);
         
         const collections = allCollections;
         
-        console.log('API responses:', { health, collections, cacheStats });
+        // console.log('API responses:', { health, collections, cacheStats });
         
         // Fetch metrics data from _metrics collection
-        console.log('Fetching metrics from _metrics collection...');
+        // console.log('Fetching metrics from _metrics collection...');
         const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
-            console.error('Failed to fetch metrics data:', err);
+            // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
         
-        console.log('Metrics data:', metricsData);
+        // console.log('Metrics data:', metricsData);
         
         // Extract metrics documents by type
         const metricsDocuments = metricsData.documents || [];
@@ -5755,7 +5744,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         const memoryDoc = metricsDocuments.find(doc => doc.type === 'memory');
         const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
         
-        console.log('Found metrics documents:', {
+        // console.log('Found metrics documents:', {
             operations: !!operationsDoc,
             performance: !!performanceDoc,
             cache: !!cacheDoc,
@@ -5814,10 +5803,10 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             avgResponseTime = latestPerf.avg_response_time_ms || null;
         }
         
-        console.log('Health API response:', health);
+        // console.log('Health API response:', health);
         
         if (health && health.metrics) {
-            console.log('Health metrics:', health.metrics);
+            // console.log('Health metrics:', health.metrics);
             totalOps = health.metrics.operations.total || 0;
             readOps = health.metrics.operations.read || 0;
             writeOps = health.metrics.operations.write || 0;
@@ -5825,16 +5814,16 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             // Fix: Ensure total operations is at least the sum of read and write
             const calculatedTotal = readOps + writeOps;
             if (calculatedTotal > totalOps) {
-                console.log('Fixing total operations:', totalOps, '->', calculatedTotal);
+                // console.log('Fixing total operations:', totalOps, '->', calculatedTotal);
                 totalOps = calculatedTotal;
             }
             
             if (health.metrics.performance) {
                 avgResponseTime = health.metrics.performance.avg_response_time_ms;
             }
-            console.log('Parsed metrics - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
+            // console.log('Parsed metrics - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
         } else {
-            console.log('No health metrics available');
+            // console.log('No health metrics available');
         }
         
         // Add visual indicator for updates
@@ -5846,13 +5835,13 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         // Update metrics display with real values
-        console.log('Updating DOM elements - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
+        // console.log('Updating DOM elements - totalOps:', totalOps, 'readOps:', readOps, 'writeOps:', writeOps);
         const totalOpsElement = document.getElementById('totalOps');
         const readOpsElement = document.getElementById('readOps');
         const writeOpsElement = document.getElementById('writeOps');
         const avgResponseTimeElement = document.getElementById('avgResponseTime');
         
-        console.log('DOM elements found:', {
+        // console.log('DOM elements found:', {
             totalOps: !!totalOpsElement,
             readOps: !!readOpsElement,
             writeOps: !!writeOpsElement,
@@ -6020,7 +6009,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
             }
             
-            console.log('Extracted operations per second data:', {
+            // console.log('Extracted operations per second data:', {
                 labels: labels,
                 readData: readData,
                 writeData: writeData
@@ -6052,7 +6041,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 operationsChart.update();
             } catch (error) {
-                console.error('Error updating operations chart:', error);
+                // console.error('Error updating operations chart:', error);
             }
         }
         
@@ -6085,7 +6074,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 operationTypesChart.update();
             } catch (error) {
-                console.error('Error updating operation types chart:', error);
+                // console.error('Error updating operation types chart:', error);
             }
         }
         
@@ -6131,7 +6120,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 cacheHitRateChart.update();
             } catch (error) {
-                console.error('Error updating cache hit rate chart:', error);
+                // console.error('Error updating cache hit rate chart:', error);
             }
         }
         
@@ -6178,7 +6167,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 memoryUsageChart.update();
             } catch (error) {
-                console.error('Error updating memory usage chart:', error);
+                // console.error('Error updating memory usage chart:', error);
             }
         }
         
@@ -6203,7 +6192,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 }
                 databaseSizeChart.update();
             } catch (error) {
-                console.error('Error updating database size chart:', error);
+                // console.error('Error updating database size chart:', error);
             }
         }
         
@@ -6215,7 +6204,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 const collectionList = Array.isArray(collections) ? collections : (collections.collections || []);
                 let totalSizeKB = 0;
                 
-                console.log('Collection list:', collectionList);
+                // console.log('Collection list:', collectionList);
                 
                 // Collections API returns array of objects with {name, documentCount, isSystem}
                 // Process collections directly from the response
@@ -6228,7 +6217,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                             const estimatedSizeKB = docCount > 0 ? docCount * 1 : (col.isSystem ? 5 : 0);
                             totalSizeKB += estimatedSizeKB;
                             
-                            console.log(`Collection ${col.name}: ${docCount} docs, ${estimatedSizeKB}KB`);
+                            // console.log(`Collection ${col.name}: ${docCount} docs, ${estimatedSizeKB}KB`);
                             
                             if (estimatedSizeKB > 0) {
                                 collectionSizes.push(estimatedSizeKB);
@@ -6254,7 +6243,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                     size: collectionSizes[i]
                 })).sort((a, b) => b.size - a.size).slice(0, 10);
                 
-                console.log('Storage chart data:', sizeData);
+                // console.log('Storage chart data:', sizeData);
                 
                 if (sizeData.length > 0) {
                     storageChart.data.labels = sizeData.map(d => d.label);
@@ -6263,7 +6252,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                     }
                     storageChart.update();
                 } else {
-                    console.log('No data for storage chart, showing placeholder');
+                    // console.log('No data for storage chart, showing placeholder');
                     // Show placeholder data when no collections have documents
                     storageChart.data.labels = ['System Collections'];
                     if (storageChart.data.datasets && storageChart.data.datasets[0]) {
@@ -6272,7 +6261,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                     storageChart.update();
                 }
             } catch (error) {
-                console.error('Error updating storage chart:', error);
+                // console.error('Error updating storage chart:', error);
             }
         }
         
@@ -6293,7 +6282,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         });
         
     } catch (error) {
-        console.error('Error loading metrics:', error);
+        // console.error('Error loading metrics:', error);
         // Show N/A on error - with null checks
         const totalOpsElement = document.getElementById('totalOps');
         const readOpsElement = document.getElementById('readOps');
@@ -6585,7 +6574,7 @@ function updateHealthScore(overallData) {
 // Update performance type card
 function updatePerformanceTypeCard(type, data) {
     if (!data) {
-        console.warn(`No performance data available for ${type}`);
+        // console.warn(`No performance data available for ${type}`);
         return;
     }
     
@@ -6686,7 +6675,7 @@ function clearPerformanceHistory() {
         try {
             localStorage.removeItem('jdbx_performance_metrics');
         } catch (e) {
-            console.warn('Failed to clear performance metrics from localStorage:', e);
+            // console.warn('Failed to clear performance metrics from localStorage:', e);
         }
         
         updatePerformanceDashboard();
@@ -6734,10 +6723,11 @@ function showPerformanceReport() {
 
 // Generate performance report
 function generatePerformanceReport(dashboardData) {
-    const timestamp = new Date().toISOString();
+    // Use current date for display only, not data storage
+    const displayDate = new Date().toISOString();
     
     let report = `JDBX JavaScript Performance Report
-Generated: ${timestamp}
+Generated: ${displayDate}
 ======================================
 
 OVERALL HEALTH SCORE: ${dashboardData.overall.healthScore}/100
@@ -6805,7 +6795,7 @@ function formatTypeStats(typeData) {
 // Export performance data
 function exportPerformanceData() {
     const data = {
-        timestamp: new Date().toISOString(),
+        exported_at: new Date().toISOString(), // For export filename only
         dashboard: getPerformanceDashboardData(),
         metrics: performanceMetrics
     };
@@ -6837,26 +6827,26 @@ function initializePerformanceDashboard() {
 
 // ===== RBAC FUNCTIONALITY =====
 function initializeRBAC() {
-    console.log('=== INITIALIZING RBAC VIEW ===');
+    // console.log('=== INITIALIZING RBAC VIEW ===');
     const rbacView = document.getElementById('rbac-view');
-    console.log('RBAC View element:', rbacView);
-    console.log('RBAC View HTML length:', rbacView ? rbacView.innerHTML.length : 'null');
-    console.log('RBAC View text content:', rbacView ? rbacView.textContent.trim().substring(0, 100) : 'null');
+    // console.log('RBAC View element:', rbacView);
+    // console.log('RBAC View HTML length:', rbacView ? rbacView.innerHTML.length : 'null');
+    // console.log('RBAC View text content:', rbacView ? rbacView.textContent.trim().substring(0, 100) : 'null');
     
     
     // Monitor for content being overwritten
     const rbacInterval = setInterval(() => {
         const rbacView = document.getElementById('rbac-view');
         if (rbacView && rbacView.textContent.trim() === 'admin') {
-            console.error('DETECTED: RBAC view has been overwritten with "admin"!');
-            console.error('Current HTML length:', rbacView.innerHTML.length);
-            console.error('This should not happen!');
+            // console.error('DETECTED: RBAC view has been overwritten with "admin"!');
+            // console.error('Current HTML length:', rbacView.innerHTML.length);
+            // console.error('This should not happen!');
             clearInterval(rbacInterval);
             
             // Try to restore it
             const rolesTab = document.getElementById('roles');
             if (rolesTab) {
-                console.log('Attempting to restore by re-showing roles tab');
+                // console.log('Attempting to restore by re-showing roles tab');
                 rolesTab.classList.add('show', 'active');
             }
         }
@@ -6869,7 +6859,7 @@ function initializeRBAC() {
     const rbacTabs = document.querySelectorAll('#rbacTabs button[data-bs-toggle="tab"]');
     rbacTabs.forEach(tab => {
         tab.addEventListener('shown.bs.tab', function(event) {
-            console.log('Tab shown:', event.target.getAttribute('data-bs-target'));
+            // console.log('Tab shown:', event.target.getAttribute('data-bs-target'));
             const targetId = event.target.getAttribute('data-bs-target').substring(1); // Remove #
             
             // Render content for the shown tab
@@ -6920,12 +6910,12 @@ async function loadRBACData(isPolling = false) {
         // After loading, ensure the active tab's content is rendered
         const activeTab = document.querySelector('#rbacTabContent .tab-pane.active');
         if (activeTab) {
-            console.log('Active tab after load:', activeTab.id);
+            // console.log('Active tab after load:', activeTab.id);
             // If roles tab is active but empty, re-render
             if (activeTab.id === 'roles') {
                 const rolesList = document.getElementById('rolesList');
                 if (rolesList && !rolesList.innerHTML.trim()) {
-                    console.log('Roles tab is active but empty, re-rendering');
+                    // console.log('Roles tab is active but empty, re-rendering');
                     renderRoles();
                 }
             }
@@ -6935,7 +6925,7 @@ async function loadRBACData(isPolling = false) {
             showNotification('RBAC data refreshed', 'info');
         }
     } catch (error) {
-        console.error('Error loading RBAC data:', error);
+        // console.error('Error loading RBAC data:', error);
         if (!isPolling) {
             showNotification('Failed to load RBAC data', 'error');
         }
@@ -6948,7 +6938,7 @@ async function loadUsers() {
         allUsers = Array.isArray(response) ? response : (response.users || []);
         renderUsers();
     } catch (error) {
-        console.error('Error loading users:', error);
+        // console.error('Error loading users:', error);
         // Show empty state instead of error
         allUsers = [];
         renderUsers();
@@ -6969,13 +6959,13 @@ async function loadUsers() {
 function renderUsers() {
     // Only render if we're in RBAC view and users tab is active
     if (currentView !== 'rbac') {
-        console.log('Not in RBAC view, skipping renderUsers');
+        // console.log('Not in RBAC view, skipping renderUsers');
         return;
     }
     
     const usersTabPane = document.getElementById('users');
     if (!usersTabPane || !usersTabPane.classList.contains('active')) {
-        console.log('Users tab not active, skipping render');
+        // console.log('Users tab not active, skipping render');
         return;
     }
     
@@ -7042,23 +7032,23 @@ function renderUsers() {
 }
 
 async function loadRoles() {
-    console.log('=== loadRoles called ===');
-    console.log('Current view:', currentView);
-    console.log('Auth token exists:', !!localStorage.getItem('jdbx_auth_token'));
+    // console.log('=== loadRoles called ===');
+    // console.log('Current view:', currentView);
+    // console.log('Auth token exists:', !!localStorage.getItem('jdbx_auth_token'));
     
     try {
         const response = await apiRequest('/api/documents?type=role&library=system&collection=roles');
-        console.log('Roles API response:', response);
+        // console.log('Roles API response:', response);
         
         // Handle both direct array and object with roles property
         allRoles = Array.isArray(response) ? response : (response.documents || []);
-        console.log('Processed roles:', allRoles);
+        // console.log('Processed roles:', allRoles);
         
         renderRoles();
         populateRoleSelects();
     } catch (error) {
-        console.error('Error loading roles:', error);
-        console.log('Error details:', error.message, error.stack);
+        // console.error('Error loading roles:', error);
+        // console.log('Error details:', error.message, error.stack);
         // Show error message in the roles tab
         const rolesList = document.getElementById('rolesList');
         if (rolesList) {
@@ -7086,40 +7076,40 @@ async function loadRoles() {
 }
 
 function renderRoles() {
-    console.log('=== renderRoles called ===');
+    // console.log('=== renderRoles called ===');
     
     // Ensure we're in the RBAC view
     if (currentView !== 'rbac') {
-        console.log('Not in RBAC view, skipping renderRoles');
+        // console.log('Not in RBAC view, skipping renderRoles');
         return;
     }
     
     // Check if roles tab exists and is active
     const rolesTabPane = document.getElementById('roles');
     if (!rolesTabPane) {
-        console.log('Roles tab pane not found');
+        // console.log('Roles tab pane not found');
         return;
     }
     
     // Only render if the roles tab is currently active
     if (!rolesTabPane.classList.contains('active')) {
-        console.log('Roles tab not active, skipping render');
+        // console.log('Roles tab not active, skipping render');
         return;
     }
     
     // Now wait a moment for DOM to update
     setTimeout(() => {
         const rolesList = document.getElementById('rolesList');
-        console.log('rolesList element:', rolesList);
-        console.log('Roles tab classes:', rolesTabPane ? rolesTabPane.className : 'null');
+        // console.log('rolesList element:', rolesList);
+        // console.log('Roles tab classes:', rolesTabPane ? rolesTabPane.className : 'null');
         
         if (!rolesList) {
-            console.error('rolesList element not found!');
-            console.error('Roles tab HTML preview:', rolesTabPane ? rolesTabPane.innerHTML.substring(0, 200) : 'null');
+            // console.error('rolesList element not found!');
+            // console.error('Roles tab HTML preview:', rolesTabPane ? rolesTabPane.innerHTML.substring(0, 200) : 'null');
             return;
         }
     
-        console.log('renderRoles called with:', allRoles);
+        // console.log('renderRoles called with:', allRoles);
     
     if (!Array.isArray(allRoles) || allRoles.length === 0) {
         rolesList.innerHTML = `
@@ -7146,7 +7136,7 @@ function renderRoles() {
             </div>
         `).join('');
     } catch (error) {
-        console.error('Error rendering roles:', error);
+        // console.error('Error rendering roles:', error);
         rolesList.innerHTML = '<div class="alert alert-danger">Error rendering roles</div>';
     }
     }, 0); // Close setTimeout
@@ -7248,7 +7238,7 @@ async function loadPermissionMatrix() {
         
         renderPermissionMatrix(permissionsByResource);
     } catch (error) {
-        console.error('Error loading permissions:', error);
+        // console.error('Error loading permissions:', error);
     }
 }
 
@@ -7318,7 +7308,7 @@ async function loadSessions() {
         window.lastSessionsData = sessions; // Store for tab switching
         renderSessions(sessions);
     } catch (error) {
-        console.error('Error loading sessions:', error);
+        // console.error('Error loading sessions:', error);
         window.lastSessionsData = []; // Store empty array on error
         renderSessionsError();
     }
@@ -7327,13 +7317,13 @@ async function loadSessions() {
 function renderSessions(sessions) {
     // Only render if we're in RBAC view and sessions tab is active
     if (currentView !== 'rbac') {
-        console.log('Not in RBAC view, skipping renderSessions');
+        // console.log('Not in RBAC view, skipping renderSessions');
         return;
     }
     
     const sessionsTabPane = document.getElementById('sessions');
     if (!sessionsTabPane || !sessionsTabPane.classList.contains('active')) {
-        console.log('Sessions tab not active, skipping render');
+        // console.log('Sessions tab not active, skipping render');
         return;
     }
     
@@ -7484,7 +7474,7 @@ async function clearAllSessions() {
         showNotification('All sessions cleared', 'success');
         await loadSessions();
     } catch (error) {
-        console.error('Error clearing sessions:', error);
+        // console.error('Error clearing sessions:', error);
         showNotification('Failed to clear sessions', 'error');
     }
 }
@@ -7503,7 +7493,7 @@ async function revokeSession(sessionId) {
         showNotification('Session revoked', 'success');
         await loadSessions();
     } catch (error) {
-        console.error('Error revoking session:', error);
+        // console.error('Error revoking session:', error);
         showNotification('Failed to revoke session', 'error');
     }
 }
@@ -7550,12 +7540,12 @@ function initializeAPI() {
 // ===== GLOBAL ERROR HANDLING =====
 // Add global error handler to prevent JavaScript errors from breaking the dashboard
 window.addEventListener('error', function(event) {
-    console.error('Global JavaScript error:', event.error);
+    // console.error('Global JavaScript error:', event.error);
     // Don't prevent default to allow normal error reporting
 });
 
 window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
+    // console.error('Unhandled promise rejection:', event.reason);
     // Don't prevent default to allow normal error reporting
 });
 
@@ -7700,7 +7690,7 @@ async function updateOperationsStatus(isPolling = false) {
         }
         
     } catch (error) {
-        console.error('Error updating operations status:', error);
+        // console.error('Error updating operations status:', error);
         // Update status to error
         const statusIndicators = document.querySelectorAll('.operation-status');
         statusIndicators.forEach(indicator => {
@@ -7909,7 +7899,7 @@ async function runPerformanceTest() {
         const docs = [];
         const startInsert = Date.now();
         for (let i = 0; i < 100; i++) {
-            const doc = { id: `doc_${i}`, data: `Test data ${i}`, timestamp: Date.now() };
+            const doc = { id: `doc_${i}`, data: `Test data ${i}` }; // Server will add timestamp
             const resp = await makeAuthenticatedRequest('/api/collections/perf_test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -8102,7 +8092,7 @@ async function loadSchemas() {
         schemas = response || [];
         renderSchemaList();
     } catch (error) {
-        console.error('Error loading schemas:', error);
+        // console.error('Error loading schemas:', error);
         schemas = [];
         renderSchemaList();
     }
@@ -8147,7 +8137,7 @@ async function loadCollectionsForSchema() {
                         });
                     }
                 } catch (err) {
-                    console.warn(`Failed to load collections for library ${library.name}:`, err);
+                    // console.warn(`Failed to load collections for library ${library.name}:`, err);
                 }
             }
         }
@@ -8156,7 +8146,7 @@ async function loadCollectionsForSchema() {
         select.innerHTML = '<option value="">Select a collection...</option>' +
             allCollectionsList.map(col => `<option value="${col}">${col}</option>`).join('');
     } catch (error) {
-        console.error('Error loading collections:', error);
+        // console.error('Error loading collections:', error);
     }
 }
 
@@ -8185,7 +8175,7 @@ async function selectSchema(collection) {
         // Update active state in list
         renderSchemaList();
     } catch (error) {
-        console.error('Error loading schema:', error);
+        // console.error('Error loading schema:', error);
         showNotification('Failed to load schema', 'error');
     }
 }
@@ -8264,7 +8254,7 @@ async function saveSchema() {
         // Select the saved schema
         selectSchema(collection);
     } catch (error) {
-        console.error('Error saving schema:', error);
+        // console.error('Error saving schema:', error);
         showNotification('Failed to save schema', 'error');
     }
 }
@@ -8290,7 +8280,7 @@ async function deleteSchema() {
         // Reload schemas
         await loadSchemas();
     } catch (error) {
-        console.error('Error deleting schema:', error);
+        // console.error('Error deleting schema:', error);
         showNotification('Failed to delete schema', 'error');
     }
 }
@@ -8369,7 +8359,7 @@ async function loadWelcomePanel() {
         }
     } catch (error) {
         // Silently fail if config collection doesn't exist
-        console.log('Welcome panel config not found or error loading:', error);
+        // console.log('Welcome panel config not found or error loading:', error);
     }
 }
 
@@ -8395,7 +8385,7 @@ function logout() {
 
 // ===== JAVASCRIPT SCRIPTS INITIALIZATION =====
 function initializeScripts() {
-    console.log('Initializing Scripts view...');
+    // console.log('Initializing Scripts view...');
     loadScripts();
 }
 
@@ -8644,12 +8634,12 @@ async function saveDocument() {
     }
     
     try {
-        console.log(`Saving document - Collection: ${currentCollection}, Document ID: ${currentDocument}`);
-        console.log('Document content:', parsedDoc);
+        // console.log(`Saving document - Collection: ${currentCollection}, Document ID: ${currentDocument}`);
+        // console.log('Document content:', parsedDoc);
         
         // Save the document using PUT method with document ID in URL
         const requestBody = JSON.stringify(parsedDoc);
-        console.log('Sending request body:', requestBody);
+        // console.log('Sending request body:', requestBody);
         
         const response = await apiRequest(`/api/documents/${currentDocument}`, {
             method: 'PUT',
@@ -8657,7 +8647,7 @@ async function saveDocument() {
             body: requestBody
         });
         
-        console.log('Save response:', response);
+        // console.log('Save response:', response);
         
         if (response.uuid || response._id || response.success || response.id) {
             showNotification('Document saved successfully', 'success');
@@ -8669,11 +8659,11 @@ async function saveDocument() {
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.style.display = 'none';
         } else {
-            console.error('Save failed with response:', response);
+            // console.error('Save failed with response:', response);
             showNotification(response.error || 'Failed to save document', 'error');
         }
     } catch (error) {
-        console.error('Save error:', error);
+        // console.error('Save error:', error);
         showNotification(`Failed to save document: ${error.message}`, 'error');
     }
 }

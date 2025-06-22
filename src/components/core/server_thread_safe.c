@@ -5,6 +5,7 @@
 #include "utils/logger.h"
 #include "utils/metrics.h"
 #include "utils/memory_manager.h"
+#include "core/rate_limiter.h"
 #include <sys/socket.h>
 #include <errno.h>
 #include <string.h>
@@ -20,6 +21,9 @@ extern http_response_t* api_dispatch_request(struct api_context* ctx, http_reque
 extern metric_t* get_server_request_duration_metric(void);
 extern metric_t* get_active_connections_metric(void);
 extern int thread_pool_add_work(thread_pool_t* pool, void (*function)(void*), void* argument);
+
+/* External rate limiter instance */
+extern rate_limiter_t* g_rate_limiter;
 
 
 /* Global thread-safe mode flag */
@@ -139,6 +143,19 @@ void server_accept_loop_thread_safe_direct(server_config_t *config) {
         LOG_DEBUG("Connection #%d accepted, client_fd=%d, from %s:%d", 
                  connection_count, client_fd, 
                  inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        
+        /* Check connection rate limit */
+        const char* client_ip = inet_ntoa(client_addr.sin_addr);
+        if (g_rate_limiter && !connection_rate_check(g_rate_limiter, client_ip)) {
+            LOG_WARNING("Connection rate limit exceeded for IP %s - rejecting connection", client_ip);
+            close(client_fd);
+            continue;
+        }
+        
+        /* Record the connection for rate limiting */
+        if (g_rate_limiter) {
+            connection_rate_record(g_rate_limiter, client_ip);
+        }
         
         /* Create client_conn_t structure for the unified handler */
         client_conn_t* client = (client_conn_t*)BUFFER_ALLOC(sizeof(client_conn_t));

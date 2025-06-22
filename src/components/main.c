@@ -32,6 +32,7 @@
 #include "rbac/jwt_cache.h"
 #include "utils/production_config.h"
 #include "utils/buffer_pool.h"
+#include "core/rate_limiter.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,6 +43,9 @@
 
 /* External global variables needed for cross-component integration */
 extern server_config_t* g_server_config;
+
+/* Global rate limiter instance - defined in globals.c */
+extern rate_limiter_t* g_rate_limiter;
 
 /* Display banner and help information */
 static void display_banner(void) {
@@ -326,6 +330,21 @@ int main(int argc, char** argv) {
   if (config_apply_database_settings(config, database) != 0) {
     LOG_WARNING("No database configuration found or failed to apply - using defaults.");
   }
+  
+  /* Initialize rate limiter with database backend */
+  LOG_DEBUG("Initializing rate limiter with database backend.");
+  g_rate_limiter = rate_limiter_init(database);
+  if (!g_rate_limiter) {
+    LOG_ERROR("Failed to initialize rate limiter");
+    INIT_LOG_FAILURE("MAIN", "Failed to initialize rate limiter");
+    BUFFER_FREE(config);
+    return 1;
+  }
+  
+  /* Create default rate limiter configuration if it doesn't exist */
+  rate_limiter_create_default_config(database);
+  
+  INIT_LOG_SUCCESS("RATE_LIMITER", "Rate limiter initialized with database backend");
   
   /* Enable thread-safe mode with comprehensive tracing */
   LOG_DEBUG("Enabling thread-safe connection management for enhanced stability.");

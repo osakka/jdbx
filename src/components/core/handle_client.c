@@ -4,6 +4,7 @@
 #include "utils/ssl.h"
 #include "utils/config_loader.h"
 #include "utils/buffer_pool.h"
+#include "core/rate_limiter.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -317,10 +318,39 @@ void handle_client(void* client_data) {
       LOG_DEBUG("Setting up SSL connection for client fd=%d", client_fd);
     }
     
+    /* Check circuit breaker for SSL service */
+    extern rate_limiter_t* g_rate_limiter;
+    if (g_rate_limiter) {
+      circuit_state_t ssl_state = circuit_breaker_get_state(g_rate_limiter, "ssl");
+      if (ssl_state == CIRCUIT_OPEN) {
+        if (g_logger) {
+          LOG_WARNING("SSL circuit breaker OPEN - rejecting connection");
+        }
+        const char* circuit_open_response = 
+          "HTTP/1.1 503 Service Unavailable\r\n"
+          "Content-Type: text/plain\r\n"
+          "Connection: close\r\n"
+          "Content-Length: 41\r\n"
+          "Retry-After: 30\r\n"
+          "\r\n"
+          "SSL service temporarily unavailable.\n";
+        send(client_fd, circuit_open_response, strlen(circuit_open_response), MSG_NOSIGNAL);
+        close(client_fd);
+        client->client_fd = 0;
+        goto cleanup;
+      }
+    }
+    
     if (client_setup_ssl(client) != 0) {
       if (g_logger) {
         LOG_ERROR("SSL handshake failed for client fd=%d - rejecting connection", client_fd);
       }
+      
+      /* Record SSL failure for circuit breaker */
+      if (g_rate_limiter) {
+        circuit_breaker_record_failure(g_rate_limiter, "ssl");
+      }
+      
       /* Send HTTP error response before closing */
       const char* ssl_required_response = 
         "HTTP/1.1 400 Bad Request\r\n"
@@ -333,6 +363,11 @@ void handle_client(void* client_data) {
       close(client_fd);
       client->client_fd = 0;
       goto cleanup;
+    }
+    
+    /* Record SSL success for circuit breaker */
+    if (g_rate_limiter) {
+      circuit_breaker_record_success(g_rate_limiter, "ssl");
     }
     
     if (g_logger) {

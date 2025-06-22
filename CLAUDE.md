@@ -1,6 +1,34 @@
 # JDBX Development Guidelines
 
-**Last Updated**: June 21, 2025 (v7.0.1 - Memory Checkpoint Safety Enhancements)
+**Last Updated**: June 22, 2025 (v7.0.2 - Comprehensive Server Protection System)
+
+## 🛡️ COMPREHENSIVE SERVER PROTECTION SYSTEM (v7.0.2)
+
+**JDBX has achieved enterprise-grade security resilience with a comprehensive protection system against misbehaving clients, service degradation, and resource exhaustion attacks - all using JDBX's own database as the single source of truth.**
+
+### 🚨 **COMPLETE PROTECTION IMPLEMENTATION:**
+- **PER-IP RATE LIMITING**: Token bucket algorithm (600 req/min, 50 burst) with HTTP 429 responses
+- **CIRCUIT BREAKERS**: Service degradation protection (SSL monitoring) with automatic recovery
+- **CONNECTION THROTTLING**: SYN flood prevention (10 conn/sec per IP) at accept() level
+- **DATABASE-BACKED STATE**: All protection state stored as documents in JDBX system library
+
+### 🔧 **TECHNICAL EXCELLENCE:**
+1. **Single Source of Truth**: Zero external dependencies - JDBX protects itself using its own database
+2. **Atomic Operations**: Race-condition-free token consumption with query-based document updates
+3. **Unified Architecture**: All protection documents follow type/library/collection patterns
+4. **Automatic Cleanup**: Expired rate limit documents cleaned up automatically
+
+### 📊 **PROTECTION COMPONENTS:**
+- **Rate Limiter**: `rate_limiter.c/h` with token bucket algorithm and database storage
+- **Circuit Breakers**: Three-state protection (CLOSED/OPEN/HALF_OPEN) for service monitoring
+- **Connection Limiting**: Pre-SSL handshake filtering integrated in server accept loop
+- **Configuration**: Database-stored config with runtime updates via system documents
+
+### 🏆 **ENTERPRISE SECURITY BENEFITS:**
+- **Attack Prevention**: Blocks API abuse, SYN floods, and service overload scenarios
+- **Graceful Degradation**: Proper HTTP error codes (429, 503) with retry guidance
+- **Zero Regressions**: All existing functionality preserved with enhanced protection
+- **Production Ready**: Comprehensive testing validates protection under intensive load
 
 ## 🔒 MEMORY CHECKPOINT SAFETY ENHANCEMENTS (v7.0.1)
 
@@ -448,6 +476,11 @@ memory_promote(document);  // Survives checkpoint rewinds
  45. RBAC DELETION SAFETY RULE: Promote user documents during RBAC deletion operations to prevent crashes when iterating over roles after checkpoint operations.
  46. CHECKPOINT COMMIT VALIDATION: Add pointer validation in checkpoint commit to handle corrupted allocations gracefully and prevent crashes during commit operations.
  47. MEMORY PROMOTION FOR JSON: Use json_promote() for JSON objects that need checkpoint promotion - it internally calls memory_promote() with proper type safety.
+ 48. SERVER PROTECTION RULE: All protection mechanisms (rate limiting, circuit breakers, connection throttling) use JDBX's own database for state storage - no external dependencies.
+ 49. RATE LIMITING ATOMIC OPERATIONS: Token bucket check and consumption must be atomic to prevent race conditions - query document, check tokens, consume token, and update document in single operation.
+ 50. CIRCUIT BREAKER STATES: Use three-state pattern (CLOSED/OPEN/HALF_OPEN) for service protection with automatic recovery testing and configurable thresholds.
+ 51. PROTECTION DOCUMENT TYPES: Use proper document classification (type=rate_limit, type=circuit_breaker, type=connection_rate) in system library for unified storage.
+ 52. AUTOMATIC CLEANUP: Protection documents must have expiration times and automatic cleanup to prevent unbounded database growth from rate limiting state.
 
 ## 🎯 HTTP PROTOCOL COMPLIANCE: Incomplete Request Handling Excellence (v6.5.9)
 

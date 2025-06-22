@@ -39,8 +39,14 @@ const char* http_status_string(http_status_t status) {
       return "404 Not Found";
     case HTTP_METHOD_NOT_ALLOWED:
       return "405 Method Not Allowed";
+    case HTTP_CONFLICT:
+      return "409 Conflict";
+    case HTTP_TOO_MANY_REQUESTS:
+      return "429 Too Many Requests";
     case HTTP_INTERNAL_SERVER_ERROR:
       return "500 Internal Server Error";
+    case HTTP_SERVICE_UNAVAILABLE:
+      return "503 Service Unavailable";
     default:
       return "500 Internal Server Error";
   }
