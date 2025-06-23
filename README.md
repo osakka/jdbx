@@ -23,6 +23,12 @@ JDBX is a high-performance document database built specifically for JSON data, f
 **Latest Version**: 7.0.4 (June 22, 2025)  
 **Status**: 🚀 **Enterprise Production Ready** - 100% thread safety with unified threading model
 
+## ⚠️ Development Disclaimer
+
+**IMPORTANT**: This codebase is under heavy active development and has **NOT been tested in production environments**. While the testing infrastructure demonstrates excellent performance and reliability in controlled environments, real-world production deployment requires additional validation, security auditing, and performance testing under actual production loads.
+
+**Use at your own risk** - this software is provided as-is for development, testing, and evaluation purposes. Production deployment should include comprehensive testing, security review, and performance validation for your specific use case.
+
 ## Architecture
 
 <div align="center">
@@ -504,7 +510,15 @@ We welcome contributions! Please see our [Contributing Guide](docs/development/c
 
 ## License
 
-JDBX is licensed under [Your License]. See `LICENSE` file for details.
+JDBX is licensed under a **Modified MIT License with Attribution Requirement**. 
+
+**Key Points:**
+- ✅ **Free for all use** - personal, commercial, open source
+- ✅ **Attribution required** - Must credit "Powered by JDBX Database" in commercial deployments
+- 🔔 **Notification requested** - Please let us know about production use (helps community growth)
+- ⚠️ **No production warranty** - Use at your own risk, testing required
+
+See [`LICENSE`](LICENSE) file for complete terms.
 
 ## Support & Community
 
