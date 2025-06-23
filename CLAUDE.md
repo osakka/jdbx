@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.0 - API Monolith Decomposition Complete  
+**Version**: 7.2.1 - E2E Testing Fixes Complete  
 **Updated**: June 23, 2025
 
 ## Project Overview
@@ -46,6 +46,16 @@ memory_promote(persistent_data);
 ```
 
 **NEVER use json_free()** - All JSON managed by checkpoints
+
+## Recent Fixes (v7.2.1)
+
+### E2E Testing Issues Resolved
+1. **ART Delete Implementation**: `skiplist_delete()` now functional in art.c
+2. **RBAC User Deletion**: Fixed path parameter extraction in rbac_api.c  
+3. **Status Endpoint**: Added `/api/status` handler in health_api.c
+4. **JSON Metrics**: Support `?format=json` parameter for JSON output
+
+All fixes maintain single source of truth with no parallel implementations.
 
 ## Build & Run
 

@@ -225,10 +225,50 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
   return response;
 }
 
+/**
+ * Handle status request - simpler version of health check
+ */
+http_response_t* api_handle_status(api_context_t *ctx, http_request_t *request) {
+  /* Avoid unused parameter warnings */
+  (void)ctx;
+  (void)request;
+  
+  /* Create JSON response with basic status information */
+  json_value_t *status = json_create_object();
+  
+  /* Add status */
+  json_object_set(status, "status", json_create_string("ok"));
+  
+  /* Add server name */
+  json_object_set(status, "server", json_create_string("JDBX"));
+  
+  /* Add version */
+  json_object_set(status, "version", json_create_string("7.2.0"));
+  
+  /* Add timestamp */
+  json_object_set(status, "timestamp", json_create_number((double)time(NULL)));
+  
+  /* Add uptime */
+  time_t uptime = get_uptime();
+  json_object_set(status, "uptime_seconds", json_create_number((double)uptime));
+  
+  /* Convert to JSON string */
+  char *status_json = json_stringify(status);
+  /* CHECKPOINT: json_free(status); */
+  
+  /* Create response */
+  http_response_t* response = create_http_response(HTTP_OK, status_json, "application/json");
+  
+  /* Free the JSON string */
+  BUFFER_FREE(status_json);
+  
+  return response;
+}
+
 /* Declare global metrics registry */
 extern metrics_registry_t* g_metrics_registry;
 
-/* Handle metrics request - Prometheus format */
+/* Handle metrics request - Prometheus format by default, JSON if requested */
 http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *request) {
   if (!ctx || !request) {
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -241,11 +281,24 @@ http_response_t* health_api_handle_metrics(api_context_t *ctx, http_request_t *r
                  "{\"error\":\"Metrics registry not initialized\"}", "application/json");
   }
   
+  /* Check if JSON format is requested via query parameter */
+  bool json_format = false;
+  if (request->query && strstr(request->query, "format=json")) {
+    json_format = true;
+  }
+  
   /* Get metrics JSON representation */
   char* metrics_json = metrics_get_json(g_metrics_registry);
   if (!metrics_json) {
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to get metrics\"}", "application/json");
+  }
+  
+  /* If JSON format requested, return directly */
+  if (json_format) {
+    http_response_t* response = create_http_response(HTTP_OK, metrics_json, "application/json");
+    BUFFER_FREE(metrics_json);
+    return response;
   }
   
   /* Convert JSON to Prometheus format (simplified) */
@@ -631,10 +684,10 @@ void register_health_api_endpoints(api_context_t *ctx) {
   }
   
   /* Check if we have enough space for our routes */
-  if (ctx->num_routes + 4 > ctx->max_routes) {
+  if (ctx->num_routes + 5 > ctx->max_routes) {
     if (g_logger) {
       LOG_ERROR("register health API endpoints: Not enough space in routes array.");
-      LOG_ERROR("Current routes: %d, Max routes: %d, Need to add: 4", 
+      LOG_ERROR("Current routes: %d, Max routes: %d, Need to add: 5", 
            ctx->num_routes, ctx->max_routes);
     }
     return;
@@ -643,12 +696,15 @@ void register_health_api_endpoints(api_context_t *ctx) {
   /* Register health check endpoint */
   ctx->routes[ctx->num_routes++] = (api_route_t){"/api/health", HTTP_GET, api_handle_health_check, 0};
   
+  /* Register status endpoint */
+  ctx->routes[ctx->num_routes++] = (api_route_t){"/api/status", HTTP_GET, api_handle_status, 0};
+  
   /* Register metrics endpoints */
   ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics", HTTP_GET, health_api_handle_metrics, 1};
   ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics/available", HTTP_GET, health_api_handle_metrics_available, 1};
   ctx->routes[ctx->num_routes++] = (api_route_t){"/api/metrics/export", HTTP_POST, health_api_handle_metrics_export, 1};
   
   if (g_logger) {
-    LOG_INFO("Health API endpoints registered - added 4 routes.");
+    LOG_INFO("Health API endpoints registered - added 5 routes.");
   }
 }

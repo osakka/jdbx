@@ -111,13 +111,16 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
     }
     
     /* For simple patterns: extract the last segment */
+    LOG_DEBUG("Extracting simple pattern for param '%s' from path '%s'", param_name, path);
     const char* last_slash = strrchr(path, '/');
     if (!last_slash || *(last_slash + 1) == '\0') {
+      LOG_DEBUG("No last slash or empty segment");
       return NULL;
     }
     
     const char* id_start = last_slash + 1;
     size_t id_len = strlen(id_start);
+    LOG_DEBUG("Found last segment: '%s' (len=%zu)", id_start, id_len);
     
     /* Check for additional path segments */
     const char* next_slash = strchr(id_start, '/');
@@ -130,6 +133,7 @@ static char* extract_path_parameter(const char* path, const char* param_name) {
       if (id) {
         strncpy(id, id_start, id_len);
         id[id_len] = '\0';
+        LOG_DEBUG("Extracted ID: '%s'", id);
         return id;
       }
     }
@@ -638,11 +642,31 @@ http_response_t* api_handle_rbac_delete_user(api_context_t* ctx, http_request_t*
     return create_error_response("Unauthorized", HTTP_FORBIDDEN);
   }
   
-  /* Get user ID from URL */
-  char* user_id = extract_path_parameter(request->path, "id");
-  if (!user_id) {
+  /* Get user ID from URL - extract from path directly */
+  LOG_DEBUG("Delete user request path: %s", request->path);
+  
+  /* Extract user ID from path: /api/rbac/users/{id} */
+  const char* users_pos = strstr(request->path, "/users/");
+  if (!users_pos) {
+    LOG_ERROR("Failed to find /users/ in path: %s", request->path);
     return create_error_response("User ID not specified", HTTP_BAD_REQUEST);
   }
+  
+  const char* user_id_start = users_pos + 7; /* length of "/users/" */
+  if (!*user_id_start) {
+    LOG_ERROR("Empty user ID in path: %s", request->path);
+    return create_error_response("User ID not specified", HTTP_BAD_REQUEST);
+  }
+  
+  /* Copy the user ID */
+  size_t user_id_len = strlen(user_id_start);
+  char* user_id = BUFFER_ALLOC(user_id_len + 1);
+  if (!user_id) {
+    return create_error_response("Memory allocation failed", HTTP_INTERNAL_SERVER_ERROR);
+  }
+  strcpy(user_id, user_id_start);
+  
+  LOG_DEBUG("Extracted user ID: %s", user_id);
   
   /* Prevent deleting own account */
   if (strcmp(requester_id, user_id) == 0) {

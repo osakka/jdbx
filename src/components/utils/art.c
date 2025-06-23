@@ -382,15 +382,56 @@ void* skiplist_search(art_t* art, const void* key, size_t key_len, size_t* value
 
 /**
  * Delete key from ART (drop-in replacement for skiplist_delete)
+ * SURGICAL FIX: Implement basic deletion without node merging for now
  */
 bool skiplist_delete(art_t* art, const void* key, size_t key_len) {
     if (!art || !key || key_len == 0) return false;
     
-    /* TODO: Implement ART deletion with node merging */
-    atomic_fetch_add(&art->delete_count, 1);
+    /* Get current root - using atomic load for thread safety */
+    void* current = atomic_load(&art->root);
+    if (!current) {
+        return false;
+    }
     
-    LOG_DEBUG("ART: Delete operation (full implementation needed)");
-    return false;
+    /* Since we're using a multi-document container, search for the key */
+    art_document_list_t* doc_list = (art_document_list_t*)current;
+    if (!doc_list) {
+        return false;
+    }
+    
+    bool found = false;
+    pthread_rwlock_wrlock(&doc_list->lock);
+    
+    /* Linear search for the document with matching key */
+    for (size_t i = 0; i < doc_list->count; i++) {
+        art_leaf_t* leaf = doc_list->documents[i];
+        if (leaf && leaf->key_len == key_len && 
+            memcmp(leaf->key, key, key_len) == 0) {
+            
+            /* Found the document - remove it from the list */
+            /* Shift remaining documents down */
+            for (size_t j = i; j < doc_list->count - 1; j++) {
+                doc_list->documents[j] = doc_list->documents[j + 1];
+            }
+            
+            doc_list->count--;
+            atomic_fetch_sub(&art->size, 1);
+            atomic_fetch_add(&art->delete_count, 1);
+            
+            /* Free the leaf memory */
+            BUFFER_FREE(leaf->key);
+            BUFFER_FREE(leaf->value);
+            BUFFER_FREE(leaf);
+            
+            found = true;
+            LOG_DEBUG("ART: Deleted key successfully");
+            break;
+        }
+    }
+    
+    pthread_rwlock_unlock(&doc_list->lock);
+    
+    return found;
 }
 
 /**
