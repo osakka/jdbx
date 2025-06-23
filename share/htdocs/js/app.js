@@ -1033,7 +1033,7 @@ function updateConnectionsChart(connectionsData) {
     const recentData = connectionsData.data.slice(-10);
     
     recentData.forEach(point => {
-        const date = new Date(point.timestamp);
+        const date = new Date(point.timestamp * 1000); // Convert Unix timestamp to milliseconds
         labels.push(date.toLocaleTimeString());
         data.push(point.active || point.active_connections || 0);
     });
@@ -1059,7 +1059,7 @@ function updateResponseTimesChart(performanceData) {
     const recentData = performanceData.data.slice(-10);
     
     recentData.forEach(point => {
-        const date = new Date(point.timestamp);
+        const date = new Date(point.timestamp * 1000); // Convert Unix timestamp to milliseconds
         labels.push(date.toLocaleTimeString());
         avgData.push(point.avg_response_time_ms || 0);
     });
@@ -6034,7 +6034,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
             // Calculate operations per second based on deltas between data points
             for (let i = 0; i < operationsDoc.data.length; i++) {
                 const point = operationsDoc.data[i];
-                const date = new Date(point.timestamp);
+                const date = new Date(point.timestamp * 1000); // Convert Unix timestamp to milliseconds
                 let label;
                 
                 if (timeRange === '1h') {
@@ -6052,7 +6052,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
                 // Calculate ops/sec from the delta since last data point
                 if (i > 0) {
                     const prevPoint = operationsDoc.data[i - 1];
-                    const timeDiff = (new Date(point.timestamp) - new Date(prevPoint.timestamp)) / 1000; // seconds
+                    const timeDiff = (new Date(point.timestamp * 1000) - new Date(prevPoint.timestamp * 1000)) / 1000; // seconds
                     
                     // Calculate the delta in operations
                     const readDelta = (point.read || 0) - (prevPoint.read || 0);
