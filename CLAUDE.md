@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.2 - UI Library Switching & Single Source of Truth  
+**Version**: 7.2.3 - UI Collection Display Fix  
 **Updated**: June 23, 2025
 
 ## Project Overview
@@ -47,9 +47,15 @@ memory_promote(persistent_data);
 
 **NEVER use json_free()** - All JSON managed by checkpoints
 
-## Recent Fixes (v7.2.2)
+## Recent Fixes (v7.2.3)
 
-### UI Library Switching Fixed
+### UI Collection Display Fixed
+1. **Collection Name Mapping**: Added plural to singular mapping in app.js
+   - Collections show plural names (users, roles, sessions)
+   - Documents have singular types (user, role, session)
+   - UI now correctly maps when querying documents
+
+### UI Library Switching Fixed (v7.2.2)
 1. **Login Endpoint**: Fixed login.html to use `/api/auth/login` (not `/api/login`)
 2. **Single Source of Truth**: Removed duplicate `api_handle_switch_library` implementations
    - Kept authoritative version in api_auth.c

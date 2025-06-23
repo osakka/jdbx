@@ -1849,9 +1849,24 @@ async function loadDocuments(collectionPath, isPolling = false) {
         
         // Use the unified documents API with query filters for library and type
         // In unified architecture, collection name corresponds to document type
+        // Map plural collection names to singular document types
+        const collectionToType = {
+            'users': 'user',
+            'roles': 'role',
+            'sessions': 'session',
+            'libraries': 'library',
+            'metrics': 'metric',
+            'configs': 'config',
+            'functions': 'function',
+            'validators': 'validator',
+            'transformers': 'transformer'
+        };
+        
+        const documentType = collectionToType[collection] || collection;
+        
         const query = {
             library: library,
-            type: collection
+            type: documentType
         };
         const response = await apiRequest(`/api/documents?query=${encodeURIComponent(JSON.stringify(query))}`);
         // Handle both array response and object with documents property
