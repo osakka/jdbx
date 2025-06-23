@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.3 - UI Collection Display Fix  
+**Version**: 7.2.4 - API Server-Side Filtering Fix Complete  
 **Updated**: June 23, 2025
 
 ## Project Overview
@@ -47,9 +47,24 @@ memory_promote(persistent_data);
 
 **NEVER use json_free()** - All JSON managed by checkpoints
 
-## Recent Fixes (v7.2.3)
+## Recent Fixes (v7.2.4)
 
-### UI Collection Display Fixed
+### 🔧 API Server-Side Filtering Fix Complete
+**CRITICAL API BUG ELIMINATED**: Fixed server-side document filtering by implementing proper URL decoding in query parameter parsing, transforming from 100% query bypass to precise server-side filtering.
+
+**Technical Achievement:**
+1. **URL Decoding Implementation**: Added comprehensive hex decoding (%XX) and plus-to-space conversion for query parameter values in `parse_url_query_to_json()`
+2. **Query Bypass Eliminated**: URL-encoded JSON queries were stored as raw strings, causing complete filter bypass
+3. **Server-Side Filtering Restored**: Queries like `{"type":"user"}` now return 7 documents (was returning all 15+ documents)
+4. **Single Source of Truth Maintained**: Eliminates need for client-side filtering workarounds
+
+**Validation Results:**
+- ✅ Query `{"nonexistent_field":"value"}` returns 0 documents (was returning all)
+- ✅ Query `{"type":"user","library":"system"}` returns 7 user documents (was returning all 15+)
+- ✅ UI collection display now shows correct document counts filtered by type
+- ✅ All `/api/documents?query=...` requests now filter server-side as intended
+
+### UI Collection Display Fixed (v7.2.3)
 1. **Collection Name Mapping**: Added plural to singular mapping in app.js
    - Collections show plural names (users, roles, sessions)
    - Documents have singular types (user, role, session)
