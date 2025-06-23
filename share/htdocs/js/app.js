@@ -1086,24 +1086,28 @@ async function loadLibraryStatistics() {
         
         let statsHtml = '';
         
-        // Process each library
-        for (const library of libraries) {
-            try {
-                // Get library stats using unified documents API - query documents by library
-                const query = JSON.stringify({"library": library.name});
-                const encodedQuery = encodeURIComponent(query);
-                const docsResponse = await apiRequest(`/api/documents?query=${encodedQuery}`);
-                
-                // Calculate stats from unified documents
-                const documents = docsResponse.documents || [];
-                const total_documents = documents.length;
-                
-                // Count unique document types as "collections"
-                const documentTypes = new Set(documents.map(doc => doc.type).filter(type => type));
+        // Optimize: Get all documents in one API call and group by library
+        try {
+            const allDocsResponse = await apiRequest('/api/documents');
+            const allDocuments = allDocsResponse.documents || [];
+            
+            // Group documents by library
+            const documentsByLibrary = {};
+            allDocuments.forEach(doc => {
+                const lib = doc.library || 'default';
+                if (!documentsByLibrary[lib]) {
+                    documentsByLibrary[lib] = [];
+                }
+                documentsByLibrary[lib].push(doc);
+            });
+            
+            // Process each library with pre-calculated stats
+            for (const library of libraries) {
+                const libraryDocs = documentsByLibrary[library.name] || [];
+                const total_documents = libraryDocs.length;
+                const documentTypes = new Set(libraryDocs.map(doc => doc.type).filter(type => type));
                 const total_collections = documentTypes.size;
-                
-                // Estimate size (rough calculation)
-                const estimated_size = documents.length * 1024; // 1KB per document estimate
+                const estimated_size = libraryDocs.length * 1024;
                 
                 const stats = {
                     total_collections,
@@ -1143,9 +1147,10 @@ async function loadLibraryStatistics() {
                         </div>
                     </div>
                 `;
-            } catch (error) {
-                // console.error(`Failed to load stats for library ${library.name}:`, error);
-                // Add placeholder card for libraries with errors
+            }
+        } catch (error) {
+            // Fallback: show libraries without detailed stats
+            for (const library of libraries) {
                 statsHtml += `
                     <div class="col-md-4 col-lg-3 mb-3">
                         <div class="card h-100 ${library.name === currentLibrary ? 'border-primary' : ''}">
@@ -1296,32 +1301,15 @@ async function renderLibrarySelector() {
     const selector = document.getElementById('globalLibrarySelector');
     if (!selector) return;
     
-    // Update the selector options with collection counts using unified documents API
-    const selectorOptions = [];
+    // Simplified: show libraries without counts to avoid multiple API calls
+    // This prevents SSL timeout issues from concurrent requests
+    const selectorOptions = libraries.map(lib => 
+        `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
+            ${lib.name}
+        </option>`
+    ).join('');
     
-    for (const lib of libraries) {
-        try {
-            // Get document types (collections) for this library using unified API
-            const query = JSON.stringify({"library": lib.name});
-            const encodedQuery = encodeURIComponent(query);
-            const docsResponse = await apiRequest(`/api/documents?query=${encodedQuery}`);
-            
-            const documents = docsResponse.documents || [];
-            const documentTypes = new Set(documents.map(doc => doc.type).filter(type => type));
-            const collectionCount = documentTypes.size;
-            
-            selectorOptions.push(`<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
-                ${lib.name} (${collectionCount} collections)
-            </option>`);
-        } catch (error) {
-            // Fallback: show library without count
-            selectorOptions.push(`<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
-                ${lib.name}
-            </option>`);
-        }
-    }
-    
-    selector.innerHTML = selectorOptions.join('');
+    selector.innerHTML = selectorOptions;
     
     // Add onchange handler
     selector.onchange = function() {
