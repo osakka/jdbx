@@ -52,3 +52,32 @@ test_server
 socket_test.py
 
 docs-archive/
+
+# Core dumps and crash artifacts
+core
+core.*
+*.core
+vgcore.*
+
+# Database files
+*.db
+*.jdbx
+*.jdb
+*.wal
+*.idx
+*.mmap
+
+# Large test files
+tests/performance/test_rwlock.db/
+tests/*/core
+tests/*/*.db
+tests/*/*.jdbx
+
+# Backup and temporary files
+*.bak
+*.tmp
+*.temp
+*~
+
+# Build artifacts in trash
+trash/
