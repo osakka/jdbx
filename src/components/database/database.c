@@ -988,6 +988,29 @@ database_t* db_init(const char* path) {
     
     pthread_rwlock_unlock(&g_db.lock);
     
+    /* Bootstrap welcome message for new databases */
+    if (!file_exists) {
+        LOG_INFO("Bootstrapping welcome message for new database");
+        json_value_t* welcome_doc = json_create_object();
+        json_object_set(welcome_doc, "type", json_create_string("config"));
+        json_object_set(welcome_doc, "library", json_create_string("system"));
+        json_object_set(welcome_doc, "collection", json_create_string("config"));
+        json_object_set(welcome_doc, "owner", json_create_string("system"));
+        json_object_set(welcome_doc, "name", json_create_string("welcome_message"));
+        json_object_set(welcome_doc, "title", json_create_string("Welcome to JDBX"));
+        json_object_set(welcome_doc, "message", json_create_string("Welcome to JDBX - Your JSON Document Database"));
+        json_object_set(welcome_doc, "type_config", json_create_string("welcome_panel"));
+        
+        json_value_t* result = storage_insert_document(&g_db.facade, welcome_doc);
+        if (result) {
+            LOG_INFO("Welcome message bootstrapped successfully");
+            /* CHECKPOINT: json_free(result); */
+        } else {
+            LOG_WARNING("Failed to bootstrap welcome message");
+        }
+        /* CHECKPOINT: json_free(welcome_doc); */
+    }
+    
     LOG_INFO("JDBX database initialized successfully with WAL support");
     return &g_db.facade;
 }
