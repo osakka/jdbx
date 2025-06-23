@@ -7019,7 +7019,7 @@ function renderUsers() {
     tbody.innerHTML = allUsers.map(user => {
         // Map role IDs to role names
         const roleNames = (user.roles || []).map(roleId => {
-            const role = allRoles.find(r => r.id === roleId);
+            const role = allRoles.find(r => (r.uuid || r.id) === roleId);
             return role ? role.name : roleId;
         });
         
@@ -7032,7 +7032,7 @@ function renderUsers() {
                         </div>
                         <div>
                             <div class="fw-bold">${user.username || 'Unknown'}</div>
-                            <small class="text-muted">ID: ${user.id || 'N/A'}</small>
+                            <small class="text-muted">ID: ${user.uuid || user.id || 'N/A'}</small>
                         </div>
                     </div>
                 </td>
@@ -7050,10 +7050,10 @@ function renderUsers() {
                 <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
                 <td>
                     <div class="action-buttons">
-                        <button class="btn btn-sm btn-outline-primary" onclick="editUser('${user.id}')">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editUser('${user.uuid || user.id}')">
                             <i class="bi bi-pencil"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.id}')">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.uuid || user.id}')">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
@@ -7158,8 +7158,8 @@ function renderRoles() {
     
     try {
         rolesList.innerHTML = allRoles.map(role => `
-            <div class="card role-card mb-2 ${selectedRole?.id === role.id ? 'active' : ''}" 
-                 onclick="selectRole('${role.id}')">
+            <div class="card role-card mb-2 ${selectedRole?.uuid === role.uuid ? 'active' : ''}" 
+                 onclick="selectRole('${role.uuid || role.id}')">
                 <div class="card-body">
                     <h6 class="card-title mb-1">${role.name}</h6>
                     <p class="card-text small text-muted mb-2">${role.description || 'No description'}</p>
@@ -7178,7 +7178,7 @@ function renderRoles() {
 }
 
 function selectRole(roleId) {
-    selectedRole = allRoles.find(r => r.id === roleId);
+    selectedRole = allRoles.find(r => (r.uuid || r.id) === roleId);
     renderRoles();
     renderRoleDetails();
 }
@@ -7218,10 +7218,10 @@ function renderRoleDetails() {
         </div>
         
         <div class="mt-4">
-            <button class="btn btn-sm btn-primary" onclick="editRole('${selectedRole.id}')">
+            <button class="btn btn-sm btn-primary" onclick="editRole('${selectedRole.uuid || selectedRole.id}')">
                 <i class="bi bi-pencil"></i> Edit Role
             </button>
-            <button class="btn btn-sm btn-danger" onclick="deleteRole('${selectedRole.id}')">
+            <button class="btn btn-sm btn-danger" onclick="deleteRole('${selectedRole.uuid || selectedRole.id}')">
                 <i class="bi bi-trash"></i> Delete Role
             </button>
         </div>
