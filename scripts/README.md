@@ -1,31 +1,50 @@
-# Scripts Directory
+# JDBX Scripts
 
-This directory contains all scripts used for building, testing, and maintaining the JDBX project.
+This directory contains all scripts for testing, examples, and tools.
 
 ## Directory Structure
 
-- **build/**: Scripts for building the project and components
-  - `build_server.sh`: Main script for building the server
-  - `monitor_server.sh`: Script for monitoring server during builds
-  - `test_server.sh`: Script for testing server after builds
-  - Other build-related utility scripts
+### `/scripts/tests/`
+Testing and performance scripts:
+- `analyze_db_performance.sh` - Database performance analysis
+- `test_skiplist_performance.sh` - Skiplist performance testing
+- `test_memory_simple.sh` - Memory usage testing
+- `test_cache_performance.sh` - Cache performance benchmarks
+- `compile_test_refcount.sh` - Reference counting tests
+- `test_jwt_performance.sh` - JWT performance testing
+- `test_js_integration.sh` - JavaScript integration tests
+- `test_jwt_cache.sh` - JWT cache testing
 
-- **testing/**: Scripts for testing the project
-  - Test runner scripts
-  - Test utilities and helpers
-  - Performance and benchmarking test scripts
+### `/scripts/examples/`
+Example scripts demonstrating JDBX usage:
+- `api_test.sh` - API endpoint testing examples
+- `basic_test.sh` - Basic functionality tests
+- `curl_examples.sh` - cURL command examples
+- `test_indexes.sh` - Index testing examples
+- `visualization_examples.sh` - Data visualization examples
+- `setup_welcome_panel.sh` - Welcome panel setup
+- `install_examples.sh` - Install JavaScript examples
 
-- **js/**: JavaScript-related scripts
-  - QuickJS integration and setup scripts
-  - JS compilation test scripts
-  - JS path resolution and caching scripts
-
-- **maintenance/**: Maintenance and utility scripts
-  - Code formatting and style enforcement scripts
-  - Warning and error fix scripts
-  - Source code reorganization scripts
-  - Header file include fixing scripts
+### `/scripts/tools/`
+Utility and migration tools:
+- `migrate_to_new_structure.sh` - Database migration helper
 
 ## Usage
 
-Most scripts should be run from the project root directory. See individual script comments for specific usage instructions.
+All scripts should be run from the project root:
+
+```bash
+# Run a test script
+./scripts/tests/test_cache_performance.sh
+
+# Run an example
+./scripts/examples/curl_examples.sh
+
+# Run a tool
+./scripts/tools/migrate_to_new_structure.sh
+```
+
+## Runtime Script
+
+The main runtime script remains in its original location:
+- `build/jdbx_runtime.sh` - Start/stop/status for JDBX daemon
