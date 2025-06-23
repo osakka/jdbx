@@ -1,6 +1,6 @@
 JDBX Database License (Modified MIT with Attribution Requirement)
 
-Copyright (c) 2025 itdlabs/jsondb Project Contributors
+Copyright (c) 2025 itdlabs/jdbx Project Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@ work based on this Software, MUST include the following attribution in:
 (c) Any licensing agreements or terms of service
 
 Required Attribution:
-"Powered by JDBX Database - https://github.com/itdlabs/jsondb"
+"Powered by JDBX Database - https://github.com/itdlabs/jdbx"
 
 NOTIFICATION REQUIREMENT:
 Users deploying this Software in production environments or creating derivative 
