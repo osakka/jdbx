@@ -404,7 +404,7 @@ http_response_t* api_handle_metrics_export(api_context_t* ctx, http_request_t* r
   return create_http_response(HTTP_OK, success_response, "application/json");
 #else
   /* In tools build, metrics export is not available */
-  return create_http_response(HTTP_NOT_IMPLEMENTED, 
+  return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                "{\"error\":\"Metrics export not available in tools build\"}", 
                "application/json");
 #endif
