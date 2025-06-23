@@ -22,6 +22,8 @@
 /* Global bootstrap synchronization mutex */
 static pthread_mutex_t g_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int g_bootstrap_completed = 0;
+/* MOVED TO api_auth.c as part of Phase 2.2 API module extraction */
+#if 0
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   LOG_DEBUG("Starting login handler.");
   
@@ -399,3 +401,4 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     
     return response;
 }
+#endif /* Moved to api_auth.c */
