@@ -3,6 +3,7 @@
 #include "database/document_storage.h"
 #include "database/database.h"
 #include "database/virtual_layer.h"
+#include "database/adaptive_indexer.h"
 #include "utils/logger.h"
 #include "utils/json.h"
 #include <time.h>
@@ -28,6 +29,7 @@ static char* g_metric_id_performance = NULL;
 static char* g_metric_id_cache = NULL;
 static char* g_metric_id_memory = NULL;
 static char* g_metric_id_connections = NULL;
+static char* g_metric_id_adaptive_indexing = NULL;
 
 /* Metrics persistence state */
 typedef struct {
@@ -90,6 +92,7 @@ int metrics_persistence_init(database_t* db) {
   g_metric_id_cache = NULL;
   g_metric_id_memory = NULL;
   g_metric_id_connections = NULL;
+  g_metric_id_adaptive_indexing = NULL;
   
   /* SURGICAL FIX: Add startup delay to prevent early JDBX deadlock */
   g_metrics_persistence->last_snapshot = time(NULL) + 30; /* Delay first snapshot by 30 seconds */
@@ -262,15 +265,35 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   json_value_t* document_to_save = NULL;
   
   if (existing) {
+    LOG_DEBUG("Checking metric %s for changes", metric_name);
     /* Document exists - check if values have changed */
     json_value_t* current_values = json_object_get(existing, "current");
     int values_changed = !current_values || !json_equals(current_values, current_data);
     
-    /* Always update the timestamp */
-    json_object_set(existing, "updated_at", json_create_integer(timestamp));
+    /* Debug type checking */
+    if (current_values && current_data && strcmp(metric_name, "adaptive_indexing") == 0) {
+      json_value_t* v1 = json_object_get(current_values, "effectiveness_rate");
+      json_value_t* v2 = json_object_get(current_data, "effectiveness_rate");
+      if (v1 && v2) {
+        LOG_DEBUG("effectiveness_rate types - current: %d, new: %d", v1->type, v2->type);
+      }
+    }
     
-    /* Only append new data point if values have changed */
+    if (!values_changed) {
+      LOG_DEBUG("Metric %s values unchanged, skipping update", metric_name);
+    } else if (current_values && current_data) {
+      char* current_str = json_stringify(current_values);
+      char* new_str = json_stringify(current_data);
+      LOG_DEBUG("Metric %s values changed - current: %s, new: %s", 
+                metric_name, current_str ? current_str : "NULL", new_str ? new_str : "NULL");
+      if (current_str) BUFFER_FREE(current_str);
+      if (new_str) BUFFER_FREE(new_str);
+    }
+    
+    /* Only update document if values have changed */
     if (values_changed) {
+      /* Update the timestamp */
+      json_object_set(existing, "updated_at", json_create_integer(timestamp));
       json_value_t* data_array = json_object_get(existing, "data");
       json_value_t* max_entries_val = json_object_get(existing, "max_entries");
       
@@ -301,12 +324,15 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
       
       /* Update current values */
       json_object_set(existing, "current", json_deep_copy(current_data));
+      
+      /* Mark document for saving */
+      document_to_save = existing;
     } else {
-      /* Values haven't changed, free the unused data point */
+      /* Values haven't changed, free the unused data point and don't save */
       /* CHECKPOINT: json_free(data_point); */
+      /* CHECKPOINT: json_free(existing); */
+      return 1; /* Success - no update needed */
     }
-    
-    document_to_save = existing;
   } else {
     /* Create new document - let db_insert_document generate the ID */
     json_value_t* new_doc = json_create_object();
@@ -480,6 +506,50 @@ static int save_metrics_snapshot(metrics_persistence_t* mp) {
     success = 0;
   }
   /* CHECKPOINT: json_free(connections); */
+  
+  /* Update adaptive indexing metrics */
+  json_value_t* adaptive_stats = adaptive_indexer_get_stats();
+  if (adaptive_stats) {
+    /* Extract key metrics for time-series storage */
+    json_value_t* adaptive_indexing = json_create_object();
+    
+    /* Basic counts */
+    json_value_t* indexes_created = json_object_get(adaptive_stats, "indexes_created");
+    json_value_t* indexes_skipped = json_object_get(adaptive_stats, "indexes_skipped");
+    json_value_t* indexes_array = json_object_get(adaptive_stats, "adaptive_indexes");
+    
+    json_object_set(adaptive_indexing, "indexes_created", 
+                   json_create_integer(indexes_created && indexes_created->type == JSON_INTEGER ? 
+                                     indexes_created->value.integer : 0));
+    json_object_set(adaptive_indexing, "indexes_skipped", 
+                   json_create_integer(indexes_skipped && indexes_skipped->type == JSON_INTEGER ? 
+                                     indexes_skipped->value.integer : 0));
+    
+    /* Calculate effectiveness metrics */
+    int total_indexes = 0;
+    int effective_indexes = 0;
+    if (indexes_array && indexes_array->type == JSON_ARRAY) {
+      total_indexes = json_array_size(indexes_array);
+      for (size_t i = 0; i < json_array_size(indexes_array); i++) {
+        json_value_t* index = json_array_get(indexes_array, i);
+        json_value_t* is_effective = json_object_get(index, "is_effective");
+        if (is_effective && is_effective->type == JSON_INTEGER && is_effective->value.integer) {
+          effective_indexes++;
+        }
+      }
+    }
+    
+    json_object_set(adaptive_indexing, "total_indexes", json_create_integer(total_indexes));
+    json_object_set(adaptive_indexing, "effective_indexes", json_create_integer(effective_indexes));
+    json_object_set(adaptive_indexing, "effectiveness_rate", 
+                   json_create_number(total_indexes > 0 ? (double)effective_indexes / total_indexes * 100.0 : 0.0));
+    
+    if (!update_metric_document(mp, &g_metric_id_adaptive_indexing, "adaptive_indexing", "adaptive_indexing", adaptive_indexing)) {
+      success = 0;
+    }
+    /* CHECKPOINT: json_free(adaptive_indexing); */
+    /* CHECKPOINT: json_free(adaptive_stats); */
+  }
   
   if (success) {
     LOG_DEBUG("Metrics saved.");

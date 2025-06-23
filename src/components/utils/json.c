@@ -1105,8 +1105,16 @@ int json_equals(json_value_t* value1, json_value_t* value2) {
     return value1 == value2; /* Both NULL is equal, otherwise not equal */
   }
   
-  /* Different types are never equal */
+  /* Different types are never equal, except for number types */
   if (value1->type != value2->type) {
+    /* Special case: compare INTEGER and NUMBER types */
+    if ((value1->type == JSON_INTEGER && value2->type == JSON_NUMBER) ||
+        (value1->type == JSON_NUMBER && value2->type == JSON_INTEGER)) {
+      /* Compare numeric values across types */
+      double v1 = (value1->type == JSON_INTEGER) ? (double)value1->value.integer : value1->value.number;
+      double v2 = (value2->type == JSON_INTEGER) ? (double)value2->value.integer : value2->value.number;
+      return v1 == v2;
+    }
     return 0;
   }
   
