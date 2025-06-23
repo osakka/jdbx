@@ -30,7 +30,8 @@ TEST_TARGETS = \
     test_api_documents \
     test_api_auth \
     test_api_rbac \
-    test_api_integration
+    test_api_integration \
+    test_performance_benchmarks
 
 # Default target
 all: $(TEST_TARGETS)
@@ -67,9 +68,15 @@ test_api_rbac: test_api_rbac.c test_framework.o $(API_DIR)/api_rbac.c $(COMMON_D
 		$(COMMON_DEPS) \
 		$(LDFLAGS)
 
-# Integration tests (placeholder)
+# Integration tests
 test_api_integration: test_api_integration.c test_framework.o $(COMMON_DEPS)
 	$(CC) $(CFLAGS) -o $@ test_api_integration.c test_framework.o \
+		$(COMMON_DEPS) \
+		$(LDFLAGS)
+
+# Performance benchmarks
+test_performance_benchmarks: test_performance_benchmarks.c test_framework.o $(COMMON_DEPS)
+	$(CC) $(CFLAGS) -o $@ test_performance_benchmarks.c test_framework.o \
 		$(COMMON_DEPS) \
 		$(LDFLAGS)
 
