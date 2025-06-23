@@ -1,6 +1,6 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.1 - E2E Testing Fixes Complete  
+**Version**: 7.2.2 - UI Library Switching & Single Source of Truth  
 **Updated**: June 23, 2025
 
 ## Project Overview
@@ -47,15 +47,25 @@ memory_promote(persistent_data);
 
 **NEVER use json_free()** - All JSON managed by checkpoints
 
-## Recent Fixes (v7.2.1)
+## Recent Fixes (v7.2.2)
 
-### E2E Testing Issues Resolved
+### UI Library Switching Fixed
+1. **Login Endpoint**: Fixed login.html to use `/api/auth/login` (not `/api/login`)
+2. **Single Source of Truth**: Removed duplicate `api_handle_switch_library` implementations
+   - Kept authoritative version in api_auth.c
+   - Removed duplicates from auth_session_api.c
+3. **URL Parameter Extraction**: Library switch handler now extracts from URL path
+   - UI sends: `/api/auth/library/{name}`
+   - Handler extracts library name from path
+4. **Access Control**: Simplified library access permissions
+   - Admin users have access to system library
+   - All users have access to default library
+
+### Previous Fixes (v7.2.1)
 1. **ART Delete Implementation**: `skiplist_delete()` now functional in art.c
 2. **RBAC User Deletion**: Fixed path parameter extraction in rbac_api.c  
 3. **Status Endpoint**: Added `/api/status` handler in health_api.c
 4. **JSON Metrics**: Support `?format=json` parameter for JSON output
-
-All fixes maintain single source of truth with no parallel implementations.
 
 ## Build & Run
 

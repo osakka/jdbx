@@ -125,7 +125,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(system_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert system library document */
-              json_value_t* system_lib_result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, system_lib_doc);
+              json_value_t* system_lib_result = db_insert_document(ctx->db, "default", "documents", system_lib_doc);
               if (system_lib_result) {
                 json_value_t* system_lib_id_val = json_object_get(system_lib_result, "uuid");
                 if (system_lib_id_val && system_lib_id_val->type == JSON_STRING) {
@@ -148,7 +148,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
               json_object_set(default_lib_doc, "updated_at", json_create_integer(now));
               
               /* Insert default library document */
-              json_value_t* default_lib_result = db_insert_document(ctx->db, STORAGE_LIBRARY, STORAGE_COLLECTION, default_lib_doc);
+              json_value_t* default_lib_result = db_insert_document(ctx->db, "default", "documents", default_lib_doc);
               if (default_lib_result) {
                 json_value_t* default_lib_id_val = json_object_get(default_lib_result, "uuid");
                 if (default_lib_id_val && default_lib_id_val->type == JSON_STRING) {
@@ -216,8 +216,7 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
                       
                       if (bootstrap_response_str) {
                         /* CHECKPOINT: json_free(bootstrap_results); */
-                        /* CHECKPOINT: json_free(body); */
-                        
+                                            
                         http_response_t* response = create_http_response(HTTP_OK, bootstrap_response_str, "application/json");
                         BUFFER_FREE(bootstrap_response_str);
                         /* CHECKPOINT: json_free(bootstrap_response_obj); */
@@ -257,7 +256,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (!ctx->db) {
     LOG_ERROR("Database context is NULL!");
     /* CHECKPOINT: json_free(username_filter); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Database not initialized\"}", "application/json");
   }
@@ -269,7 +267,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     
   if (!query_results) {
     /* CHECKPOINT: json_free(username_filter); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to query user\"}", "application/json");
   }
@@ -279,7 +276,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (!results || results->type != JSON_ARRAY || json_array_size(results) == 0) {
     /* CHECKPOINT: json_free(username_filter); */
     /* CHECKPOINT: json_free(query_results); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
   }
@@ -292,7 +288,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
       !password_hash_val || password_hash_val->type != JSON_STRING) {
     /* CHECKPOINT: json_free(username_filter); */
     /* CHECKPOINT: json_free(query_results); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"User data corrupted\"}", "application/json");
   }
@@ -306,7 +301,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (!verify_password(password, stored_hash)) {
     /* CHECKPOINT: json_free(username_filter); */
     /* CHECKPOINT: json_free(query_results); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_UNAUTHORIZED, 
                  "{\"error\":\"Invalid credentials\"}", "application/json");
   }
@@ -325,7 +319,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
   if (!response_str || !response_obj) {
     LOG_ERROR("Failed to create token response.");
     /* CHECKPOINT: json_free(query_results); */
-    /* CHECKPOINT: json_free(body); */
     /* CHECKPOINT: if (response_obj) json_free(response_obj); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create response\"}", "application/json");
@@ -402,7 +395,6 @@ http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {
     /* Clean up and return response */
     /* CHECKPOINT: json_free(username_filter); */
     /* CHECKPOINT: json_free(query_results); */
-    /* CHECKPOINT: json_free(body); */
     
     http_response_t* response = create_http_response(HTTP_OK, response_str, "application/json");
     LOG_DEBUG("Returning successful login response with library context: %s", user_lib);
@@ -437,7 +429,6 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
 
   if (!username_val || username_val->type != JSON_STRING || 
       !password_val || password_val->type != JSON_STRING) {
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username and password required\"}", "application/json");
   }
@@ -451,14 +442,12 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
 
   /* Validate username */
   if (strlen(username) < 3 || strlen(username) > 50) {
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Username must be between 3 and 50 characters\"}", "application/json");
   }
 
   /* Validate password */
   if (strlen(password) < 8) {
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_BAD_REQUEST, 
                  "{\"error\":\"Password must be at least 8 characters\"}", "application/json");
   }
@@ -474,8 +463,7 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
     json_value_t* documents = json_object_get(existing_users, "documents");
     if (documents && documents->type == JSON_ARRAY && json_array_size(documents) > 0) {
       /* CHECKPOINT: json_free(existing_users); */
-      /* CHECKPOINT: json_free(body); */
-      return create_http_response(HTTP_CONFLICT, 
+        return create_http_response(HTTP_CONFLICT, 
                    "{\"error\":\"Username already exists\"}", "application/json");
     }
     /* CHECKPOINT: json_free(existing_users); */
@@ -487,7 +475,6 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   /* Create new user */
   json_value_t* user_result = virtual_create_user(ctx->db, username, password, RBAC_SYSTEM_LIBRARY);
   if (!user_result) {
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to create user\"}", "application/json");
   }
@@ -496,7 +483,6 @@ http_response_t* api_handle_register(api_context_t* ctx, http_request_t* request
   json_value_t* user_id_val = json_object_get(user_result, "uuid");
   if (!user_id_val || user_id_val->type != JSON_STRING) {
     /* CHECKPOINT: json_free(user_result); */
-    /* CHECKPOINT: json_free(body); */
     return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
                  "{\"error\":\"Failed to get user ID\"}", "application/json");
   }
@@ -1079,34 +1065,38 @@ http_response_t* api_handle_get_library_context(api_context_t* ctx, http_request
 
 /**
  * Switch library context
+ * POST /api/auth/library/{library_name}
  */
 http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* request) {
-    if (!ctx || !ctx->db || !request || !request->body) {
+    if (!ctx || !ctx->db || !request) {
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Invalid request\"}", "application/json");
     }
     
-    /* Parse request body */
-    json_value_t* body = json_parse(request->body);
-    if (!body || body->type != JSON_OBJECT) {
+    /* Extract library name from URL path */
+    const char* path = request->path;
+    const char* lib_prefix = "/api/auth/library/";
+    
+    /* Log for debugging */
+    LOG_INFO("Library switch handler called with path: '%s'", path);
+    
+    if (strncmp(path, lib_prefix, strlen(lib_prefix)) != 0) {
         return create_http_response(HTTP_BAD_REQUEST,
-                     "{\"error\":\"Invalid JSON body\"}", "application/json");
+                     "{\"error\":\"Invalid library path\"}", "application/json");
     }
     
-    /* Get library name from request */
-    json_value_t* library_val = json_object_get(body, "library");
-    if (!library_val || library_val->type != JSON_STRING) {
-        /* CHECKPOINT: json_free(body); */
+    const char* target_library = path + strlen(lib_prefix);
+    if (!target_library || strlen(target_library) == 0) {
         return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Library name required\"}", "application/json");
     }
     
-    const char* new_library = library_val->value.string;
+    /* Use the library name from the URL */
+    const char* new_library = target_library;
     
     /* Extract token */
     char* token = api_extract_token(request);
     if (!token) {
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"No authorization token\"}", "application/json");
     }
@@ -1115,7 +1105,6 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     jwt_token_t* jwt = jwt_decode(token);
     if (!jwt || !jwt->payload) {
         BUFFER_FREE(token);
-        /* CHECKPOINT: json_free(body); */
         if (jwt) jwt_free(jwt);
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"Invalid token\"}", "application/json");
@@ -1135,39 +1124,49 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     if (!user_id || !username) {
         BUFFER_FREE(token);
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Invalid token claims\"}", "application/json");
     }
     
-    /* Verify library exists */
-    json_value_t* library_query = json_create_object();
-    json_object_set(library_query, "type", json_create_string(DOC_TYPE_NAME_LIBRARY));
-    json_object_set(library_query, "name", json_create_string(new_library));
-    json_object_set(library_query, "library", json_create_string("system"));
+    /* Check if user has access to the library */
+    int has_access = 0;
     
-    json_value_t* library_results = virtual_query(ctx->db, DOC_TYPE_NAME_LIBRARY, "system", VIRTUAL_COLLECTION_LIBRARIES, library_query);
-    /* CHECKPOINT: json_free(library_query); */
-    
-    if (!library_results) {
-        BUFFER_FREE(token);
-        jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
-        return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
-                     "{\"error\":\"Failed to query library\"}", "application/json");
+    /* Users always have access to default library */
+    if (strcmp(new_library, "default") == 0) {
+        has_access = 1;
+        LOG_INFO("User has access to default library");
+    }
+    /* Admins have access to system library */
+    else if (strcmp(new_library, "system") == 0) {
+        /* Check if user is admin - for now, check if username is "admin" */
+        if (username && strcmp(username, "admin") == 0) {
+            has_access = 1;
+            LOG_INFO("Admin user has access to system library");
+        } else if (ctx->rbac && rbac_check_permission(ctx->rbac, user_id, RBAC_COLLECTION, "system", RBAC_READ)) {
+            has_access = 1;
+            LOG_INFO("User has explicit permission to access system library");
+        }
+    }
+    /* Users have access to their own library */
+    else if (username && strcmp(new_library, username) == 0) {
+        has_access = 1;
+        LOG_INFO("User has access to their personal library");
+    }
+    /* Check permissions for other libraries */
+    else {
+        if (ctx->rbac && rbac_check_permission(ctx->rbac, user_id, RBAC_COLLECTION, new_library, RBAC_READ)) {
+            has_access = 1;
+            LOG_INFO("User has explicit permission to access library '%s'", new_library);
+        }
     }
     
-    json_value_t* docs = json_object_get(library_results, "documents");
-    if (!docs || docs->type != JSON_ARRAY || json_array_size(docs) == 0) {
-        /* CHECKPOINT: json_free(library_results); */
+    if (!has_access) {
+        LOG_WARNING("User %s denied access to library '%s'", username, new_library);
         BUFFER_FREE(token);
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
-        return create_http_response(HTTP_NOT_FOUND,
-                     "{\"error\":\"Library not found\"}", "application/json");
+        return create_http_response(HTTP_FORBIDDEN,
+                     "{\"error\":\"Access denied to library\"}", "application/json");
     }
-    
-    /* CHECKPOINT: json_free(library_results); */
     
     /* Create new JWT with updated library context */
     json_value_t* response_obj = json_create_object();
@@ -1187,7 +1186,6 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
         /* CHECKPOINT: json_free(response_obj); */
         BUFFER_FREE(token);
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to create JWT\"}", "application/json");
     }
@@ -1207,7 +1205,6 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
         jwt_free(new_jwt);
         BUFFER_FREE(token);
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to create new token\"}", "application/json");
     }
@@ -1244,7 +1241,6 @@ http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* r
     jwt_free(new_jwt);
     BUFFER_FREE(token);
     jwt_free(jwt);
-    /* CHECKPOINT: json_free(body); */
     
     char* response_str = json_stringify(response_obj);
     /* CHECKPOINT: json_free(response_obj); */
@@ -1274,8 +1270,7 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     
     if (!current_pass_val || current_pass_val->type != JSON_STRING ||
         !new_pass_val || new_pass_val->type != JSON_STRING) {
-        /* CHECKPOINT: json_free(body); */
-        return create_http_response(HTTP_BAD_REQUEST,
+            return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"Current and new passwords required\"}", "application/json");
     }
     
@@ -1284,15 +1279,13 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     
     /* Validate new password */
     if (strlen(new_password) < 8) {
-        /* CHECKPOINT: json_free(body); */
-        return create_http_response(HTTP_BAD_REQUEST,
+            return create_http_response(HTTP_BAD_REQUEST,
                      "{\"error\":\"New password must be at least 8 characters\"}", "application/json");
     }
     
     /* Extract token */
     char* token = api_extract_token(request);
     if (!token) {
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"No authorization token\"}", "application/json");
     }
@@ -1301,7 +1294,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     jwt_token_t* jwt = jwt_decode(token);
     if (!jwt || !jwt->payload) {
         BUFFER_FREE(token);
-        /* CHECKPOINT: json_free(body); */
         if (jwt) jwt_free(jwt);
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"Invalid token\"}", "application/json");
@@ -1312,7 +1304,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     
     if (!user_id) {
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Invalid token claims\"}", "application/json");
     }
@@ -1321,7 +1312,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     json_value_t* user_doc = virtual_get(ctx->db, user_id);
     if (!user_doc) {
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_NOT_FOUND,
                      "{\"error\":\"User not found\"}", "application/json");
     }
@@ -1331,7 +1321,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     if (!password_hash_val || password_hash_val->type != JSON_STRING) {
         /* CHECKPOINT: json_free(user_doc); */
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"User data corrupted\"}", "application/json");
     }
@@ -1344,7 +1333,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     if (!verify_password(current_password, stored_hash)) {
         /* CHECKPOINT: json_free(user_doc); */
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_UNAUTHORIZED,
                      "{\"error\":\"Current password is incorrect\"}", "application/json");
     }
@@ -1356,7 +1344,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     if (!new_hash) {
         /* CHECKPOINT: json_free(user_doc); */
         jwt_free(jwt);
-        /* CHECKPOINT: json_free(body); */
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,
                      "{\"error\":\"Failed to hash new password\"}", "application/json");
     }
@@ -1377,7 +1364,6 @@ http_response_t* api_handle_change_password(api_context_t* ctx, http_request_t* 
     BUFFER_FREE(new_hash);
     /* CHECKPOINT: json_free(user_doc); */
     jwt_free(jwt);
-    /* CHECKPOINT: json_free(body); */
     
     if (!update_result) {
         return create_http_response(HTTP_INTERNAL_SERVER_ERROR,

@@ -13,8 +13,7 @@ http_response_t* api_handle_get_current_session(api_context_t* ctx, http_request
 /* Get current library context */
 http_response_t* api_handle_get_library_context(api_context_t* ctx, http_request_t* request);
 
-/* Switch library context */
-http_response_t* api_handle_switch_library(api_context_t* ctx, http_request_t* request);
+/* Switch library context - MOVED to api_auth.h for single source of truth */
 
 /* Terminate a specific session */
 http_response_t* api_handle_terminate_session(api_context_t* ctx, http_request_t* request);

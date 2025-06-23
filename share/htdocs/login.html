@@ -97,8 +97,8 @@
             // Hide error message
             document.getElementById('errorMessage').style.display = 'none';
             
-            // Send login request (server has /api/login, not /api/auth/login)
-            fetch('/api/login', {
+            // Send login request to correct endpoint
+            fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
