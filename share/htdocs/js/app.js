@@ -1171,8 +1171,10 @@ function formatDate(dateString) {
 
 async function loadDashboardMetrics() {
     try {
-        // Fetch metrics data from _metrics collection
-        const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
+        // Fetch metrics data using properly URL-encoded JSON query
+        const query = JSON.stringify({"type":"metric","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const metricsData = await apiRequest(`/api/documents?query=${encodedQuery}`).catch(err => {
             // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -2353,9 +2355,10 @@ async function validateDocumentRealtime(content) {
 
 async function getCollectionValidators(collection) {
     try {
-        // Use the current library for validators collection
-        const validatorsPath = `${currentLibrary}/_validators`;
-        const response = await apiRequest(`/api/documents?type=validator&library=${currentLibrary}`);
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"validator","library":currentLibrary});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         if (response && response.documents) {
             // Filter validators for this collection or global validators
             return response.documents.filter(script => {
@@ -4574,9 +4577,10 @@ async function loadTransformersForPreview() {
     }
     
     try {
-        // Use the current library for transformers collection
-        const transformersPath = `${currentLibrary}/_transformers`;
-        const response = await apiRequest(`/api/documents?type=transformer&library=${currentLibrary}`);
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"transformer","library":currentLibrary});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         if (response && response.documents) {
             // Filter transformers for this collection or global transformers
             currentTransformers = response.documents.filter(script => {
@@ -5748,9 +5752,11 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // console.log('API responses:', { health, collections, cacheStats });
         
-        // Fetch metrics data from _metrics collection
+        // Fetch metrics data using properly URL-encoded JSON query
         // console.log('Fetching metrics from _metrics collection...');
-        const metricsData = await apiRequest('/api/documents?type=metric&library=system').catch(err => {
+        const query = JSON.stringify({"type":"metric","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const metricsData = await apiRequest(`/api/documents?query=${encodedQuery}`).catch(err => {
             // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -6955,8 +6961,13 @@ async function loadRBACData(isPolling = false) {
 
 async function loadUsers() {
     try {
-        const response = await apiRequest('/api/documents?type=user&library=system&collection=users');
-        allUsers = Array.isArray(response) ? response : (response.users || []);
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"user","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        
+        // Handle unified documents response format
+        allUsers = Array.isArray(response) ? response : (response.documents || []);
         renderUsers();
     } catch (error) {
         // console.error('Error loading users:', error);
@@ -7058,10 +7069,13 @@ async function loadRoles() {
     // console.log('Auth token exists:', !!localStorage.getItem('jdbx_auth_token'));
     
     try {
-        const response = await apiRequest('/api/documents?type=role&library=system&collection=roles');
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"role","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         // console.log('Roles API response:', response);
         
-        // Handle both direct array and object with roles property
+        // Handle unified documents response format
         allRoles = Array.isArray(response) ? response : (response.documents || []);
         // console.log('Processed roles:', allRoles);
         
@@ -7216,8 +7230,10 @@ function renderRoleDetails() {
 
 async function loadPermissionMatrix() {
     try {
-        // Use unified documents API to get roles and extract permissions
-        const response = await apiRequest('/api/documents?type=role&library=system&collection=roles');
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"role","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         
         // Extract permissions from role documents
         const permissionsByResource = {};
@@ -7324,7 +7340,10 @@ function loadAuditLog() {
 // Sessions management functions
 async function loadSessions() {
     try {
-        const response = await apiRequest('/api/documents?type=session&library=system&collection=sessions');
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"session","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         const sessions = response.documents || [];
         window.lastSessionsData = sessions; // Store for tab switching
         renderSessions(sessions);
@@ -7481,8 +7500,10 @@ async function clearAllSessions() {
     }
     
     try {
-        // Get all sessions
-        const response = await apiRequest('/api/documents?type=session&library=system&collection=sessions');
+        // Use properly URL-encoded JSON query for server-side filtering
+        const query = JSON.stringify({"type":"session","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         const sessions = response.documents || [];
         
         // Delete each session
@@ -8312,7 +8333,9 @@ async function loadWelcomePanel() {
     
     try {
         // Check if _system_config collection exists first
-        const systemConfigResponse = await apiRequest('/api/documents?type=config&library=system', 'GET', null, true);
+        const query1 = JSON.stringify({"type":"config","library":"system"});
+        const encodedQuery1 = encodeURIComponent(query1);
+        const systemConfigResponse = await apiRequest(`/api/documents?query=${encodedQuery1}`, 'GET', null, true);
         
         if (systemConfigResponse && systemConfigResponse.documents) {
             // Look for welcome message in system config
@@ -8345,7 +8368,9 @@ async function loadWelcomePanel() {
         }
         
         // Fall back to checking _config collection for legacy support
-        const configResponse = await apiRequest('/api/documents?type=config&library=default', 'GET', null, true);
+        const query2 = JSON.stringify({"type":"config","library":"default"});
+        const encodedQuery2 = encodeURIComponent(query2);
+        const configResponse = await apiRequest(`/api/documents?query=${encodedQuery2}`, 'GET', null, true);
         
         if (configResponse && configResponse.documents) {
             const welcomeConfig = configResponse.documents.find(doc => 
