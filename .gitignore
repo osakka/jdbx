@@ -81,3 +81,7 @@ tests/*/*.jdbx
 
 # Build artifacts in trash
 trash/
+# Runtime files
+build/var/*.jdbx
+build/var/*.log
+build/var/*.pid
