@@ -81,10 +81,10 @@ int metrics_persistence_init(database_t* db) {
   /* PURE DOCUMENTS: No collection creation needed - using documents collection */
   LOG_INFO("Using documents collection for metrics storage (pure documents architecture)");
   
-  /* PURE DOCUMENTS: Skip metric document lookup for now - create fresh */
-  LOG_INFO("Skipping existing metric document lookup - will create fresh metrics");
+  /* PURE DOCUMENTS: Initialize metric IDs to NULL - they'll be found or created as needed */
+  LOG_INFO("Initializing metrics system - will find existing metric documents or create new ones");
   
-  /* Initialize all metric IDs to NULL so they'll be created fresh */
+  /* Initialize all metric IDs to NULL - find_metric_by_name will locate existing documents */
   g_metric_id_operations = NULL;
   g_metric_id_performance = NULL; 
   g_metric_id_cache = NULL;
@@ -193,13 +193,13 @@ static void* metrics_persistence_thread(void* arg) {
  * Helper function to find metric document by name
  */
 static char* find_metric_by_name(metrics_persistence_t* mp, const char* metric_name) {
-  /* PURE DOCUMENTS: Query documents collection with type=metric */
+  /* PURE DOCUMENTS: Query documents collection with type=metric using fixed storage API */
   json_value_t* query = json_create_object();
   json_object_set(query, "type", json_create_string("metric"));
   json_object_set(query, "name", json_create_string(metric_name));
   json_object_set(query, "library", json_create_string("system"));
   
-  json_value_t* result = db_query_documents(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, query);
+  json_value_t* result = storage_query_documents(mp->db, query);
   /* CHECKPOINT: json_free(query); */
   
   if (result) {
@@ -258,7 +258,7 @@ static int update_metric_document(metrics_persistence_t* mp, char** metric_id_pt
   }
   
   /* Check if document exists */
-  json_value_t* existing = metric_id ? db_get_document(mp->db, STORAGE_LIBRARY, STORAGE_COLLECTION, metric_id) : NULL;
+  json_value_t* existing = metric_id ? storage_get_document(mp->db, metric_id) : NULL;
   json_value_t* document_to_save = NULL;
   
   if (existing) {
