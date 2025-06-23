@@ -1089,9 +1089,27 @@ async function loadLibraryStatistics() {
         // Process each library
         for (const library of libraries) {
             try {
-                // Get library stats
-                const statsResponse = await apiRequest(`/api/libraries/${library.name}/stats`);
-                const stats = statsResponse.stats || {};
+                // Get library stats using unified documents API - query documents by library
+                const query = JSON.stringify({"library": library.name});
+                const encodedQuery = encodeURIComponent(query);
+                const docsResponse = await apiRequest(`/api/documents?query=${encodedQuery}`);
+                
+                // Calculate stats from unified documents
+                const documents = docsResponse.documents || [];
+                const total_documents = documents.length;
+                
+                // Count unique document types as "collections"
+                const documentTypes = new Set(documents.map(doc => doc.type).filter(type => type));
+                const total_collections = documentTypes.size;
+                
+                // Estimate size (rough calculation)
+                const estimated_size = documents.length * 1024; // 1KB per document estimate
+                
+                const stats = {
+                    total_collections,
+                    total_documents,
+                    total_size: estimated_size
+                };
                 
                 // Create library stat card
                 statsHtml += `
@@ -1163,9 +1181,22 @@ function formatBytes(bytes) {
 }
 
 // Helper function to format date
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
+function formatDate(dateInput) {
+    if (!dateInput) return 'N/A';
+    
+    // Handle Unix timestamp (number) or date string
+    let date;
+    if (typeof dateInput === 'number') {
+        // Unix timestamp - multiply by 1000 to convert to milliseconds
+        date = new Date(dateInput * 1000);
+    } else {
+        // Date string
+        date = new Date(dateInput);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'N/A';
+    
     return date.toLocaleDateString();
 }
 
@@ -1243,7 +1274,7 @@ async function loadLibraries() {
             
             // Load collections first, then render library selector with counts
             await loadBrowserCollections();
-            renderLibrarySelector();
+            await renderLibrarySelector();
         } else {
             // console.warn('Invalid libraries response format:', response);
             throw new Error('Invalid response format');
@@ -1256,24 +1287,41 @@ async function loadLibraries() {
             { name: 'system', description: 'System library for internal operations' }
         ];
         // console.log('Using fallback libraries:', libraries);
-        renderLibrarySelector();
+        await renderLibrarySelector();
     }
 }
 
 // Render library selector in the navigation bar
-function renderLibrarySelector() {
+async function renderLibrarySelector() {
     const selector = document.getElementById('globalLibrarySelector');
     if (!selector) return;
     
-    // Update the selector options with collection counts
-    selector.innerHTML = libraries.map(lib => {
-        const libCollections = allCollections.filter(c => c.library === lib.name);
-        const collectionCount = libCollections.length;
-        // console.log(`Library ${lib.name} has ${collectionCount} collections:`, libCollections);
-        return `<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
-            ${lib.name} (${collectionCount} collections)
-        </option>`;
-    }).join('');
+    // Update the selector options with collection counts using unified documents API
+    const selectorOptions = [];
+    
+    for (const lib of libraries) {
+        try {
+            // Get document types (collections) for this library using unified API
+            const query = JSON.stringify({"library": lib.name});
+            const encodedQuery = encodeURIComponent(query);
+            const docsResponse = await apiRequest(`/api/documents?query=${encodedQuery}`);
+            
+            const documents = docsResponse.documents || [];
+            const documentTypes = new Set(documents.map(doc => doc.type).filter(type => type));
+            const collectionCount = documentTypes.size;
+            
+            selectorOptions.push(`<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
+                ${lib.name} (${collectionCount} collections)
+            </option>`);
+        } catch (error) {
+            // Fallback: show library without count
+            selectorOptions.push(`<option value="${lib.name}" ${lib.name === currentLibrary ? 'selected' : ''}>
+                ${lib.name}
+            </option>`);
+        }
+    }
+    
+    selector.innerHTML = selectorOptions.join('');
     
     // Add onchange handler
     selector.onchange = function() {
@@ -4946,7 +4994,7 @@ async function createNewCollection() {
             
             // Refresh collections to show the new one
             await loadBrowserCollections();
-            renderLibrarySelector(); // Update library selector with new counts
+            await renderLibrarySelector(); // Update library selector with new counts
             
             // Auto-select the new collection
             setTimeout(() => selectCollection(collectionName), 100);
@@ -7642,11 +7690,7 @@ function parseJSONSafely(jsonString, context = 'JSON', showNotificationOnError =
     }
 }
 
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-}
+// formatDate function moved to line 1184 - this duplicate removed
 
 // ===== ACTION HANDLERS =====
 function createCollection() {
@@ -8340,7 +8384,7 @@ async function loadWelcomePanel() {
         if (systemConfigResponse && systemConfigResponse.documents) {
             // Look for welcome message in system config
             const welcomeConfig = systemConfigResponse.documents.find(doc => 
-                doc.type === 'welcome_message'
+                doc.name === 'welcome_message'
             );
             
             if (welcomeConfig) {
