@@ -184,8 +184,16 @@ jwt_token_t* jwt_decode(const char* token_str) {
         token->payload->sub[len] = '\0';
     }
     
+    /* Set other required fields */
+    token->payload->iss = strdup("jdbx-auth");
+    token->payload->aud = strdup("jdbx-api");
     token->payload->exp = time(NULL) + 3600;  /* 1 hour from now */
     token->payload->iat = time(NULL);
+    
+    /* Add claims object with user info */
+    token->payload->claims = json_create_object();
+    json_object_set(token->payload->claims, "username", json_create_string("testuser"));
+    json_object_set(token->payload->claims, "library", json_create_string("default"));
     
     token->token_str = strdup(token_str);
     
@@ -219,6 +227,7 @@ char* rbac_db_create_session(database_t* db, const char* user_id, const char* to
     (void)db;  /* Unused parameter */
     if (!g_mock_auth_db || !user_id || !token) return NULL;
     
+    
     json_value_t* session = json_create_object();
     char id[32];
     snprintf(id, sizeof(id), "session-%zu", json_array_size(g_mock_auth_db->sessions) + 1);
@@ -228,6 +237,7 @@ char* rbac_db_create_session(database_t* db, const char* user_id, const char* to
     json_object_set(session, "token", json_create_string(token));
     json_object_set(session, "type", json_create_string("session"));
     json_object_set(session, "library", json_create_string("system"));
+    json_object_set(session, "active", json_create_boolean(1));
     
     if (ip_address) {
         json_object_set(session, "ip_address", json_create_string(ip_address));
@@ -246,6 +256,9 @@ char* rbac_db_create_session(database_t* db, const char* user_id, const char* to
     json_object_set(session, "expires_at", json_create_string(timestamp));
     
     json_array_append(g_mock_auth_db->sessions, json_deep_copy(session));
+    
+    /* Also add to documents array so db_query_documents can find it */
+    json_array_append(g_mock_auth_db->documents, json_deep_copy(session));
     
     /* CHECKPOINT: json_free(session); */
     
@@ -312,17 +325,86 @@ int rbac_db_add_user_to_role(database_t* db, const char* user_id, const char* ro
     return 1;
 }
 
+/* Mock virtual_query - the main function used by logout/session functions */
+json_value_t* virtual_query(database_t* db, const char* doc_type, const char* library, const char* collection, json_value_t* query) {
+    (void)db;          /* Unused parameter */
+    (void)doc_type;    /* Unused parameter */
+    (void)library;     /* Unused parameter */
+    (void)collection;  /* Unused parameter */
+    
+    if (!g_mock_auth_db || !query) {
+        return NULL;
+    }
+    
+    
+    json_value_t* result = json_create_object();
+    json_value_t* docs = json_create_array();
+    
+    /* Search through sessions array for matches */
+    for (size_t i = 0; i < json_array_size(g_mock_auth_db->sessions); i++) {
+        json_value_t* session = json_array_get(g_mock_auth_db->sessions, i);
+        int matches = 1;
+        
+        /* Check if query criteria match */
+        if (query && query->type == JSON_OBJECT) {
+            const char* key;
+            json_value_t* val;
+            json_object_foreach(query, key, val) {
+                json_value_t* session_val = json_object_get(session, key);
+                if (!json_values_equal(val, session_val)) {
+                    matches = 0;
+                    break;
+                }
+            }
+        }
+        
+        if (matches) {
+            json_array_append(docs, json_deep_copy(session));
+        }
+    }
+    
+    json_object_set(result, "documents", docs);
+    json_object_set(result, "count", json_create_integer(json_array_size(docs)));
+    
+    return result;
+}
+
+/* Mock virtual_get_session_by_token - used by get_current_session */
+json_value_t* virtual_get_session_by_token(database_t* db, const char* token) {
+    (void)db;  /* Unused parameter */
+    if (!g_mock_auth_db || !token) return NULL;
+    
+    
+    /* Search in sessions */
+    for (size_t i = 0; i < json_array_size(g_mock_auth_db->sessions); i++) {
+        json_value_t* session = json_array_get(g_mock_auth_db->sessions, i);
+        json_value_t* tok = json_object_get(session, "token");
+        if (tok && tok->type == JSON_STRING && strcmp(tok->value.string, token) == 0) {
+            return json_deep_copy(session);
+        }
+    }
+    
+    return NULL;
+}
+
 /* Mock virtual layer functions */
 json_value_t* virtual_get(database_t* db, const char* uuid) {
     (void)db;  /* Unused parameter */
     if (!g_mock_auth_db || !uuid) return NULL;
     
+    printf("\n  DEBUG: virtual_get looking for UUID: %s\n", uuid);
+    printf("  DEBUG: sessions array size: %zu\n", json_array_size(g_mock_auth_db->sessions));
+    
     /* Search in sessions */
     for (size_t i = 0; i < json_array_size(g_mock_auth_db->sessions); i++) {
         json_value_t* session = json_array_get(g_mock_auth_db->sessions, i);
         json_value_t* id = json_object_get(session, "uuid");
-        if (id && id->type == JSON_STRING && strcmp(id->value.string, uuid) == 0) {
-            return json_deep_copy(session);
+        if (id && id->type == JSON_STRING) {
+            printf("  DEBUG: comparing with session UUID: %s\n", id->value.string);
+            if (strcmp(id->value.string, uuid) == 0) {
+                printf("  DEBUG: Found matching session!\n");
+                return json_deep_copy(session);
+            }
         }
     }
     
@@ -335,6 +417,7 @@ json_value_t* virtual_get(database_t* db, const char* uuid) {
         }
     }
     
+    printf("  DEBUG: No matching document found for UUID: %s\n", uuid);
     return NULL;
 }
 
@@ -397,22 +480,6 @@ char* api_extract_token(http_request_t* request) {
     return strdup(auth_str + 7);
 }
 
-/* Mock virtual query */
-json_value_t* virtual_query(database_t* db, const char* type, const char* library, const char* collection, json_value_t* filters) {
-    (void)db;         /* Unused parameter */
-    (void)type;       /* Unused parameter */
-    (void)library;    /* Unused parameter */
-    (void)collection; /* Unused parameter */
-    (void)filters;    /* Unused parameter */
-    
-    /* Simple mock - return empty result */
-    json_value_t* result = json_create_object();
-    json_value_t* docs = json_create_array();
-    json_object_set(result, "documents", docs);
-    json_object_set(result, "count", json_create_integer(0));
-    
-    return result;
-}
 
 /* Mock JWT create/encode */
 jwt_token_t* jwt_create(const char* secret) {
@@ -442,22 +509,6 @@ char* jwt_encode(jwt_token_t* token, const char* secret) {
     return strdup(encoded);
 }
 
-/* Mock session lookup */
-json_value_t* virtual_get_session_by_token(database_t* db, const char* token) {
-    (void)db;  /* Unused parameter */
-    if (!g_mock_auth_db || !token) return NULL;
-    
-    /* Search for session with matching token */
-    for (size_t i = 0; i < json_array_size(g_mock_auth_db->sessions); i++) {
-        json_value_t* session = json_array_get(g_mock_auth_db->sessions, i);
-        json_value_t* tok = json_object_get(session, "token");
-        if (tok && tok->type == JSON_STRING && strcmp(tok->value.string, token) == 0) {
-            return json_deep_copy(session);
-        }
-    }
-    
-    return NULL;
-}
 
 /* Mock password functions */
 int verify_password(const char* password, const char* hash) {
@@ -537,10 +588,19 @@ json_value_t* db_insert_document(database_t* db, const char* library, const char
 }
 
 json_value_t* db_query_documents(database_t* db, const char* library, const char* collection, json_value_t* query) {
+    (void)db;         /* Unused parameter */
     (void)library;    /* Unused parameter */
     (void)collection; /* Unused parameter */
     
     if (!g_mock_auth_db) return NULL;
+    
+    printf("\n  DEBUG: db_query_documents called for library=%s, collection=%s\n", 
+           library ? library : "NULL", collection ? collection : "NULL");
+    if (query) {
+        char* query_str = json_stringify(query);
+        printf("  DEBUG: query: %s\n", query_str);
+        BUFFER_FREE(query_str);
+    }
     
     json_value_t* result = json_create_object();
     json_value_t* docs = json_create_array();
@@ -577,16 +637,31 @@ json_value_t* db_query_documents(database_t* db, const char* library, const char
 json_value_t* virtual_query_users(database_t* db, const char* library, json_value_t* filters) {
     (void)db;       /* Unused parameter */
     (void)library;  /* Unused parameter */
-    (void)filters;  /* Unused parameter */
     if (!g_mock_auth_db) return NULL;
     
     json_value_t* result = json_create_object();
     json_value_t* docs = json_create_array();
     
-    /* Copy all users */
+    /* Apply filters if provided */
     for (size_t i = 0; i < json_array_size(g_mock_auth_db->users); i++) {
         json_value_t* user = json_array_get(g_mock_auth_db->users, i);
-        json_array_append(docs, json_deep_copy(user));
+        int matches = 1;
+        
+        if (filters && filters->type == JSON_OBJECT) {
+            const char* key;
+            json_value_t* val;
+            json_object_foreach(filters, key, val) {
+                json_value_t* user_val = json_object_get(user, key);
+                if (!json_values_equal(val, user_val)) {
+                    matches = 0;
+                    break;
+                }
+            }
+        }
+        
+        if (matches) {
+            json_array_append(docs, json_deep_copy(user));
+        }
     }
     
     json_object_set(result, "documents", docs);
@@ -737,18 +812,28 @@ static int test_auth_register() {
     /* Call handler */
     http_response_t* response = api_handle_register(ctx, request);
     TEST_ASSERT_NOT_NULL(response);
+    
+    if (response->status != HTTP_CREATED) {
+        printf("\n  Registration failed with status %d\n", response->status);
+        printf("  Response body: %s\n", response->body ? response->body : "NULL");
+    }
+    
     TEST_ASSERT_EQ(HTTP_CREATED, response->status);
     
     /* Verify response */
     json_value_t* result = json_parse(response->body);
     TEST_ASSERT_NOT_NULL(result);
     
-    json_value_t* user = json_object_get(result, "user");
-    TEST_ASSERT_NOT_NULL(user);
-    
-    json_value_t* username = json_object_get(user, "username");
+    /* Check the actual response format */
+    json_value_t* username = json_object_get(result, "username");
     TEST_ASSERT_NOT_NULL(username);
     TEST_ASSERT_STR_EQ("newuser", json_get_string(username));
+    
+    json_value_t* user_id = json_object_get(result, "user_id");
+    TEST_ASSERT_NOT_NULL(user_id);
+    
+    json_value_t* message = json_object_get(result, "message");
+    TEST_ASSERT_NOT_NULL(message);
     
     /* Cleanup */
     /* CHECKPOINT: json_free(result); */
@@ -813,6 +898,12 @@ static int test_auth_token_refresh() {
     /* Call handler */
     http_response_t* response = api_handle_token_refresh(ctx, request);
     TEST_ASSERT_NOT_NULL(response);
+    
+    if (response->status != HTTP_OK) {
+        printf("\n  Token refresh failed with status %d\n", response->status);
+        printf("  Response body: %s\n", response->body ? response->body : "NULL");
+    }
+    
     TEST_ASSERT_EQ(HTTP_OK, response->status);
     
     /* Verify new token */
@@ -862,6 +953,12 @@ static int test_auth_logout() {
     /* Call handler */
     http_response_t* response = api_handle_logout(ctx, request);
     TEST_ASSERT_NOT_NULL(response);
+    
+    if (response->status != HTTP_OK) {
+        printf("\n  Logout failed with status %d\n", response->status);
+        printf("  Response body: %s\n", response->body ? response->body : "NULL");
+    }
+    
     TEST_ASSERT_EQ(HTTP_OK, response->status);
     
     /* Verify session was deleted */
@@ -889,6 +986,13 @@ static int test_auth_get_session() {
     api_context_t* ctx = create_mock_api_context(&auth);
     TEST_ASSERT_NOT_NULL(ctx);
     
+    /* Create a session first */
+    time_t expires = time(NULL) + 3600;
+    char* session_id = rbac_db_create_session(ctx->db, "user-1", 
+                                             "mock_jwt_token_user-1_testuser_3600", 
+                                             expires, "127.0.0.1", "Test Client");
+    TEST_ASSERT_NOT_NULL(session_id);
+    
     /* Create request with auth token */
     http_request_t* request = create_mock_request(HTTP_GET, "/api/auth/session", NULL,
                                                  "Bearer mock_jwt_token_user-1_testuser_3600");
@@ -903,11 +1007,13 @@ static int test_auth_get_session() {
     json_value_t* result = json_parse(response->body);
     TEST_ASSERT_NOT_NULL(result);
     
-    json_value_t* user_id = json_object_get(result, "user_id");
-    TEST_ASSERT_NOT_NULL(user_id);
-    TEST_ASSERT_STR_EQ("user-1", json_get_string(user_id));
+    
+    json_value_t* user_uuid = json_object_get(result, "user_uuid");
+    TEST_ASSERT_NOT_NULL(user_uuid);
+    TEST_ASSERT_STR_EQ("user-1", json_get_string(user_uuid));
     
     /* Cleanup */
+    free(session_id);
     /* CHECKPOINT: json_free(result); */
     free_http_response(response);
     destroy_mock_request(request);
