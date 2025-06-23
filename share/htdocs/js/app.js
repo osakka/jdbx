@@ -1193,8 +1193,8 @@ async function loadDashboardMetrics() {
         }
         
         const metricsDocuments = uniqueDocuments;
-        const performanceDoc = metricsDocuments.find(doc => doc.type === 'performance');
-        const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
+        const performanceDoc = metricsDocuments.find(doc => doc.name === 'performance');
+        const connectionsDoc = metricsDocuments.find(doc => doc.name === 'connections');
         
         // Update charts with the data
         if (connectionsDoc && connectionsDoc.data && connectionsDoc.data.length > 0) {
@@ -5763,13 +5763,13 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         
         // console.log('Metrics data:', metricsData);
         
-        // Extract metrics documents by type
+        // Extract metrics documents by name (not type, as type is always 'metric')
         const metricsDocuments = metricsData.documents || [];
-        const operationsDoc = metricsDocuments.find(doc => doc.type === 'operations');
-        const performanceDoc = metricsDocuments.find(doc => doc.type === 'performance');
-        const cacheDoc = metricsDocuments.find(doc => doc.type === 'cache');
-        const memoryDoc = metricsDocuments.find(doc => doc.type === 'memory');
-        const connectionsDoc = metricsDocuments.find(doc => doc.type === 'connections');
+        const operationsDoc = metricsDocuments.find(doc => doc.name === 'operations');
+        const performanceDoc = metricsDocuments.find(doc => doc.name === 'performance');
+        const cacheDoc = metricsDocuments.find(doc => doc.name === 'cache');
+        const memoryDoc = metricsDocuments.find(doc => doc.name === 'memory');
+        const connectionsDoc = metricsDocuments.find(doc => doc.name === 'connections');
         
         // console.log('Found metrics documents:', {
         //     operations: !!operationsDoc,
