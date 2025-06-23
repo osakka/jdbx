@@ -47,6 +47,7 @@
 #include "database/index_metrics.h"
 #include "utils/generic_cache.h"
 #include "utils/art.h"
+#include "utils/metrics.h"
 #include "utils/memory_manager.h"
 #include "utils/buffer_pool.h"
 #include "utils/memory_manager.h"
@@ -690,6 +691,16 @@ int virtual_delete(database_t* db, const char* uuid) {
  */
 json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     (void)db; // Use global database
+    
+    // Increment database read operations metric
+    metric_t* db_read_metric = get_db_read_operations_metric();
+    if (db_read_metric) {
+        metrics_counter_inc(db_read_metric, 1);
+    }
+    metric_t* db_ops_metric = get_db_operations_metric();
+    if (db_ops_metric) {
+        metrics_counter_inc(db_ops_metric, 1);
+    }
     
     LOG_DEBUG("Storage query on unified collection with query=%p", query);
     
@@ -1885,6 +1896,16 @@ json_value_t* db_stats(database_t* db, const char* collection) {
 json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     (void)db; // Use global database
     
+    // Increment database write operations metric
+    metric_t* db_write_metric = get_db_write_operations_metric();
+    if (db_write_metric) {
+        metrics_counter_inc(db_write_metric, 1);
+    }
+    metric_t* db_ops_metric = get_db_operations_metric();
+    if (db_ops_metric) {
+        metrics_counter_inc(db_ops_metric, 1);
+    }
+    
     // Direct access to unified collection - NO virtual logic
     pthread_rwlock_rdlock(&g_db.lock);
     library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
@@ -1950,6 +1971,16 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
  */
 json_value_t* storage_update_document(database_t* db, const char* uuid, json_value_t* document) {
     (void)db; // Use global database
+    
+    // Increment database write operations metric
+    metric_t* db_write_metric = get_db_write_operations_metric();
+    if (db_write_metric) {
+        metrics_counter_inc(db_write_metric, 1);
+    }
+    metric_t* db_ops_metric = get_db_operations_metric();
+    if (db_ops_metric) {
+        metrics_counter_inc(db_ops_metric, 1);
+    }
     
     // Direct access to unified collection - NO virtual logic
     pthread_rwlock_rdlock(&g_db.lock);
@@ -2058,6 +2089,16 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
 int storage_delete_document(database_t* db, const char* uuid) {
     (void)db; // Use global database
     
+    // Increment database write operations metric
+    metric_t* db_write_metric = get_db_write_operations_metric();
+    if (db_write_metric) {
+        metrics_counter_inc(db_write_metric, 1);
+    }
+    metric_t* db_ops_metric = get_db_operations_metric();
+    if (db_ops_metric) {
+        metrics_counter_inc(db_ops_metric, 1);
+    }
+    
     // Direct access to unified collection - NO virtual logic
     pthread_rwlock_rdlock(&g_db.lock);
     library_t* lib = get_or_create_library(PHYSICAL_STORAGE_LIBRARY);
@@ -2124,6 +2165,16 @@ int storage_delete_document(database_t* db, const char* uuid) {
  */
 json_value_t* storage_get_document(database_t* db, const char* uuid) {
     (void)db; // Use global database
+    
+    // Increment database read operations metric
+    metric_t* db_read_metric = get_db_read_operations_metric();
+    if (db_read_metric) {
+        metrics_counter_inc(db_read_metric, 1);
+    }
+    metric_t* db_ops_metric = get_db_operations_metric();
+    if (db_ops_metric) {
+        metrics_counter_inc(db_ops_metric, 1);
+    }
     
     // Direct access to unified collection - NO virtual logic
     pthread_rwlock_rdlock(&g_db.lock);
