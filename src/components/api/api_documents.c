@@ -71,8 +71,37 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
             char* key = pair;
             char* value = equals + 1;
             
-            /* URL decode if needed (basic implementation) */
-            json_object_set(result, key, json_create_string(value));
+            /* URL decode the value (basic implementation for most common cases) */
+            size_t value_len = strlen(value);
+            char* decoded_value = BUFFER_ALLOC(value_len + 1);
+            if (decoded_value) {
+                size_t decoded_len = 0;
+                for (size_t i = 0; i < value_len; i++) {
+                    if (value[i] == '%' && i + 2 < value_len) {
+                        /* Hex decode %XX */
+                        char hex[3] = {value[i+1], value[i+2], '\0'};
+                        char* endptr;
+                        long byte_val = strtol(hex, &endptr, 16);
+                        if (*endptr == '\0') {
+                            decoded_value[decoded_len++] = (char)byte_val;
+                            i += 2; /* Skip the hex digits */
+                        } else {
+                            decoded_value[decoded_len++] = value[i];
+                        }
+                    } else if (value[i] == '+') {
+                        /* + becomes space in URL encoding */
+                        decoded_value[decoded_len++] = ' ';
+                    } else {
+                        decoded_value[decoded_len++] = value[i];
+                    }
+                }
+                decoded_value[decoded_len] = '\0';
+                json_object_set(result, key, json_create_string(decoded_value));
+                BUFFER_FREE(decoded_value);
+            } else {
+                /* Fallback to original value if allocation fails */
+                json_object_set(result, key, json_create_string(value));
+            }
         }
         pair = strtok(NULL, "&");
     }
@@ -148,12 +177,26 @@ http_response_t* api_handle_unified_documents_query(api_context_t* ctx, http_req
     if (parsed_params) {
       /* Check if there's a 'query' parameter with JSON */
       json_value_t* query_param = json_object_get(parsed_params, "query");
-      if (query_param && query_param->type == JSON_OBJECT) {
-        /* MEMORY LEAK FIX: Use query_param directly instead of deep copy
-         * Query only used within request scope - no need for deep copy
-         * that might get promoted and cause memory accumulation */
-        query = query_param;
-        /* Note: parsed_params will be cleaned up by checkpoint system */
+      if (query_param) {
+        if (query_param->type == JSON_STRING) {
+          /* Parse the JSON string */
+          query = json_parse(query_param->value.string);
+          if (!query || query->type != JSON_OBJECT) {
+            /* CHECKPOINT: if (query) json_free(query); */
+            query = json_create_object();
+          }
+          /* CHECKPOINT: json_free(parsed_params); */
+        } else if (query_param->type == JSON_OBJECT) {
+          /* Deep copy the query object to ensure it's independent */
+          query = json_clone(query_param);
+          if (!query) {
+            query = json_create_object();
+          }
+          /* CHECKPOINT: json_free(parsed_params); */
+        } else {
+          /* Use the parsed parameters as the query */
+          query = parsed_params;
+        }
       } else {
         /* Use the parsed parameters as the query */
         query = parsed_params;
