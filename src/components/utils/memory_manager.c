@@ -10,6 +10,8 @@
 #define _GNU_SOURCE
 #include "utils/memory_manager.h"
 #include "utils/buffer_pool.h"
+#include "utils/tlsf_allocator.h"
+#include "utils/arena_allocator.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -25,6 +27,7 @@
 
 /* Memory allocation flags */
 #define MEMORY_FLAG_HAZARD_PROTECTED 0x00000001  /* Protected by hazard pointers */
+#define MEMORY_FLAG_ARENA_ALLOCATED  0x00000002  /* Allocated from arena */
 
 /* Memory allocation header for tracking */
 typedef struct memory_header {
@@ -53,6 +56,8 @@ struct memory_checkpoint {
     uint64_t allocation_count;        /* Number of allocations */
     uint64_t total_size;              /* Total allocated size */
     int committed;                    /* Whether checkpoint is committed */
+    arena_t* arena;                   /* Arena for checkpoint-scoped allocations */
+    uint32_t arena_checkpoint_id;     /* Arena checkpoint ID for bulk free */
 };
 
 /* Thread-local memory state */
@@ -60,10 +65,11 @@ typedef struct {
     memory_checkpoint_t* current_checkpoint;  /* Active checkpoint */
     int initialized;                          /* Whether initialized */
     int bypass_checkpoint;                    /* Skip checkpoint for this allocation */
+    tlsf_pool_t* tlsf_pool;                  /* Thread-local TLSF pool */
 } memory_state_t;
 
 /* Thread-local storage for memory state */
-static __thread memory_state_t tls_memory = {NULL, 0, 0};
+static __thread memory_state_t tls_memory = {NULL, 0, 0, NULL};
 
 /* Global statistics */
 static struct {
@@ -86,6 +92,11 @@ static void ensure_memory_initialized(void) {
         tls_memory.current_checkpoint = NULL;
         tls_memory.bypass_checkpoint = 0;
         tls_memory.initialized = 1;
+        
+        /* Initialize TLSF pool for this thread (32MB) */
+        if (!tls_memory.tlsf_pool) {
+            tls_memory.tlsf_pool = tlsf_create_pool(32 * 1024 * 1024);
+        }
         /* Don't log from here - can cause issues */
         /* But we can use direct printf for debugging */
         /* printf("Memory manager: Initialized TLS for thread %p\n", (void*)pthread_self()); */
@@ -121,13 +132,13 @@ static memory_header_t* get_memory_header(void* ptr) {
     /* Validate magic number with memory barrier for thread safety */
     __sync_synchronize();  /* Memory fence */
     
-    /* Additional validation: check if header is in valid memory range */
-    /* This prevents reading arbitrary memory for magic validation */
-    if ((uintptr_t)header & (_Alignof(max_align_t) - 1)) {
-        return NULL;  /* Not properly aligned for our headers */
-    }
-    
     uint32_t magic = header->magic;
+    
+    /* Debug print for troubleshooting */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        fprintf(stderr, "get_memory_header: ptr=%p, header=%p, magic=0x%x (expected 0x%x)\n", 
+                ptr, header, magic, MEMORY_MAGIC);
+    }
     
     if (magic == MEMORY_MAGIC) {
         /* Additional safety check: validate size field is reasonable */
@@ -170,6 +181,13 @@ memory_checkpoint_t* memory_checkpoint_create(void) {
     checkpoint->allocation_count = 0;
     checkpoint->total_size = 0;
     checkpoint->committed = 0;
+    
+    /* Create arena for checkpoint allocations (4MB) */
+    checkpoint->arena = arena_create(4 * 1024 * 1024);
+    checkpoint->arena_checkpoint_id = 0;
+    if (checkpoint->arena) {
+        checkpoint->arena_checkpoint_id = arena_checkpoint(checkpoint->arena);
+    }
     
     /* Make it current */
     tls_memory.current_checkpoint = checkpoint;
@@ -226,10 +244,20 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                 if (hazard_list) hazard_list->prev = header;
                 hazard_list = header;
             } else {
-                /* Not hazard protected - free immediately */
-                header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
-                free(header);
-                freed_count++;
+                /* Check if this is an arena allocation */
+                if (!(header->flags & MEMORY_FLAG_ARENA_ALLOCATED)) {
+                    /* Not arena allocated - free immediately */
+                    header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
+                    
+                    /* Check if TLSF allocated */
+                    if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+                        tlsf_free(tls_memory.tlsf_pool, header);
+                    } else {
+                        free(header);
+                    }
+                    freed_count++;
+                }
+                /* Arena allocations are freed in bulk when arena is reset */
             }
             header = next;
         }
@@ -251,9 +279,21 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
         /* Unlock before destroying */
         pthread_spin_unlock(&cp->lock);
         
+        /* Reset arena if present */
+        if (cp->arena && cp->arena_checkpoint_id) {
+            arena_reset_to_checkpoint(cp->arena, cp->arena_checkpoint_id);
+        }
+        
         /* Move to parent and free the checkpoint */
         memory_checkpoint_t* parent = cp->parent;
         pthread_spin_destroy(&cp->lock);  /* Cleanup spinlock */
+        
+        /* Arena is already reset, now destroy it */
+        if (cp->arena) {
+            arena_destroy(cp->arena);
+            cp->arena = NULL;
+        }
+        
         free(cp);
         cp = parent;
     }
@@ -277,10 +317,20 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
             if (hazard_list) hazard_list->prev = header;
             hazard_list = header;
         } else {
-            /* Not hazard protected - free immediately */
-            header->magic = MEMORY_MAGIC_FREE;
-            free(header);
-            freed_count++;
+            /* Check if this is an arena allocation */
+            if (!(header->flags & MEMORY_FLAG_ARENA_ALLOCATED)) {
+                /* Not arena allocated - free immediately */
+                header->magic = MEMORY_MAGIC_FREE;
+                
+                /* Check if TLSF allocated */
+                if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+                    tlsf_free(tls_memory.tlsf_pool, header);
+                } else {
+                    free(header);
+                }
+                freed_count++;
+            }
+            /* Arena allocations are freed in bulk when arena is reset */
         }
         header = next;
     }
@@ -337,6 +387,12 @@ void memory_checkpoint_commit(memory_checkpoint_t* checkpoint) {
     /* If this is the current checkpoint, clear it */
     if (tls_memory.current_checkpoint == checkpoint) {
         tls_memory.current_checkpoint = checkpoint->parent;
+    }
+    
+    /* Destroy arena if present */
+    if (checkpoint->arena) {
+        arena_destroy(checkpoint->arena);
+        checkpoint->arena = NULL;
     }
     
     /* Destroy spinlock and free the checkpoint structure */
@@ -424,14 +480,34 @@ void* memory_alloc(size_t size) {
     
     ensure_memory_initialized();
     
-    /* Always allocate with header for consistency */
-    /* Ensure total allocation is aligned to max_align_t */
-    size_t total_size = HEADER_SIZE + size;
-    memory_header_t* header = (memory_header_t*)aligned_alloc(_Alignof(max_align_t), 
-                                                              (total_size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1));
-    if (!header) {
+    /* Decide which allocator to use */
+    void* allocated_ptr = NULL;
+    int from_arena = 0;
+    
+    /* Use arena for checkpoint allocations under 64KB - DISABLED FOR NOW */
+    if (0 && tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
+        !tls_memory.bypass_checkpoint && size < 65536 && tls_memory.current_checkpoint->arena) {
+        allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
+        from_arena = 1;
+    }
+    
+    /* Use TLSF for non-arena allocations - DISABLED FOR NOW */
+    if (0 && !allocated_ptr && tls_memory.tlsf_pool) {
+        allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
+    }
+    
+    /* Fallback to system malloc */
+    if (!allocated_ptr) {
+        size_t total_size = HEADER_SIZE + size;
+        allocated_ptr = aligned_alloc(_Alignof(max_align_t), 
+                                     (total_size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1));
+    }
+    
+    if (!allocated_ptr) {
         return NULL;
     }
+    
+    memory_header_t* header = (memory_header_t*)allocated_ptr;
     
     /* Initialize header */
     header->magic = MEMORY_MAGIC;
@@ -439,9 +515,19 @@ void* memory_alloc(size_t size) {
     header->checkpoint = NULL;
     header->next = NULL;
     header->prev = NULL;
+    header->flags = from_arena ? MEMORY_FLAG_ARENA_ALLOCATED : 0;
+    header->hazard_data = NULL;
+    
+    /* Debug print */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        void* user_ptr = (char*)header + HEADER_SIZE;
+        fprintf(stderr, "memory_alloc: allocated_ptr=%p, header=%p, user_ptr=%p, size=%zu, from_arena=%d\n",
+                allocated_ptr, header, user_ptr, size, from_arena);
+    }
     
     /* If we have an active checkpoint AND not bypassing, track the allocation */
-    if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && !tls_memory.bypass_checkpoint) {
+    if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
+        !tls_memory.bypass_checkpoint) {
         memory_checkpoint_t* cp = tls_memory.current_checkpoint;
         
         /* Lock checkpoint for list modification */
@@ -528,13 +614,29 @@ void memory_free(void* ptr) {
     
     /* Mark as freed to detect double-free */
     header->magic = MEMORY_MAGIC_FREE;
-    free(header);
+    
+    /* Determine which allocator to free to */
+    if (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) {
+        /* Arena allocations are freed in bulk on checkpoint rewind */
+        /* Individual frees are no-ops */
+    } else if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+        /* TLSF allocation */
+        tlsf_free(tls_memory.tlsf_pool, header);
+    } else {
+        /* System allocation */
+        free(header);
+    }
 }
 
 /**
  * Reallocate memory with checkpoint tracking
  */
 void* memory_realloc(void* ptr, size_t new_size) {
+    /* Debug print */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        fprintf(stderr, "memory_realloc called: ptr=%p, new_size=%zu\n", ptr, new_size);
+    }
+    
     if (new_size == 0) {
         memory_free(ptr);
         return NULL;
@@ -559,7 +661,47 @@ void* memory_realloc(void* ptr, size_t new_size) {
         return realloc(ptr, new_size);
     }
     
-    /* Managed allocation - allocate new memory */
+    /* Check which allocator owns this memory */
+    int is_arena = (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) ? 1 : 0;
+    int is_tlsf = 0;
+    
+    if (!is_arena && tls_memory.tlsf_pool) {
+        size_t block_size = tlsf_block_size(header);
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "tlsf_block_size returned: %zu for header=%p\n", block_size, header);
+        }
+        if (block_size > 0) {
+            is_tlsf = 1;
+        }
+    }
+    
+    /* Debug print */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        fprintf(stderr, "memory_realloc: is_arena=%d, is_tlsf=%d\n", is_arena, is_tlsf);
+    }
+    
+    /* Arena allocations cannot be reallocated in-place */
+    if (is_arena) {
+        /* Allocate new memory */
+        void* new_ptr = memory_alloc(new_size);
+        if (!new_ptr) {
+            return NULL;
+        }
+        
+        /* Copy data */
+        size_t copy_size = header->size < new_size ? header->size : new_size;
+        memcpy(new_ptr, ptr, copy_size);
+        
+        /* Arena memory is freed in bulk, so just return new allocation */
+        return new_ptr;
+    }
+    
+    /* For now, use fallback for TLSF allocations too - proper integration needs more work */
+    if (0 && is_tlsf) {
+        /* DISABLED: TLSF realloc integration needs to handle our header properly */
+    }
+    
+    /* Fallback: allocate new memory */
     void* new_ptr = memory_alloc(new_size);
     if (!new_ptr) {
         return NULL;
@@ -568,6 +710,12 @@ void* memory_realloc(void* ptr, size_t new_size) {
     /* Copy data */
     size_t copy_size = header->size < new_size ? header->size : new_size;
     memcpy(new_ptr, ptr, copy_size);
+    
+    /* Debug print */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        fprintf(stderr, "memory_realloc fallback: old_ptr=%p, new_ptr=%p, old_size=%zu, new_size=%zu, copy_size=%zu\n",
+                ptr, new_ptr, header->size, new_size, copy_size);
+    }
     
     /* Free old memory */
     memory_free(ptr);
@@ -643,6 +791,10 @@ char* memory_strdup(const char* str) {
 void memory_manager_init(void) {
     /* Memory manager initialization - no logging */
     pthread_mutex_lock(&g_memory_lock);
+    
+    /* Initialize TLSF system */
+    tlsf_init();
+    
     /* Reset global stats */
     g_memory_stats.checkpoints_created = 0;
     g_memory_stats.rewinds_performed = 0;
@@ -659,7 +811,29 @@ void memory_manager_shutdown(void) {
     /* Memory manager shutdown - stats available via memory_manager_get_stats() */
     pthread_mutex_lock(&g_memory_lock);
     
-    /* Clean shutdown - no logging from memory manager */
+    /* Clean up thread-local TLSF pool if exists */
+    if (tls_memory.tlsf_pool) {
+        tlsf_destroy_pool(tls_memory.tlsf_pool);
+        tls_memory.tlsf_pool = NULL;
+    }
+    
+    /* Clean up any remaining checkpoints */
+    while (tls_memory.current_checkpoint) {
+        memory_checkpoint_t* cp = tls_memory.current_checkpoint;
+        tls_memory.current_checkpoint = cp->parent;
+        
+        /* Clean up arena if present */
+        if (cp->arena) {
+            arena_destroy(cp->arena);
+        }
+        
+        pthread_spin_destroy(&cp->lock);
+        free(cp);
+    }
+    
+    /* Mark as uninitialized */
+    g_memory_manager_initialized = 0;
+    tls_memory.initialized = 0;
     
     pthread_mutex_unlock(&g_memory_lock);
 }
