@@ -26,6 +26,10 @@ typedef enum init_status_e {
     
     /* Special status codes for daemon process flow control */
     INIT_DAEMON_PARENT_EXIT = 1,  /* Parent process should exit gracefully */
+    
+    /* Special status codes for command line handling */
+    INIT_SHOW_HELP = 2,      /* Help was requested, show help and exit */
+    INIT_SHOW_VERSION = 3,   /* Version was requested, show version and exit */
 } init_status_t;
 
 /* Initialize logging system */

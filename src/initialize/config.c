@@ -401,14 +401,14 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   if (show_help) {
     BUFFER_FREE(heap_config);
     /* Return special code to indicate help should be shown */
-    return INIT_CONFIG_ERROR;
+    return INIT_SHOW_HELP;
   }
   
   /* Show version if requested */
   if (show_version) {
     BUFFER_FREE(heap_config);
     /* Return special code to indicate version should be shown */
-    return INIT_CONFIG_ERROR;
+    return INIT_SHOW_VERSION;
   }
   
   /* Handle terminate command */

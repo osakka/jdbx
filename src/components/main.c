@@ -91,7 +91,12 @@ static void print_usage(const char* program_name) {
   printf("\n");
 }
 
-/* Removed unused print_version function */
+/* Print version information */
+static void print_version(void) {
+  printf("JDBX Database Server v7.2.5\n");
+  printf("Built with: ART Engine, Checkpoint Memory, SSL/TLS, QuickJS\n");
+  printf("Copyright (c) 2025 JDBX Project\n");
+}
 
 /* Read PID from PID file - needed by init_config for terminate mode */
 pid_t read_pid_file() {
@@ -160,7 +165,18 @@ int main(int argc, char** argv) {
   /* Initialize configuration */
   status = init_config(argc, argv, &config);
   if (status != INIT_OK) {
-    /* Handle special cases for initialization with terminate mode requested */
+    /* Handle special cases */
+    if (status == INIT_SHOW_HELP) {
+      print_usage(argv[0]);
+      return 0;  /* Exit successfully after showing help */
+    }
+    
+    if (status == INIT_SHOW_VERSION) {
+      print_version();
+      return 0;  /* Exit successfully after showing version */
+    }
+    
+    /* Handle terminate mode */
     if (config && status == INIT_ERROR) {
       pid_t pid = read_pid_file();
       if (pid > 0) {
