@@ -249,8 +249,8 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                     /* Not arena allocated - free immediately */
                     header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
                     
-                    /* Check if TLSF allocated */
-                    if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+                    /* Check if TLSF allocated - DISABLED FOR NOW */
+                    if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
                         tlsf_free(tls_memory.tlsf_pool, header);
                     } else {
                         free(header);
@@ -322,8 +322,8 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                 /* Not arena allocated - free immediately */
                 header->magic = MEMORY_MAGIC_FREE;
                 
-                /* Check if TLSF allocated */
-                if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+                /* Check if TLSF allocated - DISABLED FOR NOW */
+                if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
                     tlsf_free(tls_memory.tlsf_pool, header);
                 } else {
                     free(header);
@@ -619,8 +619,8 @@ void memory_free(void* ptr) {
     if (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) {
         /* Arena allocations are freed in bulk on checkpoint rewind */
         /* Individual frees are no-ops */
-    } else if (tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
-        /* TLSF allocation */
+    } else if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
+        /* TLSF allocation - DISABLED FOR NOW */
         tlsf_free(tls_memory.tlsf_pool, header);
     } else {
         /* System allocation */
@@ -665,7 +665,8 @@ void* memory_realloc(void* ptr, size_t new_size) {
     int is_arena = (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) ? 1 : 0;
     int is_tlsf = 0;
     
-    if (!is_arena && tls_memory.tlsf_pool) {
+    if (0 && !is_arena && tls_memory.tlsf_pool) {
+        /* TLSF realloc checking - DISABLED FOR NOW */
         size_t block_size = tlsf_block_size(header);
         if (getenv("JDBX_MEM_DEBUG")) {
             fprintf(stderr, "tlsf_block_size returned: %zu for header=%p\n", block_size, header);
