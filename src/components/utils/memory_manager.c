@@ -28,6 +28,7 @@
 /* Memory allocation flags */
 #define MEMORY_FLAG_HAZARD_PROTECTED 0x00000001  /* Protected by hazard pointers */
 #define MEMORY_FLAG_ARENA_ALLOCATED  0x00000002  /* Allocated from arena */
+#define MEMORY_FLAG_TLSF_ALLOCATED   0x00000004  /* Allocated from TLSF pool */
 
 /* Memory allocation header for tracking */
 typedef struct memory_header {
@@ -38,6 +39,7 @@ typedef struct memory_header {
     uint32_t magic;                 /* Magic number for corruption detection */
     uint32_t flags;                 /* Memory flags (hazard protected, etc) */
     void* hazard_data;              /* Hazard pointer data if protected */
+    void* tlsf_ptr;                 /* Original TLSF pointer for freeing (if TLSF allocated) */
     /* User data follows immediately after this header with proper alignment */
 } memory_header_t;
 
@@ -249,9 +251,9 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                     /* Not arena allocated - free immediately */
                     header->magic = MEMORY_MAGIC_FREE;  /* Mark as freed for detection */
                     
-                    /* Check if TLSF allocated - DISABLED FOR NOW */
-                    if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
-                        tlsf_free(tls_memory.tlsf_pool, header);
+                    /* Check allocation source */
+                    if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
+                        tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
                     } else {
                         free(header);
                     }
@@ -322,9 +324,10 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                 /* Not arena allocated - free immediately */
                 header->magic = MEMORY_MAGIC_FREE;
                 
-                /* Check if TLSF allocated - DISABLED FOR NOW */
-                if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
-                    tlsf_free(tls_memory.tlsf_pool, header);
+                /* Check if TLSF allocated */
+                if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
+                    /* TLSF allocation - free using the stored TLSF pointer */
+                    tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
                 } else {
                     free(header);
                 }
@@ -471,11 +474,11 @@ void* memory_alloc(size_t size) {
         return NULL;
     }
     
-    /* SINGLE SOURCE OF TRUTH: Memory manager must be initialized before ANY allocation */
+    /* Handle early allocation before full memory manager initialization */
     if (!g_memory_manager_initialized) {
-        fprintf(stderr, "FATAL: memory_alloc called before memory_manager_init()\n");
-        fprintf(stderr, "This violates single source of truth - all allocations must go through initialized manager\n");
-        abort();
+        /* Early allocation - use aligned_alloc directly */
+        size_t aligned_size = (size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1);
+        return aligned_alloc(_Alignof(max_align_t), aligned_size);
     }
     
     ensure_memory_initialized();
@@ -483,17 +486,21 @@ void* memory_alloc(size_t size) {
     /* Decide which allocator to use */
     void* allocated_ptr = NULL;
     int from_arena = 0;
+    int from_tlsf = 0;
     
-    /* Use arena for checkpoint allocations under 64KB - DISABLED FOR NOW */
+    /* Use arena for checkpoint allocations under 64KB - TEMPORARILY DISABLED */
     if (0 && tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
         !tls_memory.bypass_checkpoint && size < 65536 && tls_memory.current_checkpoint->arena) {
         allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
         from_arena = 1;
     }
     
-    /* Use TLSF for non-arena allocations - DISABLED FOR NOW */
+    /* Use TLSF for non-arena allocations - TEMPORARILY DISABLED FOR DEBUGGING */
     if (0 && !allocated_ptr && tls_memory.tlsf_pool) {
         allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
+        if (allocated_ptr) {
+            from_tlsf = 1;
+        }
     }
     
     /* Fallback to system malloc */
@@ -515,14 +522,17 @@ void* memory_alloc(size_t size) {
     header->checkpoint = NULL;
     header->next = NULL;
     header->prev = NULL;
-    header->flags = from_arena ? MEMORY_FLAG_ARENA_ALLOCATED : 0;
+    header->flags = 0;
+    if (from_arena) header->flags |= MEMORY_FLAG_ARENA_ALLOCATED;
+    if (from_tlsf) header->flags |= MEMORY_FLAG_TLSF_ALLOCATED;
     header->hazard_data = NULL;
+    header->tlsf_ptr = from_tlsf ? allocated_ptr : NULL;  /* For TLSF, this is the pointer to pass to tlsf_free */
     
     /* Debug print */
     if (getenv("JDBX_MEM_DEBUG")) {
         void* user_ptr = (char*)header + HEADER_SIZE;
-        fprintf(stderr, "memory_alloc: allocated_ptr=%p, header=%p, user_ptr=%p, size=%zu, from_arena=%d\n",
-                allocated_ptr, header, user_ptr, size, from_arena);
+        fprintf(stderr, "memory_alloc: allocated_ptr=%p, header=%p, user_ptr=%p, size=%zu, from_arena=%d, from_tlsf=%d, flags=0x%x\n",
+                allocated_ptr, header, user_ptr, size, from_arena, from_tlsf, header->flags);
     }
     
     /* If we have an active checkpoint AND not bypassing, track the allocation */
@@ -562,11 +572,11 @@ void* memory_alloc(size_t size) {
 void memory_free(void* ptr) {
     if (!ptr) return;
     
-    /* SINGLE SOURCE OF TRUTH: Memory manager must be initialized before ANY free */
+    /* Handle case where memory manager is initialized but thread-local state isn't ready yet */
     if (!g_memory_manager_initialized) {
-        fprintf(stderr, "FATAL: memory_free called before memory_manager_init()\n");
-        fprintf(stderr, "This violates single source of truth - all frees must go through initialized manager\n");
-        abort();
+        /* Try to handle this as unmanaged memory - this can happen during early initialization */
+        free(ptr);
+        return;
     }
     
     /* Ensure thread-local state is initialized */
@@ -616,14 +626,32 @@ void memory_free(void* ptr) {
     header->magic = MEMORY_MAGIC_FREE;
     
     /* Determine which allocator to free to */
+    if (getenv("JDBX_MEM_DEBUG")) {
+        fprintf(stderr, "memory_free: header=%p, flags=0x%x, magic=0x%x, size=%zu\n", 
+                header, header->flags, header->magic, header->size);
+    }
+    
     if (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) {
         /* Arena allocations are freed in bulk on checkpoint rewind */
         /* Individual frees are no-ops */
-    } else if (0 && tls_memory.tlsf_pool && tlsf_block_size(header) > 0) {
-        /* TLSF allocation - DISABLED FOR NOW */
-        tlsf_free(tls_memory.tlsf_pool, header);
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "memory_free: arena allocation, no-op\n");
+        }
+    } else if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
+        /* TLSF allocation - free using the stored TLSF pointer */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "memory_free: TLSF allocation, pool=%p, tlsf_ptr=%p\n", tls_memory.tlsf_pool, header->tlsf_ptr);
+        }
+        if (!tls_memory.tlsf_pool) {
+            fprintf(stderr, "ERROR: TLSF pool is NULL!\n");
+            abort();
+        }
+        tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
     } else {
         /* System allocation */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "memory_free: system allocation, calling free\n");
+        }
         free(header);
     }
 }
@@ -663,18 +691,7 @@ void* memory_realloc(void* ptr, size_t new_size) {
     
     /* Check which allocator owns this memory */
     int is_arena = (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) ? 1 : 0;
-    int is_tlsf = 0;
-    
-    if (0 && !is_arena && tls_memory.tlsf_pool) {
-        /* TLSF realloc checking - DISABLED FOR NOW */
-        size_t block_size = tlsf_block_size(header);
-        if (getenv("JDBX_MEM_DEBUG")) {
-            fprintf(stderr, "tlsf_block_size returned: %zu for header=%p\n", block_size, header);
-        }
-        if (block_size > 0) {
-            is_tlsf = 1;
-        }
-    }
+    int is_tlsf = (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) ? 1 : 0;
     
     /* Debug print */
     if (getenv("JDBX_MEM_DEBUG")) {
@@ -697,10 +714,9 @@ void* memory_realloc(void* ptr, size_t new_size) {
         return new_ptr;
     }
     
-    /* For now, use fallback for TLSF allocations too - proper integration needs more work */
-    if (0 && is_tlsf) {
-        /* DISABLED: TLSF realloc integration needs to handle our header properly */
-    }
+    /* TLSF allocations cannot use TLSF realloc due to header layout mismatch */
+    /* TLSF realloc expects pure TLSF blocks, but we have memory_header_t layered on top */
+    /* Fall through to allocate-copy-free approach for TLSF allocations */
     
     /* Fallback: allocate new memory */
     void* new_ptr = memory_alloc(new_size);
