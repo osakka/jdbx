@@ -47,7 +47,6 @@
 #include "core/server.h"
 #include "database/database.h"
 #include "core/rate_limiter.h"
-#include "database/document_storage.h"
 #include "rbac/rbac.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"

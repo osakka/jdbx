@@ -175,6 +175,36 @@ typedef struct {
     int max_login_attempts;      /* Maximum login attempts before lockout */
     int login_lockout_time;      /* Login lockout time in seconds */
 
+    /* Admin cookie configuration */
+    char* admin_cookie_name;     /* Admin authentication cookie name */
+    int admin_cookie_ttl;        /* Admin cookie TTL in seconds */
+    int admin_cookie_secure;     /* Cookie secure flag (HTTPS only) */
+    int admin_cookie_httponly;   /* Cookie HTTP-only flag */
+    char* admin_cookie_samesite; /* Cookie SameSite policy */
+
+    /* Persistence configuration */
+    int persistence_ops_threshold;   /* Save after N operations */
+    size_t persistence_size_threshold; /* Save after N bytes of changes */
+    int persistence_save_interval;   /* Save every N seconds */
+
+    /* Input validation limits */
+    size_t max_collection_name_length; /* Maximum collection name length */
+    size_t max_document_id_length;     /* Maximum document ID length */
+    size_t max_path_length;            /* Maximum file path length */
+    size_t max_url_length;             /* Maximum URL length */
+    size_t max_email_length;           /* Maximum email address length */
+
+    /* Advanced indexing and performance configuration */
+    int query_tracker_max_patterns;      /* Maximum query patterns to track */
+    int adaptive_index_min_documents;    /* Minimum documents for indexing */
+    int adaptive_index_max_per_collection; /* Maximum indexes per collection */
+    int index_cleanup_min_age_hours;     /* Index minimum age before cleanup (hours) */
+    int index_cleanup_min_queries;      /* Minimum queries before cleanup evaluation */
+    double index_cleanup_roi_threshold;  /* ROI threshold for index removal */
+    double index_cleanup_effectiveness_threshold; /* Effectiveness threshold for cleanup */
+    int index_cleanup_interval;         /* Index cleanup check interval (seconds) */
+    int query_tracker_cleanup_interval; /* Query tracker cleanup interval (seconds) */
+
     /* Status */
     int error;                   /* Error code */
 } server_config_t;

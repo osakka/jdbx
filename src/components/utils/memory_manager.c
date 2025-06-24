@@ -21,7 +21,6 @@
 #include <stddef.h>
 #include <stdalign.h>
 #include <stdio.h>
-#include <pthread.h>
 
 /* Memory managers should not depend on logging */
 

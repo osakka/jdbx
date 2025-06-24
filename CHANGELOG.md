@@ -5,29 +5,40 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [7.2.5] - 2025-06-24
+## [7.2.6] - 2025-06-24
 
 ### Added
-- **COMPREHENSIVE CONFIGURATION MANAGEMENT**: Complete socket, JWT cache, SSL security, and password policy configuration options
-- Socket configuration options: `--socket-backlog`, `--socket-keepalive`, `--socket-reuseport` with runtime application
-- JWT cache configuration: `--jwt-cache-buckets`, `--jwt-cache-ttl`, `--jwt-cache-max-entries` with dynamic sizing
-- SSL security options: `--ssl-verify-peer`, `--ssl-verify-depth`, `--ssl-session-timeout` for production hardening
-- Password policy controls: `--min-password-length`, `--max-login-attempts`, `--login-lockout-time` for enhanced security
-- Configuration defaults centralized in `config_defaults.h` with comprehensive documentation
-- Runtime configuration application in socket initialization, JWT cache setup, and security validation
+- **ADVANCED INDEXING CONFIGURATION**: Complete advanced indexing and performance configuration system
+- Query tracker configuration: `JDBX_QUERY_TRACKER_MAX_PATTERNS`, `JDBX_QUERY_TRACKER_CLEANUP_INTERVAL`
+- Adaptive indexing thresholds: `JDBX_ADAPTIVE_INDEX_MIN_DOCUMENTS`, `JDBX_ADAPTIVE_INDEX_MAX_PER_COLLECTION`
+- Index cleanup configuration: age thresholds, ROI thresholds, effectiveness thresholds, cleanup intervals
+- **COMPREHENSIVE ADMIN COOKIE SECURITY**: Full admin authentication cookie configuration system
+- Admin cookie security: `JDBX_ADMIN_COOKIE_NAME`, `JDBX_ADMIN_COOKIE_TTL`, secure flags, SameSite policy
+- **PERSISTENCE CONFIGURATION**: Complete database persistence threshold configuration
+- Persistence thresholds: `JDBX_PERSISTENCE_OPS_THRESHOLD`, `JDBX_PERSISTENCE_SIZE_THRESHOLD`, `JDBX_PERSISTENCE_SAVE_INTERVAL`
+- **INPUT VALIDATION LIMITS**: Configurable validation limits for all input types
+- Validation limits: collection names, document IDs, file paths, URLs, email addresses
+
+### Fixed
+- **CRITICAL SSL MEMORY CORRUPTION**: Fixed use-after-free bug in SSL certificate path normalization
+- SSL path normalization now uses two-phase approach preventing memory corruption during configuration loading
+- Removed 8 duplicate include statements across core files maintaining single source of truth
+- CLI flag alignment: restricted short flags to essential only (-h, -v), all others use long flags with --
 
 ### Changed
-- JWT cache now uses configurable bucket count, TTL, and maximum entries instead of hardcoded values
-- Socket listen backlog configurable via `--socket-backlog` (default: 512)
-- All configuration options follow long flag convention (`--`) with no unnecessary short flags
-- Configuration system maintains three-tier priority: environment file → CLI flags → database config
+- Configuration system now supports 35+ environment variables covering all major subsystems
+- All static assignments eliminated - paths, filenames, flags, options, IDs now fully configurable
+- Environment file extended with comprehensive documentation for all new configuration options
+- Three-tier configuration priority fully implemented: env file → CLI flags → database config (highest priority)
 
 ### Security
-- Enhanced SSL configuration options for production-grade security validation
-- Configurable password policy enforcement with lockout protection
-- JWT cache security with configurable expiration and memory limits
+- Admin cookie security fully configurable with secure defaults (HTTPS-only, HTTP-only, SameSite=Strict)
+- SSL certificate path handling hardened against memory corruption vulnerabilities
 
 ### Performance
+- Advanced indexing parameters now configurable for optimal query performance tuning
+- Query tracker memory usage configurable preventing memory exhaustion under load
+- Index cleanup thresholds configurable for automatic performance optimization
 - Optimized JWT cache with configurable hash buckets for better distribution
 - Socket performance tuning via configurable backlog and keep-alive settings
 - Configuration-driven performance tuning replacing hardcoded constants

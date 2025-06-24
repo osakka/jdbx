@@ -1,7 +1,6 @@
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "database/database.h"
-#include "database/document_storage.h"
 #include "database/collection_defaults.h"
 #include "rbac/rbac_database.h"
 #include "utils/json.h"

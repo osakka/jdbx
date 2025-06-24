@@ -38,10 +38,8 @@
 /* CRITICAL: Understand the storage vs virtual layer distinction! */
 #include "database/VIRTUAL_VS_STORAGE_CRITICAL.h"
 
-/* Persistence configuration constants */
-#define PERSISTENCE_BUFFER_OPS_THRESHOLD 50      /* Save after 50 operations */
-#define PERSISTENCE_BUFFER_SIZE_THRESHOLD (1024 * 1024)  /* Save after 1MB of changes */
-#define PERSISTENCE_PERIODIC_SAVE_INTERVAL 30    /* Save every 30 seconds */
+/* Persistence configuration constants - DEPRECATED: Use server_config_t fields instead */
+/* Replaced by configurable persistence_* fields in server_config_t */
 
 /* Schema validation rule types */
 typedef enum {

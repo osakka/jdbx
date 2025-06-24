@@ -6,7 +6,6 @@
 #include "database/document_storage.h"
 #include "core/server.h"
 #include "database/database.h"
-#include "database/document_storage.h"
 #include "rbac/rbac.h"
 #include "utils/config_loader.h"
 #include "rbac/rbac_db.h"

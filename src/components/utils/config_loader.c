@@ -1933,6 +1933,8 @@ void config_free(server_config_t* config) {
   if (config->log_file) BUFFER_FREE(config->log_file);
   if (config->web_root) BUFFER_FREE(config->web_root);
   
+  /* Admin cookie configuration removed for debugging */
+  
   /* Free SSL resources */
   if (config->cert_path) BUFFER_FREE(config->cert_path);
   if (config->key_path) BUFFER_FREE(config->key_path);
@@ -2088,6 +2090,36 @@ void config_init_defaults(server_config_t* config) {
   config->min_password_length = DEFAULT_MIN_PASSWORD_LENGTH;
   config->max_login_attempts = DEFAULT_MAX_LOGIN_ATTEMPTS;
   config->login_lockout_time = DEFAULT_LOGIN_LOCKOUT_TIME;
+
+  /* Admin cookie configuration */
+  config->admin_cookie_name = BUFFER_STRDUP(DEFAULT_ADMIN_COOKIE_NAME);
+  config->admin_cookie_ttl = DEFAULT_ADMIN_COOKIE_TTL;
+  config->admin_cookie_secure = DEFAULT_ADMIN_COOKIE_SECURE;
+  config->admin_cookie_httponly = DEFAULT_ADMIN_COOKIE_HTTPONLY;
+  config->admin_cookie_samesite = BUFFER_STRDUP(DEFAULT_ADMIN_COOKIE_SAMESITE);
+
+  /* Persistence configuration */
+  config->persistence_ops_threshold = DEFAULT_PERSISTENCE_OPS_THRESHOLD;
+  config->persistence_size_threshold = DEFAULT_PERSISTENCE_SIZE_THRESHOLD;
+  config->persistence_save_interval = DEFAULT_PERSISTENCE_SAVE_INTERVAL;
+
+  /* Input validation limits */
+  config->max_collection_name_length = DEFAULT_MAX_COLLECTION_NAME_LENGTH;
+  config->max_document_id_length = DEFAULT_MAX_DOCUMENT_ID_LENGTH;
+  config->max_path_length = DEFAULT_MAX_PATH_LENGTH;
+  config->max_url_length = DEFAULT_MAX_URL_LENGTH;
+  config->max_email_length = DEFAULT_MAX_EMAIL_LENGTH;
+
+  /* Advanced indexing and performance configuration */
+  config->query_tracker_max_patterns = DEFAULT_QUERY_TRACKER_MAX_PATTERNS;
+  config->adaptive_index_min_documents = DEFAULT_ADAPTIVE_INDEX_MIN_DOCUMENTS;
+  config->adaptive_index_max_per_collection = DEFAULT_ADAPTIVE_INDEX_MAX_PER_COLLECTION;
+  config->index_cleanup_min_age_hours = DEFAULT_INDEX_CLEANUP_MIN_AGE_HOURS;
+  config->index_cleanup_min_queries = DEFAULT_INDEX_CLEANUP_MIN_QUERIES;
+  config->index_cleanup_roi_threshold = DEFAULT_INDEX_CLEANUP_ROI_THRESHOLD;
+  config->index_cleanup_effectiveness_threshold = DEFAULT_INDEX_CLEANUP_EFFECTIVENESS_THRESHOLD;
+  config->index_cleanup_interval = DEFAULT_INDEX_CLEANUP_INTERVAL;
+  config->query_tracker_cleanup_interval = DEFAULT_QUERY_TRACKER_CLEANUP_INTERVAL;
   
   if (g_logger) {
     LOG_INFO("Configuration initialized with default values.");

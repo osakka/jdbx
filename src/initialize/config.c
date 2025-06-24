@@ -135,9 +135,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     /* ESSENTIAL SHORT FLAGS ONLY */
     {"help",         no_argument,       0, 'h'},
     {"version",      no_argument,       0, 'v'},
-    {"daemon",       no_argument,       0, 'd'},
-    {"foreground",   no_argument,       0, 'f'},
-    {"config",       required_argument, 0, 'c'},
+    {"daemon",       no_argument,       0, 0},
+    {"foreground",   no_argument,       0, 0},
+    {"config",       required_argument, 0, 0},
     
     /* ALL OTHER OPTIONS USE LONG FLAGS ONLY */
     {"terminate",    no_argument,       0, 400},
@@ -213,19 +213,20 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   int option_index = 0;
   
   optind = 1; /* Reset getopt index */
-  while ((opt = getopt_long(argc, argv, "hvdfc:", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hv", long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
         show_help = 1;
         break;
-      case 'd':
-        /* Daemon mode - handle in run_daemon check later */
-        break;
-      case 'f':
-        foreground_mode = 1;
-        break;
-      case 'c':
-        config_file = optarg;
+      case 0:
+        /* Long options with no short equivalent */
+        if (strcmp(long_options[option_index].name, "daemon") == 0) {
+          /* Daemon mode - handle in run_daemon check later */
+        } else if (strcmp(long_options[option_index].name, "foreground") == 0) {
+          foreground_mode = 1;
+        } else if (strcmp(long_options[option_index].name, "config") == 0) {
+          config_file = optarg;
+        }
         break;
       case 'v':
         show_version = 1;
@@ -703,6 +704,32 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   INIT_LOG_DEBUG("CONFIG", " Index time threshold: %d", heap_config->index_time_threshold);
   INIT_LOG_DEBUG("CONFIG", " Index startup delay: %d", heap_config->index_startup_delay);
   INIT_LOG_DEBUG("CONFIG", " Index check interval: %d", heap_config->index_check_interval);
+  /* Admin cookie configuration */
+  INIT_LOG_DEBUG("CONFIG", " Admin cookie name: %s", heap_config->admin_cookie_name ? heap_config->admin_cookie_name : "(null)");
+  INIT_LOG_DEBUG("CONFIG", " Admin cookie TTL: %d", heap_config->admin_cookie_ttl);
+  INIT_LOG_DEBUG("CONFIG", " Admin cookie secure: %s", heap_config->admin_cookie_secure ? "yes" : "no");
+  INIT_LOG_DEBUG("CONFIG", " Admin cookie HTTP-only: %s", heap_config->admin_cookie_httponly ? "yes" : "no");
+  INIT_LOG_DEBUG("CONFIG", " Admin cookie SameSite: %s", heap_config->admin_cookie_samesite ? heap_config->admin_cookie_samesite : "(null)");
+  /* Persistence configuration */
+  INIT_LOG_DEBUG("CONFIG", " Persistence ops threshold: %d", heap_config->persistence_ops_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Persistence size threshold: %zu bytes", heap_config->persistence_size_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Persistence save interval: %d seconds", heap_config->persistence_save_interval);
+  /* Input validation limits */
+  INIT_LOG_DEBUG("CONFIG", " Max collection name length: %zu", heap_config->max_collection_name_length);
+  INIT_LOG_DEBUG("CONFIG", " Max document ID length: %zu", heap_config->max_document_id_length);
+  INIT_LOG_DEBUG("CONFIG", " Max path length: %zu", heap_config->max_path_length);
+  INIT_LOG_DEBUG("CONFIG", " Max URL length: %zu", heap_config->max_url_length);
+  INIT_LOG_DEBUG("CONFIG", " Max email length: %zu", heap_config->max_email_length);
+  /* Advanced indexing and performance configuration */
+  INIT_LOG_DEBUG("CONFIG", " Query tracker max patterns: %d", heap_config->query_tracker_max_patterns);
+  INIT_LOG_DEBUG("CONFIG", " Adaptive index min documents: %d", heap_config->adaptive_index_min_documents);
+  INIT_LOG_DEBUG("CONFIG", " Adaptive index max per collection: %d", heap_config->adaptive_index_max_per_collection);
+  INIT_LOG_DEBUG("CONFIG", " Index cleanup min age hours: %d", heap_config->index_cleanup_min_age_hours);
+  INIT_LOG_DEBUG("CONFIG", " Index cleanup min queries: %d", heap_config->index_cleanup_min_queries);
+  INIT_LOG_DEBUG("CONFIG", " Index cleanup ROI threshold: %.2f", heap_config->index_cleanup_roi_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Index cleanup effectiveness threshold: %.2f", heap_config->index_cleanup_effectiveness_threshold);
+  INIT_LOG_DEBUG("CONFIG", " Index cleanup interval: %d seconds", heap_config->index_cleanup_interval);
+  INIT_LOG_DEBUG("CONFIG", " Query tracker cleanup interval: %d seconds", heap_config->query_tracker_cleanup_interval);
   
   /* Set the output parameter */
   *config_out = heap_config;

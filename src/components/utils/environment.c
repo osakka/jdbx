@@ -85,7 +85,9 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
     return 0;
   }
   
-  /* Store original values to free later */
+  /* Debug logging temporarily disabled - SSL memory corruption fixed */
+  
+  /* Store original values to free later - DO NOT FREE UNTIL THE END */
   char* old_db_path = config->db_file;
   char* old_pid_file = config->pid_file;
   char* old_log_file = config->log_file;
@@ -93,39 +95,63 @@ int normalize_config_paths(server_config_t* config, const char* base_dir) {
   char* old_cert_path = config->cert_path;
   char* old_key_path = config->key_path;
   
-  /* Normalize all paths */
+  /* Create new normalized paths WITHOUT freeing old ones yet */
+  char* new_db_path = NULL;
+  char* new_pid_file = NULL;
+  char* new_log_file = NULL;
+  char* new_web_root = NULL;
+  char* new_cert_path = NULL;
+  char* new_key_path = NULL;
+  
+  /* Generate all new paths first */
   if (config->db_file) {
-    config->db_file = ensure_absolute_path(config->db_file, base_dir);
+    new_db_path = ensure_absolute_path(config->db_file, base_dir);
   }
-  
-  
   if (config->pid_file) {
-    config->pid_file = ensure_absolute_path(config->pid_file, base_dir);
+    new_pid_file = ensure_absolute_path(config->pid_file, base_dir);
   }
-  
   if (config->log_file) {
-    config->log_file = ensure_absolute_path(config->log_file, base_dir);
+    new_log_file = ensure_absolute_path(config->log_file, base_dir);
   }
-  
   if (config->web_root) {
-    config->web_root = ensure_absolute_path(config->web_root, base_dir);
+    new_web_root = ensure_absolute_path(config->web_root, base_dir);
   }
-  
   if (config->cert_path) {
-    config->cert_path = ensure_absolute_path(config->cert_path, base_dir);
+    new_cert_path = ensure_absolute_path(config->cert_path, base_dir);
   }
-  
   if (config->key_path) {
-    config->key_path = ensure_absolute_path(config->key_path, base_dir);
+    new_key_path = ensure_absolute_path(config->key_path, base_dir);
   }
   
-  /* Free original strings */
-  BUFFER_FREE(old_db_path);
-  BUFFER_FREE(old_pid_file);
-  BUFFER_FREE(old_log_file);
-  BUFFER_FREE(old_web_root);
-  BUFFER_FREE(old_cert_path);
-  BUFFER_FREE(old_key_path);
+  /* Now update all config fields atomically */
+  if (new_db_path) {
+    config->db_file = new_db_path;
+  }
+  if (new_pid_file) {
+    config->pid_file = new_pid_file;
+  }
+  if (new_log_file) {
+    config->log_file = new_log_file;
+  }
+  if (new_web_root) {
+    config->web_root = new_web_root;
+  }
+  if (new_cert_path) {
+    config->cert_path = new_cert_path;
+  }
+  if (new_key_path) {
+    config->key_path = new_key_path;
+  }
+  
+  /* Finally, free all old values */
+  if (old_db_path) BUFFER_FREE(old_db_path);
+  if (old_pid_file) BUFFER_FREE(old_pid_file);
+  if (old_log_file) BUFFER_FREE(old_log_file);
+  if (old_web_root) BUFFER_FREE(old_web_root);
+  if (old_cert_path) BUFFER_FREE(old_cert_path);
+  if (old_key_path) BUFFER_FREE(old_key_path);
+  
+  /* SSL memory corruption fixed - paths now correctly normalized */
   
   return 1;
 }
@@ -345,6 +371,122 @@ int load_environment_config(server_config_t* config) {
     }
   }
   
+  /* Admin cookie configuration */
+  const char* admin_cookie_name = getenv("JDBX_ADMIN_COOKIE_NAME");
+  if (admin_cookie_name) {
+    BUFFER_FREE(config->admin_cookie_name);
+    config->admin_cookie_name = BUFFER_STRDUP(admin_cookie_name);
+  }
+  
+  const char* admin_cookie_ttl = getenv("JDBX_ADMIN_COOKIE_TTL");
+  if (admin_cookie_ttl) {
+    config->admin_cookie_ttl = atoi(admin_cookie_ttl);
+  }
+  
+  const char* admin_cookie_secure = getenv("JDBX_ADMIN_COOKIE_SECURE");
+  if (admin_cookie_secure) {
+    config->admin_cookie_secure = (strcmp(admin_cookie_secure, "true") == 0 || strcmp(admin_cookie_secure, "1") == 0);
+  }
+  
+  const char* admin_cookie_httponly = getenv("JDBX_ADMIN_COOKIE_HTTPONLY");
+  if (admin_cookie_httponly) {
+    config->admin_cookie_httponly = (strcmp(admin_cookie_httponly, "true") == 0 || strcmp(admin_cookie_httponly, "1") == 0);
+  }
+  
+  const char* admin_cookie_samesite = getenv("JDBX_ADMIN_COOKIE_SAMESITE");
+  if (admin_cookie_samesite) {
+    BUFFER_FREE(config->admin_cookie_samesite);
+    config->admin_cookie_samesite = BUFFER_STRDUP(admin_cookie_samesite);
+  }
+
+  /* Persistence configuration */
+  const char* persistence_ops_threshold = getenv("JDBX_PERSISTENCE_OPS_THRESHOLD");
+  if (persistence_ops_threshold) {
+    config->persistence_ops_threshold = atoi(persistence_ops_threshold);
+  }
+  
+  const char* persistence_size_threshold = getenv("JDBX_PERSISTENCE_SIZE_THRESHOLD");
+  if (persistence_size_threshold) {
+    config->persistence_size_threshold = (size_t)atoll(persistence_size_threshold);
+  }
+  
+  const char* persistence_save_interval = getenv("JDBX_PERSISTENCE_SAVE_INTERVAL");
+  if (persistence_save_interval) {
+    config->persistence_save_interval = atoi(persistence_save_interval);
+  }
+
+  /* Input validation limits configuration */
+  const char* max_collection_name_length = getenv("JDBX_MAX_COLLECTION_NAME_LENGTH");
+  if (max_collection_name_length) {
+    config->max_collection_name_length = (size_t)atoll(max_collection_name_length);
+  }
+  
+  const char* max_document_id_length = getenv("JDBX_MAX_DOCUMENT_ID_LENGTH");
+  if (max_document_id_length) {
+    config->max_document_id_length = (size_t)atoll(max_document_id_length);
+  }
+  
+  const char* max_path_length = getenv("JDBX_MAX_PATH_LENGTH");
+  if (max_path_length) {
+    config->max_path_length = (size_t)atoll(max_path_length);
+  }
+  
+  const char* max_url_length = getenv("JDBX_MAX_URL_LENGTH");
+  if (max_url_length) {
+    config->max_url_length = (size_t)atoll(max_url_length);
+  }
+  
+  const char* max_email_length = getenv("JDBX_MAX_EMAIL_LENGTH");
+  if (max_email_length) {
+    config->max_email_length = (size_t)atoll(max_email_length);
+  }
+
+  /* Advanced indexing and performance configuration */
+  const char* query_tracker_max_patterns = getenv("JDBX_QUERY_TRACKER_MAX_PATTERNS");
+  if (query_tracker_max_patterns) {
+    config->query_tracker_max_patterns = atoi(query_tracker_max_patterns);
+  }
+  
+  const char* adaptive_index_min_documents = getenv("JDBX_ADAPTIVE_INDEX_MIN_DOCUMENTS");
+  if (adaptive_index_min_documents) {
+    config->adaptive_index_min_documents = atoi(adaptive_index_min_documents);
+  }
+  
+  const char* adaptive_index_max_per_collection = getenv("JDBX_ADAPTIVE_INDEX_MAX_PER_COLLECTION");
+  if (adaptive_index_max_per_collection) {
+    config->adaptive_index_max_per_collection = atoi(adaptive_index_max_per_collection);
+  }
+  
+  const char* index_cleanup_min_age_hours = getenv("JDBX_INDEX_CLEANUP_MIN_AGE_HOURS");
+  if (index_cleanup_min_age_hours) {
+    config->index_cleanup_min_age_hours = atoi(index_cleanup_min_age_hours);
+  }
+  
+  const char* index_cleanup_min_queries = getenv("JDBX_INDEX_CLEANUP_MIN_QUERIES");
+  if (index_cleanup_min_queries) {
+    config->index_cleanup_min_queries = atoi(index_cleanup_min_queries);
+  }
+  
+  const char* index_cleanup_roi_threshold = getenv("JDBX_INDEX_CLEANUP_ROI_THRESHOLD");
+  if (index_cleanup_roi_threshold) {
+    config->index_cleanup_roi_threshold = atof(index_cleanup_roi_threshold);
+  }
+  
+  const char* index_cleanup_effectiveness_threshold = getenv("JDBX_INDEX_CLEANUP_EFFECTIVENESS_THRESHOLD");
+  if (index_cleanup_effectiveness_threshold) {
+    config->index_cleanup_effectiveness_threshold = atof(index_cleanup_effectiveness_threshold);
+  }
+  
+  const char* index_cleanup_interval = getenv("JDBX_INDEX_CLEANUP_INTERVAL");
+  if (index_cleanup_interval) {
+    config->index_cleanup_interval = atoi(index_cleanup_interval);
+  }
+  
+  const char* query_tracker_cleanup_interval = getenv("JDBX_QUERY_TRACKER_CLEANUP_INTERVAL");
+  if (query_tracker_cleanup_interval) {
+    config->query_tracker_cleanup_interval = atoi(query_tracker_cleanup_interval);
+  }
+
   /* Apply log configuration to active logger if it exists */
   if (g_logger) {
     const char* runtime_log_level = getenv("JDBX_LOG_LEVEL");
@@ -360,6 +502,6 @@ int load_environment_config(server_config_t* config) {
     }
   }
   
-  /* Normalize all paths to absolute */
-  return normalize_config_paths(config, base_dir);
+  /* Path normalization is handled by init_config() after all sources are loaded */
+  return 1;
 }

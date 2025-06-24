@@ -255,6 +255,88 @@
 #define DEFAULT_MAX_RETRIES 3
 #define DEFAULT_RETRY_DELAY 100  /* 100 milliseconds */
 
+/*==============================================================================
+ * Authentication and Security Defaults
+ *============================================================================*/
+
+/** Default admin authentication cookie name */
+#define DEFAULT_ADMIN_COOKIE_NAME "jdbx_static_auth"
+
+/** Default admin cookie TTL in seconds (1 hour) */
+#define DEFAULT_ADMIN_COOKIE_TTL 3600
+
+/** Default admin cookie secure flag (HTTPS only) */
+#define DEFAULT_ADMIN_COOKIE_SECURE 1
+
+/** Default admin cookie HTTP-only flag */
+#define DEFAULT_ADMIN_COOKIE_HTTPONLY 1
+
+/** Default admin cookie SameSite policy */
+#define DEFAULT_ADMIN_COOKIE_SAMESITE "Strict"
+
+/*==============================================================================
+ * Persistence Configuration Defaults
+ *============================================================================*/
+
+/** Default persistence operations threshold (save after N operations) */
+#define DEFAULT_PERSISTENCE_OPS_THRESHOLD 50
+
+/** Default persistence size threshold (save after N bytes of changes) */
+#define DEFAULT_PERSISTENCE_SIZE_THRESHOLD (1024 * 1024)
+
+/** Default persistence save interval (save every N seconds) */
+#define DEFAULT_PERSISTENCE_SAVE_INTERVAL 30
+
+/*==============================================================================
+ * Input Validation Limits Defaults
+ *============================================================================*/
+
+/** Default maximum collection name length */
+#define DEFAULT_MAX_COLLECTION_NAME_LENGTH 128
+
+/** Default maximum document ID length */
+#define DEFAULT_MAX_DOCUMENT_ID_LENGTH 256
+
+/** Default maximum file path length */
+#define DEFAULT_MAX_PATH_LENGTH 1024
+
+/** Default maximum URL length */
+#define DEFAULT_MAX_URL_LENGTH 2048
+
+/** Default maximum email address length */
+#define DEFAULT_MAX_EMAIL_LENGTH 256
+
+/*==============================================================================
+ * Advanced Indexing and Performance Defaults
+ *============================================================================*/
+
+/** Default maximum query patterns to track */
+#define DEFAULT_QUERY_TRACKER_MAX_PATTERNS 10000
+
+/** Default minimum documents for adaptive indexing */
+#define DEFAULT_ADAPTIVE_INDEX_MIN_DOCUMENTS 10
+
+/** Default maximum indexes per collection */
+#define DEFAULT_ADAPTIVE_INDEX_MAX_PER_COLLECTION 10
+
+/** Default index minimum age before cleanup (hours) */
+#define DEFAULT_INDEX_CLEANUP_MIN_AGE_HOURS 24
+
+/** Default minimum queries before cleanup evaluation */
+#define DEFAULT_INDEX_CLEANUP_MIN_QUERIES 100
+
+/** Default ROI threshold for index removal */
+#define DEFAULT_INDEX_CLEANUP_ROI_THRESHOLD -0.5
+
+/** Default effectiveness threshold for cleanup */
+#define DEFAULT_INDEX_CLEANUP_EFFECTIVENESS_THRESHOLD 0.1
+
+/** Default index cleanup check interval (seconds) */
+#define DEFAULT_INDEX_CLEANUP_INTERVAL 3600
+
+/** Default query tracker cleanup interval (seconds) */
+#define DEFAULT_QUERY_TRACKER_CLEANUP_INTERVAL 3600
+
 /* CORS defaults */
 #define DEFAULT_CORS_ENABLED 0
 #define DEFAULT_CORS_ALLOW_CREDENTIALS 0

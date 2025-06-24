@@ -33,7 +33,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <time.h>    /* For nanosleep */
 
 #include "database/database.h"
 #include "database/document_storage.h"
@@ -50,7 +49,6 @@
 #include "utils/metrics.h"
 #include "utils/memory_manager.h"
 #include "utils/buffer_pool.h"
-#include "utils/memory_manager.h"
 #include "utils/ref_json.h"
 #include "rbac/rbac_db.h"
 

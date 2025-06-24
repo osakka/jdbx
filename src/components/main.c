@@ -57,12 +57,12 @@ static void display_banner(void) {
 static void print_usage(const char* program_name) {
   printf("Usage: %s [OPTIONS]\n\n", program_name);
   printf("JSON Database Server - A lightweight JSON document database\n\n");
-  printf("Essential Options (short flags available):\n");
+  printf("Essential Options:\n");
   printf(" -h, --help              Display this help message and exit\n");
   printf(" -v, --version           Display version information and exit\n");
-  printf(" -d, --daemon            Run as a daemon (background mode)\n");
-  printf(" -f, --foreground        Run in foreground mode (do not daemonize)\n");
-  printf(" -c, --config=FILE       Load configuration from file\n");
+  printf("     --daemon            Run as a daemon (background mode)\n");
+  printf("     --foreground        Run in foreground mode (do not daemonize)\n");
+  printf("     --config=FILE       Load configuration from file\n");
   printf("\nConfiguration Options (long flags only):\n");
   printf("     --terminate         Terminate running server instance\n");
   printf("     --log-level=LEVEL   Set log level (error, warn, info, debug, trace)\n");

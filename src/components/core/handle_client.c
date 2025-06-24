@@ -17,7 +17,6 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
 /* Forward declarations for SSL support */
 static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_size);
