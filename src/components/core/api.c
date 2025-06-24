@@ -296,7 +296,7 @@ api_route_t routes[] = {
 };
 
 /* Helper function to get string value from JSON object */
-static const char* json_object_get_string(json_value_t* object, const char* key) {
+__attribute__((unused)) static const char* json_object_get_string(json_value_t* object, const char* key) {
   if (!object || object->type != JSON_OBJECT || !key) {
     return NULL;
   }
@@ -770,7 +770,7 @@ http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* reques
 
 /* Create collection */
 /* Helper function to extract user info from request - safe version using existing auth system */
-static int get_request_user_info(http_request_t* request, char* user_id_out, char* username_out, size_t buffer_size) {
+__attribute__((unused)) static int get_request_user_info(http_request_t* request, char* user_id_out, char* username_out, size_t buffer_size) {
   if (!request || !user_id_out || !username_out || buffer_size < 1) {
     return 0;
   }

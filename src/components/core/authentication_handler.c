@@ -19,9 +19,9 @@
 #include <time.h>
 #include <stdlib.h>
 
-/* Global bootstrap synchronization mutex */
-static pthread_mutex_t g_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int g_bootstrap_completed = 0;
+/* Global bootstrap synchronization mutex - legacy, kept for potential future use */
+__attribute__((unused)) static pthread_mutex_t g_bootstrap_mutex = PTHREAD_MUTEX_INITIALIZER;
+__attribute__((unused)) static int g_bootstrap_completed = 0;
 /* MOVED TO api_auth.c as part of Phase 2.2 API module extraction */
 #if 0
 http_response_t* api_handle_login(api_context_t* ctx, http_request_t* request) {

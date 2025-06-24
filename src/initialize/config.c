@@ -126,12 +126,9 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
   }
   memset(heap_config, 0, sizeof(server_config_t));
   
-  /* Initialize with default values */
-  server_config_t local_config = {0};
-  config_init_defaults(&local_config);
-  
-  /* Copy to heap allocated config */
-  memcpy(heap_config, &local_config, sizeof(server_config_t));
+  /* Initialize with default values directly on heap-allocated config */
+  /* This avoids issues with stack-allocated configs containing heap pointers */
+  config_init_defaults(heap_config);
   
   /* Define long options - short flags reserved for essential operations only */
   static struct option long_options[] = {

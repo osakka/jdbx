@@ -95,8 +95,10 @@ static void ensure_memory_initialized(void) {
         tls_memory.bypass_checkpoint = 0;
         tls_memory.initialized = 1;
         
-        /* Initialize TLSF pool for this thread (32MB) */
-        if (!tls_memory.tlsf_pool) {
+        /* Initialize TLSF pool for this thread only if the memory manager is fully initialized
+         * This prevents TLSF allocation during early initialization phase.
+         */
+        if (!tls_memory.tlsf_pool && g_memory_manager_initialized) {
             tls_memory.tlsf_pool = tlsf_create_pool(32 * 1024 * 1024);
         }
         /* Don't log from here - can cause issues */
@@ -116,18 +118,36 @@ static memory_header_t* get_memory_header(void* ptr) {
     
     /* Sanity check for obviously bad pointers */
     if ((uintptr_t)ptr < HEADER_SIZE) {
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "get_memory_header: ptr=%p too small (< %zu)\n", ptr, HEADER_SIZE);
+        }
         return NULL;
     }
     
-    /* Safely check if this could be a valid header by checking alignment */
-    /* Headers are allocated by aligned_alloc, so they should be aligned */
+    /* Check alignment - be more lenient for TLSF allocations
+     * TLSF provides its own alignment guarantees which may differ from max_align_t
+     */
     if ((uintptr_t)header % _Alignof(max_align_t) != 0) {
-        return NULL;
+        /* Try checking if this could be a TLSF allocation with different alignment */
+        if ((uintptr_t)header % 8 != 0) {  /* TLSF should at least be 8-byte aligned */
+            if (getenv("JDBX_MEM_DEBUG")) {
+                fprintf(stderr, "get_memory_header: ptr=%p header=%p alignment failed (even for TLSF)\n", 
+                        ptr, header);
+            }
+            return NULL;
+        }
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "get_memory_header: ptr=%p header=%p relaxed alignment (possible TLSF)\n", 
+                    ptr, header);
+        }
     }
     
     /* Check if the magic field location is readable before accessing it */
     /* This is a heuristic - we're checking if the pointer makes sense */
     if ((uintptr_t)header < 0x1000) {  /* Likely not a valid heap address */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "get_memory_header: ptr=%p header=%p too low (< 0x1000)\n", ptr, header);
+        }
         return NULL;
     }
     
@@ -140,6 +160,10 @@ static memory_header_t* get_memory_header(void* ptr) {
     if (getenv("JDBX_MEM_DEBUG")) {
         fprintf(stderr, "get_memory_header: ptr=%p, header=%p, magic=0x%x (expected 0x%x)\n", 
                 ptr, header, magic, MEMORY_MAGIC);
+        if (magic != MEMORY_MAGIC) {
+            fprintf(stderr, "  Magic mismatch! Header fields: size=%zu, checkpoint=%p, flags=0x%x\n",
+                    header->size, header->checkpoint, header->flags);
+        }
     }
     
     if (magic == MEMORY_MAGIC) {
@@ -495,9 +519,13 @@ void* memory_alloc(size_t size) {
         from_arena = 1;
     }
     
-    /* Use TLSF for non-arena allocations - but not during early initialization */
-    static int tlsf_enabled = 0;  /* Start disabled until config is loaded */
-    if (!allocated_ptr && tlsf_enabled && tls_memory.tlsf_pool && size >= TLSF_MIN_BLOCK_SIZE) {
+    /* Use TLSF for non-arena allocations - but only if memory manager is fully initialized
+     * This ensures consistency: allocations during early init use system malloc,
+     * and allocations during runtime use TLSF for eligible sizes.
+     * This prevents mixing allocators for the same logical allocation across realloc calls.
+     */
+    if (!allocated_ptr && tls_memory.tlsf_pool && g_memory_manager_initialized && 
+        size >= TLSF_MIN_BLOCK_SIZE) {
         allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
         if (allocated_ptr) {
             from_tlsf = 1;
@@ -687,21 +715,45 @@ void* memory_realloc(void* ptr, size_t new_size) {
     memory_header_t* header = get_memory_header(ptr);
     if (!header) {
         /* Not a managed allocation - could be early allocation or system malloc */
-        /* We need to allocate new memory and copy */
         if (getenv("JDBX_MEM_DEBUG")) {
             fprintf(stderr, "memory_realloc: Not managed allocation, using fallback for ptr=%p\n", ptr);
         }
         
-        /* Allocate new memory through our system */
-        void* new_ptr = memory_alloc(new_size);
-        if (!new_ptr) {
-            return NULL;
+        /* For unmanaged allocations, we need to handle two cases:
+         * 1. NULL pointer - this is just a malloc
+         * 2. Non-NULL pointer - could be from system malloc or corrupted
+         * 
+         * The safest approach is to treat NULL as malloc and try system
+         * realloc for non-NULL pointers as a last resort.
+         */
+        if (!ptr) {
+            /* This is effectively a malloc */
+            return memory_alloc(new_size);
         }
         
-        /* We don't know the old size, so we can't safely copy.
-           This is a fundamental issue - we need to track all allocations. 
-           For now, let's try system realloc as a fallback */
-        return realloc(ptr, new_size);
+        /* Non-NULL unmanaged pointer - try system realloc */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "WARNING: memory_realloc called on unmanaged pointer %p, "
+                    "attempting system realloc\n", ptr);
+        }
+        
+        /* Try system realloc - this will work if:
+         * 1. The pointer was allocated with system malloc before memory_manager_init
+         * 2. The pointer was allocated by a library using malloc directly
+         * It will fail (and likely crash) if the pointer is invalid or corrupted
+         */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "WARNING: About to call system realloc on unmanaged pointer %p, size=%zu\n", 
+                    ptr, new_size);
+        }
+        void* result = realloc(ptr, new_size);
+        if (!result && new_size > 0) {
+            /* Realloc failed - could be invalid pointer or out of memory */
+            if (getenv("JDBX_MEM_DEBUG")) {
+                fprintf(stderr, "ERROR: system realloc failed for unmanaged pointer %p\n", ptr);
+            }
+        }
+        return result;
     }
     
     /* Check which allocator owns this memory */
@@ -834,6 +886,9 @@ void memory_manager_init(void) {
     /* Mark as initialized */
     g_memory_manager_initialized = 1;
     pthread_mutex_unlock(&g_memory_lock);
+    
+    /* Now initialize TLSF pool for the main thread if it wasn't created yet */
+    ensure_memory_initialized();
 }
 
 /**

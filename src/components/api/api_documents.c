@@ -117,7 +117,7 @@ static json_value_t* parse_url_query_to_json(const char* query_string) {
  * @param request HTTP request
  * @return library name string, or "default" if none specified
  */
-static char* get_session_library(api_context_t* ctx, http_request_t* request) {
+__attribute__((unused)) static char* get_session_library(api_context_t* ctx __attribute__((unused)), http_request_t* request __attribute__((unused))) {
     /* Default implementation - can be enhanced with session management */
     return "default";
 }

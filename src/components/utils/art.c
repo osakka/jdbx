@@ -48,7 +48,7 @@ typedef struct art_document_list {
 /**
  * Find the longest common prefix between two keys
  */
-static uint8_t find_common_prefix(const uint8_t* key1, size_t len1,
+__attribute__((unused)) static uint8_t find_common_prefix(const uint8_t* key1, size_t len1,
                                   const uint8_t* key2, size_t len2) {
     uint8_t common = 0;
     size_t min_len = len1 < len2 ? len1 : len2;
@@ -97,7 +97,7 @@ static art_leaf_t* art_create_leaf(const void* key, size_t key_len,
 /**
  * Create an inner node with specified type
  */
-static art_node_t* art_create_node(art_node_type_t type) {
+__attribute__((unused)) static art_node_t* art_create_node(art_node_type_t type) {
     art_node_t* node = BUFFER_ALLOC(sizeof(art_node_t));
     if (!node) return NULL;
     
@@ -534,9 +534,9 @@ bool skiplist_iterator_next(art_iterator_t* iter,
  * Range scan with callback (drop-in replacement for skiplist_range_scan)
  */
 void skiplist_range_scan(art_t* art,
-                         const void* start_key, size_t start_key_len,
-                         const void* end_key, size_t end_key_len,
-                         art_scan_callback callback, void* user_data) {
+                         const void* start_key __attribute__((unused)), size_t start_key_len __attribute__((unused)),
+                         const void* end_key __attribute__((unused)), size_t end_key_len __attribute__((unused)),
+                         art_scan_callback callback, void* user_data __attribute__((unused))) {
     if (!art || !callback) return;
     
     /* TODO: Implement ART range scanning */
