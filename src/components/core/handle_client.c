@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
+#include <stdint.h>
 #include <sys/syscall.h>
 #include <pthread.h>
 #include <arpa/inet.h>
@@ -1217,8 +1218,14 @@ void handle_client(void* client_data) {
       response = api_dispatch_request(client->api_ctx, request);
       
       if (g_logger) {
-        TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
-            (void*)response, response ? (int)response->status : -1);
+        /* Validate response pointer before dereferencing */
+        if (response && (uintptr_t)response > 0x1000) {
+          TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 
+              (void*)response, (int)response->status);
+        } else {
+          TRACE_NET("API_DISPATCH_RESULT: response=%p (invalid/null)", 
+              (void*)response);
+        }
       }
     }
     

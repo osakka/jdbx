@@ -7,6 +7,8 @@
 #include <unistd.h> /* For getpid() */
 #include <sys/syscall.h> /* For gettid() */
 #include <strings.h> /* For strcasecmp() */
+#include <fcntl.h> /* For fcntl() and F_GETFL */
+#include <stdint.h> /* For uintptr_t */
 
 /* Global logger instance */
 logger_config_t* g_logger = NULL;
@@ -314,28 +316,45 @@ static const char* get_filename(const char* path) {
 /* Log a message with source information */
 void logger_log(log_level_t level, const char* file, int line, 
         const char* function, const char* format, ...) {
-  /* Check if logger is initialized */
-  if (!g_logger) {
+  /* Thread-safe check for logger validity during shutdown */
+  logger_config_t* logger = g_logger;
+  if (!logger || (uintptr_t)logger < 0x1000) {
     return;
   }
   
   /* Check if this message should be logged based on level */
-  if (level > g_logger->log_level) {
+  if (level > logger->log_level) {
     return;
   }
   
   /* Bypass memory manager for logging to avoid recursion */
-  if (g_logger) {  /* Only bypass if logger is initialized */
+  if (logger) {  /* Only bypass if logger is initialized */
     memory_bypass_checkpoint(1);
   }
   
-  pthread_mutex_lock(&g_logger->lock);
+  pthread_mutex_lock(&logger->lock);
   
   /* Determine output stream for console mode */
-  FILE* output = g_logger->log_file;
+  FILE* output = logger->log_file;
+  
+  /* Validate file pointer before using it - daemon fork can invalidate FDs */
+  if (output && output != stdout && output != stderr) {
+    /* First check if pointer seems reasonable (not clearly corrupted) */
+    if ((uintptr_t)output < 0x1000 || (uintptr_t)output == 0x5) {
+      /* Clearly invalid pointer, fall back to stderr immediately */
+      output = stderr;
+    } else {
+      /* Check if file descriptor is still valid */
+      int fd = fileno(output);
+      if (fd < 0 || fcntl(fd, F_GETFL) == -1) {
+        /* File descriptor is invalid, fall back to stderr */
+        output = stderr;
+      }
+    }
+  }
   
   /* In console mode, direct errors and warnings to stderr, others to stdout */
-  if (g_logger->log_file_path[0] == '\0') { /* Console mode */
+  if (logger->log_file_path[0] == '\0') { /* Console mode */
     if (level <= LOG_LEVEL_WARNING) { /* ERROR and WARNING go to stderr */
       output = stderr;
     } else {
@@ -346,7 +365,7 @@ void logger_log(log_level_t level, const char* file, int line,
   /* Format: timestamp [processid:threadid] [level] functionname.filename(without extension) line_num: short message */
   
   /* Add timestamp if enabled */
-  if (g_logger->include_timestamp) {
+  if (logger->include_timestamp) {
     time_t now;
     struct tm* time_info;
     char timestamp[30];
@@ -359,19 +378,19 @@ void logger_log(log_level_t level, const char* file, int line,
   }
   
   /* Add process information if enabled */
-  if (g_logger->include_process_info) {
+  if (logger->include_process_info) {
     pid_t pid = getpid();
     long tid = syscall(SYS_gettid);
     fprintf(output, "[%d:%ld] ", pid, tid);
   }
   
   /* Add log level if enabled */
-  if (g_logger->include_level) {
+  if (logger->include_level) {
     fprintf(output, "[%s] ", log_level_strings[level]);
   }
   
   /* Add source information if enabled - functionname.filename line_num: */
-  if (g_logger->include_source) {
+  if (logger->include_source) {
     const char* filename = get_filename(file);
     /* Remove .c extension for cleaner output */
     char clean_filename[64];
@@ -409,27 +428,29 @@ void logger_log(log_level_t level, const char* file, int line,
 /* Log a trace message with category */
 void logger_trace(trace_category_t category, const char* file, int line,
                   const char* function, const char* format, ...) {
-  /* Check if logger is initialized and trace is enabled for this category */
-  if (!g_logger || g_logger->log_level < LOG_LEVEL_TRACE || 
-      (g_logger->trace_mask & category) == 0) {
+  /* Thread-safe atomic logger access - single source of truth */
+  logger_config_t* logger = g_logger;
+  if (!logger || (uintptr_t)logger < 0x1000 || 
+      logger->log_level < LOG_LEVEL_TRACE || 
+      (logger->trace_mask & category) == 0) {
     return;
   }
   
   /* Bypass memory manager for logging to avoid recursion */
-  if (g_logger) {  /* Only bypass if logger is initialized */
+  if (logger) {  /* Only bypass if logger is initialized */
     memory_bypass_checkpoint(1);
   }
   
-  pthread_mutex_lock(&g_logger->lock);
+  pthread_mutex_lock(&logger->lock);
   
   /* Determine output stream */
-  FILE* output = g_logger->log_file;
-  if (g_logger->log_file_path[0] == '\0') { /* Console mode */
+  FILE* output = logger->log_file;
+  if (logger->log_file_path[0] == '\0') { /* Console mode */
     output = stdout;
   }
   
   /* Add timestamp */
-  if (g_logger->include_timestamp) {
+  if (logger->include_timestamp) {
     time_t now;
     struct tm* time_info;
     char timestamp[30];
@@ -445,14 +466,14 @@ void logger_trace(trace_category_t category, const char* file, int line,
   fprintf(output, "[TRACE] ");
   
   /* Add process information */
-  if (g_logger->include_process_info) {
+  if (logger->include_process_info) {
     pid_t pid = getpid();
     long tid = syscall(SYS_gettid);
     fprintf(output, "[%d:%ld] ", pid, tid);
   }
   
   /* Add source information */
-  if (g_logger->include_source) {
+  if (logger->include_source) {
     const char* filename = get_filename(file);
     char clean_filename[64];
     strncpy(clean_filename, filename, sizeof(clean_filename) - 1);
@@ -478,10 +499,10 @@ void logger_trace(trace_category_t category, const char* file, int line,
   /* Flush to ensure log is written immediately */
   fflush(output);
   
-  pthread_mutex_unlock(&g_logger->lock);
+  pthread_mutex_unlock(&logger->lock);
   
   /* Re-enable memory manager checkpoints */
-  if (g_logger) {  /* Only if logger was initialized */
+  if (logger) {  /* Only if logger was initialized */
     memory_bypass_checkpoint(0);
   }
 }
