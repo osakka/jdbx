@@ -14,14 +14,13 @@ extern logger_config_t* g_logger;
 
 /**
  * Helper macro for logging daemon messages
- * Uses debug level for detailed steps in debug mode,
- * but only logs important events at info level
+ * Uses unified early-stage logging when logger not initialized
  */
 #define DAEMON_LOG(level, message, ...) \
   if (g_logger) { \
-    LOG_##level("[DAEMON] " message, ##__VA_ARGS__); \
+    LOG_##level(message, ##__VA_ARGS__); \
   } else { \
-    fprintf(stderr, "[DAEMON] " message "\n", ##__VA_ARGS__); \
+    EARLY_LOG_##level("DAEMON", message, ##__VA_ARGS__); \
   }
 
 /**
@@ -30,9 +29,9 @@ extern logger_config_t* g_logger;
  */
 #define DAEMON_DEBUG(message, ...) \
   if (g_logger && g_logger->log_level >= LOG_LEVEL_DEBUG) { \
-    LOG_DEBUG("[DAEMON] " message, ##__VA_ARGS__); \
+    LOG_DEBUG(message, ##__VA_ARGS__); \
   } else if (!g_logger) { \
-    fprintf(stderr, "[DAEMON:DEBUG] " message "\n", ##__VA_ARGS__); \
+    EARLY_LOG_DEBUG("DAEMON", message, ##__VA_ARGS__); \
   }
 
 /**
@@ -125,7 +124,7 @@ int daemonize_process(const char* pid_file) {
   
   /* Write to logger if available before closing stdin/stdout/stderr */
   if (g_logger) {
-    LOG_INFO("[DAEMON] Final daemon process (PID: %d) starting in directory: %s", 
+    LOG_INFO("Final daemon process (PID: %d) starting in directory: %s", 
         daemon_pid, cwd);
   }
   
@@ -141,7 +140,7 @@ int daemonize_process(const char* pid_file) {
   if (fd < 0) {
     /* Can't log to stderr anymore, but logger might still work */
     if (g_logger) {
-      LOG_ERROR("[DAEMON] Failed to open /dev/null: %s (errno=%d)", 
+      LOG_ERROR("Failed to open /dev/null: %s (errno=%d)", 
           strerror(errno), errno);
     }
     return -1; /* Error opening /dev/null */
@@ -169,7 +168,7 @@ int daemonize_process(const char* pid_file) {
   if (original_stdout > 0) {
     FILE* saved_stdout = fdopen(original_stdout, "w");
     if (saved_stdout) {
-      fprintf(saved_stdout, "[DAEMON] Process successfully daemonized (PID: %d)\n", daemon_pid);
+      fprintf(saved_stdout, "Process successfully daemonized (PID: %d)\n", daemon_pid);
       fclose(saved_stdout);
     }
   }

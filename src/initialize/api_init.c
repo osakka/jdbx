@@ -76,9 +76,9 @@ init_status_t init_api(server_config_t* config, database_t* database,
             routes_added, api_ctx->num_routes);
   } else {
     if (g_logger) {
-      LOG_WARNING("[INIT:API] Cannot register RBAC API routes - missing context, database or RBAC system.");
+      LOG_WARNING("Cannot register RBAC API routes - missing context, database or RBAC system.");
     } else {
-      fprintf(stderr, "[INIT:API] WARNING: Cannot register RBAC API routes - missing context, database or RBAC system\n");
+      EARLY_LOG_WARNING("API", "Cannot register RBAC API routes - missing context, database or RBAC system");
     }
   }
   
@@ -93,9 +93,9 @@ init_status_t init_api(server_config_t* config, database_t* database,
     INIT_LOG_SUCCESS("API", "Health API endpoints registered");
   } else {
     if (g_logger) {
-      LOG_WARNING("[INIT:API] API context not available, health endpoints not registered.");
+      LOG_WARNING("API context not available, health endpoints not registered.");
     } else {
-      fprintf(stderr, "[INIT:API] WARNING: API context not available, health endpoints not registered\n");
+      EARLY_LOG_WARNING("API", "API context not available, health endpoints not registered");
     }
   }
   

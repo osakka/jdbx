@@ -268,6 +268,40 @@ void logger_close() {
   g_logger = NULL;
 }
 
+/* Early-stage logging for initialization before logger is ready */
+void logger_early_log(log_level_t level, const char* component, const char* format, ...) {
+  /* Use stderr for early-stage logging */
+  FILE* output = stderr;
+  
+  /* Format timestamp */
+  time_t now = time(NULL);
+  struct tm* tm_info = localtime(&now);
+  char timestamp[32];
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_info);
+  
+  /* Get process and thread IDs */
+  pid_t pid = getpid();
+  pid_t tid = syscall(SYS_gettid);
+  
+  /* Map level to string */
+  const char* level_str = "UNKNOWN";
+  if (level >= LOG_LEVEL_NONE && level <= LOG_LEVEL_TRACE) {
+    level_str = log_level_strings[level];
+  }
+  
+  /* Print early-stage log with component prefix */
+  fprintf(output, "%s [%d:%d] [%s] [%s] ", timestamp, pid, tid, level_str, component);
+  
+  /* Print the actual message */
+  va_list args;
+  va_start(args, format);
+  vfprintf(output, format, args);
+  va_end(args);
+  
+  fprintf(output, "\n");
+  fflush(output);
+}
+
 /* Extract filename from path */
 static const char* get_filename(const char* path) {
   const char* filename = strrchr(path, '/');

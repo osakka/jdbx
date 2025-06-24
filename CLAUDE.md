@@ -1,7 +1,7 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.4 - API Server-Side Filtering Fix Complete  
-**Updated**: June 23, 2025
+**Version**: 7.2.5 - Unified Logging Architecture  
+**Updated**: June 24, 2025
 
 ## Project Overview
 
@@ -46,6 +46,28 @@ memory_promote(persistent_data);
 ```
 
 **NEVER use json_free()** - All JSON managed by checkpoints
+
+## Recent Fixes (v7.2.5)
+
+### 🔧 Unified Logging Architecture (v7.2.5)
+**COMPREHENSIVE LOGGING STANDARDIZATION**: Implemented unified logging with early-stage support, eliminating redundant prefixes and ensuring consistent formatting across all initialization phases.
+
+**Technical Achievements:**
+1. **Early-Stage Logging**: Created `logger_early_log()` for consistent logging before main logger initialization
+2. **Redundant Prefix Elimination**: Removed [DAEMON], [FILE_SERVING], [INIT:*] prefixes - file/function info already in log format
+3. **Unified Macros**: DAEMON_LOG and INIT_LOG_* now seamlessly transition between early and regular logging
+4. **Thread-Safe Implementation**: Both regular and early-stage logging are fully thread-safe
+
+**Logging Format:**
+```
+timestamp [pid:tid] [level] function.filename line: message
+```
+
+**Key Improvements:**
+- ✅ Consistent format across all initialization phases
+- ✅ Seamless daemonization transitions (stderr → logger)
+- ✅ Cleaner, more focused log messages
+- ✅ Per-functionality trace control (TRACE_DB, TRACE_RBAC, etc.)
 
 ## Recent Fixes (v7.2.4)
 
@@ -111,6 +133,7 @@ cat var/jdbxd.log
 5. **Document Everything** - All fixes thoroughly documented
 6. **Clean Workspace** - Move temp files to trash/
 7. **Impeccable Git** - Clean commits, proper hygiene
+8. **Unified Logging** - Consistent format, no redundant prefixes
 
 ## Critical Memory Rules
 
@@ -142,6 +165,33 @@ virtual_query_users(db, library, filters);
 - **Three-Tier Config**: env → CLI → database priority
 - **Rate Limiting**: Use JDBX database for state storage
 - **SSL/TLS**: Production-ready defaults
+
+## Logging Standards
+
+### Format
+```
+timestamp [pid:tid] [level] function.filename line: message
+```
+
+### Levels
+- **ERROR**: Critical errors preventing operation
+- **WARNING**: Important issues needing attention  
+- **INFO**: Key operational events (production default)
+- **DEBUG**: Detailed troubleshooting information
+- **TRACE**: Per-functionality execution flow
+
+### Early-Stage Logging
+Use `EARLY_LOG_*` macros before logger initialization:
+```c
+EARLY_LOG_INFO("COMPONENT", "Message with %s", "parameters");
+```
+
+### Trace Categories
+- `TRACE_DB(...)` - Database operations
+- `TRACE_RBAC(...)` - Role-based access control
+- `TRACE_API(...)` - API request handling
+- `TRACE_AUTH(...)` - Authentication flows
+- `TRACE_NET(...)` - Network operations
 
 ## Documentation
 

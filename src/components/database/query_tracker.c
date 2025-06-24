@@ -252,7 +252,10 @@ static query_pattern_t* find_or_create_pattern(const char* collection_name, cons
  * Start timing a query
  */
 query_timing_t* query_tracker_start_timing(const char* collection_name, json_value_t* query_json) {
-    if (!g_query_tracker || !collection_name) return NULL;
+    if (!g_query_tracker || !collection_name) {
+        LOG_DEBUG("Query tracker start_timing: tracker=%p, collection=%s", g_query_tracker, collection_name ? collection_name : "NULL");
+        return NULL;
+    }
     
     query_timing_t* timing = (query_timing_t*)BUFFER_ALLOC(sizeof(query_timing_t));
     if (!timing) return NULL;
@@ -264,6 +267,8 @@ query_timing_t* query_tracker_start_timing(const char* collection_name, json_val
     timing->collection_name = collection_name; /* Assume string persists during query */
     timing->query_json = query_json;          /* Assume JSON persists during query */
     
+    LOG_DEBUG("Query tracker: Started timing for collection '%s'", collection_name);
+    
     return timing;
 }
 
@@ -272,6 +277,7 @@ query_timing_t* query_tracker_start_timing(const char* collection_name, json_val
  */
 void query_tracker_end_timing(query_timing_t* timing) {
     if (!timing || !g_query_tracker) {
+        LOG_DEBUG("Query tracker end_timing: timing=%p, tracker=%p", timing, g_query_tracker);
         BUFFER_FREE(timing);
         return;
     }
@@ -285,11 +291,14 @@ void query_tracker_end_timing(query_timing_t* timing) {
     size_t field_count = 0;
     char** field_paths = extract_query_field_paths(timing->query_json, &field_count);
     
+    LOG_DEBUG("Query tracker: Extracted %zu field paths from query", field_count);
+    
     if (field_paths && field_count > 0) {
         pthread_rwlock_wrlock(&g_query_tracker->lock);
         
         /* Record pattern for each queried field */
         for (size_t i = 0; i < field_count; i++) {
+            LOG_DEBUG("Query tracker: Recording pattern for field '%s' in collection '%s'", field_paths[i], timing->collection_name);
             query_pattern_t* pattern = find_or_create_pattern(timing->collection_name, field_paths[i]);
             if (pattern) {
                 /* Update statistics */
@@ -336,11 +345,14 @@ query_pattern_t** query_tracker_get_index_candidates(size_t* count) {
         while (pattern) {
             total_patterns++;
             
-            /* Debug log each pattern - moved after threshold calculation */
-            
             /* Determine dynamic thresholds based on collection size */
             size_t count_threshold = QUERY_TRACKER_INDEX_THRESHOLD_COUNT_DEFAULT;
             double time_threshold = QUERY_TRACKER_INDEX_THRESHOLD_AVG_MS_DEFAULT;
+            
+            /* Debug log each pattern */
+            LOG_DEBUG("Pattern: %s.%s - queries=%lu, avg_time=%.2fms, has_index=%d",
+                     pattern->collection_name, pattern->field_path,
+                     pattern->query_count, pattern->avg_time_ms, pattern->has_index);
             
             /* For system collections, use lower thresholds */
             if (pattern->collection_name[0] == '_') {

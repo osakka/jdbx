@@ -172,24 +172,24 @@ init_status_t init_socket(server_config_t* config) {
               INIT_LOG_SUCCESS("SOCKET", "Socket connect test successful - listener is working");
             } else {
               if (g_logger) {
-                LOG_WARNING("[INIT:SOCKET] Socket connect test failed with error: %s", strerror(optval));
+                LOG_WARNING("Socket connect test failed with error: %s", strerror(optval));
               } else {
-                fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test failed with error: %s\n", strerror(optval));
+                EARLY_LOG_WARNING("SOCKET", "Socket connect test failed with error: %s", strerror(optval));
               }
             }
           }
         } else {
           if (g_logger) {
-            LOG_WARNING("[INIT:SOCKET] Socket connect test timed out - listener might not be working.");
+            LOG_WARNING("Socket connect test timed out - listener might not be working.");
           } else {
-            fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test timed out - listener might not be working\n");
+            EARLY_LOG_WARNING("SOCKET", "Socket connect test timed out - listener might not be working");
           }
         }
       } else {
         if (g_logger) {
-          LOG_WARNING("[INIT:SOCKET] Socket connect test failed immediately: %s", strerror(errno));
+          LOG_WARNING("Socket connect test failed immediately: %s", strerror(errno));
         } else {
-          fprintf(stderr, "[INIT:SOCKET] WARNING: Socket connect test failed immediately: %s\n", strerror(errno));
+          EARLY_LOG_WARNING("SOCKET", "Socket connect test failed immediately: %s", strerror(errno));
         }
       }
     } else {

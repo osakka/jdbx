@@ -692,6 +692,9 @@ int virtual_delete(database_t* db, const char* uuid) {
 json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     (void)db; // Use global database
     
+    // Start query timing for adaptive indexing
+    query_timing_t* timing = query_tracker_start_timing(STORAGE_COLLECTION, query);
+    
     // Increment database read operations metric
     metric_t* db_read_metric = get_db_read_operations_metric();
     if (db_read_metric) {
@@ -706,6 +709,7 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     
     if (!query) {
         LOG_WARNING("storage_query_documents called with NULL query");
+        if (timing) query_tracker_end_timing(timing);
         return NULL;
     }
     
@@ -736,12 +740,14 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     library_t* lib = get_or_create_library(STORAGE_LIBRARY);
     if (!lib) {
         pthread_rwlock_unlock(&g_db.lock);
+        if (timing) query_tracker_end_timing(timing);
         return NULL;
     }
     
     collection_t* coll = get_or_create_collection(STORAGE_LIBRARY, STORAGE_COLLECTION);
     if (!coll) {
         pthread_rwlock_unlock(&g_db.lock);
+        if (timing) query_tracker_end_timing(timing);
         return NULL;
     }
     
@@ -759,6 +765,7 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
         pthread_rwlock_unlock(&coll->lock);
         /* CHECKPOINT: json_free(result); */
         /* CHECKPOINT: json_free(filtered_docs); */
+        if (timing) query_tracker_end_timing(timing);
         return NULL;
     }
     
@@ -861,6 +868,9 @@ json_value_t* storage_query_documents(database_t* db, json_value_t* query) {
     
     json_object_set(result, "documents", filtered_docs);
     json_object_set(result, "count", json_create_integer(count));
+    
+    // End query timing for adaptive indexing
+    if (timing) query_tracker_end_timing(timing);
     
     return result;
 }
@@ -969,6 +979,7 @@ database_t* db_init(const char* path) {
     
     /* Initialize subsystems */
     adaptive_indexer_init(&g_db.facade);
+    adaptive_indexer_start();
     query_tracker_init();
     
     /* Store path and mark as initialized */

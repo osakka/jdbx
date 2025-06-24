@@ -1048,10 +1048,10 @@ void handle_client(void* client_data) {
     response = serve_admin_file(request->path);
     if (g_logger) {
       if (response) {
-        LOG_DEBUG("[FILE_SERVING] File %s served successfully: status=%d, content_length=%zu, content_type=%s", 
+        LOG_DEBUG("File %s served successfully: status=%d, content_length=%zu, content_type=%s", 
                   request->path, response->status, response->content_length, response->content_type ? response->content_type : "null");
       } else {
-        LOG_DEBUG("[FILE_SERVING] File %s NOT served (response is NULL)", request->path);
+        LOG_DEBUG("File %s NOT served (response is NULL)", request->path);
       }
     }
 
@@ -1089,7 +1089,7 @@ void handle_client(void* client_data) {
     size_t response_len = 0;
     char* response_str = serialize_http_response_with_length(response, &response_len);
     if (g_logger) {
-      LOG_DEBUG("[FILE_SERVING] Serializing response for %s: content_length=%zu, total_response_len=%zu, header_bytes=%zu", 
+      LOG_DEBUG("Serializing response for %s: content_length=%zu, total_response_len=%zu, header_bytes=%zu", 
                 request->path, response->content_length, response_len, response_len - response->content_length);
     }
     
@@ -1099,7 +1099,7 @@ void handle_client(void* client_data) {
       socklen_t error_len = sizeof(socket_error);
       if (getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &socket_error, &error_len) == 0) {
         if (socket_error != 0) {
-          LOG_ERROR("[FILE_SERVING] Socket error detected before write for %s: %s", request->path, strerror(socket_error));
+          LOG_ERROR("Socket error detected before write for %s: %s", request->path, strerror(socket_error));
         }
       }
       
@@ -1107,12 +1107,12 @@ void handle_client(void* client_data) {
       struct sockaddr_in peer_addr;
       socklen_t peer_len = sizeof(peer_addr);
       if (getpeername(client_fd, (struct sockaddr*)&peer_addr, &peer_len) < 0) {
-        LOG_ERROR("[FILE_SERVING] Socket not connected for %s: %s", request->path, strerror(errno));
+        LOG_ERROR("Socket not connected for %s: %s", request->path, strerror(errno));
       }
       
       /* Send response, handling partial writes and errors */
       size_t bytes_sent = 0;
-      if (g_logger) LOG_DEBUG("[FILE_SERVING] Starting to send %zu bytes for %s", response_len, request->path);
+      if (g_logger) LOG_DEBUG("Starting to send %zu bytes for %s", response_len, request->path);
       while (bytes_sent < response_len) {
         /* Check for socket readiness before each write */
         fd_set write_fds;
@@ -1122,7 +1122,7 @@ void handle_client(void* client_data) {
         
         int ready = select(client_fd + 1, NULL, &write_fds, NULL, &timeout);
         if (ready <= 0) {
-          LOG_ERROR("[FILE_SERVING] Socket not ready for write for %s (ready=%d, errno=%s)", 
+          LOG_ERROR("Socket not ready for write for %s (ready=%d, errno=%s)", 
                     request->path, ready, ready < 0 ? strerror(errno) : "timeout");
           break;
         }
@@ -1131,29 +1131,29 @@ void handle_client(void* client_data) {
         if (result < 0) {
           if (errno == EINTR) {
             /* Interrupted by signal, retry */
-            if (g_logger) LOG_DEBUG("[FILE_SERVING] Write interrupted by signal, retrying for %s", request->path);
+            if (g_logger) LOG_DEBUG("Write interrupted by signal, retrying for %s", request->path);
             continue;
           } else if (errno == EPIPE || errno == ECONNRESET) {
             /* Connection closed by client */
-            LOG_ERROR("[FILE_SERVING] Client closed connection during write for %s (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
+            LOG_ERROR("Client closed connection during write for %s (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
             break;
           } else {
             /* Other error */
-            LOG_ERROR("[FILE_SERVING] Write error for %s: %s (sent %zu/%zu bytes)", request->path, strerror(errno), bytes_sent, response_len);
+            LOG_ERROR("Write error for %s: %s (sent %zu/%zu bytes)", request->path, strerror(errno), bytes_sent, response_len);
             break;
           }
         } else if (result == 0) {
           /* No bytes written, connection closed */
-          LOG_ERROR("[FILE_SERVING] No bytes written for %s, connection closed (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
+          LOG_ERROR("No bytes written for %s, connection closed (sent %zu/%zu bytes)", request->path, bytes_sent, response_len);
           break;
         } else {
           bytes_sent += result;
           if (g_logger && (bytes_sent % 16384 == 0 || bytes_sent == response_len)) {
-            LOG_DEBUG("[FILE_SERVING] Progress for %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
+            LOG_DEBUG("Progress for %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
           }
         }
       }
-      if (g_logger) LOG_DEBUG("[FILE_SERVING] Completed sending %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
+      if (g_logger) LOG_DEBUG("Completed sending %s: %zu/%zu bytes sent", request->path, bytes_sent, response_len);
       
       BUFFER_FREE(response_str);
     }

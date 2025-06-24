@@ -92,7 +92,7 @@ void init_register_config(server_config_t* config);
     if (g_logger) { \
         LOG_INFO(message, ##__VA_ARGS__); \
     } else { \
-        printf(message "\n", ##__VA_ARGS__); \
+        EARLY_LOG_INFO(component, message, ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization failure */
@@ -100,7 +100,7 @@ void init_register_config(server_config_t* config);
     if (g_logger) { \
         LOG_ERROR(message, ##__VA_ARGS__); \
     } else { \
-        fprintf(stderr, message "\n", ##__VA_ARGS__); \
+        EARLY_LOG_ERROR(component, message, ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization progress */
@@ -108,7 +108,7 @@ void init_register_config(server_config_t* config);
     if (g_logger) { \
         LOG_INFO(message, ##__VA_ARGS__); \
     } else { \
-        printf(message "\n", ##__VA_ARGS__); \
+        EARLY_LOG_INFO(component, message, ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization warnings */
@@ -116,7 +116,7 @@ void init_register_config(server_config_t* config);
     if (g_logger) { \
         LOG_WARNING(message, ##__VA_ARGS__); \
     } else { \
-        fprintf(stderr, message "\n", ##__VA_ARGS__); \
+        EARLY_LOG_WARNING(component, message, ##__VA_ARGS__); \
     }
 
 /* Standard log message for initialization debug information */
@@ -124,9 +124,7 @@ void init_register_config(server_config_t* config);
     if (g_logger) { \
         LOG_DEBUG(message, ##__VA_ARGS__); \
     } else { \
-        if (g_verbose_mode) { \
-            printf("DEBUG: " message "\n", ##__VA_ARGS__); \
-        } \
+        EARLY_LOG_DEBUG(component, message, ##__VA_ARGS__); \
     }
 
 /* Global flag for verbose mode (used when logger is not yet initialized) */

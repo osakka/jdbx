@@ -37,9 +37,9 @@ void init_cleanup(void) {
   if (g_process_type != PROCESS_TYPE_SERVER) {
     /* Always log this at INFO level so we can see it */
     if (g_logger) {
-      LOG_INFO("[INIT:CORE] Skipping cleanup in non-server process (type=%d)", g_process_type);
+      LOG_INFO("Skipping cleanup in non-server process (type=%d)", g_process_type);
     } else {
-      printf("[INIT:CORE] Skipping cleanup in non-server process (type=%d)\n", g_process_type);
+      EARLY_LOG_INFO("CORE", "Skipping cleanup in non-server process (type=%d)", g_process_type);
     }
     return;
   }
@@ -114,7 +114,7 @@ void init_cleanup(void) {
     INIT_LOG_PROGRESS("CORE", "Shutdown complete, closing logger");
     logger_close();
   } else {
-    printf("[INIT:CORE] Shutdown complete\n");
+    EARLY_LOG_INFO("CORE", "Shutdown complete");
   }
 }
 
@@ -158,9 +158,9 @@ void init_set_process_type(int type) {
   g_process_type = type;
   /* Always log this at INFO level so we can see it */
   if (g_logger) {
-    LOG_INFO("[INIT:CORE] Process type set to: %d", type);
+    LOG_INFO("Process type set to: %d", type);
   } else {
-    printf("[INIT:CORE] Process type set to: %d\n", type);
+    EARLY_LOG_INFO("CORE", "Process type set to: %d", type);
   }
 }
 

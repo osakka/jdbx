@@ -107,4 +107,13 @@ void logger_trace(trace_category_t category, const char* file, int line,
 #define TRACE_METRICS(...)  logger_trace(TRACE_METRICS, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define TRACE_MEMORY(...)   logger_trace(TRACE_MEMORY, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
+/* Early-stage logging for initialization before logger is ready */
+void logger_early_log(log_level_t level, const char* component, const char* format, ...);
+
+/* Early-stage logging macros - use these during initialization */
+#define EARLY_LOG_ERROR(component, ...)   logger_early_log(LOG_LEVEL_ERROR, component, __VA_ARGS__)
+#define EARLY_LOG_WARNING(component, ...) logger_early_log(LOG_LEVEL_WARNING, component, __VA_ARGS__)
+#define EARLY_LOG_INFO(component, ...)    logger_early_log(LOG_LEVEL_INFO, component, __VA_ARGS__)
+#define EARLY_LOG_DEBUG(component, ...)   logger_early_log(LOG_LEVEL_DEBUG, component, __VA_ARGS__)
+
 #endif /* JDBX_LOGGER_H */
