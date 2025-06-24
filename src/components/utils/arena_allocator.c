@@ -1,9 +1,9 @@
 #include "utils/arena_allocator.h"
 #include "utils/tlsf_allocator.h"
-#include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 /* Arena Allocator Implementation
  * 
@@ -58,7 +58,7 @@ arena_t* arena_create(size_t size) {
     size_t total_size = sizeof(arena_t) + size;
     arena_t* arena = (arena_t*)aligned_alloc(64, total_size);
     if (!arena) {
-        LOG_ERROR("Failed to allocate arena of size %zu", total_size);
+        /* Failed to allocate arena - no logging to avoid circular dependencies */
         return NULL;
     }
     
@@ -69,7 +69,7 @@ arena_t* arena_create(size_t size) {
     arena->current = arena->memory;
     arena->next_checkpoint_id = 1;
     
-    LOG_DEBUG("Created arena: size=%zu, address=%p", size, arena);
+    /* Arena created successfully */
     return arena;
 }
 
@@ -114,7 +114,7 @@ void* arena_alloc(arena_t* arena, size_t size) {
             }
             arena->next = arena_create(new_size);
             if (!arena->next) {
-                LOG_ERROR("Failed to create overflow arena");
+                /* Failed to create overflow arena - no logging to avoid circular dependencies */
                 return NULL;
             }
         }
@@ -172,7 +172,7 @@ uint32_t arena_checkpoint(arena_t* arena) {
     cp->next = arena->checkpoints;
     arena->checkpoints = cp;
     
-    LOG_DEBUG("Arena checkpoint %u at position %zu", cp->checkpoint_id, cp->position);
+    /* Checkpoint created */
     return cp->checkpoint_id;
 }
 
@@ -188,7 +188,7 @@ void arena_reset_to_checkpoint(arena_t* arena, uint32_t checkpoint_id) {
     }
     
     if (!cp) {
-        LOG_WARNING("Checkpoint %u not found in arena", checkpoint_id);
+        /* Checkpoint not found - silent failure to avoid circular dependencies */
         return;
     }
     
@@ -210,7 +210,7 @@ void arena_reset_to_checkpoint(arena_t* arena, uint32_t checkpoint_id) {
         arena->next = NULL;
     }
     
-    LOG_DEBUG("Arena reset to checkpoint %u, position %zu", checkpoint_id, cp->position);
+    /* Arena reset to checkpoint */
 }
 
 /* Get statistics */
@@ -276,13 +276,13 @@ void* arena_promote(arena_t* arena, void* ptr, size_t size) {
     tlsf_pool_t* tlsf = tlsf_get_thread_pool();
     void* new_ptr = tlsf_malloc(tlsf, size);
     if (!new_ptr) {
-        LOG_ERROR("Failed to promote arena object to TLSF");
+        /* Failed to promote arena object to TLSF - no logging to avoid circular dependencies */
         return NULL;
     }
     
     /* Copy data */
     memcpy(new_ptr, ptr, size);
     
-    LOG_DEBUG("Promoted object from arena to TLSF: old=%p, new=%p, size=%zu", ptr, new_ptr, size);
+    /* Object promoted successfully */
     return new_ptr;
 }

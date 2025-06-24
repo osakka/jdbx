@@ -1,9 +1,9 @@
 #include "utils/tlsf_allocator.h"
-#include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include <stdio.h>
 
 /* TLSF Two-Level Segregated Fit Implementation
  * 
@@ -301,7 +301,7 @@ tlsf_pool_t* tlsf_create_pool(size_t pool_size) {
     mapping_insert(pool_size - TLSF_BLOCK_HEADER_SIZE, &fl, &sl);
     insert_free_block(pool, (free_block_t*)initial_block, fl, sl);
     
-    LOG_DEBUG("Created TLSF pool: size=%zu, address=%p", pool_size, pool);
+    /* TLSF pool created successfully */
     return pool;
 }
 

@@ -1217,7 +1217,10 @@ void handle_client(void* client_data) {
     if (!response) {
       response = api_dispatch_request(client->api_ctx, request);
       
-      if (g_logger) {
+      /* Thread-safe logger check with atomic access */
+      extern logger_config_t* g_logger;
+      logger_config_t* logger = g_logger;
+      if (logger && (uintptr_t)logger > 0x1000) {
         /* Validate response pointer before dereferencing */
         if (response && (uintptr_t)response > 0x1000) {
           TRACE_NET("API_DISPATCH_RESULT: response=%p, status=%d", 

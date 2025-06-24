@@ -94,15 +94,14 @@ static void ensure_memory_initialized(void) {
         tls_memory.bypass_checkpoint = 0;
         tls_memory.initialized = 1;
         
-        /* Initialize TLSF pool for this thread only if the memory manager is fully initialized
+        /* TEMPORARILY DISABLED: TLSF pool creation to isolate stability issues
+         * Initialize TLSF pool for this thread only if the memory manager is fully initialized
          * This prevents TLSF allocation during early initialization phase.
          */
-        if (!tls_memory.tlsf_pool && g_memory_manager_initialized) {
+        if (0 && !tls_memory.tlsf_pool && g_memory_manager_initialized) {
             tls_memory.tlsf_pool = tlsf_create_pool(32 * 1024 * 1024);
         }
         /* Don't log from here - can cause issues */
-        /* But we can use direct printf for debugging */
-        /* printf("Memory manager: Initialized TLS for thread %p\n", (void*)pthread_self()); */
     }
 }
 
@@ -207,8 +206,9 @@ memory_checkpoint_t* memory_checkpoint_create(void) {
     checkpoint->total_size = 0;
     checkpoint->committed = 0;
     
-    /* Create arena for checkpoint allocations (4MB) */
-    checkpoint->arena = arena_create(4 * 1024 * 1024);
+    /* TEMPORARILY DISABLED: Arena creation to isolate stability issues
+     * Create arena for checkpoint allocations (4MB) */
+    checkpoint->arena = NULL; /* arena_create(4 * 1024 * 1024); */
     checkpoint->arena_checkpoint_id = 0;
     if (checkpoint->arena) {
         checkpoint->arena_checkpoint_id = arena_checkpoint(checkpoint->arena);
@@ -511,19 +511,21 @@ void* memory_alloc(size_t size) {
     int from_arena = 0;
     int from_tlsf = 0;
     
-    /* Use arena for checkpoint allocations under 64KB */
-    if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
+    /* TEMPORARILY DISABLED: Arena and TLSF allocators to isolate stability issues 
+     * Use arena for checkpoint allocations under 64KB */
+    if (0 && tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
         !tls_memory.bypass_checkpoint && size < 65536 && tls_memory.current_checkpoint->arena) {
         allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
         from_arena = 1;
     }
     
-    /* Use TLSF for non-arena allocations - but only if memory manager is fully initialized
+    /* TEMPORARILY DISABLED: TLSF allocator to isolate stability issues
+     * Use TLSF for non-arena allocations - but only if memory manager is fully initialized
      * This ensures consistency: allocations during early init use system malloc,
      * and allocations during runtime use TLSF for eligible sizes.
      * This prevents mixing allocators for the same logical allocation across realloc calls.
      */
-    if (!allocated_ptr && tls_memory.tlsf_pool && g_memory_manager_initialized && 
+    if (0 && !allocated_ptr && tls_memory.tlsf_pool && g_memory_manager_initialized && 
         size >= TLSF_MIN_BLOCK_SIZE) {
         allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
         if (allocated_ptr) {
@@ -872,7 +874,7 @@ char* memory_strdup(const char* str) {
  * Initialize memory manager
  */
 void memory_manager_init(void) {
-    /* Memory manager initialization - no logging */
+    /* Memory manager initialization - no logging to avoid circular dependencies */
     pthread_mutex_lock(&g_memory_lock);
     
     /* Initialize TLSF system */
@@ -884,6 +886,7 @@ void memory_manager_init(void) {
     g_memory_stats.allocations_freed_by_rewind = 0;
     /* Mark as initialized */
     g_memory_manager_initialized = 1;
+    
     pthread_mutex_unlock(&g_memory_lock);
     
     /* Now initialize TLSF pool for the main thread if it wasn't created yet */
