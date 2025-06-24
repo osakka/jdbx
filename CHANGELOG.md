@@ -5,6 +5,33 @@ All notable changes to the JDBX database server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.5] - 2025-06-24
+
+### Added
+- **COMPREHENSIVE CONFIGURATION MANAGEMENT**: Complete socket, JWT cache, SSL security, and password policy configuration options
+- Socket configuration options: `--socket-backlog`, `--socket-keepalive`, `--socket-reuseport` with runtime application
+- JWT cache configuration: `--jwt-cache-buckets`, `--jwt-cache-ttl`, `--jwt-cache-max-entries` with dynamic sizing
+- SSL security options: `--ssl-verify-peer`, `--ssl-verify-depth`, `--ssl-session-timeout` for production hardening
+- Password policy controls: `--min-password-length`, `--max-login-attempts`, `--login-lockout-time` for enhanced security
+- Configuration defaults centralized in `config_defaults.h` with comprehensive documentation
+- Runtime configuration application in socket initialization, JWT cache setup, and security validation
+
+### Changed
+- JWT cache now uses configurable bucket count, TTL, and maximum entries instead of hardcoded values
+- Socket listen backlog configurable via `--socket-backlog` (default: 512)
+- All configuration options follow long flag convention (`--`) with no unnecessary short flags
+- Configuration system maintains three-tier priority: environment file → CLI flags → database config
+
+### Security
+- Enhanced SSL configuration options for production-grade security validation
+- Configurable password policy enforcement with lockout protection
+- JWT cache security with configurable expiration and memory limits
+
+### Performance
+- Optimized JWT cache with configurable hash buckets for better distribution
+- Socket performance tuning via configurable backlog and keep-alive settings
+- Configuration-driven performance tuning replacing hardcoded constants
+
 ## [7.1.0] - 2025-06-22
 
 ### Added

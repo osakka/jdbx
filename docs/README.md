@@ -2,7 +2,7 @@
 
 **Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
-**Version**: 7.0.1 | **Status**: Production Ready - Memory Checkpoint Safety with 100% Test Success
+**Version**: 7.2.5 | **Status**: Production Ready - Configuration Management Excellence with Security Hardening
 
 ## 🚀 Quick Start
 
@@ -95,7 +95,7 @@ Working code examples and templates
 
 ## 🏷️ **Documentation by Version**
 
-- **v7.0.1** (Current) - Memory Checkpoint Safety with 100% Test Success
+- **v7.2.5** (Current) - Configuration Management Excellence with Security Hardening
 - **v7.0.0** - Integrated WAL Architecture with Single Source of Truth
 - **v6.5.14** - Enterprise Logging Standards
 - **v6.5.13** - Client Connection Memory Lifecycle Fix
@@ -132,6 +132,6 @@ Help improve this documentation:
 
 ---
 
-**Documentation Version**: 7.0.1  
-**Last Updated**: June 22, 2025  
+**Documentation Version**: 7.2.5  
+**Last Updated**: June 24, 2025  
 **Contributors**: Technical Writing Team, JDBX Maintainers

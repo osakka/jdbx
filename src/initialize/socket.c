@@ -46,6 +46,32 @@ init_status_t init_socket(server_config_t* config) {
     INIT_LOG_SUCCESS("SOCKET", "Socket option SO_REUSEADDR set");
   }
 
+  /* Set socket keep-alive if enabled */
+  if (config->socket_keepalive) {
+    int keepalive = 1;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) {
+      INIT_LOG_FAILURE("SOCKET", "Failed to set SO_KEEPALIVE: %s", strerror(errno));
+      /* Continue anyway, this is not fatal */
+    } else {
+      INIT_LOG_SUCCESS("SOCKET", "Socket option SO_KEEPALIVE set");
+    }
+  }
+
+  /* Set socket reuse port if enabled */
+  if (config->socket_reuseport) {
+#ifdef SO_REUSEPORT
+    int reuseport = 1;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &reuseport, sizeof(reuseport)) < 0) {
+      INIT_LOG_FAILURE("SOCKET", "Failed to set SO_REUSEPORT: %s", strerror(errno));
+      /* Continue anyway, this is not fatal */
+    } else {
+      INIT_LOG_SUCCESS("SOCKET", "Socket option SO_REUSEPORT set");
+    }
+#else
+    INIT_LOG_WARNING("SOCKET", "SO_REUSEPORT not supported on this platform");
+#endif
+  }
+
   /* Prepare address structure */
   struct sockaddr_in address;
   memset(&address, 0, sizeof(address));
@@ -90,17 +116,17 @@ init_status_t init_socket(server_config_t* config) {
 
   INIT_LOG_SUCCESS("SOCKET", "Socket bound successfully");
 
-  /* Set up to listen for connections with proper backlog for concurrent load */
-  INIT_LOG_PROGRESS("SOCKET", "Setting socket to listen state with backlog=512");
+  /* Set up to listen for connections with configurable backlog */
+  INIT_LOG_PROGRESS("SOCKET", "Setting socket to listen state with backlog=%d", config->socket_backlog);
   
-  if (listen(socket_fd, 512) < 0) {
+  if (listen(socket_fd, config->socket_backlog) < 0) {
     INIT_LOG_FAILURE("SOCKET", "Failed to listen on socket: %s (errno=%d)", 
             strerror(errno), errno);
     close(socket_fd);
     return INIT_SOCKET_ERROR;
   }
 
-  INIT_LOG_SUCCESS("SOCKET", "Socket listening successfully (backlog=512)");
+  INIT_LOG_SUCCESS("SOCKET", "Socket listening successfully (backlog=%d)", config->socket_backlog);
 
   /* Verify socket state */
   int acceptconn = 0;

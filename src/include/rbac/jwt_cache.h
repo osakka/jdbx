@@ -40,6 +40,9 @@ typedef struct jwt_cache {
 /* Global JWT cache instance */
 extern jwt_cache_t* g_jwt_cache;
 
+/* Configure JWT cache with server configuration values */
+void jwt_cache_configure(int bucket_count, int ttl_seconds, int max_entries);
+
 /* Initialize global JWT cache */
 int jwt_cache_init(size_t max_entries);
 

@@ -2068,6 +2068,26 @@ void config_init_defaults(server_config_t* config) {
   config->cors.enabled = DEFAULT_CORS_ENABLED;
   config->cors.allow_credentials = DEFAULT_CORS_ALLOW_CREDENTIALS;
   config->cors.max_age = DEFAULT_CORS_MAX_AGE;
+
+  /* Socket configuration */
+  config->socket_backlog = DEFAULT_SOCKET_BACKLOG;
+  config->socket_keepalive = DEFAULT_SOCKET_KEEPALIVE;
+  config->socket_reuseport = DEFAULT_SOCKET_REUSEPORT;
+
+  /* SSL security configuration */
+  config->ssl_verify_peer = DEFAULT_SSL_VERIFY_PEER;
+  config->ssl_verify_depth = DEFAULT_SSL_VERIFY_DEPTH;
+  config->ssl_session_timeout = DEFAULT_SSL_SESSION_TIMEOUT;
+
+  /* JWT cache configuration */
+  config->jwt_cache_buckets = DEFAULT_JWT_CACHE_BUCKETS;
+  config->jwt_cache_ttl = DEFAULT_JWT_CACHE_TTL;
+  config->jwt_cache_max_entries = DEFAULT_JWT_CACHE_MAX_ENTRIES;
+
+  /* Password policy configuration */
+  config->min_password_length = DEFAULT_MIN_PASSWORD_LENGTH;
+  config->max_login_attempts = DEFAULT_MAX_LOGIN_ATTEMPTS;
+  config->login_lockout_time = DEFAULT_LOGIN_LOCKOUT_TIME;
   
   if (g_logger) {
     LOG_INFO("Configuration initialized with default values.");

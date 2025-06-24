@@ -192,6 +192,22 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
     {"bootstrap-admin-pass", required_argument, 0, 321},
     {"admin-email", required_argument, 0, 322},
     {"jwt-secret", required_argument, 0, 323},
+    /* Socket configuration options */
+    {"socket-backlog", required_argument, 0, 330},
+    {"socket-keepalive", no_argument, 0, 331},
+    {"socket-reuseport", no_argument, 0, 332},
+    /* SSL security options */
+    {"ssl-verify-peer", no_argument, 0, 340},
+    {"ssl-verify-depth", required_argument, 0, 341},
+    {"ssl-session-timeout", required_argument, 0, 342},
+    /* JWT cache options */
+    {"jwt-cache-buckets", required_argument, 0, 350},
+    {"jwt-cache-ttl", required_argument, 0, 351},
+    {"jwt-cache-max-entries", required_argument, 0, 352},
+    /* Password policy options */
+    {"min-password-length", required_argument, 0, 360},
+    {"max-login-attempts", required_argument, 0, 361},
+    {"login-lockout-time", required_argument, 0, 362},
     {0, 0, 0, 0}
   };
   
@@ -331,6 +347,46 @@ init_status_t init_config(int argc, char** argv, server_config_t** config_out) {
         break;
       case 323: /* --jwt-secret */
         jwt_secret = optarg;
+        break;
+      /* Socket configuration options */
+      case 330: /* --socket-backlog */
+        heap_config->socket_backlog = atoi(optarg);
+        break;
+      case 331: /* --socket-keepalive */
+        heap_config->socket_keepalive = 1;
+        break;
+      case 332: /* --socket-reuseport */
+        heap_config->socket_reuseport = 1;
+        break;
+      /* SSL security options */
+      case 340: /* --ssl-verify-peer */
+        heap_config->ssl_verify_peer = 1;
+        break;
+      case 341: /* --ssl-verify-depth */
+        heap_config->ssl_verify_depth = atoi(optarg);
+        break;
+      case 342: /* --ssl-session-timeout */
+        heap_config->ssl_session_timeout = atoi(optarg);
+        break;
+      /* JWT cache options */
+      case 350: /* --jwt-cache-buckets */
+        heap_config->jwt_cache_buckets = atoi(optarg);
+        break;
+      case 351: /* --jwt-cache-ttl */
+        heap_config->jwt_cache_ttl = atoi(optarg);
+        break;
+      case 352: /* --jwt-cache-max-entries */
+        heap_config->jwt_cache_max_entries = atoi(optarg);
+        break;
+      /* Password policy options */
+      case 360: /* --min-password-length */
+        heap_config->min_password_length = atoi(optarg);
+        break;
+      case 361: /* --max-login-attempts */
+        heap_config->max_login_attempts = atoi(optarg);
+        break;
+      case 362: /* --login-lockout-time */
+        heap_config->login_lockout_time = atoi(optarg);
         break;
       default:
         INIT_LOG_FAILURE("CONFIG", "Invalid command line option");

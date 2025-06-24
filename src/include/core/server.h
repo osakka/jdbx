@@ -155,6 +155,26 @@ typedef struct {
     int index_startup_delay;          /* Indexing startup delay (seconds) */
     int index_check_interval;         /* Indexing check interval (seconds) */
 
+    /* Socket configuration */
+    int socket_backlog;          /* Socket listen backlog */
+    int socket_keepalive;        /* Socket keep-alive flag */
+    int socket_reuseport;        /* Socket reuse port flag */
+
+    /* SSL security configuration */
+    int ssl_verify_peer;         /* SSL client verification flag */
+    int ssl_verify_depth;        /* SSL certificate verification depth */
+    int ssl_session_timeout;     /* SSL session timeout in seconds */
+
+    /* JWT cache configuration */
+    int jwt_cache_buckets;       /* JWT cache hash bucket count */
+    int jwt_cache_ttl;           /* JWT cache TTL in seconds */
+    int jwt_cache_max_entries;   /* JWT cache maximum entries */
+
+    /* Password policy configuration */
+    int min_password_length;     /* Minimum password length */
+    int max_login_attempts;      /* Maximum login attempts before lockout */
+    int login_lockout_time;      /* Login lockout time in seconds */
+
     /* Status */
     int error;                   /* Error code */
 } server_config_t;

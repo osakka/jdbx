@@ -7,11 +7,27 @@
 #include <string.h>
 #include <openssl/evp.h>
 
-#define CACHE_BUCKET_COUNT 1024
-#define CACHE_TTL_SECONDS (30 * 60)  /* 30 minutes - match JWT token expiration */
+/* Configuration will be loaded at runtime - defaults only for fallback */
+#define CACHE_BUCKET_COUNT_FALLBACK 1024
+#define CACHE_TTL_SECONDS_FALLBACK (30 * 60)  /* 30 minutes - match JWT token expiration */
+
+/* Global configuration values set during initialization */
+static int g_cache_bucket_count = CACHE_BUCKET_COUNT_FALLBACK;
+static int g_cache_ttl_seconds = CACHE_TTL_SECONDS_FALLBACK;
+static int g_cache_max_entries = 10000;  /* Fallback value */
 
 /* Global cache instance */
 jwt_cache_t* g_jwt_cache = NULL;
+
+/* Configure JWT cache with server configuration values */
+void jwt_cache_configure(int bucket_count, int ttl_seconds, int max_entries) {
+    g_cache_bucket_count = bucket_count > 0 ? bucket_count : CACHE_BUCKET_COUNT_FALLBACK;
+    g_cache_ttl_seconds = ttl_seconds > 0 ? ttl_seconds : CACHE_TTL_SECONDS_FALLBACK;
+    g_cache_max_entries = max_entries > 0 ? max_entries : 10000;
+    
+    LOG_DEBUG("JWT cache configured: buckets=%d, TTL=%d seconds, max_entries=%d", 
+              g_cache_bucket_count, g_cache_ttl_seconds, g_cache_max_entries);
+}
 
 /* Hash function for token strings (using SHA256 for security) */
 static void hash_token(const char* token, char* hash_out) {
@@ -39,7 +55,7 @@ static unsigned int get_bucket_index(const char* token_hash) {
     while (*token_hash) {
         hash = ((hash << 5) + hash) + *token_hash++;
     }
-    return hash % CACHE_BUCKET_COUNT;
+    return hash % g_cache_bucket_count;
 }
 
 /* Move entry to head of LRU list */
@@ -167,8 +183,8 @@ int jwt_cache_init(size_t max_entries) {
     }
     memory_promote(g_jwt_cache);  /* Global cache survives checkpoints */
     
-    g_jwt_cache->bucket_count = CACHE_BUCKET_COUNT;
-    g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
+    g_jwt_cache->bucket_count = g_cache_bucket_count;
+    g_jwt_cache->buckets = BUFFER_ALLOC(sizeof(jwt_cache_entry_t*) * g_cache_bucket_count);
     if (!g_jwt_cache->buckets) {
         BUFFER_FREE(g_jwt_cache);
         g_jwt_cache = NULL;
@@ -178,7 +194,7 @@ int jwt_cache_init(size_t max_entries) {
     memory_promote(g_jwt_cache->buckets);  /* Part of global cache */
     
     /* Initialize all bucket pointers to NULL */
-    memset(g_jwt_cache->buckets, 0, sizeof(jwt_cache_entry_t*) * CACHE_BUCKET_COUNT);
+    memset(g_jwt_cache->buckets, 0, sizeof(jwt_cache_entry_t*) * g_cache_bucket_count);
     
     g_jwt_cache->max_entries = max_entries;
     g_jwt_cache->current_entries = 0;
@@ -252,7 +268,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
         
         if (strcmp(entry->token_hash, token_hash) == 0) {
             /* Check if entry is expired */
-            if (now < entry->expiry && now < entry->cached_at + CACHE_TTL_SECONDS) {
+            if (now < entry->expiry && now < entry->cached_at + g_cache_ttl_seconds) {
                 g_jwt_cache->hits++;
                 
                 /* CRITICAL FIX: Duplicate the payload before releasing the lock to prevent use-after-free */
@@ -541,7 +557,7 @@ void jwt_cache_cleanup(void) {
             
             /* 🎯 RACE CONDITION PROTECTION: Check expiry with null safety */
             if (entry->expiry != 0 && entry->cached_at != 0 && 
-                (now >= entry->expiry || now >= entry->cached_at + CACHE_TTL_SECONDS)) {
+                (now >= entry->expiry || now >= entry->cached_at + g_cache_ttl_seconds)) {
                 /* 🔒 SURGICAL PRECISION: Safe removal with pointer validation */
                 *prev = entry->next;
                 lru_remove(g_jwt_cache, entry);

@@ -386,8 +386,11 @@ int main(int argc, char** argv) {
   }
   
   /* Initialize JWT cache for performance */
-  LOG_DEBUG("Initializing JWT cache with 10,000 max entries.");
-  if (jwt_cache_init(10000) != 0) {  /* 10,000 max cached tokens */
+  LOG_DEBUG("Initializing JWT cache with %d max entries.", config->jwt_cache_max_entries);
+  /* Configure JWT cache with server configuration values */
+  jwt_cache_configure(config->jwt_cache_buckets, config->jwt_cache_ttl, config->jwt_cache_max_entries);
+  
+  if (jwt_cache_init(config->jwt_cache_max_entries) != 0) {
     INIT_LOG_FAILURE("MAIN", "Failed to initialize JWT cache");
     BUFFER_FREE(config);
     return 1;

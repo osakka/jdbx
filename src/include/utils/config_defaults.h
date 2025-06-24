@@ -64,6 +64,19 @@
 #define DEFAULT_BACKUP_SUBDIR "backups"
 
 /*==============================================================================
+ * Network Socket Defaults
+ *============================================================================*/
+
+/** Default socket listen backlog */
+#define DEFAULT_SOCKET_BACKLOG 512
+
+/** Default socket keep-alive enabled flag */
+#define DEFAULT_SOCKET_KEEPALIVE 1
+
+/** Default socket reuse port flag */
+#define DEFAULT_SOCKET_REUSEPORT 0
+
+/*==============================================================================
  * Security Defaults
  *============================================================================*/
 
@@ -101,6 +114,16 @@
 #define DEFAULT_JWT_SECRET_AUTO_GENERATE 1
 #define DEFAULT_JWT_SECRET_MIN_LENGTH 32
 
+/** Default JWT cache configuration */
+#define DEFAULT_JWT_CACHE_BUCKETS 1024
+#define DEFAULT_JWT_CACHE_TTL 1800
+#define DEFAULT_JWT_CACHE_MAX_ENTRIES 10000
+
+/** Default password policy configuration */
+#define DEFAULT_MIN_PASSWORD_LENGTH 12
+#define DEFAULT_MAX_LOGIN_ATTEMPTS 5
+#define DEFAULT_LOGIN_LOCKOUT_TIME 300
+
 /*==============================================================================
  * Feature Defaults
  *============================================================================*/
@@ -119,6 +142,15 @@
 
 /** Default SSL private key file path */
 #define DEFAULT_SSL_KEY_PATH "/etc/ssl/private/server.key"
+
+/** Default SSL client verification enabled flag */
+#define DEFAULT_SSL_VERIFY_PEER 0
+
+/** Default SSL certificate verification depth */
+#define DEFAULT_SSL_VERIFY_DEPTH 9
+
+/** Default SSL session timeout in seconds */
+#define DEFAULT_SSL_SESSION_TIMEOUT 300
 
 /*==============================================================================
  * Database Defaults
