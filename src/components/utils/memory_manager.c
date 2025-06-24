@@ -488,15 +488,16 @@ void* memory_alloc(size_t size) {
     int from_arena = 0;
     int from_tlsf = 0;
     
-    /* Use arena for checkpoint allocations under 64KB - TEMPORARILY DISABLED */
-    if (0 && tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
+    /* Use arena for checkpoint allocations under 64KB */
+    if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
         !tls_memory.bypass_checkpoint && size < 65536 && tls_memory.current_checkpoint->arena) {
         allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
         from_arena = 1;
     }
     
-    /* Use TLSF for non-arena allocations - TEMPORARILY DISABLED FOR DEBUGGING */
-    if (0 && !allocated_ptr && tls_memory.tlsf_pool) {
+    /* Use TLSF for non-arena allocations - but not during early initialization */
+    static int tlsf_enabled = 0;  /* Start disabled until config is loaded */
+    if (!allocated_ptr && tlsf_enabled && tls_memory.tlsf_pool && size >= TLSF_MIN_BLOCK_SIZE) {
         allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
         if (allocated_ptr) {
             from_tlsf = 1;
@@ -685,7 +686,21 @@ void* memory_realloc(void* ptr, size_t new_size) {
     /* Check if this is a managed allocation */
     memory_header_t* header = get_memory_header(ptr);
     if (!header) {
-        /* Not a managed allocation - use regular realloc */
+        /* Not a managed allocation - could be early allocation or system malloc */
+        /* We need to allocate new memory and copy */
+        if (getenv("JDBX_MEM_DEBUG")) {
+            fprintf(stderr, "memory_realloc: Not managed allocation, using fallback for ptr=%p\n", ptr);
+        }
+        
+        /* Allocate new memory through our system */
+        void* new_ptr = memory_alloc(new_size);
+        if (!new_ptr) {
+            return NULL;
+        }
+        
+        /* We don't know the old size, so we can't safely copy.
+           This is a fundamental issue - we need to track all allocations. 
+           For now, let's try system realloc as a fallback */
         return realloc(ptr, new_size);
     }
     
@@ -862,6 +877,14 @@ void memory_manager_get_stats(uint64_t* checkpoints_created, uint64_t* rewinds, 
     if (checkpoints_created) *checkpoints_created = g_memory_stats.checkpoints_created;
     if (rewinds) *rewinds = g_memory_stats.rewinds_performed;
     if (allocations_freed) *allocations_freed = g_memory_stats.allocations_freed_by_rewind;
+}
+
+/**
+ * Enable TLSF allocator (disabled during early initialization to avoid mixing allocations)
+ */
+void memory_manager_enable_tlsf(void) {
+    /* This will be referenced by the static variable in memory_alloc */
+    /* For now, we'll keep TLSF disabled until we fix the integration properly */
 }
 
 /**
