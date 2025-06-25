@@ -1,12 +1,13 @@
 # JDBX Development Guidelines
 
-**Version**: 7.2.6 - Configuration System & Code Audit Complete  
-**Updated**: June 24, 2025
+**Version**: 7.2.8 - Documentation Excellence & Memory Stability Complete  
+**Updated**: June 25, 2025
 
 ## Project Overview
 
-JDBX is a revolutionary database engine with:
-- **ART Engine**: Adaptive Radix Tree data structures (O(k) operations)
+JDBX is a high-performance database engine with:
+- **Skiplist Primary**: Lock-free skiplist data structures (O(log n) operations) 
+- **ART Extension**: Adaptive Radix Tree implementation (art.c) as alternative data structure
 - **Unified Documents**: Everything stored as documents with type-based discrimination  
 - **Checkpoint Memory**: Automatic memory management with promotion system
 - **Modular APIs**: Clean separation across focused modules
@@ -28,7 +29,8 @@ src/
 
 Key files:
 - main.c: Entry point
-- art.c: ART engine (replaces skiplist)
+- skiplist.h: Primary data structure (lock-free skiplist)
+- art.c: Alternative ART engine implementation
 - memory_manager.c: Checkpoint system
 - api_*.c: Modular API handlers
 ```

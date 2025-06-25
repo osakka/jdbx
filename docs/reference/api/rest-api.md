@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 7.0.1  
-**Last Updated**: June 22, 2025  
+**Version**: 7.2.8  
+**Last Updated**: June 25, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v7.0.1 with memory checkpoint safety enhancements, integrated WAL architecture, HTTP protocol compliance, enterprise-grade authentication security excellence, collection ownership protection, and revolutionary memory management.
+Complete REST API documentation for JDBX v7.2.8 with documentation excellence, memory management stability, configuration system alignment, checkpoint-based memory management, integrated WAL architecture, and enterprise-grade security.
 
 ## Authentication
 
@@ -12,7 +12,7 @@ JDBX uses JWT (JSON Web Tokens) for authentication with database-backed RBAC.
 
 ### Login
 ```http
-POST /api/login
+POST /api/auth/login
 Content-Type: application/json
 
 {

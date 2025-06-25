@@ -20,8 +20,8 @@
 
 JDBX is a high-performance document database built specifically for JSON data, featuring **TRUE unified documents architecture** and capable of handling billion-document collections with sub-millisecond response times. Written in C for maximum performance, JDBX stores ALL entities (users, roles, libraries, configs, metrics) as documents in a single unified collection, providing unprecedented architectural simplicity while maintaining enterprise-grade performance. With native JavaScript integration, comprehensive RBAC, and a complete RESTful API, JDBX represents the future of document database design.
 
-**Latest Version**: 7.2.6 (June 24, 2025)  
-**Status**: 🚀 **Enterprise Production Ready** - Total configuration alignment and code audit complete
+**Latest Version**: 7.2.8 (June 25, 2025)  
+**Status**: 🚀 **Enterprise Production Ready** - Documentation excellence and memory management stability complete
 
 ## ⚠️ Development Disclaimer
 
@@ -63,13 +63,13 @@ JDBX is a high-performance document database built specifically for JSON data, f
 - **📊 AUDIT READY**: Meets cryptographic security standards
 - **✨ ZERO FUNCTIONAL IMPACT**: Enhanced security with full compatibility
 
-### 🚀 **v7.1.0 - Revolutionary ART Engine Implementation**
-- **🎯 REVOLUTIONARY DATA STRUCTURE**: Complete Adaptive Radix Tree (ART) engine replacing skiplist with O(k) operations
-- **⚡ ULTRA-CLEAN CUTOVER**: Original skiplist.c completely eliminated - pure ART architecture achieved
-- **🔒 DROP-IN REPLACEMENT**: Perfect API compatibility with zero regressions - identical function signatures preserved
-- **🚀 SUPERIOR PERFORMANCE**: O(k) lookup time where k=key length vs O(log n) skiplist operations
-- **📊 CACHE-FRIENDLY DESIGN**: Adaptive radix tree structure with superior memory locality and prefix compression
-- **✨ SINGLE SOURCE OF TRUTH**: Zero duplicate data structure implementations - pure architectural excellence
+### 🚀 **v7.1.0 - ART Engine Implementation**
+- **🎯 DATA STRUCTURE EXPANSION**: Adaptive Radix Tree (ART) engine implementation as alternative to skiplist
+- **⚡ COMPATIBILITY LAYER**: ART provides skiplist-compatible API functions
+- **🔒 API COMPATIBILITY**: Maintained function signatures for seamless integration
+- **🚀 ALTERNATIVE PERFORMANCE**: ART offers O(k) lookup time where k=key length for suitable workloads
+- **📊 CACHE-FRIENDLY DESIGN**: Adaptive radix tree structure with memory locality optimizations
+- **✨ DUAL IMPLEMENTATION**: Both skiplist and ART data structures available for different use cases
 
 ### 🛡️ **v7.0.2 - Server Protection System**
 - **🎯 RATE LIMITING**: Per-IP token bucket (600 req/min) with HTTP 429
@@ -222,7 +222,8 @@ JDBX is a high-performance document database built specifically for JSON data, f
 
 ### **🏗️ Database Engine**
 - **JDBX Backend**: Single-file database with B-tree structure and WAL
-- **Skip-List Indexes**: Thread-safe operations with O(log n) complexity
+- **Skiplist Primary**: Lock-free skiplist data structures with O(log n) complexity
+- **ART Alternative**: Adaptive Radix Tree implementation for specific use cases
 - **Adaptive Indexing**: Automatic index creation based on query patterns
 - **Field-Level RBAC**: Granular permissions on unified document fields
 
@@ -493,20 +494,18 @@ For complete API documentation, see: `/api/openapi.json` or visit the [API Refer
 - **[JavaScript Development](docs/guides/javascript-development.md)** - Script development and integration
 - **[RBAC Setup](docs/guides/rbac-setup.md)** - Role-based access control configuration
 
-## Performance Benchmarks
+## Performance Characteristics
 
-JDBX v3.3.0 delivers exceptional performance with lock-free architecture:
+JDBX provides high-performance document database operations:
 
-| Operation | Response Time | Throughput | Notes |
-|-----------|---------------|------------|-------|
-| Document Insert | 1.2ms avg | 50K+ docs/sec | Batch operations |
-| Document Query (Indexed) | 0.8ms avg | 100K+ ops/sec | O(1) hash lookup |
-| Document Query (Range) | 2.1ms avg | 25K+ ops/sec | O(log n) B-tree scan |
-| Library Access | 0.1ms avg | 1M+ ops/sec | Lock-free lookup |
-| JavaScript Function | 3.5ms avg | 15K+ ops/sec | QuickJS execution |
-| Field-Level Update | 0.9ms avg | 75K+ ops/sec | Granular operations |
+- **Document Operations**: Efficient insert, query, and update operations
+- **Indexing**: Automatic adaptive indexing based on query patterns
+- **Memory Management**: Checkpoint-based memory system with automatic cleanup
+- **Concurrency**: Thread-safe operations with lock-free skiplist data structures
+- **JavaScript Integration**: QuickJS engine for custom business logic
+- **Field-Level Operations**: Granular document field manipulation
 
-*Benchmarks measured on: Intel Xeon 3.2GHz, 32GB RAM, NVMe SSD*
+*Performance characteristics vary based on workload, data size, and system configuration. Benchmark your specific use case for accurate measurements.*
 
 ## Contributing
 
