@@ -5,7 +5,6 @@
 #include "database/document_storage.h"
 #include "utils/logger.h"
 #include "utils/json.h"
-#include "utils/skiplist.h"
 #include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
