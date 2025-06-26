@@ -1,0 +1,33 @@
+# Makefile for Production Deployment Certification
+# Phase 5: Final production deployment certification and sign-off
+
+CC = gcc
+CFLAGS = -Wall -Wextra -g -O2 -pthread -std=c11
+INCLUDES = -I../../src/include -I../../src/components
+LDFLAGS = -lm -lpthread
+
+# Production certification test
+TARGET = test_production_certification
+SOURCE = test_production_certification.c
+
+all: $(TARGET)
+
+$(TARGET): $(SOURCE)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(TARGET) $(SOURCE) $(LDFLAGS)
+
+# Run production certification test
+certify: $(TARGET)
+	@echo "================================================================"
+	@echo "RUNNING PRODUCTION DEPLOYMENT CERTIFICATION"
+	@echo "FINAL SIGN-OFF - SURGICAL PRECISION VALIDATION"
+	@echo "================================================================"
+	@./$(TARGET)
+
+# Quick certification status
+status: $(TARGET)
+	@./$(TARGET) | grep -E "(CERTIFICATION|✅|❌|🎯|🚀|PASSED|FAILED|READY)"
+
+clean:
+	rm -f $(TARGET) *.o
+
+.PHONY: all certify status clean

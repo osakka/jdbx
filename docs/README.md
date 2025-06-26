@@ -2,7 +2,7 @@
 
 **Welcome to the official JDBX documentation** - your comprehensive guide to the high-performance document database built for JSON data.
 
-**Version**: 7.2.8 | **Status**: Production Ready - Documentation Excellence & Memory Stability Complete
+**Version**: 7.2.9 | **Status**: Production Ready - Exotic Memory Allocators Integration Complete
 
 ## 🚀 Quick Start
 
