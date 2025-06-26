@@ -8,7 +8,9 @@
  */
 
 #define _GNU_SOURCE
+#include "utils/memory_types.h"
 #include "utils/memory_manager.h"
+#include "utils/memory_allocator_config.h"
 #include "utils/buffer_pool.h"
 #include "utils/tlsf_allocator.h"
 #include "utils/arena_allocator.h"
@@ -25,41 +27,14 @@
 /* Memory managers should not depend on logging */
 
 /* Memory allocation flags */
-#define MEMORY_FLAG_HAZARD_PROTECTED 0x00000001  /* Protected by hazard pointers */
-#define MEMORY_FLAG_ARENA_ALLOCATED  0x00000002  /* Allocated from arena */
-#define MEMORY_FLAG_TLSF_ALLOCATED   0x00000004  /* Allocated from TLSF pool */
+/* Memory flags are now defined in memory_types.h */
 
-/* Memory allocation header for tracking */
-typedef struct memory_header {
-    struct memory_header* next;      /* Next allocation in checkpoint */
-    struct memory_header* prev;      /* Previous allocation in checkpoint */
-    memory_checkpoint_t* checkpoint; /* Owning checkpoint */
-    size_t size;                    /* Allocation size */
-    uint32_t magic;                 /* Magic number for corruption detection */
-    uint32_t flags;                 /* Memory flags (hazard protected, etc) */
-    void* hazard_data;              /* Hazard pointer data if protected */
-    void* tlsf_ptr;                 /* Original TLSF pointer for freeing (if TLSF allocated) */
-    /* User data follows immediately after this header with proper alignment */
-} memory_header_t;
+/* Memory allocation header is now defined in memory_types.h */
 
-#define MEMORY_MAGIC 0xDEADBEEF
+/* Magic numbers and header size are now defined in memory_types.h */
 #define MEMORY_MAGIC_FREE 0xFEEDF00D
-/* Calculate header size with proper alignment for max_align_t */
-#define HEADER_SIZE ((sizeof(memory_header_t) + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1))
 
-/* Checkpoint structure */
-struct memory_checkpoint {
-    pthread_spinlock_t lock;          /* Spinlock for thread-safe list operations */
-    struct memory_checkpoint* parent;  /* Parent checkpoint for nesting */
-    memory_header_t* first_alloc;     /* First allocation in this checkpoint */
-    memory_header_t* last_alloc;      /* Last allocation for O(1) append */
-    time_t created_at;                /* Creation timestamp */
-    uint64_t allocation_count;        /* Number of allocations */
-    uint64_t total_size;              /* Total allocated size */
-    int committed;                    /* Whether checkpoint is committed */
-    arena_t* arena;                   /* Arena for checkpoint-scoped allocations */
-    uint32_t arena_checkpoint_id;     /* Arena checkpoint ID for bulk free */
-};
+/* Checkpoint structure is now defined in memory_types.h */
 
 /* Thread-local memory state */
 typedef struct {
@@ -94,12 +69,18 @@ static void ensure_memory_initialized(void) {
         tls_memory.bypass_checkpoint = 0;
         tls_memory.initialized = 1;
         
-        /* TEMPORARILY DISABLED: TLSF pool creation to isolate stability issues
-         * Initialize TLSF pool for this thread only if the memory manager is fully initialized
-         * This prevents TLSF allocation during early initialization phase.
+        /* Initialize TLSF pool for this thread - controlled by configuration
+         * Only create pool if:
+         * 1. Memory manager is fully initialized (avoids early init issues)  
+         * 2. TLSF allocator is enabled via configuration
+         * 3. Pool doesn't already exist
          */
-        if (0 && !tls_memory.tlsf_pool && g_memory_manager_initialized) {
+        if (!tls_memory.tlsf_pool && g_memory_manager_initialized && 
+            memory_allocator_config_tlsf_enabled()) {
             tls_memory.tlsf_pool = tlsf_create_pool(32 * 1024 * 1024);
+            if (tls_memory.tlsf_pool && SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "ensure_memory_initialized: TLSF pool created for thread\n");
+            }
         }
         /* Don't log from here - can cause issues */
     }
@@ -108,7 +89,7 @@ static void ensure_memory_initialized(void) {
 /**
  * Get memory header from user pointer
  */
-static memory_header_t* get_memory_header(void* ptr) {
+memory_header_t* get_memory_header(void* ptr) {
     if (!ptr) return NULL;
     
     /* Calculate the header pointer - user data starts at HEADER_SIZE offset */
@@ -206,12 +187,23 @@ memory_checkpoint_t* memory_checkpoint_create(void) {
     checkpoint->total_size = 0;
     checkpoint->committed = 0;
     
-    /* TEMPORARILY DISABLED: Arena creation to isolate stability issues
-     * Create arena for checkpoint allocations (4MB) */
-    checkpoint->arena = NULL; /* arena_create(4 * 1024 * 1024); */
+    /* Create arena for checkpoint allocations (4MB) - controlled by configuration */
+    checkpoint->arena = NULL;
     checkpoint->arena_checkpoint_id = 0;
-    if (checkpoint->arena) {
-        checkpoint->arena_checkpoint_id = arena_checkpoint(checkpoint->arena);
+    
+    /* Create arena only if enabled via configuration */
+    if (SHOULD_USE_ARENA_ALLOCATOR()) {
+        checkpoint->arena = arena_create(4 * 1024 * 1024);
+        if (checkpoint->arena) {
+            checkpoint->arena_checkpoint_id = arena_checkpoint(checkpoint->arena);
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_checkpoint_create: Arena created for checkpoint %p\n", checkpoint);
+            }
+        } else {
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_checkpoint_create: Arena creation failed for checkpoint %p\n", checkpoint);
+            }
+        }
     }
     
     /* Make it current */
@@ -489,8 +481,32 @@ void memory_bypass_checkpoint(int bypass) {
     tls_memory.bypass_checkpoint = bypass;
 }
 
+/* Allocation decision thresholds - configurable for optimization */
+#define ARENA_MAX_ALLOCATION_SIZE   (64 * 1024)     /* 64KB - Arena threshold */
+#define TLSF_MAX_REASONABLE_SIZE    (1024 * 1024)   /* 1MB - TLSF upper limit */
+
 /**
- * Allocate memory with checkpoint tracking
+ * Intelligent allocation decision helpers
+ */
+static inline int should_use_arena_allocator(size_t size) {
+    return (memory_allocator_config_arena_enabled() &&
+            tls_memory.current_checkpoint &&
+            !tls_memory.current_checkpoint->committed &&
+            !tls_memory.bypass_checkpoint &&
+            size < ARENA_MAX_ALLOCATION_SIZE &&
+            tls_memory.current_checkpoint->arena);
+}
+
+int should_use_tlsf_allocator(size_t size) {
+    return (memory_allocator_config_tlsf_enabled() &&
+            tls_memory.tlsf_pool &&
+            g_memory_manager_initialized &&
+            size >= TLSF_MIN_BLOCK_SIZE &&
+            size <= TLSF_MAX_REASONABLE_SIZE);
+}
+
+/**
+ * Allocate memory with unified decision engine
  */
 void* memory_alloc(size_t size) {
     if (size == 0) {
@@ -506,38 +522,59 @@ void* memory_alloc(size_t size) {
     
     ensure_memory_initialized();
     
-    /* Decide which allocator to use */
+    /* Unified allocation decision variables */
     void* allocated_ptr = NULL;
     int from_arena = 0;
     int from_tlsf = 0;
     
-    /* TEMPORARILY DISABLED: Arena and TLSF allocators to isolate stability issues 
-     * Use arena for checkpoint allocations under 64KB */
-    if (0 && tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
-        !tls_memory.bypass_checkpoint && size < 65536 && tls_memory.current_checkpoint->arena) {
-        allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
-        from_arena = 1;
-    }
-    
-    /* TEMPORARILY DISABLED: TLSF allocator to isolate stability issues
-     * Use TLSF for non-arena allocations - but only if memory manager is fully initialized
-     * This ensures consistency: allocations during early init use system malloc,
-     * and allocations during runtime use TLSF for eligible sizes.
-     * This prevents mixing allocators for the same logical allocation across realloc calls.
+    /* DECISION PATH 1: Arena Allocator (Highest Priority)
+     * Conditions: Active checkpoint + Small size + Arena enabled + Arena available
+     * Benefits: Ultra-fast bump pointer allocation + bulk free on rewind
      */
-    if (0 && !allocated_ptr && tls_memory.tlsf_pool && g_memory_manager_initialized && 
-        size >= TLSF_MIN_BLOCK_SIZE) {
-        allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
+    if (should_use_arena_allocator(size)) {
+        allocated_ptr = arena_alloc(tls_memory.current_checkpoint->arena, HEADER_SIZE + size);
         if (allocated_ptr) {
-            from_tlsf = 1;
+            from_arena = 1;
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_alloc: Arena allocation successful, size=%zu\n", size);
+            }
+        } else {
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_alloc: Arena allocation failed, falling back, size=%zu\n", size);
+            }
         }
     }
     
-    /* Fallback to system malloc */
+    /* DECISION PATH 2: TLSF Allocator (Medium Priority)
+     * Conditions: No arena allocation + Runtime context + TLSF enabled + Size in range
+     * Benefits: O(1) worst-case allocation + minimal fragmentation + thread-local pools
+     */
+    if (!allocated_ptr && should_use_tlsf_allocator(size)) {
+        allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
+        if (allocated_ptr) {
+            from_tlsf = 1;
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_alloc: TLSF allocation successful, size=%zu, tlsf_ptr=%p\n", size, allocated_ptr);
+            }
+        } else {
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "memory_alloc: TLSF allocation failed, falling back, size=%zu\n", size);
+            }
+        }
+    }
+    
+    /* DECISION PATH 3: System Malloc (Lowest Priority - Fallback)
+     * Conditions: No exotic allocation successful OR early init OR large sizes OR emergency mode
+     * Benefits: Universal compatibility + reliability + handles any size
+     * Use Cases: Early initialization, oversized allocations, allocator failures
+     */
     if (!allocated_ptr) {
         size_t total_size = HEADER_SIZE + size;
         allocated_ptr = aligned_alloc(_Alignof(max_align_t), 
                                      (total_size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1));
+        if (SHOULD_DEBUG_MEMORY()) {
+            fprintf(stderr, "memory_alloc: System malloc fallback, size=%zu\n", size);
+        }
     }
     
     if (!allocated_ptr) {
@@ -556,7 +593,7 @@ void* memory_alloc(size_t size) {
     if (from_arena) header->flags |= MEMORY_FLAG_ARENA_ALLOCATED;
     if (from_tlsf) header->flags |= MEMORY_FLAG_TLSF_ALLOCATED;
     header->hazard_data = NULL;
-    header->tlsf_ptr = from_tlsf ? allocated_ptr : NULL;  /* For TLSF, this is the pointer to pass to tlsf_free */
+    header->tlsf_ptr = from_tlsf ? allocated_ptr : NULL;  /* For TLSF, this is the original TLSF pointer to pass to tlsf_free */
     
     /* Debug print */
     if (getenv("JDBX_MEM_DEBUG")) {
@@ -676,6 +713,7 @@ void memory_free(void* ptr) {
             fprintf(stderr, "ERROR: TLSF pool is NULL!\n");
             abort();
         }
+        /* For TLSF, the tlsf_ptr is the original user pointer we got from tlsf_malloc */
         tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
     } else {
         /* System allocation */
@@ -877,6 +915,9 @@ void memory_manager_init(void) {
     /* Memory manager initialization - no logging to avoid circular dependencies */
     pthread_mutex_lock(&g_memory_lock);
     
+    /* Initialize memory allocator configuration system */
+    memory_allocator_config_init();
+    
     /* Initialize TLSF system */
     tlsf_init();
     
@@ -891,6 +932,11 @@ void memory_manager_init(void) {
     
     /* Now initialize TLSF pool for the main thread if it wasn't created yet */
     ensure_memory_initialized();
+    
+    if (SHOULD_DEBUG_MEMORY()) {
+        fprintf(stderr, "memory_manager_init: Memory manager initialized with configuration\n");
+        memory_allocator_config_log_status();
+    }
 }
 
 /**
@@ -925,6 +971,9 @@ void memory_manager_shutdown(void) {
     tls_memory.initialized = 0;
     
     pthread_mutex_unlock(&g_memory_lock);
+    
+    /* Shutdown configuration system */
+    memory_allocator_config_shutdown();
 }
 
 /**

@@ -19,6 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
+#include "utils/memory_types.h"
 
 /* Forward declarations */
 typedef struct memory_checkpoint memory_checkpoint_t;
@@ -154,6 +155,10 @@ void memory_clear_hazard_protection(void* ptr);
  * @param ptr The memory that can now be safely freed
  */
 void memory_hazard_retire_callback(void* ptr);
+
+/* Internal functions for advanced memory management */
+memory_header_t* get_memory_header(void* ptr);
+int should_use_tlsf_allocator(size_t size);
 
 /* Convenience macros for easy integration */
 #define MEMORY_CHECKPOINT() memory_checkpoint_create()
