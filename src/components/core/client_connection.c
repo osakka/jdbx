@@ -1,3 +1,19 @@
+/**
+ * @file client_connection.c
+ * @brief Client connection lifecycle management and resource tracking
+ * 
+ * Implements connection management for JDBX server, handling client connection
+ * creation, tracking, timeout management, and resource cleanup. Provides
+ * centralized connection state management with thread-safe operations.
+ * 
+ * Key Features:
+ * - Connection pooling and reuse
+ * - Automatic timeout detection and cleanup
+ * - Thread-safe connection state management
+ * - Resource tracking and leak prevention
+ * - Statistics collection for monitoring
+ */
+
 #include "core/client_connection.h"
 #include "utils/logger.h"
 #include <stdlib.h>
@@ -11,20 +27,43 @@
 #include <arpa/inet.h>
 #include "utils/buffer_pool.h"
 
-/* Global connection manager */
+/**
+ * Global connection manager instance
+ * 
+ * Singleton connection manager providing centralized client connection
+ * tracking and lifecycle management. Initialized during server startup
+ * and accessed by request handlers for connection state management.
+ * 
+ * Thread Safety: Protected by internal mutexes for concurrent access
+ * Lifecycle: Created during server init, destroyed during shutdown
+ */
 static connection_manager_t *g_connection_manager = NULL;
 
 /* === INTERNAL HELPER FUNCTIONS === */
 
 /**
- * Get current timestamp
+ * Get current monotonic timestamp
+ * 
+ * Retrieves the current monotonic time, unaffected by system clock
+ * adjustments. Used for accurate timeout calculations and connection
+ * lifecycle management.
+ * 
+ * @param ts Timespec structure to populate with current time
  */
 static void get_current_time(struct timespec *ts) {
     clock_gettime(CLOCK_MONOTONIC, ts);
 }
 
 /**
- * Check if connection has timed out
+ * Check if connection has exceeded timeout threshold
+ * 
+ * Determines whether a client connection has been inactive beyond
+ * the configured timeout period. Used for connection cleanup and
+ * resource management.
+ * 
+ * @param conn Client connection to check (must not be NULL)
+ * @param timeout_seconds Maximum allowed inactive time in seconds
+ * @return 1 if connection expired, 0 if still valid
  */
 static int is_connection_expired(client_connection_t *conn, uint32_t timeout_seconds) {
     if (!conn) return 1;

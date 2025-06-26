@@ -58,26 +58,37 @@ typedef enum {
     HTTP_SERVICE_UNAVAILABLE = 503
 } http_status_t;
 
-/* HTTP methods */
+/**
+ * HTTP request methods supported by JDBX API
+ * 
+ * Standard HTTP methods for RESTful API operations, with unknown method
+ * handling for unsupported or malformed requests.
+ */
 typedef enum {
-    HTTP_GET,
-    HTTP_POST,
-    HTTP_PUT,
-    HTTP_DELETE,
-    HTTP_PATCH,
-    HTTP_OPTIONS,
-    HTTP_HEAD,
-    HTTP_UNKNOWN
+    HTTP_GET,                /**< Retrieve resource data */
+    HTTP_POST,               /**< Create new resources */
+    HTTP_PUT,                /**< Update existing resources */
+    HTTP_DELETE,             /**< Remove resources */
+    HTTP_PATCH,              /**< Partial resource updates */
+    HTTP_OPTIONS,            /**< CORS preflight and capability discovery */
+    HTTP_HEAD,               /**< Retrieve headers without body */
+    HTTP_UNKNOWN             /**< Unsupported or malformed method */
 } http_method_t;
 
-/* CORS configuration */
+/**
+ * Cross-Origin Resource Sharing (CORS) configuration
+ * 
+ * Manages CORS policy for browser-based API access, defining allowed
+ * origins, methods, and headers for cross-domain requests. Essential
+ * for web application security and functionality.
+ */
 typedef struct {
-    int enabled;                  /* Enable/disable CORS */
-    char** allowed_origins;       /* List of allowed origins */
-    int allowed_origins_count;    /* Number of allowed origins */
-    char** allowed_methods;       /* List of allowed methods */
-    int allowed_methods_count;    /* Number of allowed methods */
-    char** allowed_headers;       /* List of allowed headers */
+    int enabled;                  /**< Enable/disable CORS globally */
+    char** allowed_origins;       /**< Allowlist of permitted origins */
+    int allowed_origins_count;    /**< Number of configured origins */
+    char** allowed_methods;       /**< Permitted HTTP methods */
+    int allowed_methods_count;    /**< Number of allowed methods */
+    char** allowed_headers;       /**< Allowed request headers */
     int allowed_headers_count;    /* Number of allowed headers */
     int allow_credentials;        /* Allow credentials */
     int max_age;                  /* Max age of preflight requests */

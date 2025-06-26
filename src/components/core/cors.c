@@ -1,10 +1,27 @@
+/**
+ * @file cors.c
+ * @brief Cross-Origin Resource Sharing (CORS) configuration and enforcement
+ * 
+ * Implements CORS policy management for JDBX web API endpoints, enabling
+ * controlled access from browser-based applications. Provides configuration
+ * for allowed origins, methods, headers, and credentials handling.
+ */
+
 #include "core/server.h"
 #include "utils/buffer_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* Initialize CORS configuration with defaults */
+/**
+ * Initialize CORS configuration with secure defaults
+ * 
+ * Sets up CORS configuration structure with production-safe defaults.
+ * Enables CORS functionality while maintaining security through explicit
+ * origin and method allowlists.
+ * 
+ * @param cors CORS configuration structure to initialize (must not be NULL)
+ */
 void init_cors_config(cors_config_t* cors) {
   if (!cors) {
     return;

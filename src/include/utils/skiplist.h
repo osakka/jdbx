@@ -11,11 +11,30 @@
 #include "utils/buffer_pool.h"
 #include "utils/memory_manager.h"
 
-/* Lock-free skip list for high-performance indexing
- * Supports concurrent reads and writes without locks
+/**
+ * @file skiplist.h
+ * @brief Lock-free skip list implementation for high-performance indexing
+ * 
+ * Provides concurrent read/write access without locks using atomic operations
+ * and hazard pointers. Primary data structure for JDBX in-memory indexing.
  */
 
+/**
+ * Maximum skip list height levels
+ * 
+ * Provides logarithmic search performance O(log n) with 32 levels
+ * supporting up to 2^32 elements efficiently. Higher levels reduce
+ * search traversal but increase memory overhead.
+ */
 #define SKIPLIST_MAX_LEVEL 32
+
+/**
+ * Skip list level promotion probability
+ * 
+ * 50% probability for level promotion provides optimal balance between
+ * search performance and memory usage. Lower values create fewer levels
+ * but longer search chains; higher values waste memory on sparse upper levels.
+ */
 #define SKIPLIST_P 0.5
 
 /* Skip list node */

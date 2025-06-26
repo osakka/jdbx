@@ -1,9 +1,34 @@
+/**
+ * @file generic_cache.c
+ * @brief Generic hash-based cache implementation with configurable policies
+ * 
+ * Provides a high-performance, thread-safe caching system with pluggable
+ * hash functions, comparison functions, and eviction policies. Designed
+ * for use across JDBX components requiring fast key-value lookups.
+ * 
+ * Features:
+ * - Configurable hash functions and key comparison
+ * - Multiple eviction policies (LRU, TTL, size-based)
+ * - Thread-safe operations with minimal locking
+ * - Memory pool integration for performance
+ */
+
 #include "utils/generic_cache.h"
 #include <stdlib.h>
 #include <string.h>
 #include "utils/buffer_pool.h"
 
-/* Default hash function */
+/**
+ * Default hash function using djb2 algorithm
+ * 
+ * Provides good distribution characteristics for most key types.
+ * Uses the djb2 hash algorithm with a prime multiplier for
+ * consistent hashing performance across different data patterns.
+ * 
+ * @param key Pointer to key data to hash
+ * @param size Size of key data in bytes
+ * @return 32-bit hash value
+ */
 static uint32_t default_hash(const void* key, size_t size) {
     const uint8_t* data = (const uint8_t*)key;
     uint32_t hash = 5381;
@@ -15,7 +40,18 @@ static uint32_t default_hash(const void* key, size_t size) {
     return hash;
 }
 
-/* Default key comparison */
+/**
+ * Default key comparison function
+ * 
+ * Performs bytewise comparison of keys using standard memcmp.
+ * Suitable for most key types including strings, integers, and
+ * binary data where lexicographic ordering is appropriate.
+ * 
+ * @param a First key to compare
+ * @param b Second key to compare  
+ * @param size Size of keys in bytes
+ * @return 0 if equal, <0 if a < b, >0 if a > b
+ */
 static int default_compare(const void* a, const void* b, size_t size) {
     return memcmp(a, b, size);
 }
