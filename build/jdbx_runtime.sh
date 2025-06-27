@@ -20,6 +20,18 @@ load_admin_credentials() {
     CMDLINE_PASS="$JDBX_BOOTSTRAP_ADMIN_PASS"
     CMDLINE_EMAIL="$JDBX_DEFAULT_ADMIN_EMAIL"
     
+    # DEVELOPMENT STRATEGY: Always ensure latest canonical config is used
+    # Copy canonical config from share/config/ to build/var/ if source is newer or target missing
+    CANONICAL_ENV="$BASE_DIR/share/config/jdbx.env"
+    if [ -f "$CANONICAL_ENV" ]; then
+        if [ ! -f "$ENV_FILE" ] || [ "$CANONICAL_ENV" -nt "$ENV_FILE" ]; then
+            echo "📝 Updating configuration from canonical source..."
+            echo "   Source: $CANONICAL_ENV"
+            echo "   Target: $ENV_FILE"
+            cp "$CANONICAL_ENV" "$ENV_FILE"
+        fi
+    fi
+    
     # Load from environment file if it exists
     if [ -f "$ENV_FILE" ]; then
         source "$ENV_FILE"
@@ -88,6 +100,13 @@ case "$1" in
         export JDBX_BOOTSTRAP_ADMIN_PASS  
         export JDBX_DEFAULT_ADMIN_EMAIL
         export JDBX_SSL_IGNORE_UNEXPECTED_EOF
+        
+        # Export memory allocator configuration variables
+        export JDBX_ENABLE_EXOTIC_ALLOCATORS
+        export JDBX_ENABLE_ARENA_ALLOCATOR
+        export JDBX_ENABLE_TLSF_ALLOCATOR
+        export JDBX_FORCE_SYSTEM_MALLOC
+        export JDBX_MEM_DEBUG
         
         # Start server with secure configuration from environment
         echo "🚀 Starting JDBX server with secure configuration..."
