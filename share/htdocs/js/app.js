@@ -321,6 +321,8 @@ function switchView(view) {
         switch (view) {
             case 'dashboard':
                 initializeDashboard();
+                // Load initial dashboard data
+                loadDashboard(false);
                 // Set up polling for dashboard
                 if (POLLING_INTERVALS.dashboard) {
                     refreshInterval = setInterval(() => loadDashboard(true), POLLING_INTERVALS.dashboard);

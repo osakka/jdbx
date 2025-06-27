@@ -75,10 +75,8 @@ async function initializeApp() {
         // Set up window resize listener
         setupResizeListener();
 
-        // Initialize ID conflict detection (if still needed)
-        setupIDConflictDetection();
-
-        // DISABLED: Let legacy app handle all navigation and initialization
+        // DISABLED: Let legacy app handle everything - modular system is purely passive
+        // setupIDConflictDetection();
         // navigateFromHash();
 
         console.log('✅ JDBX Modular Application initialized successfully');
@@ -259,30 +257,15 @@ if (typeof window !== 'undefined') {
 // Set up global error handling
 setupGlobalErrorHandler();
 
-// Wait for legacy app to be ready before initializing modular system
-function waitForLegacyApp() {
-    return new Promise((resolve) => {
-        // Check if key legacy functions are available
-        if (typeof window.loadDashboard === 'function' && 
-            typeof window.initializeDashboard === 'function') {
-            console.log('✅ Legacy app detected - initializing modular system');
-            resolve();
-        } else {
-            console.log('⏳ Waiting for legacy app to load...');
-            setTimeout(() => waitForLegacyApp().then(resolve), 100);
-        }
-    });
-}
-
-// Auto-initialize when DOM and legacy app are ready
+// Simplified initialization - just provide utilities
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', async () => {
-        await waitForLegacyApp();
-        initializeApp();
+    document.addEventListener('DOMContentLoaded', () => {
+        // Wait a bit for legacy app to initialize first
+        setTimeout(initializeApp, 500);
     });
 } else {
     // DOM is already ready, wait for legacy app
-    waitForLegacyApp().then(initializeApp);
+    setTimeout(initializeApp, 500);
 }
 
 // Clean up on page unload
