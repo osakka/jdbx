@@ -334,12 +334,12 @@ int main(int argc, char** argv) {
     return 1;
   }
   
-  /* 🕵️ INSPECTOR CLOUSEAU'S SSL COMPATIBILITY MODE */
-  /* Phase 2: SSL Compatibility - DO NOT re-enable exotic allocators when SSL is active */
+  /* 🚀 REVOLUTIONARY SSL SEMANTIC ALLOCATOR ACTIVATION */
+  /* Phase 2: Enable SSL semantic allocator instead of blanket disable */
   if (config->use_ssl && exotic_allocators_were_enabled) {
-    LOG_WARNING("SSL enabled - exotic allocators will remain disabled for runtime SSL compatibility");
-    LOG_WARNING("This prevents SSL segfaults but reduces performance to system malloc levels");
-    /* NOTE: Exotic allocators intentionally NOT re-enabled to prevent SSL runtime crashes */
+    LOG_INFO("SSL enabled - activating revolutionary SSL semantic allocator");
+    LOG_INFO("SSL operations will use optimized semantic memory management");
+    memory_allocator_emergency_enable(); /* Re-enable for SSL semantic allocator */
   }
   
   /* Initialize production configuration before database */

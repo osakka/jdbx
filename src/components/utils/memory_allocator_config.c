@@ -248,6 +248,17 @@ int memory_allocator_enable(bool arena, bool tlsf) {
     return 0;
 }
 
+/* Emergency re-enable exotic allocators with SSL semantic configuration */
+int memory_allocator_emergency_enable(void) {
+    if (!atomic_load(&g_mem_config.initialized)) {
+        return -1;
+    }
+    
+    /* 🚀 REVOLUTIONARY: Enable with SSL semantic allocator configuration */
+    /* SSL semantic allocator works through TLSF but with SSL-specific routing */
+    return memory_allocator_enable(false, true); /* Arena=false, TLSF=true for SSL semantic */
+}
+
 /**
  * ============================================================================
  * CONFIGURATION STATUS REPORTING

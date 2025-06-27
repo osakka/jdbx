@@ -107,6 +107,16 @@ bool memory_allocator_config_force_system_malloc(void);
 int memory_allocator_emergency_disable(void);
 
 /**
+ * Emergency re-enable exotic allocators with SSL semantic configuration
+ * 
+ * Re-enables exotic allocators with SSL semantic allocator configuration.
+ * Used to restore performance after SSL compatibility phase.
+ * 
+ * @return 0 on success, -1 on failure
+ */
+int memory_allocator_emergency_enable(void);
+
+/**
  * Enable exotic allocators with specific configuration
  * 
  * @param arena Enable Arena allocator for checkpoint allocations
