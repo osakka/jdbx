@@ -26,29 +26,97 @@
     <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/theme.js"></script>
+    
+    <!-- Anti-zoom script to prevent CSS warnings -->
+    <script>
+        (function() {
+            'use strict';
+            
+            // Override zoom property setter to prevent warnings
+            if (typeof CSSStyleDeclaration !== 'undefined') {
+                const originalSetProperty = CSSStyleDeclaration.prototype.setProperty;
+                CSSStyleDeclaration.prototype.setProperty = function(property, value, priority) {
+                    // Block zoom property assignments
+                    if (property === 'zoom' || property === '-webkit-zoom' || property === '-moz-zoom') {
+                        console.warn('[JDBX] Blocked non-standard zoom property:', property, value);
+                        return;
+                    }
+                    return originalSetProperty.call(this, property, value, priority);
+                };
+            }
+            
+            // Monitor for dynamically added zoom styles
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        const element = mutation.target;
+                        if (element.style && element.style.zoom) {
+                            element.style.zoom = '';
+                            element.style.transform = element.style.transform || 'scale(1)';
+                            element.style.transformOrigin = element.style.transformOrigin || '0 0';
+                        }
+                    }
+                });
+            });
+            
+            // Start observing when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    observer.observe(document.body, {
+                        attributes: true,
+                        subtree: true,
+                        attributeFilter: ['style']
+                    });
+                });
+            } else {
+                observer.observe(document.body, {
+                    attributes: true,
+                    subtree: true,
+                    attributeFilter: ['style']
+                });
+            }
+        })();
+    </script>
     <style>
-        /* Critical styles to prevent FOUC */
-        body {
-            visibility: hidden;
+        /* Prevent FOUC with minimal layout impact */
+        html {
+            opacity: 0;
+            transition: opacity 0.1s ease-in;
         }
         
-        body.loaded {
-            visibility: visible;
+        html.loaded {
+            opacity: 1;
         }
         
-        /* Override non-standard zoom property with transform */
-        [style*="zoom"] {
+        /* Comprehensive zoom property suppression */
+        *, *::before, *::after {
+            /* Prevent any zoom usage via CSS variables */
+            --zoom: unset !important;
+        }
+        
+        /* Target all possible zoom property usage patterns */
+        [style*="zoom"], 
+        [style*="ZOOM"],
+        [class*="zoom"],
+        [class*="ZOOM"] {
             zoom: unset !important;
-            transform-origin: 0 0;
+            transform: scale(1) !important;
+            transform-origin: 0 0 !important;
         }
         
-        /* Fix for Swagger UI zoom issues */
-        .swagger-ui .model-box,
-        .swagger-ui .models,
-        .swagger-ui .opblock {
+        /* Specific library overrides */
+        .swagger-ui *,
+        .chart-container *,
+        .prism-*,
+        [class*="swagger"] *,
+        [class*="chart"] * {
             zoom: unset !important;
-            transform: scale(1);
-            transform-origin: 0 0;
+            transform-origin: 0 0 !important;
+        }
+        
+        /* Bootstrap and other framework overrides */
+        .modal *, .dropdown *, .tooltip *, .popover * {
+            zoom: unset !important;
         }
         
         /* SPA-specific styles */

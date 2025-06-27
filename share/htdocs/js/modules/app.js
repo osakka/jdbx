@@ -51,8 +51,8 @@ async function initializeApp() {
     console.log('🚀 Initializing JDBX Modular Application...');
 
     try {
-        // Mark body as loaded to prevent FOUC
-        document.body.classList.add('loaded');
+        // Mark HTML as loaded to prevent FOUC with minimal layout impact
+        document.documentElement.classList.add('loaded');
         
         // Check authentication
         if (!isAuthenticated()) {
