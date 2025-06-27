@@ -1,6 +1,6 @@
 # JDBX Documentation Index
 
-**Version**: 7.2.8 | **Last Updated**: June 25, 2025
+**Version**: 7.3.1 | **Last Updated**: June 27, 2025
 
 This is the comprehensive A-Z index of all JDBX documentation. Use this as your single source for finding any documentation topic.
 
@@ -58,6 +58,7 @@ System design, decisions, and technical architecture.
 #### Architecture Decision Records (ADRs)
 All architectural decisions are documented in the [ADR directory](adr/):
 
+- **[ADR-050](adr/ADR-050-revolutionary-ssl-semantic-allocator.md)** - Revolutionary SSL Semantic Allocator (v7.3.1) 🚀
 - **[ADR-040](adr/ADR-040-memory-checkpoint-safety.md)** - Memory Checkpoint Safety (v7.0.1)
 - **[ADR-038](adr/ADR-038-integrated-wal-architecture.md)** - Integrated WAL Architecture (v7.0.0)
 - **[ADR-037](adr/ADR-037-enterprise-logging-standards.md)** - Enterprise Logging Standards

@@ -1,10 +1,10 @@
 # REST API Reference
 
-**Version**: 7.2.8  
-**Last Updated**: June 25, 2025  
+**Version**: 7.3.1  
+**Last Updated**: June 27, 2025  
 **Base URL**: `https://localhost:5000/api` (SSL enabled by default)
 
-Complete REST API documentation for JDBX v7.2.8 with documentation excellence, memory management stability, configuration system alignment, checkpoint-based memory management, integrated WAL architecture, and enterprise-grade security.
+Complete REST API documentation for JDBX v7.3.1 with Revolutionary SSL Semantic Allocator, documentation excellence, memory management stability, configuration system alignment, checkpoint-based memory management, integrated WAL architecture, and enterprise-grade security.
 
 ## Authentication
 
