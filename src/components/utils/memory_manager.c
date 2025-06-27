@@ -770,7 +770,10 @@ static bool is_ssl_allocation(void) {
     }
     
     /* Check if we're being called from SSL library context */
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wframe-address"
     void* caller_address = __builtin_return_address(1);  /* Get caller's address */
+    #pragma GCC diagnostic pop
     if (!caller_address) {
         return false;
     }
