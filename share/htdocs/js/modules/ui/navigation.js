@@ -201,17 +201,26 @@ async function refreshCurrentView() {
  * Initialize dashboard view
  */
 async function initializeDashboard() {
-    // Will be implemented when dashboard module is extracted
-    try {
-        if (typeof window.initializeDashboard === 'function') {
+    // Check if legacy app has loaded and is available
+    if (typeof window.initializeDashboard === 'function' && window.initializeDashboard !== initializeDashboard) {
+        try {
+            console.log('🔗 Calling legacy initializeDashboard');
             await window.initializeDashboard();
+        } catch (error) {
+            console.warn('Error calling legacy initializeDashboard:', error);
         }
-        if (typeof window.loadDashboard === 'function') {
+    }
+    
+    if (typeof window.loadDashboard === 'function') {
+        try {
+            console.log('🔗 Calling legacy loadDashboard');
             await window.loadDashboard(false);
+        } catch (error) {
+            console.warn('Error calling legacy loadDashboard:', error);
         }
-    } catch (error) {
-        console.warn('Error initializing dashboard view:', error);
-        showNotification('Dashboard view initialization failed. Trying alternative approach.', 'warning');
+    } else {
+        console.warn('⚠️ loadDashboard function not available - data may not load');
+        showNotification('Dashboard data loading may be delayed. Please refresh if data does not appear.', 'info');
     }
 }
 

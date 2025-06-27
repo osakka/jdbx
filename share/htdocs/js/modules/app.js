@@ -66,8 +66,8 @@ async function initializeApp() {
         // Set up session validation
         setupSessionValidation();
 
-        // Set up hash navigation
-        setupHashNavigation();
+        // DISABLED: Let legacy app handle navigation for now
+        // setupHashNavigation();
 
         // Set up theme change listener for charts
         setupThemeChangeListener();
@@ -259,12 +259,30 @@ if (typeof window !== 'undefined') {
 // Set up global error handling
 setupGlobalErrorHandler();
 
-// Auto-initialize when DOM is ready
+// Wait for legacy app to be ready before initializing modular system
+function waitForLegacyApp() {
+    return new Promise((resolve) => {
+        // Check if key legacy functions are available
+        if (typeof window.loadDashboard === 'function' && 
+            typeof window.initializeDashboard === 'function') {
+            console.log('✅ Legacy app detected - initializing modular system');
+            resolve();
+        } else {
+            console.log('⏳ Waiting for legacy app to load...');
+            setTimeout(() => waitForLegacyApp().then(resolve), 100);
+        }
+    });
+}
+
+// Auto-initialize when DOM and legacy app are ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp);
+    document.addEventListener('DOMContentLoaded', async () => {
+        await waitForLegacyApp();
+        initializeApp();
+    });
 } else {
-    // DOM is already ready
-    initializeApp();
+    // DOM is already ready, wait for legacy app
+    waitForLegacyApp().then(initializeApp);
 }
 
 // Clean up on page unload
