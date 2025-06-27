@@ -1,5 +1,6 @@
 #include "api/api.h"
 #include "database/database.h"
+#include "database/index_metrics.h"
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
 #include <stdio.h>
@@ -458,3 +459,55 @@ http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* requ
   
   return http_response;
 }
+
+/* Get aggregate index statistics across all collections */
+http_response_t* api_handle_index_aggregate_stats(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Get aggregate index metrics from the metrics system */
+  json_value_t* metrics_json = index_metrics_get_all_json();
+  
+  if (!metrics_json) {
+    /* Fallback to basic empty response if metrics system not available */
+    json_value_t* response = json_create_object();
+    json_object_set(response, "total_indexes", json_create_integer(0));
+    json_object_set(response, "avg_effectiveness", json_create_number(0.0));
+    json_object_set(response, "queries_optimized_24h", json_create_integer(0));
+    json_object_set(response, "total_time_saved", json_create_number(0.0));
+    json_object_set(response, "total_storage_mb", json_create_number(0.0));
+    
+    json_value_t* empty_array = json_create_array();
+    json_object_set(response, "indexes", empty_array);
+    
+    json_value_t* effectiveness_dist = json_create_object();
+    json_object_set(effectiveness_dist, "high", json_create_integer(0));
+    json_object_set(effectiveness_dist, "medium", json_create_integer(0));
+    json_object_set(effectiveness_dist, "low", json_create_integer(0));
+    json_object_set(response, "effectiveness_distribution", effectiveness_dist);
+    
+    json_value_t* performance_impact = json_create_object();
+    json_object_set(performance_impact, "avg_with_index", json_create_number(0.0));
+    json_object_set(performance_impact, "avg_without_index", json_create_number(0.0));
+    json_object_set(response, "performance_impact", performance_impact);
+    
+    metrics_json = response;
+  }
+  
+  /* Convert to string */
+  char* response_str = json_stringify(metrics_json);
+  
+  /* Free JSON object */
+  /* CHECKPOINT: json_free(metrics_json); */
+  
+  /* Create HTTP response */
+  http_response_t* http_response = create_http_response(HTTP_OK, response_str, "application/json");
+  
+  /* Free response string */
+  BUFFER_FREE(response_str);
+  
+  return http_response;
+}
+

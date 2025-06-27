@@ -124,6 +124,7 @@ http_response_t* api_handle_index_get(api_context_t* ctx, http_request_t* reques
 http_response_t* api_handle_index_delete(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_index_rebuild(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_index_stats(api_context_t* ctx, http_request_t* request);
+http_response_t* api_handle_index_aggregate_stats(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_index_query(api_context_t* ctx, http_request_t* request);
 http_response_t* api_handle_index_compound_query(api_context_t* ctx, http_request_t* request);
 

@@ -8832,3 +8832,224 @@ function createNewDocument() {
 
 // Current script data
 
+
+
+// ========================
+// Index Performance Metrics
+// ========================
+
+// Load index performance metrics
+async function loadIndexMetrics() {
+    try {
+        const [healthResponse, indexStatsResponse] = await Promise.all([
+            apiRequest('health'),
+            apiRequest('index/stats')
+        ]);
+
+        const health = healthResponse.health || {};
+        const indexStats = indexStatsResponse || {};
+
+        // Update index overview cards
+        document.getElementById('totalIndexes').textContent = indexStats.total_indexes || 0;
+        document.getElementById('avgEffectiveness').textContent = 
+            indexStats.avg_effectiveness ? `${indexStats.avg_effectiveness.toFixed(1)}%` : '0%';
+        document.getElementById('queriesOptimized').textContent = indexStats.queries_optimized_24h || 0;
+        document.getElementById('timeSaved').textContent = 
+            indexStats.total_time_saved ? `${indexStats.total_time_saved.toFixed(1)}ms` : '0ms';
+        document.getElementById('indexStorageUsed').textContent = 
+            indexStats.total_storage_mb ? `${indexStats.total_storage_mb.toFixed(2)} MB` : '0 MB';
+
+        // Update effectiveness status
+        const effectivenessChange = document.getElementById('effectivenessChange');
+        if (indexStats.avg_effectiveness >= 75) {
+            effectivenessChange.textContent = 'Excellent';
+            effectivenessChange.className = 'text-success';
+        } else if (indexStats.avg_effectiveness >= 50) {
+            effectivenessChange.textContent = 'Good';
+            effectivenessChange.className = 'text-warning';
+        } else {
+            effectivenessChange.textContent = 'Needs attention';
+            effectivenessChange.className = 'text-danger';
+        }
+
+        // Populate index table
+        const tableBody = document.getElementById('indexTableBody');
+        if (indexStats.indexes && indexStats.indexes.length > 0) {
+            tableBody.innerHTML = indexStats.indexes.map(index => `
+                <tr>
+                    <td>${index.name}</td>
+                    <td>${index.collection}</td>
+                    <td>${index.field_path}</td>
+                    <td>
+                        <span class="badge ${getEffectivenessBadgeClass(index.effectiveness)}">
+                            ${index.effectiveness.toFixed(1)}%
+                        </span>
+                    </td>
+                    <td>${index.queries_per_day || 0}</td>
+                    <td>${index.storage_mb ? index.storage_mb.toFixed(2) + ' MB' : '0 MB'}</td>
+                    <td>
+                        <span class="text-${index.roi >= 100 ? 'success' : index.roi >= 50 ? 'warning' : 'danger'}">
+                            ${index.roi ? index.roi.toFixed(0) + '%' : 'N/A'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="optimizeIndex('${index.name}')">
+                            Optimize
+                        </button>
+                        ${index.effectiveness < 30 ? 
+                            `<button class="btn btn-sm btn-outline-danger ms-1" onclick="removeIndex('${index.name}')">Remove</button>` : 
+                            ''
+                        }
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center text-muted">
+                        <i class="bi bi-search"></i>
+                        <br>No index data available
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Update charts
+        updateIndexCharts(indexStats);
+
+    } catch (error) {
+        console.error('Error loading index metrics:', error);
+        // Fallback to basic display
+        document.getElementById('totalIndexes').textContent = '0';
+        document.getElementById('avgEffectiveness').textContent = '0%';
+    }
+}
+
+function getEffectivenessBadgeClass(effectiveness) {
+    if (effectiveness >= 75) return 'bg-success';
+    if (effectiveness >= 50) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function updateIndexCharts(indexStats) {
+    // Only update if charts exist
+    const effectivenessCtx = document.getElementById('indexEffectivenessChart');
+    const performanceCtx = document.getElementById('queryPerformanceChart');
+    
+    if (effectivenessCtx && indexStats.effectiveness_distribution) {
+        // Create or update effectiveness distribution chart
+        if (window.indexEffectivenessChart) {
+            window.indexEffectivenessChart.destroy();
+        }
+        
+        window.indexEffectivenessChart = new Chart(effectivenessCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['High (75%+)', 'Medium (50-75%)', 'Low (<50%)'],
+                datasets: [{
+                    data: [
+                        indexStats.effectiveness_distribution.high || 0,
+                        indexStats.effectiveness_distribution.medium || 0,
+                        indexStats.effectiveness_distribution.low || 0
+                    ],
+                    backgroundColor: ['#198754', '#ffc107', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+    
+    if (performanceCtx && indexStats.performance_impact) {
+        // Create or update query performance chart
+        if (window.queryPerformanceChart) {
+            window.queryPerformanceChart.destroy();
+        }
+        
+        window.queryPerformanceChart = new Chart(performanceCtx, {
+            type: 'bar',
+            data: {
+                labels: ['With Index', 'Without Index'],
+                datasets: [{
+                    label: 'Average Query Time (ms)',
+                    data: [
+                        indexStats.performance_impact.avg_with_index || 0,
+                        indexStats.performance_impact.avg_without_index || 0
+                    ],
+                    backgroundColor: ['#198754', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Query Time (ms)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Enhanced metrics loading with index performance
+window.loadIndexMetrics = loadIndexMetrics;
+
+
+
+// Enhanced memory and system metrics
+function updateEnhancedSystemMetrics(health) {
+    // Memory allocator breakdown
+    const memoryAllocators = document.getElementById('memoryAllocators');
+    const memoryBreakdown = document.getElementById('memoryBreakdown');
+    
+    if (health.memory_allocators) {
+        const allocators = health.memory_allocators;
+        if (allocators.tlsf_enabled || allocators.arena_enabled) {
+            memoryAllocators.textContent = 'Enhanced';
+            const parts = [];
+            if (allocators.arena_usage_mb > 0) parts.push(`Arena: ${allocators.arena_usage_mb}MB`);
+            if (allocators.tlsf_usage_mb > 0) parts.push(`TLSF: ${allocators.tlsf_usage_mb}MB`);
+            if (allocators.system_usage_mb > 0) parts.push(`System: ${allocators.system_usage_mb}MB`);
+            memoryBreakdown.textContent = parts.join(', ') || 'No detailed breakdown';
+        } else {
+            memoryAllocators.textContent = 'System';
+            memoryBreakdown.textContent = 'Standard malloc only';
+        }
+    }
+    
+    // System load
+    const systemLoad = document.getElementById('systemLoad');
+    const loadStatus = document.getElementById('loadStatus');
+    
+    if (health.system && health.system.load_average) {
+        const load = health.system.load_average;
+        systemLoad.textContent = load.toFixed(2);
+        
+        if (load < 1.0) {
+            loadStatus.textContent = 'Normal';
+            loadStatus.className = 'text-success';
+        } else if (load < 2.0) {
+            loadStatus.textContent = 'Moderate';
+            loadStatus.className = 'text-warning';
+        } else {
+            loadStatus.textContent = 'High';
+            loadStatus.className = 'text-danger';
+        }
+    }
+}
+
+// Expose enhanced metrics function globally
+window.updateEnhancedSystemMetrics = updateEnhancedSystemMetrics;
+

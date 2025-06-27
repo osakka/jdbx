@@ -206,6 +206,7 @@ api_route_t routes[] = {
   {"/api/indexes/", HTTP_DELETE, api_handle_index_delete, 1},
   {"/api/indexes/rebuild/", HTTP_POST, api_handle_index_rebuild, 1},
   {"/api/indexes/stats/", HTTP_GET, api_handle_index_stats, 1},
+  {"/api/index/stats", HTTP_GET, api_handle_index_aggregate_stats, 1},
   {"/api/indexes/query/", HTTP_POST, api_handle_index_query, 1},
   {"/api/indexes/compound/", HTTP_POST, api_handle_index_compound_query, 1},
   
