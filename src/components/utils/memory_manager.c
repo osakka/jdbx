@@ -23,6 +23,8 @@
 #include <stddef.h>
 #include <stdalign.h>
 #include <stdio.h>
+#include <stdbool.h>    /* For bool type - Inspector Claude needs this */
+#include <dlfcn.h>      /* For SSL detection - Inspector Claude's solution */
 
 /* Memory managers should not depend on logging */
 
@@ -557,11 +559,89 @@ int should_use_tlsf_allocator(size_t size) {
 }
 
 /**
+ * Inspector Claude's SSL Detection Function
+ * "Ah! Ze clever detection of ze SSL allocations!"
+ * 
+ * Detects if the current allocation is coming from SSL library
+ * to prevent exotic allocator corruption of SSL contexts.
+ */
+static bool is_ssl_allocation(void) {
+    /* Check if SSL bypass is forced via environment */
+    static int ssl_bypass_checked = 0;
+    static int ssl_bypass_forced = 0;
+    
+    if (!ssl_bypass_checked) {
+        const char* ssl_bypass = getenv("JDBX_SSL_FORCE_SYSTEM_MALLOC");
+        ssl_bypass_forced = (ssl_bypass && (strcmp(ssl_bypass, "true") == 0 || 
+                                           strcmp(ssl_bypass, "1") == 0));
+        ssl_bypass_checked = 1;
+    }
+    
+    if (ssl_bypass_forced) {
+        return true;  /* Force system malloc for all allocations */
+    }
+    
+    /* Check if we're being called from SSL library context */
+    void* caller_address = __builtin_return_address(1);  /* Get caller's address */
+    if (!caller_address) {
+        return false;
+    }
+    
+    Dl_info caller_info;
+    if (dladdr(caller_address, &caller_info) && caller_info.dli_fname) {
+        const char* library_name = caller_info.dli_fname;
+        
+        /* Check if the caller is from SSL or crypto libraries */
+        if (strstr(library_name, "libssl") || 
+            strstr(library_name, "libcrypto") ||
+            strstr(library_name, "ssl") ||
+            strstr(library_name, "crypto")) {
+            
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "🕵️ SSL allocation detected from: %s\n", library_name);
+            }
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Allocate memory with unified decision engine
+ * Enhanced with Inspector Claude's SSL bypass protection
  */
 void* memory_alloc(size_t size) {
     if (size == 0) {
         return NULL;
+    }
+    
+    /* INSPECTOR CLAUDE'S SSL BYPASS - HIGHEST PRIORITY! */
+    if (is_ssl_allocation()) {
+        if (SHOULD_DEBUG_MEMORY()) {
+            fprintf(stderr, "🕵️ SSL allocation bypass: size=%zu, using system malloc\n", size);
+        }
+        /* SSL allocations always use system malloc with header for consistency */
+        size_t total_size = HEADER_SIZE + size;
+        void* ssl_allocated_ptr = aligned_alloc(_Alignof(max_align_t), 
+                                              (total_size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1));
+        if (!ssl_allocated_ptr) {
+            return NULL;
+        }
+        
+        /* Initialize header for SSL allocation */
+        memory_header_t* ssl_header = (memory_header_t*)ssl_allocated_ptr;
+        ssl_header->magic = MEMORY_MAGIC;
+        ssl_header->size = size;
+        ssl_header->checkpoint = NULL;
+        ssl_header->next = NULL;
+        ssl_header->prev = NULL;
+        ssl_header->flags = 0;  /* System malloc, no special flags */
+        ssl_header->hazard_data = NULL;
+        ssl_header->tlsf_ptr = NULL;
+        
+        /* Return user pointer (after header) */
+        return (char*)ssl_allocated_ptr + HEADER_SIZE;
     }
     
     /* Handle early allocation before full memory manager initialization */

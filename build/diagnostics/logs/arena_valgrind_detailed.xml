@@ -1,0 +1,3420 @@
+<?xml version="1.0"?>
+
+<valgrindoutput>
+
+<protocolversion>4</protocolversion>
+<protocoltool>memcheck</protocoltool>
+
+<preamble>
+  <line>Memcheck, a memory error detector</line>
+  <line>Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.</line>
+  <line>Using Valgrind-3.19.0-8d3c8034b8-20220411 and LibVEX; rerun with -h for copyright info</line>
+  <line>Command: /opt/jdbx/build/bin/jdbxd --config=/opt/jdbx/build/var/jdbx.env --no-daemon</line>
+</preamble>
+
+<pid>1788980</pid>
+<ppid>1788871</ppid>
+<tool>memcheck</tool>
+
+<args>
+  <vargv>
+    <exe>/usr/bin/valgrind.bin</exe>
+    <arg>--tool=memcheck</arg>
+    <arg>--leak-check=full</arg>
+    <arg>--show-leak-kinds=all</arg>
+    <arg>--track-origins=yes</arg>
+    <arg>--track-fds=yes</arg>
+    <arg>--show-reachable=yes</arg>
+    <arg>--error-exitcode=1</arg>
+    <arg>--gen-suppressions=all</arg>
+    <arg>--verbose</arg>
+    <arg>--log-file=/opt/jdbx/build/diagnostics/logs/arena_valgrind_detailed.log</arg>
+    <arg>--xml=yes</arg>
+    <arg>--xml-file=/opt/jdbx/build/diagnostics/logs/arena_valgrind_detailed.xml</arg>
+  </vargv>
+  <argv>
+    <exe>/opt/jdbx/build/bin/jdbxd</exe>
+    <arg>--config=/opt/jdbx/build/var/jdbx.env</arg>
+    <arg>--no-daemon</arg>
+  </argv>
+</args>
+
+<status>
+  <state>RUNNING</state>
+  <time>00:00:00:00.273 </time>
+</status>
+
+
+<status>
+  <state>FINISHED</state>
+  <time>00:00:00:01.132 </time>
+</status>
+
+<error>
+  <unique>0x0</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 1 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x1507BC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>50</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x1</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 2 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x1507D2</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>51</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x2</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 3 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x1507E8</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>52</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x3</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 4 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x1507FE</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>53</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x4</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 5 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x150814</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>54</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x5</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 6 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150CEC</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>154</line>
+    </frame>
+    <frame>
+      <ip>0x15082A</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>55</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x6</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 7 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150DC4</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_header</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>175</line>
+    </frame>
+    <frame>
+      <ip>0x150840</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>58</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x7</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 8 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150DC4</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_header</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>175</line>
+    </frame>
+    <frame>
+      <ip>0x150856</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>59</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x8</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 9 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150DC4</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_header</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>175</line>
+    </frame>
+    <frame>
+      <ip>0x150882</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>61</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x9</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are indirectly lost in loss record 10 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150C14</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_origin</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>133</line>
+    </frame>
+    <frame>
+      <ip>0x150898</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>64</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_origin</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_origin
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_origin</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_origin
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xa</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are definitely lost in loss record 11 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x1303E6</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2002</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xb</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>80 bytes in 1 blocks are definitely lost in loss record 12 of 24</text>
+    <leakedbytes>80</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x1308C7</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2099</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xc</unique>
+  <tid>1</tid>
+  <kind>Leak_IndirectlyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are indirectly lost in loss record 13 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x150DC4</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_header</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>175</line>
+    </frame>
+    <frame>
+      <ip>0x15086C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>60</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: indirect</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xd</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 14 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x130490</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2016</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xe</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 15 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x1304EE</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2021</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0xf</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 16 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x13054C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2026</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x10</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 17 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x12963B</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_construct_path</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>444</line>
+    </frame>
+    <frame>
+      <ip>0x129844</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_get_web_root</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>490</line>
+    </frame>
+    <frame>
+      <ip>0x13057E</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2032</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>config_construct_path</fun> </sframe>
+    <sframe> <fun>config_get_web_root</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:config_construct_path
+   fun:config_get_web_root
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>config_construct_path</fun> </sframe>
+    <sframe> <fun>config_get_web_root</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:config_construct_path
+   fun:config_get_web_root
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x11</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 18 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x130628</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2048</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x12</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 19 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x13065E</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2049</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x13</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>96 bytes in 1 blocks are definitely lost in loss record 20 of 24</text>
+    <leakedbytes>96</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1282A3</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_strdup_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>86</line>
+    </frame>
+    <frame>
+      <ip>0x13085E</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2095</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_strdup_safe</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_strdup_safe
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x14</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>144 bytes in 1 blocks are definitely lost in loss record 21 of 24</text>
+    <leakedbytes>144</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x1284DF</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>generate_jwt_secret</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>74</line>
+    </frame>
+    <frame>
+      <ip>0x128B4E</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>load_jwt_secret_secure</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>197</line>
+    </frame>
+    <frame>
+      <ip>0x130598</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2035</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>generate_jwt_secret</fun> </sframe>
+    <sframe> <fun>load_jwt_secret_secure</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:generate_jwt_secret
+   fun:load_jwt_secret_secure
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>generate_jwt_secret</fun> </sframe>
+    <sframe> <fun>load_jwt_secret_secure</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:generate_jwt_secret
+   fun:load_jwt_secret_secure
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x15</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>160 (80 direct, 80 indirect) bytes in 1 blocks are definitely lost in loss record 22 of 24</text>
+    <leakedbytes>160</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x12815C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_alloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>32</line>
+    </frame>
+    <frame>
+      <ip>0x12820C</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_realloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>62</line>
+    </frame>
+    <frame>
+      <ip>0x150BBB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_origin</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>125</line>
+    </frame>
+    <frame>
+      <ip>0x150898</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>64</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_origin</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_origin
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_alloc_safe</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_origin</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:buffer_pool_alloc_safe
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_origin
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x16</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>432 (96 direct, 336 indirect) bytes in 1 blocks are definitely lost in loss record 23 of 24</text>
+    <leakedbytes>432</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x1387C8</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_realloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>828</line>
+    </frame>
+    <frame>
+      <ip>0x128221</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_realloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>66</line>
+    </frame>
+    <frame>
+      <ip>0x150D6B</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_header</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>167</line>
+    </frame>
+    <frame>
+      <ip>0x150882</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>61</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>memory_realloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:memory_realloc
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>memory_realloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_header</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:memory_realloc
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_header
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<error>
+  <unique>0x17</unique>
+  <tid>1</tid>
+  <kind>Leak_DefinitelyLost</kind>
+  <xwhat>
+    <text>592 (112 direct, 480 indirect) bytes in 1 blocks are definitely lost in loss record 24 of 24</text>
+    <leakedbytes>592</leakedbytes>
+    <leakedblocks>1</leakedblocks>
+  </xwhat>
+  <stack>
+    <frame>
+      <ip>0x4846C60</ip>
+      <obj>/usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so</obj>
+      <fn>memalign</fn>
+      <dir>./coregrind/m_replacemalloc</dir>
+      <file>vg_replace_malloc.c</file>
+      <line>1517</line>
+    </frame>
+    <frame>
+      <ip>0x138012</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_alloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>572</line>
+    </frame>
+    <frame>
+      <ip>0x1387C8</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>memory_realloc</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>memory_manager.c</file>
+      <line>828</line>
+    </frame>
+    <frame>
+      <ip>0x128221</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>buffer_pool_realloc_safe</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>buffer_pool.c</file>
+      <line>66</line>
+    </frame>
+    <frame>
+      <ip>0x150C93</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>add_cors_allowed_method</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>146</line>
+    </frame>
+    <frame>
+      <ip>0x15082A</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_cors_config</fn>
+      <dir>/opt/jdbx/src/components/core</dir>
+      <file>cors.c</file>
+      <line>55</line>
+    </frame>
+    <frame>
+      <ip>0x1305AB</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>config_init_defaults</fn>
+      <dir>/opt/jdbx/src/components/utils</dir>
+      <file>config_loader.c</file>
+      <line>2038</line>
+    </frame>
+    <frame>
+      <ip>0x13FA8F</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>init_config</fn>
+      <dir>/opt/jdbx/src/initialize</dir>
+      <file>config.c</file>
+      <line>131</line>
+    </frame>
+    <frame>
+      <ip>0x118329</ip>
+      <obj>/opt/jdbx/build/bin/jdbxd</obj>
+      <fn>main</fn>
+      <dir>/opt/jdbx/src/components</dir>
+      <file>main.c</file>
+      <line>166</line>
+    </frame>
+  </stack>
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>memory_realloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:memory_realloc
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+</error>
+
+  <suppression>
+    <sname>insert_a_suppression_name_here</sname>
+    <skind>Memcheck:Leak</skind>
+    <skaux>match-leak-kinds: definite</skaux>
+    <sframe> <fun>memalign</fun> </sframe>
+    <sframe> <fun>memory_alloc</fun> </sframe>
+    <sframe> <fun>memory_realloc</fun> </sframe>
+    <sframe> <fun>buffer_pool_realloc_safe</fun> </sframe>
+    <sframe> <fun>add_cors_allowed_method</fun> </sframe>
+    <sframe> <fun>init_cors_config</fun> </sframe>
+    <sframe> <fun>config_init_defaults</fun> </sframe>
+    <sframe> <fun>init_config</fun> </sframe>
+    <sframe> <fun>main</fun> </sframe>
+    <rawtext>
+<![CDATA[
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:memalign
+   fun:memory_alloc
+   fun:memory_realloc
+   fun:buffer_pool_realloc_safe
+   fun:add_cors_allowed_method
+   fun:init_cors_config
+   fun:config_init_defaults
+   fun:init_config
+   fun:main
+}
+]]>
+    </rawtext>
+  </suppression>
+<errorcounts>
+</errorcounts>
+
+<suppcounts>
+</suppcounts>
+
+</valgrindoutput>
+
