@@ -5749,6 +5749,67 @@ async function loadScriptMetrics() {
     }
 }
 
+// Update script performance chart with data
+function updateScriptPerformanceChart(scriptsData) {
+    if (!scriptPerformanceChart) {
+        console.warn('Script performance chart not initialized');
+        return;
+    }
+    
+    try {
+        if (!scriptsData || !Array.isArray(scriptsData)) {
+            // No data - show empty chart
+            scriptPerformanceChart.data.labels = ['No Data'];
+            scriptPerformanceChart.data.datasets[0].data = [0];
+            scriptPerformanceChart.update();
+            return;
+        }
+        
+        // Extract script names and execution times
+        const labels = scriptsData.map(script => script.name || 'Unknown');
+        const executionTimes = scriptsData.map(script => script.avg_time || 0);
+        const executions = scriptsData.map(script => script.executions || 0);
+        const errors = scriptsData.map(script => script.errors || 0);
+        
+        // Update chart data
+        scriptPerformanceChart.data.labels = labels;
+        scriptPerformanceChart.data.datasets[0].data = executionTimes;
+        
+        // Add additional datasets if we have execution count data
+        if (scriptPerformanceChart.data.datasets.length === 1 && executions.some(count => count > 0)) {
+            scriptPerformanceChart.data.datasets.push({
+                label: 'Executions',
+                data: executions,
+                borderColor: '#38a169',
+                backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                yAxisID: 'y1'
+            });
+            
+            // Add second y-axis for executions
+            if (!scriptPerformanceChart.options.scales.y1) {
+                scriptPerformanceChart.options.scales.y1 = {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Executions'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                };
+            }
+        }
+        
+        // Update chart
+        scriptPerformanceChart.update();
+        
+    } catch (error) {
+        console.error('Error updating script performance chart:', error);
+    }
+}
+
 async function loadMetrics(timeRange = '1h', isPolling = false) {
     // console.log('loadMetrics called with timeRange:', timeRange, 'isPolling:', isPolling);
     try {

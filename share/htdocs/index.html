@@ -27,6 +27,30 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/theme.js"></script>
     <style>
+        /* Critical styles to prevent FOUC */
+        body {
+            visibility: hidden;
+        }
+        
+        body.loaded {
+            visibility: visible;
+        }
+        
+        /* Override non-standard zoom property with transform */
+        [style*="zoom"] {
+            zoom: unset !important;
+            transform-origin: 0 0;
+        }
+        
+        /* Fix for Swagger UI zoom issues */
+        .swagger-ui .model-box,
+        .swagger-ui .models,
+        .swagger-ui .opblock {
+            zoom: unset !important;
+            transform: scale(1);
+            transform-origin: 0 0;
+        }
+        
         /* SPA-specific styles */
         .view-container {
             display: none;
