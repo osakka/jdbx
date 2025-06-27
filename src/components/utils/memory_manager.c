@@ -550,11 +550,15 @@ void* memory_alloc(size_t size) {
      * Benefits: O(1) worst-case allocation + minimal fragmentation + thread-local pools
      */
     if (!allocated_ptr && should_use_tlsf_allocator(size)) {
-        allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, HEADER_SIZE + size);
+        /* Ensure TLSF allocation uses same alignment as system malloc for consistency */
+        size_t total_size = HEADER_SIZE + size;
+        size_t aligned_total = (total_size + _Alignof(max_align_t) - 1) & ~(_Alignof(max_align_t) - 1);
+        allocated_ptr = tlsf_malloc(tls_memory.tlsf_pool, aligned_total);
         if (allocated_ptr) {
             from_tlsf = 1;
             if (SHOULD_DEBUG_MEMORY()) {
-                fprintf(stderr, "memory_alloc: TLSF allocation successful, size=%zu, tlsf_ptr=%p\n", size, allocated_ptr);
+                fprintf(stderr, "memory_alloc: TLSF allocation successful, size=%zu, aligned_total=%zu, tlsf_ptr=%p\n", 
+                        size, aligned_total, allocated_ptr);
             }
         } else {
             if (SHOULD_DEBUG_MEMORY()) {
