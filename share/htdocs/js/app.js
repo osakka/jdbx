@@ -5724,6 +5724,31 @@ function initializeMetrics() {
     }, 100);
 }
 
+// Missing function: Load script performance metrics
+async function loadScriptMetrics() {
+    try {
+        // Load script execution metrics if available
+        const response = await apiRequest('/api/metrics/scripts');
+        
+        if (response && response.scripts) {
+            updateScriptPerformanceChart(response.scripts);
+        } else {
+            // Create placeholder data if no script metrics available
+            const placeholderData = {
+                scripts: [
+                    { name: 'validation', executions: 0, avg_time: 0, errors: 0 },
+                    { name: 'transformation', executions: 0, avg_time: 0, errors: 0 }
+                ]
+            };
+            updateScriptPerformanceChart(placeholderData.scripts);
+        }
+    } catch (error) {
+        console.warn('Script metrics not available:', error.message);
+        // Create empty chart with no data to prevent UI errors
+        updateScriptPerformanceChart([]);
+    }
+}
+
 async function loadMetrics(timeRange = '1h', isPolling = false) {
     // console.log('loadMetrics called with timeRange:', timeRange, 'isPolling:', isPolling);
     try {
