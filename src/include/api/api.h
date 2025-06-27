@@ -37,10 +37,17 @@ typedef struct api_context {
     int max_routes;          /* Maximum number of routes */
 } api_context_t;
 
+/* API result structure for explicit checkpoint lifecycle management */
+typedef struct api_result {
+    http_response_t* response;
+    memory_checkpoint_t* checkpoint;
+} api_result_t;
+
 /* API function prototypes */
 api_context_t* api_create_context(database_t* db, rbac_system_t* rbac, const char* jwt_secret);
 void api_free_context(api_context_t* ctx);
-http_response_t* api_dispatch_request(api_context_t* ctx, http_request_t* request);
+api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request);
+void api_result_free(api_result_t* result);  /* Clean API result and commit/rewind checkpoint */
 int api_authenticate_request(api_context_t* ctx, http_request_t* request);
 int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request);
 char* api_extract_token(http_request_t* request);

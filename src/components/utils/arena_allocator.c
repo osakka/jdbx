@@ -68,7 +68,15 @@ arena_t* arena_create(size_t size) {
     /* Ensure memory region starts at proper alignment boundary */
     char* memory_start = (char*)arena + sizeof(arena_t);
     arena->memory = align_ptr(memory_start, ARENA_ALIGNMENT);
-    arena->size = size - (arena->memory - memory_start);  /* Adjust size for alignment */
+    
+    /* CRITICAL FIX: Calculate usable size correctly accounting for structure and alignment */
+    size_t structure_overhead = arena->memory - (char*)arena;
+    if (structure_overhead >= aligned_total) {
+        /* Invalid configuration - should never happen with our allocation strategy */
+        free(arena);
+        return NULL;
+    }
+    arena->size = aligned_total - structure_overhead;
     arena->current = arena->memory;
     arena->next_checkpoint_id = 1;
     

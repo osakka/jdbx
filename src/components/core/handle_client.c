@@ -1193,6 +1193,9 @@ void handle_client(void* client_data) {
   
   /* Keep-alive loop for processing multiple requests */
   do {
+    /* API result for explicit checkpoint lifecycle management */
+    api_result_t* api_result = NULL;
+    
     /* Dispatch request to API handler */
     if (g_logger) {
       TRACE_NET("API_DISPATCH: Dispatching %s %s to API handler (request #%d)", 
@@ -1215,7 +1218,29 @@ void handle_client(void* client_data) {
     
     /* If no static file response, try API dispatch */
     if (!response) {
-      response = api_dispatch_request(client->api_ctx, request);
+      /* SURGICAL DEBUGGING: Track API dispatch call */
+      if (getenv("JDBX_MEM_DEBUG")) {
+        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
+        if (debug_file) {
+          fprintf(debug_file, "🚀 handle_client: Calling api_dispatch_request for path=%s\n", 
+                 request->path ? request->path : "<null>");
+          fflush(debug_file);
+          fclose(debug_file);
+        }
+      }
+      
+      api_result = api_dispatch_request(client->api_ctx, request);
+      response = api_result ? api_result->response : NULL;
+      
+      if (getenv("JDBX_MEM_DEBUG")) {
+        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
+        if (debug_file) {
+          fprintf(debug_file, "🎯 handle_client: api_dispatch_request returned result=%p, response=%p, checkpoint=%p\n", 
+                 api_result, response, api_result ? api_result->checkpoint : NULL);
+          fflush(debug_file);
+          fclose(debug_file);
+        }
+      }
       
       /* Thread-safe logger check with atomic access */
       extern logger_config_t* g_logger;
@@ -1297,6 +1322,21 @@ void handle_client(void* client_data) {
     } else {
       /* Response serialization failed */
       keep_alive_enabled = 0;
+    }
+    
+    /* EXPLICIT CHECKPOINT COMMIT: Commit checkpoint after response serialization */
+    if (api_result) {
+        if (getenv("JDBX_MEM_DEBUG")) {
+            FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
+            if (debug_file) {
+                fprintf(debug_file, "🎯 handle_client: Committing API result checkpoint %p after response serialization\n", 
+                       api_result->checkpoint);
+                fflush(debug_file);
+                fclose(debug_file);
+            }
+        }
+        api_result_free(api_result);  /* This will commit checkpoint and free result */
+        api_result = NULL;
     }
 
     /* CRITICAL MEMORY SAFETY: Safe cleanup with NULL checks */
