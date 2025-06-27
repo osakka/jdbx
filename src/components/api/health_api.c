@@ -3,6 +3,7 @@
 #include "utils/metrics.h"
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
+#include "utils/memory_manager.h"
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -211,6 +212,30 @@ http_response_t* api_handle_health_check(api_context_t *ctx, http_request_t *req
     
     json_object_set(health, "metrics", metrics_json);
   }
+  
+  /* Add memory allocator information */
+  json_value_t *memory_allocators = json_create_object();
+  
+  /* Get basic memory manager statistics */
+  uint64_t checkpoints_created = 0, rewinds = 0, allocations_freed = 0;
+  memory_manager_get_stats(&checkpoints_created, &rewinds, &allocations_freed);
+  
+  /* Basic allocator status - TLSF and Arena are currently disabled in v7.2.9 */
+  json_object_set(memory_allocators, "tlsf_enabled", json_create_boolean(0));
+  json_object_set(memory_allocators, "arena_enabled", json_create_boolean(0));
+  
+  /* Memory usage breakdown - currently all system malloc */
+  json_object_set(memory_allocators, "system_usage_mb", json_create_number(process_mem / 1024.0));
+  json_object_set(memory_allocators, "tlsf_usage_mb", json_create_number(0.0));
+  json_object_set(memory_allocators, "arena_usage_mb", json_create_number(0.0));
+  json_object_set(memory_allocators, "total_usage_mb", json_create_number(process_mem / 1024.0));
+  
+  /* Checkpoint statistics */
+  json_object_set(memory_allocators, "active_checkpoints", json_create_integer((int)checkpoints_created));
+  json_object_set(memory_allocators, "total_rewinds", json_create_integer((int)rewinds));
+  json_object_set(memory_allocators, "allocations_freed", json_create_integer((int)allocations_freed));
+  
+  json_object_set(health, "memory_allocators", memory_allocators);
   
   /* Convert health object to JSON string */
   char *health_json = json_stringify(health);

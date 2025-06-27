@@ -957,6 +957,9 @@ async function loadSystemHealth() {
             } else {
                 document.getElementById('uptime').textContent = 'N/A';
             }
+            
+            // Update enhanced system metrics panel
+            updateEnhancedSystemMetrics(health);
         } else {
             document.getElementById('cpuUsage').textContent = 'N/A';
             document.getElementById('memoryUsage').textContent = 'N/A';
