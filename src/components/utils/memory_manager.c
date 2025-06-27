@@ -296,16 +296,11 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
         /* Unlock before destroying */
         pthread_spin_unlock(&cp->lock);
         
-        /* Reset arena if present */
-        if (cp->arena && cp->arena_checkpoint_id) {
-            arena_reset_to_checkpoint(cp->arena, cp->arena_checkpoint_id);
-        }
-        
         /* Move to parent and free the checkpoint */
         memory_checkpoint_t* parent = cp->parent;
         pthread_spin_destroy(&cp->lock);  /* Cleanup spinlock */
         
-        /* Arena is already reset, now destroy it */
+        /* Destroy arena completely (no reset needed - we're destroying the checkpoint) */
         if (cp->arena) {
             arena_destroy(cp->arena);
             cp->arena = NULL;
@@ -606,9 +601,10 @@ void* memory_alloc(size_t size) {
                 allocated_ptr, header, user_ptr, size, from_arena, from_tlsf, header->flags);
     }
     
-    /* If we have an active checkpoint AND not bypassing, track the allocation */
+    /* If we have an active checkpoint AND not bypassing, track the allocation 
+     * EXCEPT for Arena allocations which are tracked/freed in bulk via arena destruction */
     if (tls_memory.current_checkpoint && !tls_memory.current_checkpoint->committed && 
-        !tls_memory.bypass_checkpoint) {
+        !tls_memory.bypass_checkpoint && !from_arena) {
         memory_checkpoint_t* cp = tls_memory.current_checkpoint;
         
         /* Lock checkpoint for list modification */

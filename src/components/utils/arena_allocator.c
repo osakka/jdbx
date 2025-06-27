@@ -54,9 +54,10 @@ arena_t* arena_create(size_t size) {
         size = ARENA_DEFAULT_SIZE;
     }
     
-    /* Allocate arena structure and memory together */
+    /* Allocate arena structure and memory together with proper alignment */
     size_t total_size = sizeof(arena_t) + size;
-    arena_t* arena = (arena_t*)aligned_alloc(64, total_size);
+    size_t aligned_total = (total_size + 64 - 1) & ~(64 - 1);  /* Align to 64-byte boundary */
+    arena_t* arena = (arena_t*)aligned_alloc(64, aligned_total);
     if (!arena) {
         /* Failed to allocate arena - no logging to avoid circular dependencies */
         return NULL;
@@ -64,8 +65,10 @@ arena_t* arena_create(size_t size) {
     
     /* Initialize arena */
     memset(arena, 0, sizeof(arena_t));
-    arena->memory = (char*)arena + sizeof(arena_t);
-    arena->size = size;
+    /* Ensure memory region starts at proper alignment boundary */
+    char* memory_start = (char*)arena + sizeof(arena_t);
+    arena->memory = align_ptr(memory_start, ARENA_ALIGNMENT);
+    arena->size = size - (arena->memory - memory_start);  /* Adjust size for alignment */
     arena->current = arena->memory;
     arena->next_checkpoint_id = 1;
     
