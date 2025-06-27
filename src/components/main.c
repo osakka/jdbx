@@ -28,6 +28,7 @@
 #include "utils/logger.h"
 #include "utils/config_loader.h"
 #include "utils/memory_manager.h"
+#include "utils/memory_allocator_config.h"
 #include "core/server_thread_safe.h"
 #include "rbac/jwt_cache.h"
 #include "utils/production_config.h"
@@ -315,6 +316,15 @@ int main(int argc, char** argv) {
   /* NOW register cleanup handler - we're in the final server process */
   init_register_cleanup();
   
+  /* 🕵️ INSPECTOR CLOUSEAU'S DUAL-PHASE INITIALIZATION */
+  /* Phase 1: Emergency disable exotic allocators before SSL initialization (only if enabled) */
+  bool exotic_allocators_were_enabled = false;
+  if (config->use_ssl && memory_allocator_config_exotic_enabled()) {
+    LOG_DEBUG("SSL enabled - temporarily disabling exotic allocators for SSL context creation");
+    memory_allocator_emergency_disable();
+    exotic_allocators_were_enabled = true;
+  }
+  
   /* Initialize socket - AFTER daemon process is fully established */
   LOG_DEBUG("Initializing Socket.");
   status = init_socket(config);
@@ -322,6 +332,14 @@ int main(int argc, char** argv) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
     BUFFER_FREE(config);
     return 1;
+  }
+  
+  /* 🕵️ INSPECTOR CLOUSEAU'S SSL COMPATIBILITY MODE */
+  /* Phase 2: SSL Compatibility - DO NOT re-enable exotic allocators when SSL is active */
+  if (config->use_ssl && exotic_allocators_were_enabled) {
+    LOG_WARNING("SSL enabled - exotic allocators will remain disabled for runtime SSL compatibility");
+    LOG_WARNING("This prevents SSL segfaults but reduces performance to system malloc levels");
+    /* NOTE: Exotic allocators intentionally NOT re-enabled to prevent SSL runtime crashes */
   }
   
   /* Initialize production configuration before database */
@@ -332,6 +350,15 @@ int main(int argc, char** argv) {
   LOG_DEBUG("Initializing production configuration: %s", config_level);
   production_config_init(config_level);
   
+  /* 🕵️ INSPECTOR CLOUSEAU'S DATABASE DUAL-PHASE INITIALIZATION */
+  /* Phase 1: Emergency disable exotic allocators before database initialization (only if enabled) */
+  bool database_exotic_allocators_were_enabled = false;
+  if (memory_allocator_config_exotic_enabled()) {
+    LOG_DEBUG("Database initialization - temporarily disabling exotic allocators for JDBX WAL memory operations");
+    memory_allocator_emergency_disable();
+    database_exotic_allocators_were_enabled = true;
+  }
+  
   /* Now that we have a socket and proper daemon context, initialize the database */
   LOG_DEBUG("Initializing Database.");
   status = init_database(config, &database);
@@ -339,6 +366,14 @@ int main(int argc, char** argv) {
     INIT_LOG_FAILURE("MAIN", "Initialization failed");
     BUFFER_FREE(config);
     return 1;
+  }
+  
+  /* Phase 2: Re-enable exotic allocators after database initialization complete (only if SSL is disabled) */
+  if (database_exotic_allocators_were_enabled && !config->use_ssl) {
+    LOG_DEBUG("Database initialization complete - re-enabling exotic allocators (SSL disabled)");
+    memory_allocator_enable(true, true);  /* Enable both Arena and TLSF */
+  } else if (database_exotic_allocators_were_enabled && config->use_ssl) {
+    LOG_WARNING("Database initialization complete - exotic allocators remain disabled due to SSL compatibility");
   }
   
   /* Apply database configuration (highest priority) */
