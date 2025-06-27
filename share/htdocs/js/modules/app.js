@@ -63,8 +63,8 @@ async function initializeApp() {
         // Initialize global database size tracking
         window.currentDatabaseSizeBytes = 0;
 
-        // Set up session validation
-        setupSessionValidation();
+        // DISABLED: Legacy app already handles session validation
+        // setupSessionValidation();
 
         // DISABLED: Let legacy app handle navigation for now
         // setupHashNavigation();
@@ -78,8 +78,8 @@ async function initializeApp() {
         // Initialize ID conflict detection (if still needed)
         setupIDConflictDetection();
 
-        // Navigate to initial view
-        navigateFromHash();
+        // DISABLED: Let legacy app handle all navigation and initialization
+        // navigateFromHash();
 
         console.log('✅ JDBX Modular Application initialized successfully');
 
