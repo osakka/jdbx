@@ -1,3 +1,49 @@
+/**
+ * @file logger.h
+ * @brief Unified logging system for JDBX with early-stage initialization support
+ * 
+ * Provides comprehensive logging infrastructure including:
+ * - Multi-level logging (ERROR, WARNING, INFO, DEBUG, TRACE)
+ * - Per-functionality trace categories for selective debugging
+ * - Thread-safe operations with proper synchronization
+ * - Early-stage logging for initialization before main logger is ready
+ * - Flexible output configuration (file, stderr)
+ * 
+ * Architecture Features:
+ * - Single global logger instance for system-wide consistency
+ * - Seamless transition between early-stage and regular logging
+ * - Per-category trace control for targeted debugging
+ * - Consistent log format with source location and timestamps
+ * 
+ * Logging Levels:
+ * - ERROR: Critical errors preventing operation
+ * - WARNING: Important issues needing attention
+ * - INFO: Key operational events (production default)
+ * - DEBUG: Detailed troubleshooting information
+ * - TRACE: Very detailed execution flow
+ * 
+ * Trace Categories:
+ * - DATABASE: Database operations and queries
+ * - RBAC: Authentication and authorization
+ * - API: HTTP request/response handling
+ * - AUTH: Authentication flows
+ * - TRANSACTION: Transaction management
+ * - BINARY: Binary data operations
+ * - JAVASCRIPT: JavaScript engine operations
+ * - NETWORK: Network communication
+ * - METRICS: Performance metrics collection
+ * - MEMORY: Memory allocation and management
+ * 
+ * Thread Safety:
+ * All logging operations are protected by internal mutex for safe
+ * concurrent access from multiple threads.
+ * 
+ * @note Use EARLY_LOG_* macros during initialization, LOG_* for normal operation
+ * @performance Logging overhead is minimal with compile-time level checks
+ * @threadsafe All logging operations are thread-safe with internal locking
+ * @memory Logger maintains minimal memory footprint with static configuration
+ */
+
 #ifndef JDBX_LOGGER_H
 #define JDBX_LOGGER_H
 

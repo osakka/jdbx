@@ -1,7 +1,34 @@
-/*
- * config_api.c - Configuration management API endpoints
- *
- * Provides REST API for runtime configuration management
+/**
+ * @file config_api.c
+ * @brief Runtime configuration management API endpoints for JDBX
+ * 
+ * Provides REST API endpoints for comprehensive configuration management including:
+ * - Server configuration retrieval and updates
+ * - Runtime configuration reloading and application
+ * - Default configuration values and templates
+ * - Logging configuration and trace category management
+ * 
+ * Architecture: Implements three-tier configuration priority system:
+ * - Environment variables (highest priority)
+ * - CLI flags (medium priority)  
+ * - Database configuration (lowest priority - managed by these endpoints)
+ * 
+ * Security Features:
+ * - RBAC-based authentication and authorization
+ * - Admin privileges required for configuration modifications
+ * - JWT token validation for all operations
+ * - Comprehensive audit logging for configuration changes
+ * 
+ * Configuration Management:
+ * - Real-time configuration updates without server restart
+ * - Database-backed persistence for configuration changes
+ * - Automatic validation and sanity checking
+ * - Rollback capabilities for invalid configurations
+ * 
+ * @note Configuration changes are persisted to database and applied immediately
+ * @performance Configuration operations are O(1) with database persistence overhead
+ * @threadsafe Thread-safe configuration access with proper locking
+ * @memory Uses checkpoint-based allocation for request processing
  */
 
 #include "api/api.h"
@@ -15,7 +42,21 @@
 #include <string.h>
 #include <time.h>
 
-/* Helper function to extract username from JWT token in request */
+/**
+ * Extract username from JWT token in HTTP request
+ * 
+ * Parses the JWT token from the request headers or cookies and extracts
+ * the username claim for RBAC authorization. Used by all configuration
+ * endpoints to identify the requesting user.
+ * 
+ * @param request HTTP request containing JWT token (may be NULL)
+ * @return Username string (caller must free) or NULL if extraction fails
+ * 
+ * @note Caller responsible for freeing returned username string
+ * @performance O(1) token parsing with JWT decode overhead
+ * @threadsafe Safe for concurrent token extraction
+ * @memory Returns allocated string - caller must BUFFER_FREE()
+ */
 static char* extract_username_from_request(http_request_t* request) {
     if (!request) return NULL;
     
@@ -40,7 +81,32 @@ static char* extract_username_from_request(http_request_t* request) {
     return username;
 }
 
-/* GET /api/config - Retrieve current configuration */
+/**
+ * Handle configuration retrieval API request
+ * 
+ * Returns the current server configuration including all settings that can
+ * be modified at runtime. Provides comprehensive view of active configuration
+ * with metadata about configuration source and version.
+ * 
+ * @param ctx API context containing database and RBAC system references
+ * @param request HTTP request with JWT authentication (no body required)
+ * @return JSON response with current configuration or error message
+ * 
+ * @note Requires RBAC read permission on database resources
+ * @performance O(1) configuration serialization with database access overhead
+ * @threadsafe Safe for concurrent configuration access
+ * @memory Uses checkpoint-based allocation for response generation
+ * 
+ * @example
+ * GET /api/config
+ * Headers: Authorization: Bearer <jwt_token>
+ * Response: {
+ *   "status": "success",
+ *   "version": "3.1.0", 
+ *   "priority": "database",
+ *   "configuration": {...}
+ * }
+ */
 http_response_t* api_handle_config_get(api_context_t* ctx, http_request_t* request) {
     /* Extract username for permissions check */
     char* username = extract_username_from_request(request);
@@ -90,7 +156,32 @@ http_response_t* api_handle_config_get(api_context_t* ctx, http_request_t* reque
     return response;
 }
 
-/* PUT /api/config - Update configuration */
+/**
+ * Handle configuration update API request
+ * 
+ * Processes configuration change requests with validation, persistence,
+ * and immediate application. Supports partial configuration updates and
+ * provides detailed feedback on update success and validation results.
+ * 
+ * @param ctx API context containing database and RBAC system references
+ * @param request HTTP request with JSON body containing configuration settings
+ * @return JSON response confirming update status and any validation errors
+ * 
+ * @note Requires RBAC admin permission - destructive operation
+ * @performance O(1) configuration update with database persistence overhead
+ * @threadsafe Safe configuration updates with proper transaction handling
+ * @memory Request body parsed using checkpoint memory management
+ * 
+ * @example
+ * PUT /api/config
+ * Headers: Authorization: Bearer <admin_jwt_token>
+ * Body: {"settings": {"server": {"max_connections": 1000}}}
+ * Response: {
+ *   "status": "success",
+ *   "message": "Configuration updated successfully",
+ *   "applied": true
+ * }
+ */
 http_response_t* api_handle_config_update(api_context_t* ctx, http_request_t* request) {
     /* Extract username for permissions check */
     char* username = extract_username_from_request(request);
@@ -436,7 +527,28 @@ http_response_t* api_handle_logging_update(api_context_t* ctx, http_request_t* r
     return response;
 }
 
-/* Register configuration API routes */
+/**
+ * Register configuration API routes with API context
+ * 
+ * Registers all configuration management endpoints including configuration
+ * retrieval, updates, reloading, defaults, and logging management. Sets up
+ * proper authentication requirements for each endpoint.
+ * 
+ * @param ctx API context to register routes with (must not be NULL)
+ * 
+ * @note All configuration endpoints require authentication
+ * @performance O(1) route registration
+ * @threadsafe Safe for concurrent route registration during startup
+ * @memory Routes stored in API context array - no additional allocation
+ * 
+ * Registered Routes:
+ * - GET /api/config - Retrieve current configuration
+ * - PUT /api/config - Update configuration  
+ * - POST /api/config/reload - Reload configuration from database
+ * - GET /api/config/defaults - Get default configuration values
+ * - GET /api/config/logging - Get logging configuration
+ * - PUT /api/config/logging - Update logging configuration
+ */
 void register_config_api_routes(api_context_t* ctx) {
     if (!ctx) {
         LOG_ERROR("Cannot register config API routes - NULL context.");

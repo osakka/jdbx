@@ -1,3 +1,28 @@
+/**
+ * @file health_api.c
+ * @brief System health monitoring API endpoints for JDBX
+ * 
+ * Provides health check and system monitoring endpoints including:
+ * - Basic health status and uptime monitoring
+ * - System resource utilization (CPU, memory, disk)
+ * - Database performance metrics and statistics
+ * - Service availability and dependency health
+ * 
+ * Architecture: Integrates with JDBX's metrics system to provide
+ * comprehensive health monitoring data for operational visibility.
+ * 
+ * Monitoring Capabilities:
+ * - Server uptime and process health
+ * - Memory usage and allocation statistics  
+ * - Database query performance metrics
+ * - System resource availability
+ * 
+ * @note Health checks have minimal performance impact
+ * @performance O(1) health checks with metrics collection overhead
+ * @threadsafe All endpoints are thread-safe for concurrent monitoring
+ * @memory Uses checkpoint-based allocation for response generation
+ */
+
 #include "api/api.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"

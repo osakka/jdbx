@@ -1,3 +1,41 @@
+/**
+ * @file session_api.c
+ * @brief Session management API endpoints for JDBX
+ * 
+ * Provides REST API endpoints for session management including:
+ * - Session retrieval and monitoring (all sessions, active sessions)
+ * - Session invalidation and logout functionality
+ * - JWT token-based session tracking and validation
+ * - Session corruption detection and filtering
+ * 
+ * Architecture: Integrates with JDBX's unified documents system using
+ * virtual layer for session persistence. Sessions are stored as documents
+ * with type "session" in the system library for centralized management.
+ * 
+ * Security Features:
+ * - JWT token validation for session authentication
+ * - Session corruption detection and filtering
+ * - Comprehensive session invalidation (token + cache)
+ * - Audit logging for session lifecycle events
+ * 
+ * Session Lifecycle:
+ * 1. Session creation during authentication (handled by auth APIs)
+ * 2. Session validation for API requests (JWT token verification)
+ * 3. Session monitoring via these API endpoints
+ * 4. Session invalidation during logout or expiration
+ * 
+ * Integration Points:
+ * - Virtual layer for unified document storage access
+ * - JWT cache for performance optimization
+ * - RBAC system for session-based authorization
+ * - Audit logging for security compliance
+ * 
+ * @note Sessions use document type "session" in unified documents architecture
+ * @performance Session queries are O(n) with database indexing optimization
+ * @threadsafe Thread-safe session operations with database consistency
+ * @memory Uses checkpoint-based allocation for request processing
+ */
+
 #include "api/api.h"
 #include "database/document_storage.h"
 #include "database/database.h"
@@ -12,7 +50,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Handle get sessions request */
+/**
+ * Handle session retrieval API request
+ * 
+ * Returns all sessions stored in the system with corruption detection and
+ * filtering. Provides comprehensive session monitoring for administrators
+ * including session metadata, timestamps, and status information.
+ * 
+ * @param ctx API context containing database connection (must not be NULL)
+ * @param request HTTP request (no parameters required)
+ * @return JSON response with filtered session list or error message
+ * 
+ * @note No authentication required - assumes caller has appropriate access
+ * @performance O(n) where n is total number of sessions in system
+ * @threadsafe Safe for concurrent session monitoring
+ * @memory Uses checkpoint-based allocation with corruption detection
+ * 
+ * Session Filtering:
+ * - Validates all required session fields (user_id, username, token, timestamps)
+ * - Filters out corrupted or incomplete session documents
+ * - Logs warnings for corrupted sessions for debugging
+ * 
+ * @example
+ * GET /api/sessions
+ * Response: {
+ *   "sessions": [...],
+ *   "count": 5
+ * }
+ */
 http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* request) {
   (void)request; /* Suppress unused parameter warning */
   if (!ctx || !ctx->db) {
@@ -93,7 +158,34 @@ http_response_t* api_handle_get_sessions(api_context_t* ctx, http_request_t* req
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
-/* Handle get active sessions request */
+/**
+ * Handle active session retrieval API request
+ * 
+ * Returns only currently active sessions in the system, providing real-time
+ * visibility into authenticated user sessions. Applies same corruption detection
+ * as full session retrieval but filters for active status.
+ * 
+ * @param ctx API context containing database connection (must not be NULL)
+ * @param request HTTP request (no parameters required)
+ * @return JSON response with filtered active session list or error message
+ * 
+ * @note No authentication required - assumes caller has appropriate access
+ * @performance O(n) where n is total number of active sessions
+ * @threadsafe Safe for concurrent active session monitoring
+ * @memory Uses checkpoint-based allocation with corruption detection
+ * 
+ * Active Session Criteria:
+ * - Session marked with active=true flag
+ * - All required session fields present and valid
+ * - Session not expired (based on expires_at timestamp)
+ * 
+ * @example
+ * GET /api/sessions/active
+ * Response: {
+ *   "sessions": [...],
+ *   "count": 3
+ * }
+ */
 http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request_t* request) {
   (void)request; /* Suppress unused parameter warning */
   if (!ctx || !ctx->db) {
@@ -176,7 +268,43 @@ http_response_t* api_handle_get_active_sessions(api_context_t* ctx, http_request
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
-/* Handle logout (invalidate session) */
+/**
+ * Handle logout and session invalidation API request
+ * 
+ * Processes logout requests by invalidating the session associated with the
+ * provided JWT token. Performs comprehensive cleanup including JWT cache
+ * invalidation, session database updates, and user-wide cache clearing.
+ * 
+ * @param ctx API context containing database and auth systems (must not be NULL)
+ * @param request HTTP request with Authorization header containing JWT token
+ * @return JSON response confirming logout success or error message
+ * 
+ * @note Requires valid JWT token in Authorization header
+ * @performance O(1) session lookup with database update overhead
+ * @threadsafe Safe for concurrent logout operations
+ * @memory Uses checkpoint-based allocation for token processing
+ * 
+ * Logout Process:
+ * 1. Extract JWT token from Authorization header
+ * 2. Find associated session in database using virtual layer
+ * 3. Invalidate specific token in JWT cache
+ * 4. Invalidate all user sessions in JWT cache
+ * 5. Mark session as inactive in database
+ * 6. Return confirmation response
+ * 
+ * Security Features:
+ * - Comprehensive token invalidation (cache + database)
+ * - User-wide session invalidation for security
+ * - Audit logging for logout events
+ * 
+ * @example
+ * POST /api/logout
+ * Headers: Authorization: Bearer <jwt_token>
+ * Response: {
+ *   "success": true,
+ *   "message": "Logged out successfully"
+ * }
+ */
 http_response_t* api_handle_logout(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !ctx->db || !request) {
     return create_http_response(HTTP_BAD_REQUEST,

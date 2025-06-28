@@ -1,3 +1,33 @@
+/**
+ * @file static_api.c
+ * @brief Static admin authentication API endpoints for JDBX
+ * 
+ * Provides static admin authentication endpoints including:
+ * - Admin login with credential validation
+ * - Admin test endpoints for debugging
+ * - JWT token generation and management
+ * 
+ * Architecture: Implements simplified admin authentication using:
+ * - Hardcoded admin credentials for demo purposes
+ * - JWT token generation for session management
+ * - HTTP cookie-based authentication persistence
+ * 
+ * Authentication Flow:
+ * 1. Client submits username/password via JSON POST
+ * 2. Server validates credentials against hardcoded admin account
+ * 3. On success, generates JWT token and sets HTTP-only cookie
+ * 4. Client receives token in both response body and cookie
+ * 
+ * Security: Uses static admin credentials (admin/admin) - suitable for
+ * development and demo environments only. Production deployments should
+ * integrate with the full RBAC system.
+ * 
+ * @note Demo authentication - hardcoded admin:admin credentials
+ * @performance O(1) authentication with JWT token generation overhead
+ * @threadsafe Thread-safe token generation and response handling
+ * @memory Uses checkpoint-based allocation for request processing
+ */
+
 #include "api/api.h"
 #include "core/server.h"
 #include "database/database.h"
@@ -9,7 +39,31 @@
 #include <string.h>
 #include <time.h>
 
-/* Admin test route handler */
+/**
+ * Handle admin test API request
+ * 
+ * Provides a simple test endpoint for verifying admin API functionality
+ * and server responsiveness. Returns server information and debug data
+ * for development and debugging purposes.
+ * 
+ * @param ctx API context (unused but required for API interface consistency)
+ * @param request HTTP request (unused but required for API interface consistency)
+ * @return JSON response with test data including server version and timestamp
+ * 
+ * @note No authentication required - public test endpoint
+ * @performance O(1) operation with minimal server impact
+ * @threadsafe Safe for concurrent access
+ * @memory Response allocated using checkpoint memory - automatically freed
+ * 
+ * @example
+ * GET /api/admin/test
+ * Response: {
+ *   "success": true,
+ *   "message": "Admin test route is working!",
+ *   "time": 1640995200,
+ *   "server": {"version": "1.0.0", "api_path": "/api/admin/test"}
+ * }
+ */
 http_response_t* api_handle_admin_test(api_context_t* ctx, http_request_t* request) {
   (void)ctx; /* Avoid unused parameter warning */
   (void)request; /* Avoid unused parameter warning */
@@ -43,7 +97,33 @@ http_response_t* api_handle_admin_test(api_context_t* ctx, http_request_t* reque
   return response;
 }
 
-/* Admin login handler */
+/**
+ * Handle admin login API request
+ * 
+ * Processes admin authentication requests using hardcoded credentials.
+ * Validates username/password, generates JWT tokens, and sets authentication
+ * cookies for successful logins. Implements the complete authentication flow.
+ * 
+ * @param ctx API context containing request routing and validation info
+ * @param request HTTP request with JSON body containing username and password
+ * @return JSON response with authentication result and JWT token or error
+ * 
+ * @note Hardcoded admin:admin credentials - for demo/development only
+ * @performance O(1) authentication with JWT generation overhead
+ * @threadsafe Thread-safe credential validation and token generation
+ * @memory Request body parsed using checkpoint memory, token freed after use
+ * 
+ * @example
+ * POST /api/admin/login
+ * Body: {"username": "admin", "password": "admin"}
+ * Response: {
+ *   "success": true,
+ *   "message": "Login successful",
+ *   "username": "admin",
+ *   "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+ * }
+ * Headers: Set-Cookie: auth_token=...; HttpOnly; Secure
+ */
 http_response_t* api_handle_admin_login(api_context_t* ctx, http_request_t* request) {
   printf("Admin login called\n");
 

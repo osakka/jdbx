@@ -1,3 +1,28 @@
+/**
+ * @file cache_api.c
+ * @brief Cache management API endpoints for JDBX
+ * 
+ * Provides REST API endpoints for cache operations including:
+ * - Cache statistics and monitoring (query cache, document cache)
+ * - Cache configuration and tuning parameters
+ * - Cache clearing and invalidation operations
+ * 
+ * Architecture: Works with JDBX's dual-cache system consisting of:
+ * - Query cache: Caches query results for improved read performance
+ * - Document cache: Caches frequently accessed documents
+ * 
+ * Authentication: Admin privileges required for cache modification operations
+ * Response Format: JSON with unified error handling and consistent structure
+ * 
+ * Integration: Integrates with the generic cache system (generic_cache_t)
+ * to provide real-time cache management capabilities for administrators.
+ * 
+ * @note Cache operations affect query and document caches independently
+ * @performance Cache statistics are O(1), clearing operations are O(n)
+ * @threadsafe All endpoints handle concurrent requests safely
+ * @memory Uses checkpoint-based allocation for request processing
+ */
+
 #include "api/api.h"
 #include "database/database.h"
 #include "utils/json.h"
@@ -7,7 +32,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Get cache statistics */
+/**
+ * Handle cache statistics API request
+ * 
+ * Returns comprehensive cache metrics including hit/miss ratios, memory usage,
+ * and performance statistics for both query and document caches. Provides
+ * real-time monitoring data for cache performance analysis.
+ * 
+ * @param ctx API context containing request authentication and routing info
+ * @param request HTTP request (no parameters required for statistics)
+ * @return JSON response with cache statistics or error message
+ * 
+ * @note Admin authentication required - returns 403 for non-admin users
+ * @performance O(1) operation with minimal cache performance impact
+ * @threadsafe Safe for concurrent access during cache operations
+ * @memory Response allocated using checkpoint memory - automatically freed
+ * 
+ * @example
+ * GET /api/cache/stats
+ * Response: {
+ *   "status": "Automatic internal caching active",
+ *   "query_cache": {"hits": 1000, "misses": 50, "hit_rate_percent": 95.2},
+ *   "document_cache": {"hits": 800, "misses": 25, "hit_rate_percent": 97.0}
+ * }
+ */
 http_response_t* api_handle_cache_stats(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -79,7 +127,27 @@ http_response_t* api_handle_cache_stats(api_context_t* ctx, http_request_t* requ
   return response;
 }
 
-/* Configure cache */
+/**
+ * Handle cache configuration API request
+ * 
+ * Processes cache configuration changes including enabling/disabling caches,
+ * adjusting capacity limits, TTL settings, and memory constraints. Supports
+ * both complete reconfiguration and partial parameter updates.
+ * 
+ * @param ctx API context containing request authentication and routing info
+ * @param request HTTP request with JSON body containing configuration parameters
+ * @return JSON response confirming configuration changes or error message
+ * 
+ * @note Admin authentication required - returns 403 for non-admin users
+ * @performance Configuration changes take effect immediately with O(1) overhead
+ * @threadsafe Safe for concurrent configuration while cache operations continue
+ * @memory Request body parsed using checkpoint memory management
+ * 
+ * @example
+ * POST /api/cache/configure
+ * Body: {"enabled": true, "capacity": 2000, "ttl": 3600, "max_memory_mb": 100}
+ * Response: {"success": true, "message": "Cache configuration updated"}
+ */
 http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request || !request->body) {
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -198,7 +266,26 @@ http_response_t* api_handle_cache_configure(api_context_t* ctx, http_request_t* 
   return response;
 }
 
-/* Clear cache */
+/**
+ * Handle cache clear API request
+ * 
+ * Clears all entries from both query and document caches, effectively
+ * resetting cache state to empty. This operation immediately frees
+ * all cached data and resets hit/miss statistics.
+ * 
+ * @param ctx API context containing request authentication and routing info
+ * @param request HTTP request (no parameters required for clearing)
+ * @return JSON response confirming cache clear operation or error message
+ * 
+ * @note Admin authentication required - destructive operation
+ * @performance O(n) operation where n is the number of cached entries
+ * @threadsafe Safe operation that coordinates with ongoing cache access
+ * @memory Cleared cache entries are freed immediately
+ * 
+ * @example
+ * POST /api/cache/clear
+ * Response: {"success": true, "message": "Cache cleared successfully"}
+ */
 http_response_t* api_handle_cache_clear(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
     return create_http_response(HTTP_BAD_REQUEST, 
@@ -227,7 +314,27 @@ http_response_t* api_handle_cache_clear(api_context_t* ctx, http_request_t* requ
   return http_response;
 }
 
-/* Process cache invalidations */
+/**
+ * Handle cache invalidation API request
+ * 
+ * Processes selective cache invalidation requests, removing specific
+ * cache entries based on criteria like document IDs, query patterns,
+ * or cache keys. More targeted than cache clearing.
+ * 
+ * @param ctx API context containing request authentication and routing info
+ * @param request HTTP request with optional body specifying invalidation criteria
+ * @return JSON response with count of invalidated entries or error message
+ * 
+ * @note Admin authentication required for cache modification
+ * @performance O(k) where k is the number of entries matching criteria
+ * @threadsafe Safe selective invalidation during concurrent cache operations
+ * @memory Invalidated entries are freed immediately, minimal memory overhead
+ * 
+ * @example
+ * POST /api/cache/invalidate
+ * Body: {"pattern": "user:*", "document_ids": ["doc123", "doc456"]}
+ * Response: {"success": true, "processed": 5, "message": "5 entries invalidated"}
+ */
 http_response_t* api_handle_cache_invalidate(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request) {
     return create_http_response(HTTP_BAD_REQUEST, 

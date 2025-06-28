@@ -1,3 +1,29 @@
+/**
+ * @file api.h
+ * @brief Core API framework and routing system for JDBX
+ * 
+ * Defines the fundamental API architecture including request routing,
+ * authentication integration, and response handling. Provides the
+ * foundation for all JDBX REST API endpoints.
+ * 
+ * Architecture Components:
+ * - API context management with request lifecycle
+ * - Route definition and handler registration
+ * - Authentication and authorization integration
+ * - Memory management using checkpoint patterns
+ * 
+ * Key Features:
+ * - Type-safe function pointer handlers
+ * - Integrated RBAC authentication
+ * - Transaction-aware request processing
+ * - Unified error handling and response formatting
+ * 
+ * @note All API handlers must follow the api_handler_t signature
+ * @performance Route matching is O(n), handler execution varies
+ * @threadsafe Thread-safe when used with checkpoint memory management
+ * @memory All API contexts use checkpoint-based allocation
+ */
+
 #ifndef API_H
 #define API_H
 
@@ -11,18 +37,44 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-/* API context forward declaration */
+/* Forward declaration for API context structure */
 typedef struct api_context api_context_t;
 
-/* API endpoint handler */
+/**
+ * API endpoint handler function signature
+ * 
+ * All API endpoint handlers must conform to this signature for
+ * consistent request processing and response generation.
+ * 
+ * @param ctx API context containing authentication, database, and routing info
+ * @param request HTTP request with headers, body, and parameters
+ * @return HTTP response with status, headers, and body (never NULL)
+ * 
+ * @note Handler must return valid response even on error
+ * @memory Response allocated using checkpoint memory - automatically freed
+ */
 typedef http_response_t* (*api_handler_t)(api_context_t* ctx, http_request_t* request);
 
-/* API route */
+/**
+ * API route definition structure
+ * 
+ * Defines a single API endpoint including path, HTTP method, handler function,
+ * and authentication requirements.
+ * 
+ * @note Path matching supports exact matches only (no wildcards)
+ * @memory Route structures typically statically allocated
+ */
 typedef struct api_route {
+    /** URL path for this route (e.g., "/api/users") */
     const char* path;
+    
+    /** HTTP method required for this route (GET, POST, etc.) */
     http_method_t method;
+    
+    /** Function to handle requests to this route */
     api_handler_t handler;
+    
+    /** Whether this route requires authentication (1=yes, 0=no) */
     int requires_auth;
 } api_route_t;
 
