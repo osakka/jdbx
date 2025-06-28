@@ -1,5 +1,52 @@
-/*
- * JDBX B-tree Implementation - Key-value storage engine
+/**
+ * @file jdbx_btree.c
+ * @brief High-performance B-tree implementation for JDBX storage engine
+ * 
+ * Implements a balanced B-tree data structure optimized for database storage including:
+ * - Self-balancing tree with guaranteed O(log n) operations
+ * - Variable-length key and value support
+ * - Page-based storage with efficient caching
+ * - Concurrent access with proper locking
+ * - Iterator support for range queries
+ * - Write-ahead logging integration
+ * 
+ * Architecture:
+ * - Page manager integration for persistent storage
+ * - Configurable node size and branching factor
+ * - Copy-on-write semantics for MVCC support
+ * - Lock-free reads with optimistic concurrency
+ * - WAL integration for crash recovery
+ * 
+ * B-tree Properties:
+ * - Minimum keys per node: 50 (configurable)
+ * - Maximum keys per node: 100 (configurable)
+ * - Balanced tree structure maintained automatically
+ * - Variable-length key/value storage
+ * - Ordered key traversal support
+ * 
+ * Performance Features:
+ * - Bulk loading optimizations for initial data
+ * - Lazy node splitting to reduce write amplification
+ * - Read-ahead prefetching for sequential access
+ * - Memory pool allocation for reduced fragmentation
+ * - Cache-friendly node layout
+ * 
+ * Concurrency:
+ * - Read-write locks at node level for fine-grained concurrency
+ * - Optimistic read operations without locking
+ * - Copy-on-write for MVCC transaction support
+ * - Deadlock-free lock ordering protocol
+ * 
+ * Storage:
+ * - Page-aligned nodes for efficient I/O
+ * - Compression support for keys and values
+ * - Checksums for data integrity verification
+ * - Atomic page updates through page manager
+ * 
+ * @note B-tree nodes are persisted using the JDBX page manager
+ * @performance All operations are O(log n) with configurable branching factor
+ * @threadsafe Thread-safe with read-write locks at node granularity
+ * @memory Uses buffer pools and page manager for memory efficiency
  */
 
 #include <stdio.h>
@@ -17,7 +64,27 @@
 #define BTREE_MIN_CHILDREN (BTREE_MIN_KEYS + 1)
 #define BTREE_MAX_CHILDREN (BTREE_MAX_KEYS + 1)
 
-/* Default key comparison function */
+/**
+ * Default key comparison function for B-tree operations
+ * 
+ * Implements lexicographic comparison of variable-length binary keys.
+ * Used when no custom comparator is provided to the B-tree.
+ * 
+ * Algorithm:
+ * 1. Compare common prefix using memcmp()
+ * 2. If prefixes equal, shorter key comes first
+ * 3. Return standard comparison result (-1, 0, 1)
+ * 
+ * @param a First key data pointer
+ * @param a_len Length of first key in bytes
+ * @param b Second key data pointer  
+ * @param b_len Length of second key in bytes
+ * @return -1 if a < b, 0 if a == b, 1 if a > b
+ * 
+ * @performance O(min(a_len, b_len)) - linear in shorter key length
+ * @threadsafe Thread-safe (no shared state)
+ * @memory No memory allocation - operates on provided buffers
+ */
 static int default_compare(const void* a, size_t a_len, 
                           const void* b, size_t b_len) {
     size_t min_len = a_len < b_len ? a_len : b_len;
@@ -139,7 +206,32 @@ static uint8_t* get_key_ptr(btree_node_t* node, int index) {
     return data;
 }
 
-/* Binary search for key in node */
+/**
+ * Binary search for key position in B-tree node
+ * 
+ * Performs binary search to find either the exact key position or the
+ * insertion point for a new key. Maintains sorted order within the node.
+ * 
+ * Algorithm:
+ * 1. Binary search using tree's comparison function
+ * 2. If key found, return exact position and set found=1
+ * 3. If key not found, return insertion position and set found=0
+ * 
+ * @param tree B-tree instance (provides comparison function)
+ * @param node B-tree node to search in (must not be NULL)
+ * @param key Key data to search for
+ * @param key_len Length of key in bytes
+ * @param found Output parameter: 1 if key exists, 0 if not found
+ * @return Position index (0 to num_keys inclusive)
+ *         - If found=1: exact position of existing key
+ *         - If found=0: insertion position to maintain sort order
+ * 
+ * @performance O(log n) where n is number of keys in node
+ * @threadsafe Thread-safe (read-only operation on stable node)
+ * @memory No memory allocation - operates on existing data
+ * 
+ * @note Insertion position may equal num_keys (append position)
+ */
 static int find_key_position(jdbx_btree_t* tree, btree_node_t* node,
                             const void* key, size_t key_len,
                             int* found) {
@@ -200,7 +292,20 @@ static uint64_t get_child_page(btree_node_t* node, int index) {
     return *(uint64_t*)data;
 }
 
-/* Check if node needs splitting */
+/**
+ * Check if B-tree node requires splitting
+ * 
+ * Determines whether a node has reached the maximum key capacity
+ * and needs to be split to maintain B-tree properties.
+ * 
+ * @param node B-tree node to check (must not be NULL)
+ * @return 1 if node is full and needs splitting, 0 otherwise
+ * 
+ * @note A node is considered full when it reaches BTREE_MAX_KEYS (100)
+ * @performance O(1) - simple comparison
+ * @threadsafe Thread-safe (read-only operation)
+ * @memory No memory allocation
+ */
 static int node_is_full(btree_node_t* node) {
     return node->num_keys >= BTREE_MAX_KEYS;
 }
@@ -212,7 +317,34 @@ static int split_node(jdbx_btree_t* tree, uint64_t parent_page,
 /* Overflow page threshold - values larger than this go to overflow pages */
 #define OVERFLOW_THRESHOLD 2048
 
-/* Write value to overflow pages */
+/**
+ * Write large value to overflow pages with chaining
+ * 
+ * Handles storage of values larger than OVERFLOW_THRESHOLD (2048 bytes)
+ * by splitting them across multiple linked overflow pages. Creates a
+ * chain of pages with forward pointers for efficient sequential access.
+ * 
+ * Algorithm:
+ * 1. Calculate number of pages needed for value
+ * 2. Allocate overflow pages sequentially
+ * 3. Write data chunks with page linking
+ * 4. Return first page ID for reference storage
+ * 
+ * @param tree B-tree instance for page allocation
+ * @param value Data to store (must not be NULL)
+ * @param value_len Size of value in bytes (must be > OVERFLOW_THRESHOLD)
+ * @return Page ID of first overflow page, 0 on allocation failure
+ * 
+ * @note Caller responsible for cleanup on failure
+ * @performance O(pages_needed) - linear in data size
+ * @threadsafe Thread-safe through page manager locking
+ * @memory Allocates ceil(value_len / PAGE_SIZE) pages
+ * 
+ * Page Chain Format:
+ * - Each page stores: [next_page_id][data_chunk]
+ * - Last page has next_page_id = 0
+ * - Data chunks fill remaining page space
+ */
 static uint64_t write_overflow_value(jdbx_btree_t* tree, const void* value, size_t value_len) {
     /* Calculate number of pages needed */
     size_t pages_needed = (value_len + JDBX_PAGE_SIZE - 1) / JDBX_PAGE_SIZE;

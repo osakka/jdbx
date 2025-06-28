@@ -1,3 +1,53 @@
+/**
+ * @file transaction.c
+ * @brief ACID-compliant transaction management for JDBX
+ * 
+ * Implements comprehensive transaction processing including:
+ * - ACID transaction guarantees (Atomicity, Consistency, Isolation, Durability)
+ * - Multi-level isolation support (READ_UNCOMMITTED, READ_COMMITTED, SERIALIZABLE)
+ * - Nested transactions with savepoint support
+ * - Deadlock detection and automatic resolution
+ * - Transaction timeout and automatic rollback
+ * - Write-ahead logging for durability
+ * 
+ * Architecture:
+ * - Thread-safe transaction management with proper locking
+ * - Lock-based concurrency control with deadlock detection
+ * - Transaction log integration for crash recovery
+ * - Connection-scoped transaction isolation
+ * - Optimistic concurrency where possible
+ * 
+ * Transaction Features:
+ * - Configurable isolation levels per transaction
+ * - Automatic rollback on connection failure or timeout
+ * - Savepoint creation and rollback to savepoint
+ * - Transaction status monitoring and reporting
+ * - Resource cleanup on transaction completion
+ * 
+ * Concurrency Control:
+ * - Two-phase locking protocol for consistency
+ * - Deadlock detection using wait-for graphs
+ * - Lock timeout prevention with automatic rollback
+ * - Read-write lock optimization for better concurrency
+ * 
+ * Durability:
+ * - Write-ahead logging before data modification
+ * - Checkpoint-based crash recovery
+ * - Transaction log persistence and replay
+ * - Atomic commit protocol implementation
+ * 
+ * Error Handling:
+ * - Comprehensive error codes for different failure modes
+ * - Automatic cleanup on transaction errors
+ * - Resource leak prevention
+ * - Detailed error reporting and logging
+ * 
+ * @note Transactions are scoped to database connections
+ * @performance Lock acquisition is O(log n) with balanced lock tables
+ * @threadsafe All transaction operations are thread-safe
+ * @memory Uses buffer pools for transaction metadata and logging
+ */
+
 #include "utils/buffer_pool.h"
 #include "transaction/transaction.h"
 #include "utils/json_helpers.h"

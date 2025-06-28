@@ -1,3 +1,37 @@
+/**
+ * @file http_request.c
+ * @brief HTTP request parsing and processing for JDBX server
+ * 
+ * Provides comprehensive HTTP request parsing functionality including:
+ * - HTTP header parsing and validation
+ * - Cookie parsing and management
+ * - URL parameter extraction and decoding
+ * - Content-Type handling
+ * - Request body processing
+ * 
+ * Architecture:
+ * - Memory-efficient parsing using buffer pools
+ * - Linked-list cookie storage for multiple values
+ * - Thread-safe request processing
+ * - Security-focused input validation
+ * 
+ * Security Features:
+ * - Buffer overflow protection using bounds checking
+ * - URL decoding with validation
+ * - Header size limits to prevent DoS attacks
+ * - Safe string parsing with null termination
+ * 
+ * Performance:
+ * - Zero-copy parsing where possible
+ * - Efficient cookie parsing with single pass
+ * - Memory pool allocation for reduced fragmentation
+ * 
+ * @note All parsed data uses buffer pool allocation for automatic cleanup
+ * @performance O(n) parsing complexity where n is request size
+ * @threadsafe Request parsing is thread-safe when each thread processes separate requests
+ * @memory Uses JDBX buffer pool system for automatic memory management
+ */
+
 #include "core/server.h"
 #include "utils/buffer_pool.h"
 #include <stdio.h>
@@ -5,7 +39,35 @@
 #include <string.h>
 #include <ctype.h>
 
-/* Parse cookies from Cookie header */
+/**
+ * Parse HTTP cookies from Cookie header into linked list
+ * 
+ * Parses the Cookie header string and extracts individual name=value
+ * pairs into a linked list structure. Handles multiple cookies
+ * separated by semicolons with proper whitespace trimming.
+ * 
+ * Cookie Format: "name1=value1; name2=value2; name3=value3"
+ * 
+ * Algorithm:
+ * 1. Duplicate header string for safe tokenization
+ * 2. Split on semicolon separators
+ * 3. Trim whitespace from each cookie pair
+ * 4. Split on equals sign to get name/value
+ * 5. Create cookie structure and add to linked list
+ * 
+ * @param request HTTP request to populate with parsed cookies (must not be NULL)
+ * 
+ * @note Ignores malformed cookies (missing equals sign)
+ * @note Uses BUFFER_* allocators for automatic memory management
+ * @performance O(n) where n is total length of cookie header
+ * @threadsafe Not thread-safe - modifies request structure
+ * @memory Allocates cookie structures using buffer pool
+ * 
+ * Error Handling:
+ * - Silently skips cookies without equals sign
+ * - Continues parsing on individual cookie allocation failures
+ * - Gracefully handles empty or NULL cookie headers
+ */
 void parse_cookies(http_request_t* request) {
   if (!request || !request->cookie_header) {
     return;

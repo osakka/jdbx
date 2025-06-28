@@ -1,3 +1,46 @@
+/**
+ * @file metrics_history_api.c
+ * @brief Historical metrics API endpoints for JDBX performance monitoring
+ * 
+ * Provides time-series metrics access via REST API including:
+ * - Historical metrics retrieval with time range filtering
+ * - Metric aggregation and statistical analysis
+ * - Adaptive indexing metrics for query optimization
+ * - Performance trend analysis and reporting
+ * - Custom metric filtering and data export
+ * 
+ * Architecture:
+ * - Time-series data storage with efficient indexing
+ * - Adaptive indexing metrics integration
+ * - Query parameter parsing for flexible filtering
+ * - JSON response formatting for client consumption
+ * - Memory-efficient data retrieval
+ * 
+ * Metrics Categories:
+ * - Database operations (read/write performance)
+ * - Query execution times and frequencies
+ * - Index usage and effectiveness
+ * - Memory allocation patterns
+ * - Network request statistics
+ * 
+ * Query Capabilities:
+ * - Time range filtering (start/end timestamps)
+ * - Metric name filtering for specific data
+ * - Aggregation functions (min, max, avg, sum)
+ * - Sampling and data point reduction
+ * 
+ * Performance Features:
+ * - Efficient time-based indexing for fast retrieval
+ * - Adaptive query optimization based on usage patterns
+ * - Memory-conscious data processing
+ * - Streaming responses for large datasets
+ * 
+ * @note Metrics data is persisted for long-term trend analysis
+ * @performance Time-series queries are O(log n) with proper indexing
+ * @threadsafe Thread-safe metrics collection and retrieval
+ * @memory Uses buffer pools for memory-efficient data processing
+ */
+
 #include "api/api.h"
 #include "utils/metrics_persistence.h"
 #include "database/adaptive_indexer.h"

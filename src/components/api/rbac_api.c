@@ -1,3 +1,46 @@
+/**
+ * @file rbac_api.c
+ * @brief Role-Based Access Control (RBAC) API endpoints for JDBX
+ * 
+ * Provides comprehensive RBAC management via REST API including:
+ * - User management (create, read, update, delete operations)
+ * - Role management and assignment
+ * - Permission management and validation
+ * - Library-scoped access control
+ * - JWT-based authentication integration
+ * 
+ * Architecture:
+ * - Unified documents storage for RBAC entities
+ * - Virtual layer abstraction for consistent data access
+ * - Library-based namespace isolation
+ * - Permission inheritance and validation
+ * - Secure JWT token handling
+ * 
+ * Security Features:
+ * - Admin-only access for RBAC modifications
+ * - JWT token validation for all operations
+ * - Input validation and sanitization
+ * - Permission-based operation filtering
+ * - Audit logging for security compliance
+ * 
+ * RBAC Model:
+ * - Users have roles within libraries
+ * - Roles have permissions on resources
+ * - Permissions are action-based (READ, WRITE, DELETE, ADMIN)
+ * - Library-scoped isolation for multi-tenancy
+ * 
+ * Integration:
+ * - Virtual layer for unified document storage
+ * - JWT cache for performance optimization
+ * - RBAC system for permission validation
+ * - Logger for audit trail
+ * 
+ * @note All RBAC operations require admin authentication
+ * @performance RBAC operations are O(1) with database indexing
+ * @threadsafe Thread-safe through virtual layer and database locking
+ * @memory Uses checkpoint-based allocation for request processing
+ */
+
 #include "api/api.h"
 #include "api/rbac_api.h"
 #include "rbac/rbac.h"

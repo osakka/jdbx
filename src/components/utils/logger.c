@@ -1,3 +1,47 @@
+/**
+ * @file logger.c
+ * @brief Implementation of unified logging system for JDBX
+ * 
+ * Implements comprehensive logging infrastructure including:
+ * - Multi-level logging with configurable output
+ * - Thread-safe operations with process/thread identification
+ * - Early-stage logging for initialization phases
+ * - Per-functionality trace categories for selective debugging
+ * - Automatic log rotation and file management
+ * - Format customization and output control
+ * 
+ * Architecture:
+ * - Global logger instance for system-wide consistency
+ * - Thread-safe operations using mutex synchronization
+ * - Memory-efficient message formatting
+ * - Seamless early-stage to regular logging transition
+ * - Category-based trace filtering for targeted debugging
+ * 
+ * Logging Features:
+ * - Timestamp formatting with microsecond precision
+ * - Process ID and thread ID identification
+ * - Source code location tracking (file, line, function)
+ * - Configurable log levels and trace categories
+ * - Buffer pool integration for memory efficiency
+ * 
+ * Early-Stage Logging:
+ * - Pre-initialization logging to stderr
+ * - Component-based message organization
+ * - Seamless transition to file-based logging
+ * - Initialization sequence tracking
+ * 
+ * Performance:
+ * - Fast message formatting with minimal allocations
+ * - Efficient category-based filtering
+ * - Thread-local optimizations where possible
+ * - Memory pool usage for reduced fragmentation
+ * 
+ * @note Early-stage logging available before logger_init() is called
+ * @performance Logging overhead is minimal with compile-time optimizations
+ * @threadsafe All logging operations are thread-safe with internal locking
+ * @memory Uses buffer pools and careful allocation for efficiency
+ */
+
 #include "utils/logger.h"
 #include "utils/buffer_pool.h"
 #include "utils/memory_manager.h"

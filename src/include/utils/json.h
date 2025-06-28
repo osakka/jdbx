@@ -1,3 +1,46 @@
+/**
+ * @file json.h
+ * @brief High-performance JSON parser and generator for JDBX
+ * 
+ * Provides comprehensive JSON processing capabilities including:
+ * - Fast, standards-compliant JSON parsing
+ * - Memory-efficient JSON generation and serialization  
+ * - Type-safe JSON value manipulation
+ * - Unicode support with proper escaping
+ * - Deep cloning and comparison operations
+ * - Integration with JDBX memory management
+ * 
+ * Features:
+ * - Zero-copy parsing optimizations where possible
+ * - Streaming parser for large JSON documents
+ * - Comprehensive Unicode support (UTF-8)
+ * - Security-focused input validation
+ * - Memory pool integration for efficiency
+ * 
+ * Type System:
+ * - Strongly typed JSON values with runtime checking
+ * - Support for all JSON types (null, boolean, number, string, array, object)
+ * - Integer type optimization for performance
+ * - Arbitrary precision number support
+ * 
+ * Memory Management:
+ * - Integration with JDBX checkpoint system
+ * - Automatic memory cleanup on parser errors
+ * - Reference counting for shared objects
+ * - Pool-based allocation for reduced fragmentation
+ * 
+ * Security:
+ * - Input validation and bounds checking
+ * - Stack overflow protection during parsing
+ * - Safe string handling with proper escaping
+ * - Denial-of-service attack prevention
+ * 
+ * @note Integrates with JDBX memory management for automatic cleanup
+ * @performance Optimized for high-throughput document processing
+ * @threadsafe Thread-safe when used with separate parser contexts
+ * @memory Uses JDBX memory pools and checkpoint system
+ */
+
 #ifndef JSON_H
 #define JSON_H
 

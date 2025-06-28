@@ -1,3 +1,49 @@
+/**
+ * @file transaction_api.c
+ * @brief Transaction management API endpoints for JDBX
+ * 
+ * Provides comprehensive transaction control via REST API including:
+ * - Transaction lifecycle management (begin, commit, rollback)
+ * - Isolation level configuration and control
+ * - Savepoint creation and management
+ * - Transaction status monitoring and reporting
+ * - Deadlock detection and resolution
+ * - Transaction timeout configuration
+ * 
+ * Architecture:
+ * - ACID-compliant transaction processing
+ * - Multi-level isolation support (READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE)
+ * - Savepoint-based nested transaction support
+ * - Deadlock detection with automatic resolution
+ * - Transaction log integration for persistence
+ * 
+ * Transaction Features:
+ * - Automatic rollback on connection failure
+ * - Configurable transaction timeouts
+ * - Lock-based concurrency control
+ * - Write-ahead logging for durability
+ * - Optimistic concurrency where possible
+ * 
+ * API Endpoints:
+ * - POST /api/transaction/begin - Start new transaction
+ * - POST /api/transaction/commit - Commit active transaction
+ * - POST /api/transaction/rollback - Rollback active transaction
+ * - GET /api/transaction/status - Get transaction status
+ * - POST /api/transaction/savepoint - Create savepoint
+ * - PUT /api/transaction/isolation - Set isolation level
+ * 
+ * Error Handling:
+ * - Comprehensive error reporting with error codes
+ * - Transaction state validation
+ * - Automatic cleanup on errors
+ * - Detailed logging for debugging
+ * 
+ * @note Transactions are associated with client connections
+ * @performance Transaction operations are O(1) with lock acquisition overhead
+ * @threadsafe Thread-safe transaction management with proper locking
+ * @memory Uses buffer pools for temporary data and response generation
+ */
+
 #include "api/api.h"
 #include "transaction/transaction.h"
 #include "utils/json.h"
