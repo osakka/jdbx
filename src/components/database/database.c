@@ -2104,7 +2104,7 @@ json_value_t* storage_update_document(database_t* db, const char* uuid, json_val
     
     pthread_rwlock_unlock(&coll->lock);
     
-    LOG_INFO("Storage: Updated document '%s' directly in unified collection", uuid);
+    LOG_DEBUG("Storage: Updated document '%s' directly in unified collection", uuid);
     
     // Return a copy and free the originals
     json_value_t* result = json_deep_copy(updated_doc);

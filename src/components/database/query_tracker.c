@@ -380,9 +380,9 @@ query_pattern_t** query_tracker_get_index_candidates(size_t* count) {
                 
                 candidates[(*count)++] = pattern;
                 
-                LOG_INFO("Index candidate: %s.%s (count=%lu, avg=%.2fms)", 
-                        pattern->collection_name, pattern->field_path,
-                        pattern->query_count, pattern->avg_time_ms);
+                LOG_DEBUG("Index candidate: %s.%s (count=%lu, avg=%.2fms)", 
+                         pattern->collection_name, pattern->field_path,
+                         pattern->query_count, pattern->avg_time_ms);
             }
             
             pattern = pattern->next;
@@ -391,7 +391,7 @@ query_pattern_t** query_tracker_get_index_candidates(size_t* count) {
     
     pthread_rwlock_unlock(&g_query_tracker->lock);
     
-    LOG_INFO("Found %zu index candidates from %zu total patterns", *count, total_patterns);
+    LOG_DEBUG("Found %zu index candidates from %zu total patterns", *count, total_patterns);
     return candidates;
 }
 

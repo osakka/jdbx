@@ -344,7 +344,7 @@ void process_index_candidates(void) {
         return;
     }
     
-    LOG_INFO("Processing %zu index candidates", candidate_count);
+    LOG_DEBUG("Processing %zu index candidates", candidate_count);
     
     /* Process each candidate */
     for (size_t i = 0; i < candidate_count; i++) {
