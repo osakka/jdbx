@@ -286,7 +286,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                     if (claims_copy->jti) memory_promote(claims_copy->jti);
                     if (claims_copy->claims) json_promote(claims_copy->claims);
                     
-                    LOG_INFO("JWT cache hit for user: %s", username);
+                    LOG_DEBUG("JWT cache hit for user: %s", username);
                     return claims_copy;
                 } else {
                     LOG_ERROR("Failed to duplicate JWT payload for user: %s", username);
@@ -308,7 +308,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
     
     g_jwt_cache->misses++;
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    LOG_INFO("JWT cache miss - will verify token");
+    LOG_DEBUG("JWT cache miss - will verify token");
     return NULL;
 }
 
@@ -450,7 +450,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
     g_jwt_cache->current_entries++;
     
     pthread_rwlock_unlock(&g_jwt_cache->lock);
-    LOG_INFO("JWT cached for user: %s", username);
+    LOG_DEBUG("JWT cached for user: %s", username);
 }
 
 /* Invalidate cache entries for a specific user */

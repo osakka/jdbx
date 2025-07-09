@@ -5,6 +5,8 @@
 #include "utils/config_loader.h"
 #include "utils/buffer_pool.h"
 #include "core/rate_limiter.h"
+#include "utils/logger.h"
+#include "utils/memory_allocator_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1219,27 +1221,17 @@ void handle_client(void* client_data) {
     /* If no static file response, try API dispatch */
     if (!response) {
       /* SURGICAL DEBUGGING: Track API dispatch call */
-      if (getenv("JDBX_MEM_DEBUG")) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-          fprintf(debug_file, "🚀 handle_client: Calling api_dispatch_request for path=%s\n", 
+      if (SHOULD_DEBUG_MEMORY()) {
+        LOG_DEBUG("🚀 handle_client: Calling api_dispatch_request for path=%s", 
                  request->path ? request->path : "<null>");
-          fflush(debug_file);
-          fclose(debug_file);
-        }
       }
       
       api_result = api_dispatch_request(client->api_ctx, request);
       response = api_result ? api_result->response : NULL;
       
-      if (getenv("JDBX_MEM_DEBUG")) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-          fprintf(debug_file, "🎯 handle_client: api_dispatch_request returned result=%p, response=%p, checkpoint=%p\n", 
+      if (SHOULD_DEBUG_MEMORY()) {
+        LOG_DEBUG("🎯 handle_client: api_dispatch_request returned result=%p, response=%p, checkpoint=%p", 
                  api_result, response, api_result ? api_result->checkpoint : NULL);
-          fflush(debug_file);
-          fclose(debug_file);
-        }
       }
       
       /* Thread-safe logger check with atomic access */
@@ -1326,14 +1318,9 @@ void handle_client(void* client_data) {
     
     /* EXPLICIT CHECKPOINT COMMIT: Commit checkpoint after response serialization */
     if (api_result) {
-        if (getenv("JDBX_MEM_DEBUG")) {
-            FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-            if (debug_file) {
-                fprintf(debug_file, "🎯 handle_client: Committing API result checkpoint %p after response serialization\n", 
-                       api_result->checkpoint);
-                fflush(debug_file);
-                fclose(debug_file);
-            }
+        if (SHOULD_DEBUG_MEMORY()) {
+          LOG_DEBUG("🎯 handle_client: Committing API result checkpoint %p after response serialization", 
+                   api_result->checkpoint);
         }
         api_result_free(api_result);  /* This will commit checkpoint and free result */
         api_result = NULL;
@@ -1553,7 +1540,7 @@ cleanup:
   
   /* Log completion */
   if (g_logger) {
-    LOG_INFO("Completed request handling in %.2f ms (thread=%lu, tid=%d)", 
+    LOG_DEBUG("Completed request handling in %.2f ms (thread=%lu, tid=%d)", 
         execution_time, (unsigned long)tid, system_tid);
   }
   

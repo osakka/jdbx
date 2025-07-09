@@ -14,6 +14,7 @@
 #include "utils/buffer_pool.h"
 #include "utils/tlsf_allocator.h"
 #include "utils/arena_allocator.h"
+#include "utils/logger.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -226,14 +227,9 @@ memory_checkpoint_t* memory_checkpoint_create(void) {
     tls_memory.current_checkpoint = checkpoint;
     
     /* CHECKPOINT LIFECYCLE DEBUGGING: Track creation */
-    if (getenv("JDBX_MEM_DEBUG")) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-            fprintf(debug_file, "🔄 memory_checkpoint_create: Setting current_checkpoint=%p (was %p, parent=%p)\n", 
-                   checkpoint, old_checkpoint, checkpoint->parent);
-            fflush(debug_file);
-            fclose(debug_file);
-        }
+    if (SHOULD_DEBUG_MEMORY()) {
+        LOG_DEBUG("🔄 memory_checkpoint_create: Setting current_checkpoint=%p (was %p, parent=%p)", 
+                 checkpoint, old_checkpoint, checkpoint->parent);
     }
     
     __sync_fetch_and_add(&g_memory_stats.checkpoints_created, 1);
@@ -341,14 +337,9 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
     tls_memory.current_checkpoint = checkpoint;
     
     /* CHECKPOINT LIFECYCLE DEBUGGING: Track rewind operations */
-    if (getenv("JDBX_MEM_DEBUG")) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-            fprintf(debug_file, "🔄 memory_checkpoint_rewind: Setting current_checkpoint=%p (was %p)\n", 
-                   checkpoint, cp);
-            fflush(debug_file);
-            fclose(debug_file);
-        }
+    if (SHOULD_DEBUG_MEMORY()) {
+        LOG_DEBUG("🔄 memory_checkpoint_rewind: Setting current_checkpoint=%p (was %p)", 
+                 checkpoint, cp);
     }
     
     /* Free the target checkpoint's allocations too */
@@ -441,14 +432,9 @@ void memory_checkpoint_commit(memory_checkpoint_t* checkpoint) {
         tls_memory.current_checkpoint = checkpoint->parent;
         
         /* CHECKPOINT LIFECYCLE DEBUGGING: Track commit operations */
-        if (getenv("JDBX_MEM_DEBUG")) {
-            FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-            if (debug_file) {
-                fprintf(debug_file, "✅ memory_checkpoint_commit: Setting current_checkpoint=%p (was %p, committed checkpoint)\n", 
-                       tls_memory.current_checkpoint, old_checkpoint);
-                fflush(debug_file);
-                fclose(debug_file);
-            }
+        if (SHOULD_DEBUG_MEMORY()) {
+            LOG_DEBUG("✅ memory_checkpoint_commit: Setting current_checkpoint=%p (was %p, committed checkpoint)", 
+                     tls_memory.current_checkpoint, old_checkpoint);
         }
     }
     
@@ -845,32 +831,22 @@ void* memory_alloc(size_t size) {
     }
     
     /* CHECKPOINT LIFECYCLE DEBUGGING: Track when checkpoint becomes NULL */
-    if (getenv("JDBX_MEM_DEBUG")) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-            fprintf(debug_file, "🔍 memory_alloc: size=%zu, current_checkpoint=%p, arena_enabled=%d, bypass=%d\n", 
-                   size, tls_memory.current_checkpoint, 
-                   memory_allocator_config_arena_enabled() ? 1 : 0, 
-                   tls_memory.bypass_checkpoint);
-            if (tls_memory.current_checkpoint) {
-                fprintf(debug_file, "  ✅ checkpoint->arena=%p, committed=%d\n", 
-                       tls_memory.current_checkpoint->arena, 
-                       tls_memory.current_checkpoint->committed);
-            }
-            fflush(debug_file);
-            fclose(debug_file);
+    if (SHOULD_DEBUG_MEMORY()) {
+        LOG_DEBUG("🔍 memory_alloc: size=%zu, current_checkpoint=%p, arena_enabled=%d, bypass=%d", 
+                 size, tls_memory.current_checkpoint, 
+                 memory_allocator_config_arena_enabled() ? 1 : 0, 
+                 tls_memory.bypass_checkpoint);
+        if (tls_memory.current_checkpoint) {
+            LOG_DEBUG("  ✅ checkpoint->arena=%p, committed=%d", 
+                     tls_memory.current_checkpoint->arena, 
+                     tls_memory.current_checkpoint->committed);
         }
     }
     
     /* DIRECT DEBUG: Check Arena allocator result */
     int arena_result = should_use_arena_allocator(size);
-    if (getenv("JDBX_MEM_DEBUG") && tls_memory.current_checkpoint) {
-        FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-        if (debug_file) {
-            fprintf(debug_file, "🎯 Arena decision: size=%zu, result=%d\n", size, arena_result);
-            fflush(debug_file);
-            fclose(debug_file);
-        }
+    if (SHOULD_DEBUG_MEMORY() && tls_memory.current_checkpoint) {
+        LOG_DEBUG("🎯 Arena decision: size=%zu, result=%d", size, arena_result);
     }
     
     if (arena_result) {

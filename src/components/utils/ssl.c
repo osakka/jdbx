@@ -418,9 +418,9 @@ ssl_error_t ssl_handshake(ssl_connection_t *conn) {
       /* ✅ HANDSHAKE SUCCESS: Connection fully established */
       conn->connected = 1;
       if (handshake_attempts > 0 && g_logger) {
-        LOG_INFO("SSL handshake completed on attempt %d (intensive load resilience)", handshake_attempts + 1);
+        LOG_DEBUG("SSL handshake completed on attempt %d (intensive load resilience)", handshake_attempts + 1);
       } else {
-        LOG_INFO("SSL handshake completed.");
+        LOG_DEBUG("SSL handshake completed.");
       }
       return SSL_SUCCESS;
     }

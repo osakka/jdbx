@@ -308,7 +308,7 @@ int api_authenticate_request_sliding(api_context_t* ctx, http_request_t* request
     json_value_t* documents = json_object_get(session_results, "documents");
     if (g_logger) {
       size_t doc_count = (documents && documents->type == JSON_ARRAY) ? documents->value.array.size : 0;
-      LOG_INFO("Session query returned %zu documents for token", doc_count);
+      LOG_DEBUG("Session query returned %zu documents for token", doc_count);
     }
     if (documents && documents->type == JSON_ARRAY && documents->value.array.size > 0) {
       session_found = 1;

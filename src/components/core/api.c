@@ -48,6 +48,8 @@
 #include "database/database.h"
 #include "core/rate_limiter.h"
 #include "rbac/rbac.h"
+#include "utils/logger.h"
+#include "utils/memory_allocator_config.h"
 #include "rbac/jwt.h"
 #include "rbac/jwt_cache.h"
 #include "rbac/rbac_db.h"
@@ -513,39 +515,24 @@ api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) 
   }
   
   /* SURGICAL DEBUGGING: Track API dispatch entry and checkpoint creation */
-  if (getenv("JDBX_MEM_DEBUG")) {
-    FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-    if (debug_file) {
-      fprintf(debug_file, "🎯 api_dispatch_request: ENTRY - path=%s method=%d\n", 
+  if (SHOULD_DEBUG_MEMORY()) {
+    LOG_DEBUG("🎯 api_dispatch_request: ENTRY - path=%s method=%d", 
              request->path ? request->path : "<null>", request->method);
-      fflush(debug_file);
-      fclose(debug_file);
-    }
   }
   
   /* Create memory checkpoint for this request */
-  if (getenv("JDBX_MEM_DEBUG")) {
-    FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-    if (debug_file) {
-      fprintf(debug_file, "🔄 api_dispatch_request: Creating checkpoint for request\n");
-      fflush(debug_file);
-      fclose(debug_file);
-    }
+  if (SHOULD_DEBUG_MEMORY()) {
+    LOG_DEBUG("🔄 api_dispatch_request: Creating checkpoint for request");
   }
   
   memory_checkpoint_t* request_checkpoint = memory_checkpoint_create();
   
-  if (getenv("JDBX_MEM_DEBUG")) {
-    FILE* debug_file = fopen("/tmp/jdbx_debug.log", "a");
-    if (debug_file) {
-      fprintf(debug_file, "📋 api_dispatch_request: Checkpoint creation result = %p\n", request_checkpoint);
-      if (request_checkpoint && request_checkpoint->arena) {
-        fprintf(debug_file, "✅ api_dispatch_request: Checkpoint has arena = %p\n", request_checkpoint->arena);
-      } else {
-        fprintf(debug_file, "❌ api_dispatch_request: Checkpoint missing arena!\n");
-      }
-      fflush(debug_file);
-      fclose(debug_file);
+  if (SHOULD_DEBUG_MEMORY()) {
+    LOG_DEBUG("📋 api_dispatch_request: Checkpoint creation result = %p", request_checkpoint);
+    if (request_checkpoint && request_checkpoint->arena) {
+      LOG_DEBUG("✅ api_dispatch_request: Checkpoint has arena = %p", request_checkpoint->arena);
+    } else {
+      LOG_DEBUG("❌ api_dispatch_request: Checkpoint missing arena!");
     }
   }
   

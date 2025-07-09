@@ -1991,7 +1991,7 @@ json_value_t* storage_insert_document(database_t* db, json_value_t* document) {
     
     pthread_rwlock_unlock(&coll->lock);
     
-    LOG_INFO("Storage: Inserted document '%s' directly into unified collection", uuid);
+    LOG_DEBUG("Storage: Inserted document '%s' directly into unified collection", uuid);
     
     return json_deep_copy(doc_copy);
 }
