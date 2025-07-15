@@ -63,6 +63,9 @@ static pthread_mutex_t g_memory_lock = PTHREAD_MUTEX_INITIALIZER;
 /* Global initialization flag */
 static volatile int g_memory_manager_initialized = 0;
 
+/* Forward declarations */
+static bool ssl_semantic_free(memory_header_t* header);
+
 /**
  * Initialize thread-local memory state
  */
@@ -292,6 +295,12 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                     /* Check allocation source */
                     if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
                         tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
+                    } else if (header->flags & 8) {
+                        /* SSL pool allocation - use semantic free */
+                        if (!ssl_semantic_free(header)) {
+                            /* Pool full or wrong size - fallback to system free */
+                            free(header);
+                        }
                     } else {
                         free(header);
                     }
@@ -367,6 +376,12 @@ void memory_checkpoint_rewind(memory_checkpoint_t* checkpoint) {
                 if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
                     /* TLSF allocation - free using the stored TLSF pointer */
                     tlsf_free(tls_memory.tlsf_pool, header->tlsf_ptr);
+                } else if (header->flags & 8) {
+                    /* SSL pool allocation - use semantic free */
+                    if (!ssl_semantic_free(header)) {
+                        /* Pool full or wrong size - fallback to system free */
+                        free(header);
+                    }
                 } else {
                     free(header);
                 }
