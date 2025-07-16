@@ -766,10 +766,16 @@
                             <i class="bi bi-collection"></i>
                         </div>
                         <div class="stat-value">
-                            <span id="statTotalCollections">0</span>
-                            <small class="text-muted" style="font-size: 0.6em;">
-                                (<span id="statUserCollections">0</span> user / <span id="statSystemCollections">0</span> system)
-                            </small>
+                            <div id="collectionsContent">
+                                <span id="statTotalCollections">0</span>
+                                <small class="text-muted" style="font-size: 0.6em;">
+                                    (<span id="statUserCollections">0</span> user / <span id="statSystemCollections">0</span> system)
+                                </small>
+                            </div>
+                            <div class="loading-indicator" id="collectionsLoading" style="display: none;">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                            </div>
+                            <div id="collectionsError" class="alert alert-danger alert-sm mt-2" style="display: none;"></div>
                         </div>
                         <div class="stat-label">Collections</div>
                     </div>
@@ -780,10 +786,16 @@
                             <i class="bi bi-file-text"></i>
                         </div>
                         <div class="stat-value">
-                            <span id="totalDocuments">0</span>
-                            <small class="text-muted" style="font-size: 0.6em;">
-                                (<span id="userDocuments">0</span> user / <span id="systemDocuments">0</span> system)
-                            </small>
+                            <div id="documentsContent">
+                                <span id="totalDocuments">0</span>
+                                <small class="text-muted" style="font-size: 0.6em;">
+                                    (<span id="userDocuments">0</span> user / <span id="systemDocuments">0</span> system)
+                                </small>
+                            </div>
+                            <div class="loading-indicator" id="documentsLoading" style="display: none;">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                            </div>
+                            <div id="documentsError" class="alert alert-danger alert-sm mt-2" style="display: none;"></div>
                         </div>
                         <div class="stat-label">Documents</div>
                     </div>

@@ -4,6 +4,10 @@ let authToken = localStorage.getItem('jdbx_auth_token');
 let currentView = 'dashboard';
 let refreshInterval = null;
 
+// PHASE 1 OPTIMIZATION: Smart polling management
+let isPollingActive = true;
+let lastPollingState = true;
+
 // Polling configuration - conservative intervals to prevent server overload
 const POLLING_INTERVALS = {
     dashboard: 60000,     // 60 seconds for dashboard
@@ -325,7 +329,11 @@ function switchView(view) {
                 loadDashboard(false);
                 // Set up polling for dashboard
                 if (POLLING_INTERVALS.dashboard) {
-                    refreshInterval = setInterval(() => loadDashboard(true), POLLING_INTERVALS.dashboard);
+                    refreshInterval = setInterval(() => {
+                        if (isPollingActive) {
+                            loadDashboard(true);
+                        }
+                    }, POLLING_INTERVALS.dashboard);
                 }
                 break;
             case 'browser':
@@ -335,7 +343,7 @@ function switchView(view) {
                     refreshInterval = setInterval(async () => {
                         try {
                             // Only poll if we're still in browser view to avoid unnecessary requests
-                            if (currentView !== 'browser') {
+                            if (currentView !== 'browser' || !isPollingActive) {
                                 return;
                             }
                             
@@ -361,7 +369,11 @@ function switchView(view) {
                 // Set up polling for metrics
                 if (POLLING_INTERVALS.metrics) {
                     const currentTimeRange = document.querySelector('.metrics-time-selector .btn-primary')?.dataset?.range || '1h';
-                    refreshInterval = setInterval(() => loadMetrics(currentTimeRange, true), POLLING_INTERVALS.metrics);
+                    refreshInterval = setInterval(() => {
+                        if (isPollingActive) {
+                            loadMetrics(currentTimeRange, true);
+                        }
+                    }, POLLING_INTERVALS.metrics);
                 }
                 break;
             case 'rbac':
@@ -375,7 +387,11 @@ function switchView(view) {
                 initializeRBAC();
                 // Set up polling for RBAC
                 if (POLLING_INTERVALS.rbac) {
-                    refreshInterval = setInterval(() => loadRBACData(true), POLLING_INTERVALS.rbac);
+                    refreshInterval = setInterval(() => {
+                        if (isPollingActive) {
+                            loadRBACData(true);
+                        }
+                    }, POLLING_INTERVALS.rbac);
                 }
                 break;
             case 'api':
@@ -386,7 +402,11 @@ function switchView(view) {
                 initializeOperations();
                 // Set up polling for operations
                 if (POLLING_INTERVALS.operations) {
-                    refreshInterval = setInterval(() => updateOperationsStatus(true), POLLING_INTERVALS.operations);
+                    refreshInterval = setInterval(() => {
+                        if (isPollingActive) {
+                            updateOperationsStatus(true);
+                        }
+                    }, POLLING_INTERVALS.operations);
                 }
                 break;
             case 'scripts':
@@ -711,6 +731,11 @@ function initializeDashboard() {
 
 async function loadDashboard(isPolling = false) {
     try {
+        // PHASE 2 OPTIMIZATION: Enhanced loading states and error handling
+        if (!isPolling) {
+            LoadingManager.setMultipleLoading(['collections', 'documents']);
+        }
+        
         // Add visual indicator for updates
         if (isPolling && previousData.lastUpdate) {
             const updateIndicator = document.querySelector('.last-update');
@@ -719,35 +744,77 @@ async function loadDashboard(isPolling = false) {
             }
         }
         
-        // Load collections
-        const collectionsData = await loadCollections();
+        // PHASE 1 & 2 OPTIMIZATION: Load all APIs in parallel with caching and retry logic
+        const promises = [
+            safeDashboardOperation(
+                () => apiCallWithCache('/api/collections'),
+                'collections',
+                'Load Collections'
+            ),
+            safeDashboardOperation(
+                () => apiCallWithCache('/api/health'),
+                'system',
+                'Load System Health'
+            ),
+            safeDashboardOperation(
+                () => apiCallWithCache('/api/documents/count'),
+                'documents',
+                'Load Document Count'
+            ),
+            safeDashboardOperation(
+                () => apiCallWithCache('/api/auth/session'),
+                'session',
+                'Load Session Info'
+            )
+        ];
         
-        // Load system health
-        await loadSystemHealth();
-        
-        // Load connections and response times
-        await loadDashboardMetrics();
-        
-        // Load library statistics
-        await loadLibraryStatistics();
-        
-        // Load welcome panel content
+        // Add welcome panel loading only for initial load, not polling
         if (!isPolling) {
-            await loadWelcomePanel();
+            promises.push(loadWelcomePanel());
         }
         
-        // Update collections chart only if data changed
-        if (hasDataChanged(collectionsData)) {
+        // Execute all API calls in parallel
+        const results = await Promise.all(promises.map(promise => 
+            promise.catch(error => {
+                // Log error but don't fail the entire dashboard load
+                console.warn('Dashboard operation failed:', error);
+                return null;
+            })
+        ));
+        
+        const [collectionsData, healthData, documentsData, sessionData] = results;
+        
+        // Update UI with successful results
+        if (collectionsData) {
             updateCollectionsChart(collectionsData.collections);
+        }
+        
+        if (documentsData) {
+            updateDocumentStats(documentsData);
         }
         
         previousData.lastUpdate = Date.now();
         
-    } catch (error) {
-        // console.error('Error loading dashboard:', error);
-        // Don't stop polling on error
+        // PHASE 2 OPTIMIZATION: Set successful state
         if (!isPolling) {
-            showNotification('Failed to load dashboard data', 'error');
+            LoadingManager.setMultipleSuccess(['collections', 'documents']);
+        }
+        
+    } catch (error) {
+        // PHASE 2 OPTIMIZATION: Enhanced error handling
+        if (!isPolling) {
+            LoadingManager.setMultipleError(['collections', 'documents'], 'Failed to load dashboard');
+            ErrorHandler.showError(error, 'Dashboard Loading');
+        }
+    }
+}
+
+// Helper function to update document stats
+function updateDocumentStats(documentsData) {
+    if (documentsData && documentsData.count !== undefined) {
+        const totalElement = document.getElementById('totalDocuments');
+        if (totalElement) {
+            totalElement.textContent = documentsData.count;
         }
     }
 }
@@ -8534,6 +8601,2007 @@ async function loadWelcomePanel() {
 
 // Toggle and dismiss functions removed - welcome panel is now always visible
 
+// ===== SMART POLLING FUNCTIONS =====
+// PHASE 1 OPTIMIZATION: Smart polling management
+
+function pausePolling() {
+    isPollingActive = false;
+    console.log('🔄 Polling paused (tab not visible)');
+}
+
+function resumePolling() {
+    if (!isPollingActive) {
+        isPollingActive = true;
+        console.log('🔄 Polling resumed (tab visible)');
+        // Trigger immediate refresh when tab becomes visible
+        if (currentView === 'dashboard') {
+            loadDashboard(true);
+        }
+    }
+}
+
+function setupSmartPolling() {
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            pausePolling();
+        } else {
+            resumePolling();
+        }
+    });
+    
+    // Also listen for window focus/blur as backup
+    window.addEventListener('focus', resumePolling);
+    window.addEventListener('blur', pausePolling);
+}
+
+// ===== LOADING INDICATOR FUNCTIONS =====
+// PHASE 1 OPTIMIZATION: Basic loading indicators
+// PHASE 2 OPTIMIZATION: Comprehensive loading states and error boundaries
+
+const LoadingState = {
+    IDLE: 'idle',
+    LOADING: 'loading',
+    SUCCESS: 'success',
+    ERROR: 'error'
+};
+
+// Global loading state manager
+const LoadingManager = {
+    states: new Map(),
+    
+    setState(sectionId, state, message = '') {
+        this.states.set(sectionId, { state, message, timestamp: Date.now() });
+        this.updateUI(sectionId, state, message);
+    },
+    
+    getState(sectionId) {
+        return this.states.get(sectionId) || { state: LoadingState.IDLE, message: '', timestamp: 0 };
+    },
+    
+    updateUI(sectionId, state, message) {
+        const loadingEl = document.getElementById(`${sectionId}Loading`);
+        const errorEl = document.getElementById(`${sectionId}Error`);
+        const contentEl = document.getElementById(`${sectionId}Content`);
+        
+        // Reset all states
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.style.display = 'none';
+            errorEl.textContent = '';
+        }
+        if (contentEl) contentEl.style.opacity = '1';
+        
+        switch (state) {
+            case LoadingState.LOADING:
+                if (loadingEl) loadingEl.style.display = 'block';
+                if (contentEl) contentEl.style.opacity = '0.5';
+                break;
+            case LoadingState.ERROR:
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = message || 'Loading failed';
+                    errorEl.className = 'alert alert-danger alert-sm mt-2';
+                }
+                if (contentEl) contentEl.style.opacity = '0.7';
+                break;
+            case LoadingState.SUCCESS:
+                // All elements already reset above
+                break;
+        }
+    },
+    
+    // Batch operations
+    setMultipleLoading(sections) {
+        sections.forEach(section => this.setState(section, LoadingState.LOADING));
+    },
+    
+    setMultipleSuccess(sections) {
+        sections.forEach(section => this.setState(section, LoadingState.SUCCESS));
+    },
+    
+    setMultipleError(sections, message) {
+        sections.forEach(section => this.setState(section, LoadingState.ERROR, message));
+    }
+};
+
+// Legacy functions for backward compatibility
+function showLoading(elementId) {
+    LoadingManager.setState(elementId.replace('Loading', ''), LoadingState.LOADING);
+}
+
+function hideLoading(elementId) {
+    LoadingManager.setState(elementId.replace('Loading', ''), LoadingState.SUCCESS);
+}
+
+function showDashboardLoading() {
+    LoadingManager.setMultipleLoading(['collections', 'documents']);
+}
+
+function hideDashboardLoading() {
+    LoadingManager.setMultipleSuccess(['collections', 'documents']);
+}
+
+function showDashboardError(message) {
+    LoadingManager.setMultipleError(['collections', 'documents'], message);
+}
+
+// ===== RETRY LOGIC FUNCTIONS =====
+// PHASE 2 OPTIMIZATION: Retry logic with exponential backoff
+
+const RetryManager = {
+    // Default retry configuration
+    defaultConfig: {
+        maxRetries: 3,
+        baseDelay: 1000,      // 1 second
+        maxDelay: 10000,      // 10 seconds
+        backoffFactor: 2,     // Exponential backoff
+        jitter: true          // Add randomness to prevent thundering herd
+    },
+    
+    async withRetry(fn, config = {}) {
+        const finalConfig = { ...this.defaultConfig, ...config };
+        let lastError;
+        
+        for (let attempt = 0; attempt <= finalConfig.maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+                
+                // Don't retry on the last attempt
+                if (attempt === finalConfig.maxRetries) {
+                    break;
+                }
+                
+                // Don't retry on certain error types
+                if (this.isNonRetryableError(error)) {
+                    break;
+                }
+                
+                // Calculate delay with exponential backoff
+                const delay = this.calculateDelay(attempt, finalConfig);
+                
+                console.log(`🔄 Retry attempt ${attempt + 1}/${finalConfig.maxRetries} after ${delay}ms for:`, error.message);
+                
+                await this.sleep(delay);
+            }
+        }
+        
+        throw lastError;
+    },
+    
+    calculateDelay(attempt, config) {
+        let delay = config.baseDelay * Math.pow(config.backoffFactor, attempt);
+        delay = Math.min(delay, config.maxDelay);
+        
+        // Add jitter to prevent thundering herd
+        if (config.jitter) {
+            delay = delay * (0.5 + Math.random() * 0.5);
+        }
+        
+        return Math.floor(delay);
+    },
+    
+    isNonRetryableError(error) {
+        // Don't retry on authentication errors or client errors
+        if (error.message && error.message.includes('401')) return true;
+        if (error.message && error.message.includes('403')) return true;
+        if (error.message && error.message.includes('400')) return true;
+        return false;
+    },
+    
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+};
+
+// Enhanced API call wrapper with retry logic
+async function apiWithRetry(endpoint, options = {}, retryConfig = {}) {
+    return RetryManager.withRetry(async () => {
+        const response = await apiCall(endpoint, options);
+        
+        // Check if response indicates a retryable error
+        if (!response.ok && response.status >= 500) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        return response;
+    }, retryConfig);
+}
+
+// ===== CLIENT-SIDE CACHING SYSTEM =====
+// PHASE 2 OPTIMIZATION: Client-side caching for static data
+
+const APICache = {
+    // Cache storage
+    cache: new Map(),
+    
+    // Cache configuration per endpoint
+    config: {
+        '/api/rbac/users': { ttl: 300000, maxAge: 900000 },        // 5 min TTL, 15 min max age
+        '/api/rbac/roles': { ttl: 600000, maxAge: 1800000 },       // 10 min TTL, 30 min max age
+        '/api/collections': { ttl: 180000, maxAge: 600000 },       // 3 min TTL, 10 min max age
+        '/api/documents/count': { ttl: 60000, maxAge: 300000 },    // 1 min TTL, 5 min max age
+        '/api/health': { ttl: 30000, maxAge: 120000 },             // 30 sec TTL, 2 min max age
+    },
+    
+    // Generate cache key from endpoint and options
+    generateKey(endpoint, options = {}) {
+        const method = options.method || 'GET';
+        const query = options.query || '';
+        const body = options.body || '';
+        return `${method}:${endpoint}:${query}:${body}`;
+    },
+    
+    // Check if cached data is valid
+    isValid(cacheEntry, endpoint) {
+        const now = Date.now();
+        const config = this.config[endpoint] || { ttl: 300000, maxAge: 900000 };
+        
+        // Check if data is within TTL
+        if (now - cacheEntry.timestamp < config.ttl) {
+            return true;
+        }
+        
+        // Check if data is within max age (stale but usable)
+        if (now - cacheEntry.timestamp < config.maxAge) {
+            return 'stale';
+        }
+        
+        return false;
+    },
+    
+    // Get cached data
+    get(endpoint, options = {}) {
+        const key = this.generateKey(endpoint, options);
+        const cacheEntry = this.cache.get(key);
+        
+        if (!cacheEntry) {
+            return null;
+        }
+        
+        const validity = this.isValid(cacheEntry, endpoint);
+        if (validity === false) {
+            this.cache.delete(key);
+            return null;
+        }
+        
+        // Mark as stale if needed
+        if (validity === 'stale') {
+            cacheEntry.stale = true;
+        }
+        
+        return cacheEntry;
+    },
+    
+    // Set cached data
+    set(endpoint, options = {}, data) {
+        const key = this.generateKey(endpoint, options);
+        const cacheEntry = {
+            data,
+            timestamp: Date.now(),
+            endpoint,
+            stale: false
+        };
+        
+        this.cache.set(key, cacheEntry);
+        
+        // Cleanup old entries periodically
+        this.cleanup();
+    },
+    
+    // Invalidate cache for specific endpoint or pattern
+    invalidate(pattern) {
+        const keysToDelete = [];
+        for (const [key, entry] of this.cache.entries()) {
+            if (entry.endpoint.includes(pattern)) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach(key => this.cache.delete(key));
+    },
+    
+    // Clear all cache
+    clear() {
+        this.cache.clear();
+    },
+    
+    // Cleanup expired entries
+    cleanup() {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            const config = this.config[entry.endpoint] || { maxAge: 900000 };
+            if (now - entry.timestamp > config.maxAge) {
+                this.cache.delete(key);
+            }
+        }
+    },
+    
+    // Get cache statistics
+    getStats() {
+        return {
+            size: this.cache.size,
+            entries: Array.from(this.cache.entries()).map(([key, entry]) => ({
+                key,
+                endpoint: entry.endpoint,
+                age: Date.now() - entry.timestamp,
+                stale: entry.stale
+            }))
+        };
+    }
+};
+
+// Enhanced API call with caching
+async function apiCallWithCache(endpoint, options = {}, useCache = true) {
+    // Only cache GET requests by default
+    if (useCache && (!options.method || options.method === 'GET')) {
+        const cached = APICache.get(endpoint, options);
+        if (cached) {
+            console.log(`📦 Cache ${cached.stale ? 'HIT (stale)' : 'HIT'} for ${endpoint}`);
+            
+            // If stale, trigger background refresh
+            if (cached.stale) {
+                console.log(`🔄 Background refresh triggered for ${endpoint}`);
+                apiCallWithCache(endpoint, options, false).then(freshData => {
+                    // Update cache with fresh data
+                    console.log(`✅ Background refresh completed for ${endpoint}`);
+                }).catch(error => {
+                    console.warn(`⚠️ Background refresh failed for ${endpoint}:`, error);
+                });
+            }
+            
+            return cached.data;
+        }
+        
+        console.log(`📦 Cache MISS for ${endpoint}`);
+    }
+    
+    try {
+        const response = await apiWithRetry(endpoint, options);
+        const data = await response.json();
+        
+        // Cache successful responses
+        if (useCache && response.ok && (!options.method || options.method === 'GET')) {
+            APICache.set(endpoint, options, data);
+        }
+        
+        return data;
+    } catch (error) {
+        // On error, try to return stale cached data as fallback
+        if (useCache) {
+            const cached = APICache.get(endpoint, options);
+            if (cached) {
+                console.log(`📦 Cache FALLBACK for ${endpoint} due to error:`, error.message);
+                return cached.data;
+            }
+        }
+        throw error;
+    }
+}
+
+// ===== ERROR HANDLING AND USER FEEDBACK =====
+// PHASE 2 OPTIMIZATION: Enhanced error handling and user feedback
+
+const ErrorHandler = {
+    // Error types and their user-friendly messages
+    errorTypes: {
+        NETWORK_ERROR: {
+            title: 'Connection Problem',
+            message: 'Unable to connect to the server. Please check your internet connection.',
+            suggestion: 'Try refreshing the page or check your network connection.',
+            icon: '🌐'
+        },
+        SERVER_ERROR: {
+            title: 'Server Error',
+            message: 'The server encountered an error while processing your request.',
+            suggestion: 'This is usually temporary. Please try again in a few moments.',
+            icon: '🔧'
+        },
+        AUTHENTICATION_ERROR: {
+            title: 'Authentication Required',
+            message: 'Your session has expired or you need to log in.',
+            suggestion: 'Please log in again to continue.',
+            icon: '🔒'
+        },
+        PERMISSION_ERROR: {
+            title: 'Access Denied',
+            message: 'You don\'t have permission to access this resource.',
+            suggestion: 'Contact your administrator if you believe this is an error.',
+            icon: '🛡️'
+        },
+        VALIDATION_ERROR: {
+            title: 'Invalid Input',
+            message: 'The data you provided is invalid or incomplete.',
+            suggestion: 'Please check your input and try again.',
+            icon: '⚠️'
+        },
+        TIMEOUT_ERROR: {
+            title: 'Request Timeout',
+            message: 'The request took too long to complete.',
+            suggestion: 'The server may be busy. Please try again.',
+            icon: '⏰'
+        },
+        UNKNOWN_ERROR: {
+            title: 'Unexpected Error',
+            message: 'An unexpected error occurred.',
+            suggestion: 'Please try again or contact support if the problem persists.',
+            icon: '❌'
+        }
+    },
+    
+    // Classify error type based on error details
+    classifyError(error) {
+        if (!error) return 'UNKNOWN_ERROR';
+        
+        const message = error.message || error.toString();
+        const status = error.status || 0;
+        
+        if (status === 401) return 'AUTHENTICATION_ERROR';
+        if (status === 403) return 'PERMISSION_ERROR';
+        if (status === 400) return 'VALIDATION_ERROR';
+        if (status >= 500) return 'SERVER_ERROR';
+        
+        if (message.includes('NetworkError') || message.includes('Failed to fetch')) {
+            return 'NETWORK_ERROR';
+        }
+        
+        if (message.includes('timeout') || message.includes('Timeout')) {
+            return 'TIMEOUT_ERROR';
+        }
+        
+        return 'UNKNOWN_ERROR';
+    },
+    
+    // Create user-friendly error message
+    formatError(error) {
+        const errorType = this.classifyError(error);
+        const template = this.errorTypes[errorType];
+        
+        return {
+            type: errorType,
+            title: template.title,
+            message: template.message,
+            suggestion: template.suggestion,
+            icon: template.icon,
+            technical: error.message || error.toString(),
+            timestamp: new Date().toISOString()
+        };
+    },
+    
+    // Show error to user with appropriate UI
+    showError(error, context = '') {
+        const formattedError = this.formatError(error);
+        
+        // Log technical details for debugging
+        console.error(`${formattedError.icon} ${formattedError.title}:`, {
+            context,
+            technical: formattedError.technical,
+            timestamp: formattedError.timestamp
+        });
+        
+        // Show user-friendly message
+        this.displayUserMessage(formattedError, context);
+        
+        // Track error for analytics (if needed)
+        this.trackError(formattedError, context);
+    },
+    
+    // Display error message to user
+    displayUserMessage(formattedError, context) {
+        const existingToast = document.querySelector('.error-toast');
+        if (existingToast) {
+            existingToast.remove();
+        }
+        
+        const toast = document.createElement('div');
+        toast.className = 'error-toast alert alert-danger alert-dismissible fade show';
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.maxWidth = '400px';
+        toast.style.minWidth = '300px';
+        
+        toast.innerHTML = `
+            <div class="d-flex align-items-start">
+                <div class="me-2" style="font-size: 1.2em;">${formattedError.icon}</div>
+                <div class="flex-grow-1">
+                    <strong>${formattedError.title}</strong><br>
+                    <small>${formattedError.message}</small>
+                    ${context ? `<br><small class="text-muted">Context: ${context}</small>` : ''}
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 8000);
+    },
+    
+    // Track error for analytics (placeholder)
+    trackError(formattedError, context) {
+        // This could send error data to analytics service
+        // For now, just store in sessionStorage for debugging
+        try {
+            const errorLog = JSON.parse(sessionStorage.getItem('errorLog') || '[]');
+            errorLog.push({ ...formattedError, context });
+            
+            // Keep only last 50 errors
+            if (errorLog.length > 50) {
+                errorLog.splice(0, errorLog.length - 50);
+            }
+            
+            sessionStorage.setItem('errorLog', JSON.stringify(errorLog));
+        } catch (e) {
+            console.warn('Failed to store error log:', e);
+        }
+    },
+    
+    // Show success message
+    showSuccess(message, context = '') {
+        const toast = document.createElement('div');
+        toast.className = 'success-toast alert alert-success alert-dismissible fade show';
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.maxWidth = '400px';
+        
+        toast.innerHTML = `
+            <div class="d-flex align-items-start">
+                <div class="me-2" style="font-size: 1.2em;">✅</div>
+                <div class="flex-grow-1">
+                    <strong>Success</strong><br>
+                    <small>${message}</small>
+                    ${context ? `<br><small class="text-muted">${context}</small>` : ''}
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 4000);
+    }
+};
+
+// Enhanced wrapper for dashboard operations
+async function safeDashboardOperation(operation, sectionId, operationName) {
+    try {
+        LoadingManager.setState(sectionId, LoadingState.LOADING);
+        const result = await operation();
+        LoadingManager.setState(sectionId, LoadingState.SUCCESS);
+        return result;
+    } catch (error) {
+        LoadingManager.setState(sectionId, LoadingState.ERROR, ErrorHandler.formatError(error).message);
+        ErrorHandler.showError(error, `Dashboard: ${operationName}`);
+        throw error;
+    }
+}
+
+// ===== VIRTUAL SCROLLING SYSTEM =====
+// PHASE 3 OPTIMIZATION: Virtual scrolling for large datasets
+
+class VirtualScrollManager {
+    constructor(container, options = {}) {
+        this.container = container;
+        this.options = {
+            itemHeight: 60,           // Height of each item in pixels
+            bufferSize: 10,          // Number of items to render outside visible area
+            threshold: 100,          // Minimum items to trigger virtual scrolling
+            ...options
+        };
+        
+        this.data = [];
+        this.filteredData = [];
+        this.visibleItems = [];
+        this.scrollTop = 0;
+        this.containerHeight = 0;
+        this.totalHeight = 0;
+        this.startIndex = 0;
+        this.endIndex = 0;
+        this.isVirtualized = false;
+        
+        this.init();
+    }
+    
+    init() {
+        this.container.style.position = 'relative';
+        this.container.style.overflow = 'auto';
+        
+        // Create virtual container
+        this.virtualContainer = document.createElement('div');
+        this.virtualContainer.style.position = 'absolute';
+        this.virtualContainer.style.top = '0';
+        this.virtualContainer.style.left = '0';
+        this.virtualContainer.style.right = '0';
+        this.virtualContainer.style.pointerEvents = 'none';
+        
+        // Create visible content container
+        this.contentContainer = document.createElement('div');
+        this.contentContainer.style.position = 'relative';
+        this.contentContainer.style.transform = 'translateY(0px)';
+        
+        this.container.appendChild(this.virtualContainer);
+        this.container.appendChild(this.contentContainer);
+        
+        // Bind scroll handler
+        this.container.addEventListener('scroll', () => this.handleScroll());
+        
+        // Bind resize handler
+        window.addEventListener('resize', () => this.handleResize());
+        
+        this.updateContainerHeight();
+    }
+    
+    setData(data) {
+        this.data = data;
+        this.filteredData = [...data];
+        this.isVirtualized = data.length > this.options.threshold;
+        this.updateVirtualization();
+    }
+    
+    filter(predicate) {
+        this.filteredData = this.data.filter(predicate);
+        this.isVirtualized = this.filteredData.length > this.options.threshold;
+        this.updateVirtualization();
+    }
+    
+    search(query) {
+        if (!query.trim()) {
+            this.filteredData = [...this.data];
+        } else {
+            const lowerQuery = query.toLowerCase();
+            this.filteredData = this.data.filter(item => 
+                JSON.stringify(item).toLowerCase().includes(lowerQuery)
+            );
+        }
+        this.isVirtualized = this.filteredData.length > this.options.threshold;
+        this.updateVirtualization();
+    }
+    
+    updateContainerHeight() {
+        const rect = this.container.getBoundingClientRect();
+        this.containerHeight = rect.height;
+        this.updateVirtualization();
+    }
+    
+    updateVirtualization() {
+        if (!this.isVirtualized) {
+            this.renderAllItems();
+            return;
+        }
+        
+        this.totalHeight = this.filteredData.length * this.options.itemHeight;
+        this.virtualContainer.style.height = `${this.totalHeight}px`;
+        
+        this.calculateVisibleRange();
+        this.renderVisibleItems();
+    }
+    
+    calculateVisibleRange() {
+        const visibleStart = Math.floor(this.scrollTop / this.options.itemHeight);
+        const visibleEnd = Math.ceil((this.scrollTop + this.containerHeight) / this.options.itemHeight);
+        
+        this.startIndex = Math.max(0, visibleStart - this.options.bufferSize);
+        this.endIndex = Math.min(this.filteredData.length, visibleEnd + this.options.bufferSize);
+    }
+    
+    renderVisibleItems() {
+        this.visibleItems = this.filteredData.slice(this.startIndex, this.endIndex);
+        
+        // Update content container position
+        const offsetY = this.startIndex * this.options.itemHeight;
+        this.contentContainer.style.transform = `translateY(${offsetY}px)`;
+        
+        // Render items
+        this.contentContainer.innerHTML = '';
+        this.visibleItems.forEach((item, index) => {
+            const element = this.renderItem(item, this.startIndex + index);
+            this.contentContainer.appendChild(element);
+        });
+        
+        // Update scroll indicator
+        this.updateScrollIndicator();
+    }
+    
+    renderAllItems() {
+        this.virtualContainer.style.height = 'auto';
+        this.contentContainer.style.transform = 'translateY(0px)';
+        this.contentContainer.innerHTML = '';
+        
+        this.filteredData.forEach((item, index) => {
+            const element = this.renderItem(item, index);
+            this.contentContainer.appendChild(element);
+        });
+    }
+    
+    renderItem(item, index) {
+        // This should be overridden by the specific implementation
+        const element = document.createElement('div');
+        element.style.height = `${this.options.itemHeight}px`;
+        element.style.display = 'flex';
+        element.style.alignItems = 'center';
+        element.style.padding = '10px';
+        element.style.borderBottom = '1px solid #eee';
+        element.textContent = JSON.stringify(item);
+        return element;
+    }
+    
+    handleScroll() {
+        this.scrollTop = this.container.scrollTop;
+        if (this.isVirtualized) {
+            this.calculateVisibleRange();
+            this.renderVisibleItems();
+        }
+    }
+    
+    handleResize() {
+        this.updateContainerHeight();
+    }
+    
+    updateScrollIndicator() {
+        if (!this.isVirtualized) return;
+        
+        const scrollPercentage = (this.scrollTop / (this.totalHeight - this.containerHeight)) * 100;
+        const visiblePercentage = (this.containerHeight / this.totalHeight) * 100;
+        
+        console.log(`📊 Virtual Scroll: ${this.startIndex}-${this.endIndex} of ${this.filteredData.length} items (${scrollPercentage.toFixed(1)}%)`);
+    }
+    
+    scrollToItem(index) {
+        if (index < 0 || index >= this.filteredData.length) return;
+        
+        const targetScroll = index * this.options.itemHeight;
+        this.container.scrollTop = targetScroll;
+    }
+    
+    getStats() {
+        return {
+            totalItems: this.data.length,
+            filteredItems: this.filteredData.length,
+            visibleItems: this.visibleItems.length,
+            isVirtualized: this.isVirtualized,
+            scrollTop: this.scrollTop,
+            containerHeight: this.containerHeight,
+            totalHeight: this.totalHeight,
+            startIndex: this.startIndex,
+            endIndex: this.endIndex
+        };
+    }
+}
+
+// Specialized virtual scroll manager for documents
+class DocumentVirtualScrollManager extends VirtualScrollManager {
+    constructor(container, options = {}) {
+        super(container, {
+            itemHeight: 80,
+            bufferSize: 5,
+            threshold: 50,
+            ...options
+        });
+    }
+    
+    renderItem(document, index) {
+        const element = document.createElement('div');
+        element.className = 'document-item';
+        element.style.height = `${this.options.itemHeight}px`;
+        element.style.display = 'flex';
+        element.style.alignItems = 'center';
+        element.style.padding = '12px';
+        element.style.borderBottom = '1px solid var(--border-color)';
+        element.style.cursor = 'pointer';
+        element.style.transition = 'background-color 0.2s';
+        
+        // Add hover effect
+        element.addEventListener('mouseenter', () => {
+            element.style.backgroundColor = 'var(--hover-bg)';
+        });
+        element.addEventListener('mouseleave', () => {
+            element.style.backgroundColor = 'transparent';
+        });
+        
+        // Document content
+        const content = document.createElement('div');
+        content.className = 'document-content';
+        content.style.flex = '1';
+        
+        const title = document.createElement('div');
+        title.className = 'document-title';
+        title.style.fontWeight = 'bold';
+        title.style.marginBottom = '4px';
+        title.textContent = document.title || document.name || document.id || 'Untitled Document';
+        
+        const details = document.createElement('div');
+        details.className = 'document-details';
+        details.style.fontSize = '0.85em';
+        details.style.color = 'var(--text-secondary)';
+        
+        const type = document.type || 'document';
+        const updatedAt = document.updated_at || document.created_at || '';
+        const size = document.size || JSON.stringify(document).length;
+        
+        details.innerHTML = `
+            <span class="badge bg-secondary me-2">${type}</span>
+            <small>${updatedAt ? new Date(updatedAt).toLocaleDateString() : 'No date'}</small>
+            <small class="ms-2">${this.formatSize(size)}</small>
+        `;
+        
+        content.appendChild(title);
+        content.appendChild(details);
+        
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'document-actions';
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-unified btn-icon-only';
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+        editBtn.title = 'Edit';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.onEdit && this.onEdit(document, index);
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm btn-unified-danger btn-icon-only';
+        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        deleteBtn.title = 'Delete';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.onDelete && this.onDelete(document, index);
+        };
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        
+        element.appendChild(content);
+        element.appendChild(actions);
+        
+        // Click handler
+        element.onclick = () => {
+            this.onSelect && this.onSelect(document, index);
+        };
+        
+        return element;
+    }
+    
+    formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    
+    // Event handlers (can be overridden)
+    onSelect(document, index) {
+        console.log('Document selected:', document);
+    }
+    
+    onEdit(document, index) {
+        console.log('Document edit:', document);
+    }
+    
+    onDelete(document, index) {
+        console.log('Document delete:', document);
+    }
+}
+
+// Global virtual scroll manager instance
+let documentsVirtualScroll = null;
+
+// ===== PERFORMANCE MONITORING SYSTEM =====
+// PHASE 3 OPTIMIZATION: Performance monitoring and metrics
+
+class PerformanceMonitor {
+    constructor() {
+        this.metrics = new Map();
+        this.observers = new Map();
+        this.startTimes = new Map();
+        this.isEnabled = true;
+        
+        this.init();
+    }
+    
+    init() {
+        // Initialize Performance Observer for monitoring
+        if (window.PerformanceObserver) {
+            this.initNavigationObserver();
+            this.initResourceObserver();
+            this.initPaintObserver();
+        }
+        
+        // Monitor FPS
+        this.initFPSMonitor();
+        
+        // Monitor memory usage
+        this.initMemoryMonitor();
+        
+        // Monitor network requests
+        this.initNetworkMonitor();
+    }
+    
+    initNavigationObserver() {
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach(entry => {
+                if (entry.entryType === 'navigation') {
+                    this.recordMetric('navigation', {
+                        type: entry.type,
+                        domContentLoaded: entry.domContentLoadedEventEnd - entry.domContentLoadedEventStart,
+                        loadComplete: entry.loadEventEnd - entry.loadEventStart,
+                        transferSize: entry.transferSize,
+                        timestamp: performance.now()
+                    });
+                }
+            });
+        });
+        
+        observer.observe({ entryTypes: ['navigation'] });
+        this.observers.set('navigation', observer);
+    }
+    
+    initResourceObserver() {
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach(entry => {
+                if (entry.entryType === 'resource') {
+                    this.recordMetric('resource', {
+                        name: entry.name,
+                        duration: entry.duration,
+                        transferSize: entry.transferSize,
+                        type: entry.initiatorType,
+                        timestamp: performance.now()
+                    });
+                }
+            });
+        });
+        
+        observer.observe({ entryTypes: ['resource'] });
+        this.observers.set('resource', observer);
+    }
+    
+    initPaintObserver() {
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach(entry => {
+                if (entry.entryType === 'paint') {
+                    this.recordMetric('paint', {
+                        type: entry.name,
+                        startTime: entry.startTime,
+                        timestamp: performance.now()
+                    });
+                }
+            });
+        });
+        
+        observer.observe({ entryTypes: ['paint'] });
+        this.observers.set('paint', observer);
+    }
+    
+    initFPSMonitor() {
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+        
+        const measureFPS = () => {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime - lastTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                frameCount = 0;
+                lastTime = currentTime;
+                
+                this.recordMetric('fps', {
+                    value: fps,
+                    timestamp: performance.now()
+                });
+            }
+            
+            requestAnimationFrame(measureFPS);
+        };
+        
+        requestAnimationFrame(measureFPS);
+    }
+    
+    initMemoryMonitor() {
+        if (performance.memory) {
+            setInterval(() => {
+                this.recordMetric('memory', {
+                    usedJSHeapSize: performance.memory.usedJSHeapSize,
+                    totalJSHeapSize: performance.memory.totalJSHeapSize,
+                    jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+                    timestamp: performance.now()
+                });
+            }, 5000); // Every 5 seconds
+        }
+    }
+    
+    initNetworkMonitor() {
+        const originalFetch = window.fetch;
+        
+        window.fetch = async function(...args) {
+            const url = args[0];
+            const startTime = performance.now();
+            
+            try {
+                const response = await originalFetch.apply(this, args);
+                const endTime = performance.now();
+                
+                PerformanceMonitor.instance.recordMetric('network', {
+                    url: url,
+                    method: args[1]?.method || 'GET',
+                    status: response.status,
+                    duration: endTime - startTime,
+                    success: response.ok,
+                    timestamp: performance.now()
+                });
+                
+                return response;
+            } catch (error) {
+                const endTime = performance.now();
+                
+                PerformanceMonitor.instance.recordMetric('network', {
+                    url: url,
+                    method: args[1]?.method || 'GET',
+                    status: 0,
+                    duration: endTime - startTime,
+                    success: false,
+                    error: error.message,
+                    timestamp: performance.now()
+                });
+                
+                throw error;
+            }
+        };
+    }
+    
+    recordMetric(category, data) {
+        if (!this.isEnabled) return;
+        
+        if (!this.metrics.has(category)) {
+            this.metrics.set(category, []);
+        }
+        
+        const categoryMetrics = this.metrics.get(category);
+        categoryMetrics.push(data);
+        
+        // Keep only last 100 entries per category
+        if (categoryMetrics.length > 100) {
+            categoryMetrics.shift();
+        }
+        
+        // Trigger custom event for real-time monitoring
+        window.dispatchEvent(new CustomEvent('performanceMetric', {
+            detail: { category, data }
+        }));
+    }
+    
+    startTiming(label) {
+        this.startTimes.set(label, performance.now());
+    }
+    
+    endTiming(label) {
+        const startTime = this.startTimes.get(label);
+        if (startTime) {
+            const duration = performance.now() - startTime;
+            this.recordMetric('timing', {
+                label,
+                duration,
+                timestamp: performance.now()
+            });
+            this.startTimes.delete(label);
+            return duration;
+        }
+        return 0;
+    }
+    
+    getMetrics(category) {
+        if (category) {
+            return this.metrics.get(category) || [];
+        }
+        return Object.fromEntries(this.metrics);
+    }
+    
+    getAverageMetric(category, field) {
+        const metrics = this.getMetrics(category);
+        if (metrics.length === 0) return 0;
+        
+        const sum = metrics.reduce((acc, metric) => acc + (metric[field] || 0), 0);
+        return sum / metrics.length;
+    }
+    
+    getLatestMetric(category) {
+        const metrics = this.getMetrics(category);
+        return metrics[metrics.length - 1] || null;
+    }
+    
+    getPerformanceScore() {
+        const fpsMetrics = this.getMetrics('fps');
+        const networkMetrics = this.getMetrics('network');
+        const memoryMetrics = this.getMetrics('memory');
+        
+        let score = 100;
+        
+        // FPS score (60 FPS = 100 points)
+        if (fpsMetrics.length > 0) {
+            const avgFPS = this.getAverageMetric('fps', 'value');
+            const fpsScore = Math.min(100, (avgFPS / 60) * 100);
+            score = (score * 0.3) + (fpsScore * 0.3);
+        }
+        
+        // Network score (based on response times)
+        if (networkMetrics.length > 0) {
+            const avgNetworkTime = this.getAverageMetric('network', 'duration');
+            const networkScore = Math.max(0, 100 - (avgNetworkTime / 10)); // 1000ms = 0 points
+            score = (score * 0.7) + (networkScore * 0.3);
+        }
+        
+        // Memory score (based on heap usage)
+        if (memoryMetrics.length > 0) {
+            const latestMemory = this.getLatestMetric('memory');
+            if (latestMemory) {
+                const memoryUsage = latestMemory.usedJSHeapSize / latestMemory.jsHeapSizeLimit;
+                const memoryScore = Math.max(0, 100 - (memoryUsage * 100));
+                score = (score * 0.8) + (memoryScore * 0.2);
+            }
+        }
+        
+        return Math.round(score);
+    }
+    
+    generateReport() {
+        const now = performance.now();
+        const networkMetrics = this.getMetrics('network');
+        const fpsMetrics = this.getMetrics('fps');
+        const memoryMetrics = this.getMetrics('memory');
+        
+        const report = {
+            timestamp: now,
+            score: this.getPerformanceScore(),
+            network: {
+                totalRequests: networkMetrics.length,
+                averageResponseTime: this.getAverageMetric('network', 'duration'),
+                successRate: networkMetrics.length > 0 ? 
+                    (networkMetrics.filter(m => m.success).length / networkMetrics.length) * 100 : 0
+            },
+            rendering: {
+                averageFPS: this.getAverageMetric('fps', 'value'),
+                currentFPS: fpsMetrics.length > 0 ? fpsMetrics[fpsMetrics.length - 1].value : 0
+            },
+            memory: {
+                current: memoryMetrics.length > 0 ? memoryMetrics[memoryMetrics.length - 1] : null,
+                trend: this.getMemoryTrend()
+            },
+            cache: {
+                hitRate: this.getCacheHitRate(),
+                size: APICache.cache.size
+            }
+        };
+        
+        return report;
+    }
+    
+    getMemoryTrend() {
+        const memoryMetrics = this.getMetrics('memory');
+        if (memoryMetrics.length < 2) return 'stable';
+        
+        const recent = memoryMetrics.slice(-5);
+        const first = recent[0].usedJSHeapSize;
+        const last = recent[recent.length - 1].usedJSHeapSize;
+        
+        const change = ((last - first) / first) * 100;
+        
+        if (change > 10) return 'increasing';
+        if (change < -10) return 'decreasing';
+        return 'stable';
+    }
+    
+    getCacheHitRate() {
+        const networkMetrics = this.getMetrics('network');
+        const cacheableRequests = networkMetrics.filter(m => m.method === 'GET');
+        
+        if (cacheableRequests.length === 0) return 0;
+        
+        // This is a simplified calculation - in reality, we'd need more detailed cache tracking
+        const fastRequests = cacheableRequests.filter(m => m.duration < 50);
+        return (fastRequests.length / cacheableRequests.length) * 100;
+    }
+    
+    displayDashboard() {
+        const report = this.generateReport();
+        
+        console.group('🚀 Performance Report');
+        console.log('Overall Score:', report.score);
+        console.log('Network:', report.network);
+        console.log('Rendering:', report.rendering);
+        console.log('Memory:', report.memory);
+        console.log('Cache:', report.cache);
+        console.groupEnd();
+        
+        return report;
+    }
+    
+    clearMetrics() {
+        this.metrics.clear();
+        this.startTimes.clear();
+    }
+    
+    disable() {
+        this.isEnabled = false;
+        this.observers.forEach(observer => observer.disconnect());
+        this.observers.clear();
+    }
+    
+    enable() {
+        this.isEnabled = true;
+        this.init();
+    }
+}
+
+// Create global performance monitor instance
+PerformanceMonitor.instance = new PerformanceMonitor();
+
+// Export for global access
+window.PerformanceMonitor = PerformanceMonitor;
+
+// Add performance monitoring functions to window
+window.getPerformanceReport = () => PerformanceMonitor.instance.generateReport();
+window.showPerformanceDashboard = () => PerformanceMonitor.instance.displayDashboard();
+window.clearPerformanceMetrics = () => PerformanceMonitor.instance.clearMetrics();
+
+// ===== BUNDLE OPTIMIZATION AND LAZY LOADING =====
+// PHASE 3 OPTIMIZATION: Optimize bundle size and implement lazy loading
+
+class LazyLoadManager {
+    constructor() {
+        this.loadedModules = new Set();
+        this.loadingModules = new Map();
+        this.observers = new Map();
+        
+        this.init();
+    }
+    
+    init() {
+        // Initialize intersection observer for lazy loading
+        this.initIntersectionObserver();
+        
+        // Optimize external dependencies
+        this.optimizeExternalDependencies();
+        
+        // Implement code splitting
+        this.implementCodeSplitting();
+    }
+    
+    initIntersectionObserver() {
+        if (window.IntersectionObserver) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        this.loadVisibleContent(entry.target);
+                    }
+                });
+            }, {
+                root: null,
+                rootMargin: '50px',
+                threshold: 0.1
+            });
+            
+            this.observers.set('intersection', observer);
+        }
+    }
+    
+    optimizeExternalDependencies() {
+        // Lazy load external libraries when needed
+        const externalLibraries = {
+            'chart.js': 'https://cdn.jsdelivr.net/npm/chart.js',
+            'prism': 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js',
+            'marked': 'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+            'swagger-ui': 'https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js'
+        };
+        
+        this.externalLibraries = externalLibraries;
+    }
+    
+    implementCodeSplitting() {
+        // Define code chunks for different views
+        this.codeChunks = {
+            dashboard: () => import('./modules/dashboard.js').catch(() => null),
+            browser: () => import('./modules/browser.js').catch(() => null),
+            rbac: () => import('./modules/rbac.js').catch(() => null),
+            metrics: () => import('./modules/metrics.js').catch(() => null),
+            operations: () => import('./modules/operations.js').catch(() => null)
+        };
+    }
+    
+    async loadModule(moduleName) {
+        if (this.loadedModules.has(moduleName)) {
+            return true;
+        }
+        
+        if (this.loadingModules.has(moduleName)) {
+            return this.loadingModules.get(moduleName);
+        }
+        
+        const loadPromise = this.internalLoadModule(moduleName);
+        this.loadingModules.set(moduleName, loadPromise);
+        
+        try {
+            await loadPromise;
+            this.loadedModules.add(moduleName);
+            this.loadingModules.delete(moduleName);
+            return true;
+        } catch (error) {
+            this.loadingModules.delete(moduleName);
+            console.warn(`Failed to load module ${moduleName}:`, error);
+            return false;
+        }
+    }
+    
+    async internalLoadModule(moduleName) {
+        // Start performance timing
+        PerformanceMonitor.instance.startTiming(`lazy-load-${moduleName}`);
+        
+        try {
+            // Load code chunk if available
+            if (this.codeChunks[moduleName]) {
+                const module = await this.codeChunks[moduleName]();
+                if (module && module.init) {
+                    await module.init();
+                }
+            }
+            
+            // Load external dependencies if needed
+            await this.loadExternalDependencies(moduleName);
+            
+            // End performance timing
+            const duration = PerformanceMonitor.instance.endTiming(`lazy-load-${moduleName}`);
+            console.log(`📦 Lazy loaded ${moduleName} in ${duration.toFixed(2)}ms`);
+            
+        } catch (error) {
+            console.error(`❌ Failed to lazy load ${moduleName}:`, error);
+            throw error;
+        }
+    }
+    
+    async loadExternalDependencies(moduleName) {
+        const dependencies = {
+            dashboard: ['chart.js'],
+            api: ['prism', 'swagger-ui'],
+            browser: ['marked'],
+            operations: ['chart.js']
+        };
+        
+        const moduleDeps = dependencies[moduleName] || [];
+        
+        for (const dep of moduleDeps) {
+            await this.loadExternalLibrary(dep);
+        }
+    }
+    
+    async loadExternalLibrary(libraryName) {
+        if (this.loadedModules.has(libraryName)) {
+            return true;
+        }
+        
+        const url = this.externalLibraries[libraryName];
+        if (!url) {
+            console.warn(`Unknown external library: ${libraryName}`);
+            return false;
+        }
+        
+        try {
+            await this.loadScript(url);
+            this.loadedModules.add(libraryName);
+            console.log(`📦 Loaded external library: ${libraryName}`);
+            return true;
+        } catch (error) {
+            console.error(`❌ Failed to load external library ${libraryName}:`, error);
+            return false;
+        }
+    }
+    
+    loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+    
+    loadVisibleContent(element) {
+        // Load content that becomes visible
+        const lazyLoadAttr = element.getAttribute('data-lazy-load');
+        if (lazyLoadAttr) {
+            this.loadModule(lazyLoadAttr);
+        }
+        
+        // Load images lazily
+        const lazyImages = element.querySelectorAll('img[data-src]');
+        lazyImages.forEach(img => {
+            img.src = img.dataset.src;
+            img.removeAttribute('data-src');
+        });
+    }
+    
+    preloadCriticalResources() {
+        // Preload critical resources
+        const criticalResources = [
+            '/css/unified-theme.css',
+            '/js/theme.js',
+            '/api/auth/session'
+        ];
+        
+        criticalResources.forEach(resource => {
+            if (resource.endsWith('.css')) {
+                this.preloadCSS(resource);
+            } else if (resource.endsWith('.js')) {
+                this.preloadScript(resource);
+            } else {
+                this.preloadData(resource);
+            }
+        });
+    }
+    
+    preloadCSS(url) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'style';
+        link.href = url;
+        document.head.appendChild(link);
+    }
+    
+    preloadScript(url) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'script';
+        link.href = url;
+        document.head.appendChild(link);
+    }
+    
+    preloadData(url) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'fetch';
+        link.href = url;
+        link.crossOrigin = 'anonymous';
+        document.head.appendChild(link);
+    }
+    
+    optimizeImages() {
+        // Add lazy loading to all images
+        const images = document.querySelectorAll('img:not([data-lazy-processed])');
+        const observer = this.observers.get('intersection');
+        
+        if (observer) {
+            images.forEach(img => {
+                img.setAttribute('data-lazy-processed', 'true');
+                observer.observe(img);
+            });
+        }
+    }
+    
+    implementServiceWorker() {
+        // Register service worker for advanced caching
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('📦 Service Worker registered:', registration);
+                })
+                .catch(error => {
+                    console.log('❌ Service Worker registration failed:', error);
+                });
+        }
+    }
+    
+    getBundleStats() {
+        return {
+            loadedModules: Array.from(this.loadedModules),
+            loadingModules: Array.from(this.loadingModules.keys()),
+            totalScripts: document.querySelectorAll('script').length,
+            totalStyles: document.querySelectorAll('link[rel="stylesheet"]').length,
+            estimatedBundleSize: this.estimateBundleSize()
+        };
+    }
+    
+    estimateBundleSize() {
+        // Rough estimation based on loaded resources
+        const scripts = document.querySelectorAll('script[src]');
+        const styles = document.querySelectorAll('link[rel="stylesheet"]');
+        
+        return {
+            scripts: scripts.length,
+            styles: styles.length,
+            estimatedSize: (scripts.length * 50 + styles.length * 20) + 'KB' // Rough estimate
+        };
+    }
+    
+    cleanup() {
+        this.observers.forEach(observer => observer.disconnect());
+        this.observers.clear();
+        this.loadedModules.clear();
+        this.loadingModules.clear();
+    }
+}
+
+// Create global lazy load manager
+const lazyLoadManager = new LazyLoadManager();
+
+// Export for global access
+window.LazyLoadManager = lazyLoadManager;
+
+// Enhanced view switching with lazy loading
+const originalSwitchView = window.switchView;
+window.switchView = async function(view) {
+    // Start performance timing
+    PerformanceMonitor.instance.startTiming(`view-switch-${view}`);
+    
+    // Load module for the view
+    await lazyLoadManager.loadModule(view);
+    
+    // Call original switch view
+    if (originalSwitchView) {
+        originalSwitchView(view);
+    }
+    
+    // End performance timing
+    PerformanceMonitor.instance.endTiming(`view-switch-${view}`);
+};
+
+// Initialize optimizations
+document.addEventListener('DOMContentLoaded', () => {
+    // Preload critical resources
+    lazyLoadManager.preloadCriticalResources();
+    
+    // Optimize images
+    lazyLoadManager.optimizeImages();
+    
+    // Implement service worker
+    lazyLoadManager.implementServiceWorker();
+    
+    console.log('📦 Bundle optimization and lazy loading initialized');
+});
+
+// ===== WEBSOCKET REAL-TIME UPDATES =====
+// PHASE 3 OPTIMIZATION: WebSocket for real-time updates
+
+class WebSocketManager {
+    constructor() {
+        this.ws = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000;
+        this.isConnected = false;
+        this.subscribers = new Map();
+        this.messageQueue = [];
+        
+        this.init();
+    }
+    
+    init() {
+        // Note: WebSocket endpoint would need to be implemented on the backend
+        // This is a client-side implementation ready for when backend WebSocket support is added
+        this.connect();
+    }
+    
+    connect() {
+        try {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.onopen = () => {
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                console.log('🔌 WebSocket connected');
+                
+                // Send authentication
+                this.authenticate();
+                
+                // Process queued messages
+                this.processMessageQueue();
+                
+                // Notify subscribers
+                this.notifySubscribers('connection', { status: 'connected' });
+            };
+            
+            this.ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleMessage(data);
+                } catch (error) {
+                    console.error('❌ WebSocket message parsing error:', error);
+                }
+            };
+            
+            this.ws.onclose = () => {
+                this.isConnected = false;
+                console.log('🔌 WebSocket disconnected');
+                this.scheduleReconnect();
+                this.notifySubscribers('connection', { status: 'disconnected' });
+            };
+            
+            this.ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                this.notifySubscribers('connection', { status: 'error', error });
+            };
+            
+        } catch (error) {
+            console.error('❌ WebSocket connection failed:', error);
+            this.scheduleReconnect();
+        }
+    }
+    
+    authenticate() {
+        const token = localStorage.getItem('jdbx_auth_token');
+        if (token) {
+            this.send({
+                type: 'auth',
+                token: token
+            });
+        }
+    }
+    
+    scheduleReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+            this.reconnectAttempts++;
+            
+            console.log(`🔄 Scheduling WebSocket reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+            
+            setTimeout(() => {
+                this.connect();
+            }, delay);
+        } else {
+            console.error('❌ Max WebSocket reconnect attempts reached');
+            this.notifySubscribers('connection', { status: 'max_attempts_reached' });
+        }
+    }
+    
+    handleMessage(data) {
+        const { type, payload } = data;
+        
+        switch (type) {
+            case 'auth_success':
+                console.log('✅ WebSocket authentication successful');
+                this.subscribeToUpdates();
+                break;
+                
+            case 'auth_failed':
+                console.error('❌ WebSocket authentication failed');
+                break;
+                
+            case 'document_updated':
+                this.handleDocumentUpdate(payload);
+                break;
+                
+            case 'document_created':
+                this.handleDocumentCreated(payload);
+                break;
+                
+            case 'document_deleted':
+                this.handleDocumentDeleted(payload);
+                break;
+                
+            case 'collection_updated':
+                this.handleCollectionUpdate(payload);
+                break;
+                
+            case 'system_metrics':
+                this.handleSystemMetrics(payload);
+                break;
+                
+            case 'user_activity':
+                this.handleUserActivity(payload);
+                break;
+                
+            default:
+                console.log('📨 Unknown WebSocket message type:', type);
+        }
+        
+        // Notify subscribers
+        this.notifySubscribers(type, payload);
+    }
+    
+    subscribeToUpdates() {
+        // Subscribe to real-time updates
+        this.send({
+            type: 'subscribe',
+            channels: ['documents', 'collections', 'system_metrics', 'user_activity']
+        });
+    }
+    
+    handleDocumentUpdate(payload) {
+        const { document, collection } = payload;
+        
+        // Update virtual scroll if document is visible
+        if (documentsVirtualScroll && currentView === 'browser') {
+            documentsVirtualScroll.updateDocument(document.id, document);
+        }
+        
+        // Update dashboard if needed
+        if (currentView === 'dashboard') {
+            this.updateDashboardCounts();
+        }
+        
+        // Show notification
+        this.showUpdateNotification('Document updated', `${document.title || document.id} was updated`);
+    }
+    
+    handleDocumentCreated(payload) {
+        const { document, collection } = payload;
+        
+        // Add to virtual scroll if viewing the same collection
+        if (documentsVirtualScroll && currentView === 'browser') {
+            documentsVirtualScroll.addDocument(document);
+        }
+        
+        // Update dashboard counts
+        if (currentView === 'dashboard') {
+            this.updateDashboardCounts();
+        }
+        
+        // Show notification
+        this.showUpdateNotification('New document', `${document.title || document.id} was created`);
+    }
+    
+    handleDocumentDeleted(payload) {
+        const { documentId, collection } = payload;
+        
+        // Remove from virtual scroll
+        if (documentsVirtualScroll && currentView === 'browser') {
+            documentsVirtualScroll.removeDocument(documentId);
+        }
+        
+        // Update dashboard counts
+        if (currentView === 'dashboard') {
+            this.updateDashboardCounts();
+        }
+        
+        // Show notification
+        this.showUpdateNotification('Document deleted', `Document was deleted`);
+    }
+    
+    handleCollectionUpdate(payload) {
+        const { collection, stats } = payload;
+        
+        // Update dashboard if viewing dashboard
+        if (currentView === 'dashboard') {
+            this.updateCollectionStats(collection, stats);
+        }
+        
+        // Show notification
+        this.showUpdateNotification('Collection updated', `${collection} was updated`);
+    }
+    
+    handleSystemMetrics(payload) {
+        const { metrics } = payload;
+        
+        // Update dashboard metrics in real-time
+        if (currentView === 'dashboard') {
+            this.updateSystemMetrics(metrics);
+        }
+        
+        // Update metrics view if active
+        if (currentView === 'metrics') {
+            this.updateMetricsView(metrics);
+        }
+    }
+    
+    handleUserActivity(payload) {
+        const { user, action, timestamp } = payload;
+        
+        // Update activity feeds
+        if (currentView === 'dashboard') {
+            this.updateActivityFeed(payload);
+        }
+    }
+    
+    updateDashboardCounts() {
+        // Refresh dashboard data without full reload
+        if (currentView === 'dashboard') {
+            safeDashboardOperation(
+                () => apiCallWithCache('/api/documents/count', {}, false),
+                'documents',
+                'Real-time Update'
+            ).then(data => {
+                updateDocumentStats(data);
+            });
+        }
+    }
+    
+    updateCollectionStats(collection, stats) {
+        // Update collection statistics in real-time
+        const collectionElement = document.querySelector(`[data-collection="${collection}"]`);
+        if (collectionElement) {
+            const countElement = collectionElement.querySelector('.collection-count');
+            if (countElement) {
+                countElement.textContent = stats.documentCount;
+            }
+        }
+    }
+    
+    updateSystemMetrics(metrics) {
+        // Update system metrics in real-time
+        Object.keys(metrics).forEach(key => {
+            const element = document.getElementById(`metric-${key}`);
+            if (element) {
+                element.textContent = metrics[key];
+            }
+        });
+    }
+    
+    updateMetricsView(metrics) {
+        // Update metrics charts in real-time
+        if (window.updateMetricsCharts) {
+            window.updateMetricsCharts(metrics);
+        }
+    }
+    
+    updateActivityFeed(activity) {
+        // Add activity to feed
+        const feedElement = document.getElementById('activity-feed');
+        if (feedElement) {
+            const activityItem = document.createElement('div');
+            activityItem.className = 'activity-item';
+            activityItem.innerHTML = `
+                <div class="activity-icon"><i class="bi bi-circle-fill"></i></div>
+                <div class="activity-content">
+                    <strong>${activity.user}</strong> ${activity.action}
+                    <small class="text-muted">${new Date(activity.timestamp).toLocaleTimeString()}</small>
+                </div>
+            `;
+            feedElement.insertBefore(activityItem, feedElement.firstChild);
+            
+            // Remove old items (keep only 20)
+            while (feedElement.children.length > 20) {
+                feedElement.removeChild(feedElement.lastChild);
+            }
+        }
+    }
+    
+    showUpdateNotification(title, message) {
+        // Show subtle notification for real-time updates
+        const notification = document.createElement('div');
+        notification.className = 'realtime-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: var(--success-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            z-index: 9998;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        notification.innerHTML = `
+            <div style="font-weight: bold;">${title}</div>
+            <div style="font-size: 0.8rem; opacity: 0.9;">${message}</div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    send(data) {
+        if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(data));
+        } else {
+            // Queue message for later
+            this.messageQueue.push(data);
+        }
+    }
+    
+    processMessageQueue() {
+        while (this.messageQueue.length > 0) {
+            const message = this.messageQueue.shift();
+            this.send(message);
+        }
+    }
+    
+    subscribe(event, callback) {
+        if (!this.subscribers.has(event)) {
+            this.subscribers.set(event, new Set());
+        }
+        this.subscribers.get(event).add(callback);
+    }
+    
+    unsubscribe(event, callback) {
+        if (this.subscribers.has(event)) {
+            this.subscribers.get(event).delete(callback);
+        }
+    }
+    
+    notifySubscribers(event, data) {
+        if (this.subscribers.has(event)) {
+            this.subscribers.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error('❌ Subscriber callback error:', error);
+                }
+            });
+        }
+    }
+    
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+        this.isConnected = false;
+        this.messageQueue = [];
+    }
+    
+    getStatus() {
+        return {
+            isConnected: this.isConnected,
+            readyState: this.ws ? this.ws.readyState : WebSocket.CLOSED,
+            reconnectAttempts: this.reconnectAttempts,
+            queuedMessages: this.messageQueue.length,
+            subscribers: Object.fromEntries(
+                Array.from(this.subscribers.entries()).map(([event, callbacks]) => 
+                    [event, callbacks.size]
+                )
+            )
+        };
+    }
+}
+
+// Create global WebSocket manager (only if not in development mode)
+let webSocketManager = null;
+
+// Initialize WebSocket only if enabled
+if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    webSocketManager = new WebSocketManager();
+    window.WebSocketManager = webSocketManager;
+} else {
+    console.log('📝 WebSocket disabled in development mode');
+}
+
+// Add CSS for animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
+
 // ===== NAVIGATION FUNCTIONS =====
 // Note: switchView function is defined earlier in the file (around line 202)
 
@@ -9143,4 +11211,18 @@ function updateEnhancedSystemMetrics(health) {
 
 // Expose enhanced metrics function globally
 window.updateEnhancedSystemMetrics = updateEnhancedSystemMetrics;
+
+// ===== SMART POLLING INITIALIZATION =====
+// PHASE 1 OPTIMIZATION: Initialize smart polling on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setupSmartPolling();
+    console.log('🔄 Smart polling initialized');
+});
+
+// Initialize immediately if DOM is already loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupSmartPolling);
+} else {
+    setupSmartPolling();
+}
 

@@ -56,6 +56,24 @@
 http_response_t* api_handle_unified_documents_query(api_context_t* ctx, http_request_t* request);
 
 /**
+ * Handle unified documents count query
+ * 
+ * Endpoint: GET /api/documents/count
+ * 
+ * Features:
+ * - Fast count operations without full document loading
+ * - Query parameter filtering (same as documents query)
+ * - Type-based filtering
+ * - Library scoping
+ * - Optimized for dashboard performance
+ * 
+ * @param ctx API context with database and RBAC
+ * @param request HTTP request with query parameters
+ * @return HTTP response with count object or error
+ */
+http_response_t* api_handle_unified_documents_count(api_context_t* ctx, http_request_t* request);
+
+/**
  * Handle unified document creation
  * 
  * Endpoint: POST /api/documents

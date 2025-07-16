@@ -122,6 +122,7 @@ api_route_t routes[] = {
   /* Unified documents routes */
   {"/api/documents", HTTP_GET, api_handle_unified_documents_query, 1},
   {"/api/documents", HTTP_POST, api_handle_unified_documents_create, 1},
+  {"/api/documents/count", HTTP_GET, api_handle_unified_documents_count, 1},
   {"/api/documents/query", HTTP_POST, api_handle_unified_documents_query, 1},
   {"/api/documents/", HTTP_GET, api_handle_unified_document_get, 1},
   {"/api/documents/", HTTP_PUT, api_handle_unified_document_update, 1},

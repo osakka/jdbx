@@ -231,6 +231,68 @@ http_response_t* api_handle_unified_documents_query(api_context_t* ctx, http_req
   return create_http_response(HTTP_OK, response_str, "application/json");
 }
 
+http_response_t* api_handle_unified_documents_count(api_context_t* ctx, http_request_t* request) {
+  if (!ctx || !request) {
+    return create_http_response(HTTP_BAD_REQUEST, 
+                 "{\"error\":\"Invalid request\"}", "application/json");
+  }
+  
+  /* Parse query parameters - reuse same logic as documents query */
+  json_value_t* query = NULL;
+  if (request->query) {
+    json_value_t* parsed_params = parse_url_query_to_json(request->query);
+    if (parsed_params) {
+      /* Check if there's a 'query' parameter for complex queries */
+      json_value_t* query_param = json_object_get(parsed_params, "query");
+      if (query_param && query_param->type == JSON_STRING) {
+        query = json_parse(query_param->value.string);
+        /* CHECKPOINT: json_free(parsed_params); */
+      } else {
+        /* Use the parsed parameters as the query */
+        query = parsed_params;
+      }
+    }
+  }
+  
+  /* If no query provided, create empty query object */
+  if (!query) {
+    query = json_create_object();
+  }
+  
+  /* Query documents from unified collection using storage layer */
+  json_value_t* documents = storage_query_documents(ctx->db, query);
+  
+  /* CHECKPOINT: json_free(query); */
+  
+  if (!documents) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to query documents\"}", "application/json");
+  }
+  
+  /* Extract count from documents result */
+  int count = 0;
+  json_value_t* docs_array = json_object_get(documents, "documents");
+  if (docs_array && docs_array->type == JSON_ARRAY) {
+    count = (int)docs_array->value.array.size;
+  }
+  
+  /* CHECKPOINT: json_free(documents); */
+  
+  /* Create count response */
+  json_value_t* response = json_create_object();
+  json_object_set(response, "count", json_create_number(count));
+  
+  char* response_str = json_stringify(response);
+  /* CHECKPOINT: json_free(response); */
+  
+  if (!response_str) {
+    return create_http_response(HTTP_INTERNAL_SERVER_ERROR, 
+                 "{\"error\":\"Failed to serialize response\"}", "application/json");
+  }
+  
+  return create_http_response(HTTP_OK, response_str, "application/json");
+}
+
 http_response_t* api_handle_unified_documents_create(api_context_t* ctx, http_request_t* request) {
   if (!ctx || !request || !request->body) {
     return create_http_response(HTTP_BAD_REQUEST, 
