@@ -7486,7 +7486,8 @@ function renderPermissionMatrix(permissionsByResource) {
     const tbody = document.getElementById('permissionsTableBody');
     if (!tbody) return;
     
-    if (Object.keys(permissionsByResource).length === 0) {
+    // Guard against undefined permissionsByResource
+    if (!permissionsByResource || Object.keys(permissionsByResource).length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="text-center text-muted py-4">
@@ -8967,11 +8968,10 @@ async function apiCallWithCache(endpoint, options = {}, useCache = true) {
     }
     
     try {
-        const response = await apiWithRetry(endpoint, options);
-        const data = await response.json();
+        const data = await apiWithRetry(endpoint, options);
         
-        // Cache successful responses
-        if (useCache && response.ok && (!options.method || options.method === 'GET')) {
+        // Cache successful responses - apiWithRetry already returns parsed JSON
+        if (useCache && (!options.method || options.method === 'GET')) {
             APICache.set(endpoint, options, data);
         }
         
