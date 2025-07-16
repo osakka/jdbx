@@ -29,6 +29,7 @@
 #include "utils/json.h"
 #include "utils/buffer_pool.h"
 #include "utils/memory_manager.h"
+#include "utils/memory_promotion.h"
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,6 +302,18 @@ http_response_t* api_handle_status(api_context_t *ctx, http_request_t *request) 
   /* Add uptime */
   time_t uptime = get_uptime();
   json_object_set(status, "uptime_seconds", json_create_number((double)uptime));
+  
+  /* Add memory promotion statistics */
+  memory_promotion_stats_t promotion_stats;
+  memory_get_promotion_stats(&promotion_stats);
+  
+  json_value_t *memory_stats = json_create_object();
+  json_object_set(memory_stats, "arena_to_tlsf_promotions", json_create_number((double)promotion_stats.arena_to_tlsf_promotions));
+  json_object_set(memory_stats, "arena_to_system_promotions", json_create_number((double)promotion_stats.arena_to_system_promotions));
+  json_object_set(memory_stats, "tlsf_to_system_promotions", json_create_number((double)promotion_stats.tlsf_to_system_promotions));
+  json_object_set(memory_stats, "promotion_failures", json_create_number((double)promotion_stats.promotion_failures));
+  json_object_set(memory_stats, "bytes_promoted", json_create_number((double)promotion_stats.bytes_promoted));
+  json_object_set(status, "memory_promotion", memory_stats);
   
   /* Convert to JSON string */
   char *status_json = json_stringify(status);

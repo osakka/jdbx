@@ -780,12 +780,6 @@ api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) 
       request_checkpoint = NULL;
   }
   
-  /* No matching route - rewind checkpoint and return 404 */
-  if (request_checkpoint) {
-      memory_checkpoint_rewind(request_checkpoint);
-      request_checkpoint = NULL;
-  }
-  
   return create_api_result(
       create_http_response(HTTP_NOT_FOUND, "{\"error\":\"Not found\"}", "application/json"),
       NULL  /* No checkpoint for 404 response */
