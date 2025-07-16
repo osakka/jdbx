@@ -216,15 +216,15 @@ http_response_t* serve_admin_file(const char* path) {
   /* Get web root directory from server config */
   extern server_config_t* g_server_config;
   const char* web_root = NULL;
+  char* dynamic_web_root = NULL;
   
   if (g_server_config && g_server_config->web_root) {
     web_root = g_server_config->web_root;
   } else {
     /* Fallback: get web root dynamically */
-    char* dynamic_web_root = config_get_web_root();
+    dynamic_web_root = config_get_web_root();
     if (dynamic_web_root) {
       web_root = dynamic_web_root;
-      /* Note: this creates a memory leak, but it's a fallback case */
     } else {
       /* Last resort */
       web_root = "share/htdocs";
@@ -290,6 +290,11 @@ http_response_t* serve_admin_file(const char* path) {
   
   /* Clean up */
   BUFFER_FREE(file_content);
+  
+  /* Free dynamically allocated web root path to prevent memory leak */
+  if (dynamic_web_root) {
+    BUFFER_FREE(dynamic_web_root);
+  }
   
   return response;
 }

@@ -5796,11 +5796,20 @@ function initializeMetrics() {
 // Missing function: Load script performance metrics
 async function loadScriptMetrics() {
     try {
-        // Load script execution metrics if available
-        const response = await apiRequest('/api/metrics/scripts');
+        // Load script execution metrics from unified documents API
+        const query = JSON.stringify({"type":"script_metric","library":"system"});
+        const encodedQuery = encodeURIComponent(query);
+        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
         
-        if (response && response.scripts) {
-            updateScriptPerformanceChart(response.scripts);
+        if (response && response.documents && response.documents.length > 0) {
+            // Convert documents to scripts format
+            const scripts = response.documents.map(doc => ({
+                name: doc.name || doc.script_name || 'Unknown',
+                executions: doc.executions || 0,
+                avg_time: doc.avg_time || 0,
+                errors: doc.errors || 0
+            }));
+            updateScriptPerformanceChart(scripts);
         } else {
             // Create placeholder data if no script metrics available
             const placeholderData = {
@@ -8799,7 +8808,7 @@ const RetryManager = {
 // Enhanced API call wrapper with retry logic
 async function apiWithRetry(endpoint, options = {}, retryConfig = {}) {
     return RetryManager.withRetry(async () => {
-        const response = await apiCall(endpoint, options);
+        const response = await apiRequest(endpoint, options);
         
         // Check if response indicates a retryable error
         if (!response.ok && response.status >= 500) {
@@ -9499,8 +9508,7 @@ class DocumentVirtualScrollManager extends VirtualScrollManager {
     }
 }
 
-// Global virtual scroll manager instance
-let documentsVirtualScroll = null;
+// Global virtual scroll manager instance removed - not needed for API-first architecture
 
 // ===== PERFORMANCE MONITORING SYSTEM =====
 // PHASE 3 OPTIMIZATION: Performance monitoring and metrics
@@ -10177,415 +10185,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('📦 Bundle optimization and lazy loading initialized');
 });
 
-// ===== WEBSOCKET REAL-TIME UPDATES =====
-// PHASE 3 OPTIMIZATION: WebSocket for real-time updates
-
-class WebSocketManager {
-    constructor() {
-        this.ws = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 1000;
-        this.isConnected = false;
-        this.subscribers = new Map();
-        this.messageQueue = [];
-        
-        this.init();
-    }
-    
-    init() {
-        // Note: WebSocket endpoint would need to be implemented on the backend
-        // This is a client-side implementation ready for when backend WebSocket support is added
-        this.connect();
-    }
-    
-    connect() {
-        try {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
-            this.ws = new WebSocket(wsUrl);
-            
-            this.ws.onopen = () => {
-                this.isConnected = true;
-                this.reconnectAttempts = 0;
-                console.log('🔌 WebSocket connected');
-                
-                // Send authentication
-                this.authenticate();
-                
-                // Process queued messages
-                this.processMessageQueue();
-                
-                // Notify subscribers
-                this.notifySubscribers('connection', { status: 'connected' });
-            };
-            
-            this.ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleMessage(data);
-                } catch (error) {
-                    console.error('❌ WebSocket message parsing error:', error);
-                }
-            };
-            
-            this.ws.onclose = () => {
-                this.isConnected = false;
-                console.log('🔌 WebSocket disconnected');
-                this.scheduleReconnect();
-                this.notifySubscribers('connection', { status: 'disconnected' });
-            };
-            
-            this.ws.onerror = (error) => {
-                console.error('❌ WebSocket error:', error);
-                this.notifySubscribers('connection', { status: 'error', error });
-            };
-            
-        } catch (error) {
-            console.error('❌ WebSocket connection failed:', error);
-            this.scheduleReconnect();
-        }
-    }
-    
-    authenticate() {
-        const token = localStorage.getItem('jdbx_auth_token');
-        if (token) {
-            this.send({
-                type: 'auth',
-                token: token
-            });
-        }
-    }
-    
-    scheduleReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-            this.reconnectAttempts++;
-            
-            console.log(`🔄 Scheduling WebSocket reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
-            
-            setTimeout(() => {
-                this.connect();
-            }, delay);
-        } else {
-            console.error('❌ Max WebSocket reconnect attempts reached');
-            this.notifySubscribers('connection', { status: 'max_attempts_reached' });
-        }
-    }
-    
-    handleMessage(data) {
-        const { type, payload } = data;
-        
-        switch (type) {
-            case 'auth_success':
-                console.log('✅ WebSocket authentication successful');
-                this.subscribeToUpdates();
-                break;
-                
-            case 'auth_failed':
-                console.error('❌ WebSocket authentication failed');
-                break;
-                
-            case 'document_updated':
-                this.handleDocumentUpdate(payload);
-                break;
-                
-            case 'document_created':
-                this.handleDocumentCreated(payload);
-                break;
-                
-            case 'document_deleted':
-                this.handleDocumentDeleted(payload);
-                break;
-                
-            case 'collection_updated':
-                this.handleCollectionUpdate(payload);
-                break;
-                
-            case 'system_metrics':
-                this.handleSystemMetrics(payload);
-                break;
-                
-            case 'user_activity':
-                this.handleUserActivity(payload);
-                break;
-                
-            default:
-                console.log('📨 Unknown WebSocket message type:', type);
-        }
-        
-        // Notify subscribers
-        this.notifySubscribers(type, payload);
-    }
-    
-    subscribeToUpdates() {
-        // Subscribe to real-time updates
-        this.send({
-            type: 'subscribe',
-            channels: ['documents', 'collections', 'system_metrics', 'user_activity']
-        });
-    }
-    
-    handleDocumentUpdate(payload) {
-        const { document, collection } = payload;
-        
-        // Update virtual scroll if document is visible
-        if (documentsVirtualScroll && currentView === 'browser') {
-            documentsVirtualScroll.updateDocument(document.id, document);
-        }
-        
-        // Update dashboard if needed
-        if (currentView === 'dashboard') {
-            this.updateDashboardCounts();
-        }
-        
-        // Show notification
-        this.showUpdateNotification('Document updated', `${document.title || document.id} was updated`);
-    }
-    
-    handleDocumentCreated(payload) {
-        const { document, collection } = payload;
-        
-        // Add to virtual scroll if viewing the same collection
-        if (documentsVirtualScroll && currentView === 'browser') {
-            documentsVirtualScroll.addDocument(document);
-        }
-        
-        // Update dashboard counts
-        if (currentView === 'dashboard') {
-            this.updateDashboardCounts();
-        }
-        
-        // Show notification
-        this.showUpdateNotification('New document', `${document.title || document.id} was created`);
-    }
-    
-    handleDocumentDeleted(payload) {
-        const { documentId, collection } = payload;
-        
-        // Remove from virtual scroll
-        if (documentsVirtualScroll && currentView === 'browser') {
-            documentsVirtualScroll.removeDocument(documentId);
-        }
-        
-        // Update dashboard counts
-        if (currentView === 'dashboard') {
-            this.updateDashboardCounts();
-        }
-        
-        // Show notification
-        this.showUpdateNotification('Document deleted', `Document was deleted`);
-    }
-    
-    handleCollectionUpdate(payload) {
-        const { collection, stats } = payload;
-        
-        // Update dashboard if viewing dashboard
-        if (currentView === 'dashboard') {
-            this.updateCollectionStats(collection, stats);
-        }
-        
-        // Show notification
-        this.showUpdateNotification('Collection updated', `${collection} was updated`);
-    }
-    
-    handleSystemMetrics(payload) {
-        const { metrics } = payload;
-        
-        // Update dashboard metrics in real-time
-        if (currentView === 'dashboard') {
-            this.updateSystemMetrics(metrics);
-        }
-        
-        // Update metrics view if active
-        if (currentView === 'metrics') {
-            this.updateMetricsView(metrics);
-        }
-    }
-    
-    handleUserActivity(payload) {
-        const { user, action, timestamp } = payload;
-        
-        // Update activity feeds
-        if (currentView === 'dashboard') {
-            this.updateActivityFeed(payload);
-        }
-    }
-    
-    updateDashboardCounts() {
-        // Refresh dashboard data without full reload
-        if (currentView === 'dashboard') {
-            safeDashboardOperation(
-                () => apiCallWithCache('/api/documents/count', {}, false),
-                'documents',
-                'Real-time Update'
-            ).then(data => {
-                updateDocumentStats(data);
-            });
-        }
-    }
-    
-    updateCollectionStats(collection, stats) {
-        // Update collection statistics in real-time
-        const collectionElement = document.querySelector(`[data-collection="${collection}"]`);
-        if (collectionElement) {
-            const countElement = collectionElement.querySelector('.collection-count');
-            if (countElement) {
-                countElement.textContent = stats.documentCount;
-            }
-        }
-    }
-    
-    updateSystemMetrics(metrics) {
-        // Update system metrics in real-time
-        Object.keys(metrics).forEach(key => {
-            const element = document.getElementById(`metric-${key}`);
-            if (element) {
-                element.textContent = metrics[key];
-            }
-        });
-    }
-    
-    updateMetricsView(metrics) {
-        // Update metrics charts in real-time
-        if (window.updateMetricsCharts) {
-            window.updateMetricsCharts(metrics);
-        }
-    }
-    
-    updateActivityFeed(activity) {
-        // Add activity to feed
-        const feedElement = document.getElementById('activity-feed');
-        if (feedElement) {
-            const activityItem = document.createElement('div');
-            activityItem.className = 'activity-item';
-            activityItem.innerHTML = `
-                <div class="activity-icon"><i class="bi bi-circle-fill"></i></div>
-                <div class="activity-content">
-                    <strong>${activity.user}</strong> ${activity.action}
-                    <small class="text-muted">${new Date(activity.timestamp).toLocaleTimeString()}</small>
-                </div>
-            `;
-            feedElement.insertBefore(activityItem, feedElement.firstChild);
-            
-            // Remove old items (keep only 20)
-            while (feedElement.children.length > 20) {
-                feedElement.removeChild(feedElement.lastChild);
-            }
-        }
-    }
-    
-    showUpdateNotification(title, message) {
-        // Show subtle notification for real-time updates
-        const notification = document.createElement('div');
-        notification.className = 'realtime-notification';
-        notification.style.cssText = `
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            background: var(--success-color);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 0.875rem;
-            z-index: 9998;
-            animation: slideIn 0.3s ease-out;
-        `;
-        
-        notification.innerHTML = `
-            <div style="font-weight: bold;">${title}</div>
-            <div style="font-size: 0.8rem; opacity: 0.9;">${message}</div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 3 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease-in';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
-    }
-    
-    send(data) {
-        if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(data));
-        } else {
-            // Queue message for later
-            this.messageQueue.push(data);
-        }
-    }
-    
-    processMessageQueue() {
-        while (this.messageQueue.length > 0) {
-            const message = this.messageQueue.shift();
-            this.send(message);
-        }
-    }
-    
-    subscribe(event, callback) {
-        if (!this.subscribers.has(event)) {
-            this.subscribers.set(event, new Set());
-        }
-        this.subscribers.get(event).add(callback);
-    }
-    
-    unsubscribe(event, callback) {
-        if (this.subscribers.has(event)) {
-            this.subscribers.get(event).delete(callback);
-        }
-    }
-    
-    notifySubscribers(event, data) {
-        if (this.subscribers.has(event)) {
-            this.subscribers.get(event).forEach(callback => {
-                try {
-                    callback(data);
-                } catch (error) {
-                    console.error('❌ Subscriber callback error:', error);
-                }
-            });
-        }
-    }
-    
-    disconnect() {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-        this.isConnected = false;
-        this.messageQueue = [];
-    }
-    
-    getStatus() {
-        return {
-            isConnected: this.isConnected,
-            readyState: this.ws ? this.ws.readyState : WebSocket.CLOSED,
-            reconnectAttempts: this.reconnectAttempts,
-            queuedMessages: this.messageQueue.length,
-            subscribers: Object.fromEntries(
-                Array.from(this.subscribers.entries()).map(([event, callbacks]) => 
-                    [event, callbacks.size]
-                )
-            )
-        };
-    }
-}
-
-// Create global WebSocket manager (only if not in development mode)
-let webSocketManager = null;
-
-// Initialize WebSocket only if enabled
-if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    webSocketManager = new WebSocketManager();
-    window.WebSocketManager = webSocketManager;
-} else {
-    console.log('📝 WebSocket disabled in development mode');
-}
+// ===== WEBSOCKET REAL-TIME UPDATES REMOVED =====
+// WebSocket functionality removed - JDBX uses API-first architecture with polling
+// Removed WebSocketManager class and related real-time functionality
 
 // Add CSS for animations
 const style = document.createElement('style');
