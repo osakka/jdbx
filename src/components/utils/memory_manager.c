@@ -103,7 +103,7 @@ memory_header_t* get_memory_header(void* ptr) {
     
     /* Sanity check for obviously bad pointers */
     if ((uintptr_t)ptr < HEADER_SIZE) {
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "get_memory_header: ptr=%p too small (< %zu)\n", ptr, HEADER_SIZE);
         }
         return NULL;
@@ -115,13 +115,13 @@ memory_header_t* get_memory_header(void* ptr) {
     if ((uintptr_t)header % _Alignof(max_align_t) != 0) {
         /* Try checking if this could be a TLSF allocation with different alignment */
         if ((uintptr_t)header % 8 != 0) {  /* TLSF should at least be 8-byte aligned */
-            if (getenv("JDBX_MEM_DEBUG")) {
+            if (SHOULD_DEBUG_MEMORY()) {
                 fprintf(stderr, "get_memory_header: ptr=%p header=%p alignment failed (even for TLSF)\n", 
                         ptr, header);
             }
             return NULL;
         }
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "get_memory_header: ptr=%p header=%p relaxed alignment (possible TLSF)\n", 
                     ptr, header);
         }
@@ -130,7 +130,7 @@ memory_header_t* get_memory_header(void* ptr) {
     /* Check if the magic field location is readable before accessing it */
     /* This is a heuristic - we're checking if the pointer makes sense */
     if ((uintptr_t)header < 0x1000) {  /* Likely not a valid heap address */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "get_memory_header: ptr=%p header=%p too low (< 0x1000)\n", ptr, header);
         }
         return NULL;
@@ -142,7 +142,7 @@ memory_header_t* get_memory_header(void* ptr) {
     uint32_t magic = header->magic;
     
     /* Debug print for troubleshooting */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         fprintf(stderr, "get_memory_header: ptr=%p, header=%p, magic=0x%x (expected 0x%x)\n", 
                 ptr, header, magic, MEMORY_MAGIC);
         if (magic != MEMORY_MAGIC) {
@@ -748,6 +748,56 @@ static bool ssl_semantic_free(memory_header_t* header) {
 }
 
 /**
+ * SSL Pool Cleanup Function
+ * Frees all SSL pool memory and stored pool entries
+ */
+static void ssl_pools_cleanup(void) {
+    if (!g_ssl_pools.initialized) {
+        return;
+    }
+    
+    pthread_mutex_lock(&g_ssl_pools.pool_mutex);
+    
+    /* Free all memory stored in pools */
+    if (g_ssl_pools.tiny_pool) {
+        for (size_t i = 0; i < g_ssl_pools.tiny_available; i++) {
+            free(g_ssl_pools.tiny_pool[i]);
+        }
+        free(g_ssl_pools.tiny_pool);
+        g_ssl_pools.tiny_pool = NULL;
+        g_ssl_pools.tiny_available = 0;
+    }
+    
+    if (g_ssl_pools.small_pool) {
+        for (size_t i = 0; i < g_ssl_pools.small_available; i++) {
+            free(g_ssl_pools.small_pool[i]);
+        }
+        free(g_ssl_pools.small_pool);
+        g_ssl_pools.small_pool = NULL;
+        g_ssl_pools.small_available = 0;
+    }
+    
+    if (g_ssl_pools.medium_pool) {
+        for (size_t i = 0; i < g_ssl_pools.medium_available; i++) {
+            free(g_ssl_pools.medium_pool[i]);
+        }
+        free(g_ssl_pools.medium_pool);
+        g_ssl_pools.medium_pool = NULL;
+        g_ssl_pools.medium_available = 0;
+    }
+    
+    /* Mark as uninitialized */
+    g_ssl_pools.initialized = false;
+    
+    pthread_mutex_unlock(&g_ssl_pools.pool_mutex);
+    pthread_mutex_destroy(&g_ssl_pools.pool_mutex);
+    
+    if (SHOULD_DEBUG_MEMORY()) {
+        fprintf(stderr, "🧹 SSL pools cleanup completed\n");
+    }
+}
+
+/**
  * Inspector Claude's SSL Detection Function
  * "Ah! Ze clever detection of ze SSL allocations!"
  * 
@@ -933,7 +983,7 @@ void* memory_alloc(size_t size) {
     header->tlsf_ptr = from_tlsf ? allocated_ptr : NULL;  /* For TLSF, this is the original TLSF pointer to pass to tlsf_free */
     
     /* Debug print */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         void* user_ptr = (char*)header + HEADER_SIZE;
         fprintf(stderr, "memory_alloc: allocated_ptr=%p, header=%p, user_ptr=%p, size=%zu, from_arena=%d, from_tlsf=%d, flags=0x%x\n",
                 allocated_ptr, header, user_ptr, size, from_arena, from_tlsf, header->flags);
@@ -1031,7 +1081,7 @@ void memory_free(void* ptr) {
     header->magic = MEMORY_MAGIC_FREE;
     
     /* Determine which allocator to free to */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         fprintf(stderr, "memory_free: header=%p, flags=0x%x, magic=0x%x, size=%zu\n", 
                 header, header->flags, header->magic, header->size);
     }
@@ -1039,12 +1089,12 @@ void memory_free(void* ptr) {
     if (header->flags & MEMORY_FLAG_ARENA_ALLOCATED) {
         /* Arena allocations are freed in bulk on checkpoint rewind */
         /* Individual frees are no-ops */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "memory_free: arena allocation, no-op\n");
         }
     } else if (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) {
         /* TLSF allocation - free using the stored TLSF pointer */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "memory_free: TLSF allocation, pool=%p, tlsf_ptr=%p\n", tls_memory.tlsf_pool, header->tlsf_ptr);
         }
         if (!tls_memory.tlsf_pool) {
@@ -1056,19 +1106,19 @@ void memory_free(void* ptr) {
     } else if (header->flags & 8) {
         /* 🚀 REVOLUTIONARY SSL POOL RETURN */
         if (ssl_semantic_free(header)) {
-            if (getenv("JDBX_MEM_DEBUG")) {
+            if (SHOULD_DEBUG_MEMORY()) {
                 fprintf(stderr, "memory_free: SSL pool return successful\n");
             }
         } else {
             /* Pool full or wrong size - fallback to system free */
-            if (getenv("JDBX_MEM_DEBUG")) {
+            if (SHOULD_DEBUG_MEMORY()) {
                 fprintf(stderr, "memory_free: SSL pool full, using system free\n");
             }
             free(header);
         }
     } else {
         /* System allocation */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "memory_free: system allocation, calling free\n");
         }
         free(header);
@@ -1080,7 +1130,7 @@ void memory_free(void* ptr) {
  */
 void* memory_realloc(void* ptr, size_t new_size) {
     /* Debug print */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         fprintf(stderr, "memory_realloc called: ptr=%p, new_size=%zu\n", ptr, new_size);
     }
     
@@ -1105,7 +1155,7 @@ void* memory_realloc(void* ptr, size_t new_size) {
     memory_header_t* header = get_memory_header(ptr);
     if (!header) {
         /* Not a managed allocation - could be early allocation or system malloc */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "memory_realloc: Not managed allocation, using fallback for ptr=%p\n", ptr);
         }
         
@@ -1122,7 +1172,7 @@ void* memory_realloc(void* ptr, size_t new_size) {
         }
         
         /* Non-NULL unmanaged pointer - try system realloc */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "WARNING: memory_realloc called on unmanaged pointer %p, "
                     "attempting system realloc\n", ptr);
         }
@@ -1132,14 +1182,14 @@ void* memory_realloc(void* ptr, size_t new_size) {
          * 2. The pointer was allocated by a library using malloc directly
          * It will fail (and likely crash) if the pointer is invalid or corrupted
          */
-        if (getenv("JDBX_MEM_DEBUG")) {
+        if (SHOULD_DEBUG_MEMORY()) {
             fprintf(stderr, "WARNING: About to call system realloc on unmanaged pointer %p, size=%zu\n", 
                     ptr, new_size);
         }
         void* result = realloc(ptr, new_size);
         if (!result && new_size > 0) {
             /* Realloc failed - could be invalid pointer or out of memory */
-            if (getenv("JDBX_MEM_DEBUG")) {
+            if (SHOULD_DEBUG_MEMORY()) {
                 fprintf(stderr, "ERROR: system realloc failed for unmanaged pointer %p\n", ptr);
             }
         }
@@ -1151,7 +1201,7 @@ void* memory_realloc(void* ptr, size_t new_size) {
     int is_tlsf = (header->flags & MEMORY_FLAG_TLSF_ALLOCATED) ? 1 : 0;
     
     /* Debug print */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         fprintf(stderr, "memory_realloc: is_arena=%d, is_tlsf=%d\n", is_arena, is_tlsf);
     }
     
@@ -1186,7 +1236,7 @@ void* memory_realloc(void* ptr, size_t new_size) {
     memcpy(new_ptr, ptr, copy_size);
     
     /* Debug print */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (SHOULD_DEBUG_MEMORY()) {
         fprintf(stderr, "memory_realloc fallback: old_ptr=%p, new_ptr=%p, old_size=%zu, new_size=%zu, copy_size=%zu\n",
                 ptr, new_ptr, header->size, new_size, copy_size);
     }
@@ -1322,6 +1372,9 @@ void memory_manager_shutdown(void) {
     tls_memory.initialized = 0;
     
     pthread_mutex_unlock(&g_memory_lock);
+    
+    /* Clean up SSL pools */
+    ssl_pools_cleanup();
     
     /* Shutdown configuration system */
     memory_allocator_config_shutdown();
