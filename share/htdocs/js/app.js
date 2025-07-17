@@ -67,7 +67,7 @@ window.currentDatabaseSizeBytes = 0;
 async function getActualDatabaseSize() {
     try {
         // Get size from unified documents API with stats query
-        const response = await apiRequest('/api/documents?stats=true');
+        const response = await api('/api/documents?stats=true');
         let totalSize = 0;
         
         // Handle unified documents response format
@@ -94,71 +94,20 @@ if (!authToken) {
     window.location.href = '/login.html';
 }
 
-// Session validation check
-let sessionCheckInterval = null;
-
-async function validateSession() {
-    // Always get fresh token from localStorage
-    const currentToken = localStorage.getItem('jdbx_auth_token');
-    authToken = currentToken; // Update global variable
-    
-    // console.log('Session validation starting, token present:', !!currentToken);
-    
-    if (!currentToken) {
-        // console.log('No auth token, redirecting to login');
+// Simple session check - only once on load
+async function checkAuth() {
+    try {
+        await api('/api/auth/session');
+        return true;
+    } catch {
+        localStorage.clear();
         window.location.href = '/login.html';
         return false;
     }
-    
-    try {
-        // Make a lightweight request to check if session is valid
-        // Using /api/libraries endpoint which requires auth but is lightweight
-        const response = await fetch(`${API_BASE_URL}/api/libraries`, {
-            method: 'GET',  // Use GET since server doesn't support HEAD
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            }
-        });
-        
-        if (response.status === 401) {
-            // console.log('Session invalid (401), redirecting to login');
-            // console.log('Token was:', currentToken ? currentToken.substring(0, 20) + '...' : 'null');
-            // Clear tokens
-            localStorage.removeItem('jdbx_auth_token');
-            localStorage.removeItem('jdbx_refresh_token');
-            // Clear session check interval
-            if (sessionCheckInterval) {
-                clearInterval(sessionCheckInterval);
-            }
-            // Redirect to login
-            window.location.href = '/login.html';
-            return false;
-        }
-        
-        // If HEAD method not allowed or not found, it's still a valid session (just not optimal)
-        if (response.status === 405 || response.status === 404) {
-            return true;
-        }
-        
-        return response.ok;
-    } catch (error) {
-        // console.error('Session validation error:', error);
-        // On network error, don't log out immediately
-        return true;
-    }
 }
 
-// Start session validation check - every 30 seconds
-function startSessionValidation() {
-    // Initial check after 15 seconds to avoid interfering with login flow
-    setTimeout(validateSession, 15000);
-    
-    // Then check every 30 seconds
-    sessionCheckInterval = setInterval(validateSession, 30000);
-}
-
-// Start session validation when page loads
-startSessionValidation();
+// Check auth once on page load
+checkAuth();
 
 // Debug: Monitor RBAC view for unexpected changes
 window.addEventListener('DOMContentLoaded', function() {
@@ -231,7 +180,7 @@ window.deleteDocument = deleteDocument;
 window.saveDocument = saveDocument;
 window.toggleEditMode = toggleEditMode;
 window.showNotification = showNotification;
-window.apiRequest = apiRequest;
+window.api = api;
 
 document.addEventListener('DOMContentLoaded', async function() {
     // Run ID conflict detection
@@ -265,8 +214,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 });
 
-// View switching
-function switchView(view) {
+// View switching - wait for data to load
+async function switchView(view) {
     // Update nav
     document.querySelectorAll('.nav-pills .nav-link').forEach(link => {
         link.classList.remove('active');
@@ -321,31 +270,35 @@ function switchView(view) {
             refreshInterval = null;
         }
         
-        // Initialize view-specific functionality
-        switch (view) {
-            case 'dashboard':
-                initializeDashboard();
-                // Load initial dashboard data
-                loadDashboard(false);
-                // Set up polling for dashboard
-                if (POLLING_INTERVALS.dashboard) {
-                    refreshInterval = setInterval(() => {
-                        if (isPollingActive) {
-                            loadDashboard(true);
-                        }
-                    }, POLLING_INTERVALS.dashboard);
-                }
-                break;
-            case 'browser':
-                initializeBrowser();
-                // Set up polling for browser - refresh both libraries/collections list and documents
-                if (POLLING_INTERVALS.browser) {
-                    refreshInterval = setInterval(async () => {
-                        try {
-                            // Only poll if we're still in browser view to avoid unnecessary requests
-                            if (currentView !== 'browser' || !isPollingActive) {
-                                return;
+        // Add loading state
+        viewElement.classList.add('loading');
+        
+        try {
+            // Initialize view-specific functionality and wait for data
+            switch (view) {
+                case 'dashboard':
+                    initializeDashboard();
+                    // Load initial dashboard data and wait
+                    await loadDashboard(false);
+                    // Set up polling for dashboard
+                    if (POLLING_INTERVALS.dashboard) {
+                        refreshInterval = setInterval(() => {
+                            if (isPollingActive) {
+                                loadDashboard(true);
                             }
+                        }, POLLING_INTERVALS.dashboard);
+                    }
+                    break;
+                case 'browser':
+                    initializeBrowser();
+                    // Set up polling for browser - refresh both libraries/collections list and documents
+                    if (POLLING_INTERVALS.browser) {
+                        refreshInterval = setInterval(async () => {
+                            try {
+                                // Only poll if we're still in browser view to avoid unnecessary requests
+                                if (currentView !== 'browser' || !isPollingActive) {
+                                    return;
+                                }
                             
                             // Refresh libraries and collections list with timeout
                             await Promise.race([
@@ -376,43 +329,48 @@ function switchView(view) {
                     }, POLLING_INTERVALS.metrics);
                 }
                 break;
-            case 'rbac':
-                // Add safeguard to ensure RBAC view isn't just text
-                const rbacView = document.getElementById('rbac-view');
-                if (rbacView && rbacView.textContent.trim() === 'admin') {
-                    // console.error('RBAC view contains only "admin" text! Reloading page...');
-                    window.location.reload();
-                    return;
-                }
-                initializeRBAC();
-                // Set up polling for RBAC
-                if (POLLING_INTERVALS.rbac) {
-                    refreshInterval = setInterval(() => {
-                        if (isPollingActive) {
-                            loadRBACData(true);
-                        }
-                    }, POLLING_INTERVALS.rbac);
-                }
-                break;
+                case 'rbac':
+                    // Load RBAC data first, then initialize
+                    await loadRBACData(false);
+                    initializeRBAC();
+                    // Set up polling for RBAC
+                    if (POLLING_INTERVALS.rbac) {
+                        refreshInterval = setInterval(() => {
+                            if (isPollingActive) {
+                                loadRBACData(true);
+                            }
+                        }, POLLING_INTERVALS.rbac);
+                    }
+                    break;
             case 'api':
                 initializeAPI();
                 // No polling for API docs
                 break;
-            case 'operations':
-                initializeOperations();
-                // Set up polling for operations
-                if (POLLING_INTERVALS.operations) {
-                    refreshInterval = setInterval(() => {
-                        if (isPollingActive) {
-                            updateOperationsStatus(true);
-                        }
-                    }, POLLING_INTERVALS.operations);
-                }
-                break;
-            case 'scripts':
-                initializeScripts();
-                // Set up polling for scripts (no regular polling needed)
-                break;
+                case 'operations':
+                    initializeOperations();
+                    // Set up polling for operations
+                    if (POLLING_INTERVALS.operations) {
+                        refreshInterval = setInterval(() => {
+                            if (isPollingActive) {
+                                updateOperationsStatus(true);
+                            }
+                        }, POLLING_INTERVALS.operations);
+                    }
+                    break;
+                case 'scripts':
+                    initializeScripts();
+                    // Set up polling for scripts (no regular polling needed)
+                    break;
+            }
+            
+            // Remove loading state after data loads
+            viewElement.classList.remove('loading');
+            
+        } catch (error) {
+            // Show error if view fails to load
+            viewElement.classList.remove('loading');
+            showError(`Failed to load ${view} view`, error);
+            return;
         }
         
         // Update URL hash
@@ -455,7 +413,7 @@ function createNotificationContainer() {
 }
 
 // API helper
-async function apiRequest(endpoint, options = {}) {
+async function api(endpoint, options = {}) {
     // Always get fresh token from localStorage to handle token refresh/updates
     const currentToken = localStorage.getItem('jdbx_auth_token');
     const defaultOptions = {
@@ -499,9 +457,9 @@ async function apiRequest(endpoint, options = {}) {
                 // For other endpoints, kick out
                 localStorage.removeItem('jdbx_auth_token');
                 localStorage.removeItem('jdbx_refresh_token');
-                // Clear session check interval
-                if (sessionCheckInterval) {
-                    clearInterval(sessionCheckInterval);
+                // Clear any intervals
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
                 }
                 window.location.href = '/login.html';
                 return;
@@ -747,22 +705,22 @@ async function loadDashboard(isPolling = false) {
         // PHASE 1 & 2 OPTIMIZATION: Load all APIs in parallel with caching and retry logic
         const promises = [
             safeDashboardOperation(
-                () => apiCallWithCache('/api/collections'),
+                () => api('/api/collections'),
                 'collections',
                 'Load Collections'
             ),
             safeDashboardOperation(
-                () => apiCallWithCache('/api/health'),
+                () => api('/api/health'),
                 'system',
                 'Load System Health'
             ),
             safeDashboardOperation(
-                () => apiCallWithCache('/api/documents/count'),
+                () => api('/api/documents/count'),
                 'documents',
                 'Load Document Count'
             ),
             safeDashboardOperation(
-                () => apiCallWithCache('/api/auth/session'),
+                () => api('/api/auth/session'),
                 'session',
                 'Load Session Info'
             )
@@ -840,7 +798,7 @@ async function loadCollections() {
         // Also load libraries for library information
         if (libraries.length === 0) {
             try {
-                const librariesResponse = await apiRequest('/api/libraries');
+                const librariesResponse = await api('/api/libraries');
                 let librariesData = Array.isArray(librariesResponse) ? librariesResponse : (librariesResponse?.libraries || []);
                 libraries = librariesData;
                 // console.log('Libraries data:', librariesData);
@@ -854,7 +812,7 @@ async function loadCollections() {
         let collectionsData = [];
         for (const library of libraries) {
             try {
-                const collectionsResponse = await apiRequest(`/api/collections?library=${library.name}`);
+                const collectionsResponse = await api(`/api/collections?library=${library.name}`);
                 if (collectionsResponse && collectionsResponse.collections) {
                     collectionsData = collectionsData.concat(collectionsResponse.collections);
                 }
@@ -991,7 +949,7 @@ async function loadCollections() {
 
 async function loadSystemHealth() {
     try {
-        const health = await apiRequest('/api/health').catch(() => null);
+        const health = await api('/api/health').catch(() => null);
         
         if (health && health.status === 'ok') {
             // Handle both old and new formats
@@ -1085,7 +1043,7 @@ function updateCollectionsChart(collections) {
 
 async function loadMetricsData() {
     try {
-        const response = await apiRequest('/api/metrics/history');
+        const response = await api('/api/metrics/history');
         if (response && response.metrics) {
             updateConnectionsChart(response.metrics.connections);
             updateResponseTimesChart(response.metrics.performance);
@@ -1150,7 +1108,7 @@ function updateResponseTimesChart(performanceData) {
 async function loadLibraryStatistics() {
     try {
         // Get all libraries
-        const librariesResponse = await apiRequest('/api/libraries');
+        const librariesResponse = await api('/api/libraries');
         const libraries = librariesResponse.libraries || [];
         
         const statsPanel = document.getElementById('libraryStatsPanel');
@@ -1160,7 +1118,7 @@ async function loadLibraryStatistics() {
         
         // Optimize: Get all documents in one API call and group by library
         try {
-            const allDocsResponse = await apiRequest('/api/documents');
+            const allDocsResponse = await api('/api/documents');
             const allDocuments = allDocsResponse.documents || [];
             
             // Group documents by library
@@ -1282,7 +1240,7 @@ async function loadDashboardMetrics() {
         // Fetch metrics data using properly URL-encoded JSON query
         const query = JSON.stringify({"type":"metric","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const metricsData = await apiRequest(`/api/documents?query=${encodedQuery}`).catch(err => {
+        const metricsData = await api(`/api/documents?query=${encodedQuery}`).catch(err => {
             // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -1334,7 +1292,7 @@ async function initializeBrowser() {
 async function loadLibraries() {
     try {
         // Use the correct libraries API endpoint that the server provides
-        const response = await apiRequest('/api/libraries');
+        const response = await api('/api/libraries');
         // console.log('Libraries API response:', response);
         
         if (response && response.libraries) {
@@ -1473,7 +1431,7 @@ async function createNewLibrary() {
             created_at: new Date().toISOString()
         };
         
-        const response = await apiRequest('/api/documents', {
+        const response = await api('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(libraryMetadata)
@@ -1504,7 +1462,7 @@ async function deleteLibrary() {
     }
     
     try {
-        const response = await apiRequest(`/api/libraries/${currentLibrary}`, {
+        const response = await api(`/api/libraries/${currentLibrary}`, {
             method: 'DELETE'
         });
         
@@ -1533,7 +1491,7 @@ async function deleteSpecificLibrary(libraryName) {
     }
     
     try {
-        const response = await apiRequest(`/api/libraries/${libraryName}`, {
+        const response = await api(`/api/libraries/${libraryName}`, {
             method: 'DELETE'
         });
         
@@ -1558,7 +1516,7 @@ async function deleteSpecificLibrary(libraryName) {
 async function switchLibrary(libraryName) {
     try {
         // First, make API call to switch library on server side
-        const response = await apiRequest(`/api/auth/library/${libraryName}`, {
+        const response = await api(`/api/auth/library/${libraryName}`, {
             method: 'POST'
         });
         
@@ -1635,7 +1593,7 @@ async function loadBrowserCollections() {
     try {
         // In unified architecture, we need to load collections from all libraries
         // First, get all libraries, then load collections for each library
-        const librariesResponse = await apiRequest('/api/libraries');
+        const librariesResponse = await api('/api/libraries');
         let availableLibraries = [];
         
         if (librariesResponse && librariesResponse.libraries) {
@@ -1651,7 +1609,7 @@ async function loadBrowserCollections() {
         let allRawCollections = [];
         for (const library of availableLibraries) {
             try {
-                const collectionsResponse = await apiRequest(`/api/collections?library=${library}`);
+                const collectionsResponse = await api(`/api/collections?library=${library}`);
                 // console.log(`Collections API response for ${library}:`, collectionsResponse);
                 
                 if (collectionsResponse && collectionsResponse.collections) {
@@ -1700,7 +1658,7 @@ async function loadBrowserCollections() {
         
         // Load schemas separately
         try {
-            const schemasResponse = await apiRequest('/api/schemas');
+            const schemasResponse = await api('/api/schemas');
             if (schemasResponse && schemasResponse.schemas) {
                 schemas = schemasResponse.schemas;
             } else if (Array.isArray(schemasResponse)) {
@@ -1746,7 +1704,7 @@ async function renderCollections() {
     // Fetch schemas if not already loaded
     if (!schemas || schemas.length === 0) {
         try {
-            const response = await apiRequest('/api/schemas');
+            const response = await api('/api/schemas');
             schemas = response.schemas || [];
         } catch (error) {
             // console.error('Failed to fetch schemas:', error);
@@ -1857,7 +1815,7 @@ async function updateCollectionCounts() {
             // Use the full path which includes library prefix
             const collectionPath = collection.fullPath || `${currentLibrary}/${collectionName}`;
             // console.log(`Requesting count for collection: ${collectionPath} (${i+1}/${collections.length})`);
-            const response = await apiRequest(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
+            const response = await api(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
             // console.log(`Received response for ${collectionPath}:`, response ? 'success' : 'null');
             const count = response && response.documents ? response.documents.length : 0;
             
@@ -1978,7 +1936,7 @@ async function loadDocuments(collectionPath, isPolling = false) {
             library: library,
             type: documentType
         };
-        const response = await apiRequest(`/api/documents?query=${encodeURIComponent(JSON.stringify(query))}`);
+        const response = await api(`/api/documents?query=${encodeURIComponent(JSON.stringify(query))}`);
         // Handle both array response and object with documents property
         const newDocuments = Array.isArray(response) ? response : (response.documents || []);
         
@@ -2309,7 +2267,7 @@ async function executeQuery() {
     
     try {
         // Use the query endpoint with the query parameter
-        const response = await apiRequest(`/api/documents`, {
+        const response = await api(`/api/documents`, {
             method: 'POST',
             body: JSON.stringify({ query: query })
         });
@@ -2466,7 +2424,7 @@ async function getCollectionValidators(collection) {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"validator","library":currentLibrary});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         if (response && response.documents) {
             // Filter validators for this collection or global validators
             return response.documents.filter(script => {
@@ -2517,7 +2475,7 @@ async function runValidators(document, validators) {
                 continue;
             }
             
-            const response = await apiRequest(`/api/js/functions/${validator.name || validator.id}`, {
+            const response = await api(`/api/js/functions/${validator.name || validator.id}`, {
                 method: 'POST',
                 body: JSON.stringify({
                     input_data: document,
@@ -3237,7 +3195,7 @@ async function createScriptVersion(scriptDocument, changeType = 'patch', changeD
         };
         
         // Store version in _script_versions collection
-        const response = await apiRequest('/api/documents', {
+        const response = await api('/api/documents', {
             method: 'POST',
             body: JSON.stringify(versionDocument)
         });
@@ -3289,7 +3247,7 @@ async function loadScriptVersions(scriptId) {
         }
         
         // Query _script_versions collection
-        const response = await apiRequest(`/api/documents?type=script_version&script_id=${scriptId}`);
+        const response = await api(`/api/documents?type=script_version&script_id=${scriptId}`);
         
         if (response.success && response.documents) {
             // Sort by version number (latest first)
@@ -3329,7 +3287,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
         // Get current script document
         const scriptType = targetVersionDoc.script_type;
         const collectionName = getCollectionNameForScriptType(scriptType);
-        const currentScript = await apiRequest(`/api/documents/${scriptId}`);
+        const currentScript = await api(`/api/documents/${scriptId}`);
         
         if (!currentScript.success) {
             throw new Error('Failed to load current script');
@@ -3358,7 +3316,7 @@ async function rollbackToVersion(scriptId, targetVersion, rollbackReason = '') {
         };
         
         // Save the rolled back script
-        const updateResponse = await apiRequest(`/api/documents/${scriptId}`, {
+        const updateResponse = await api(`/api/documents/${scriptId}`, {
             method: 'PUT',
             body: JSON.stringify(rolledBackScript)
         });
@@ -3973,7 +3931,7 @@ async function createVersionFromModal() {
         // Add tags if provided
         if (tags.length > 0) {
             versionDoc.tags = [...(versionDoc.tags || []), ...tags];
-            await apiRequest(`/api/documents/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
+            await api(`/api/documents/${versionDoc.uuid || versionDoc._id}`, 'PUT', versionDoc);
         }
         
         showMessage(`Version ${versionDoc.version} created successfully!`, 'success');
@@ -4195,7 +4153,7 @@ async function batchEnableScripts() {
             const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = true;
-                await apiRequest(`/api/documents/${scriptId}`, 'PUT', doc);
+                await api(`/api/documents/${scriptId}`, 'PUT', doc);
                 return { success: true, scriptId };
             }
             return { success: false, scriptId, error: 'Document not found' };
@@ -4219,7 +4177,7 @@ async function batchDisableScripts() {
             const doc = documents.find(d => (d.uuid || d._id || d.id) === scriptId);
             if (doc) {
                 doc.enabled = false;
-                await apiRequest(`/api/documents/${scriptId}`, 'PUT', doc);
+                await api(`/api/documents/${scriptId}`, 'PUT', doc);
                 return { success: true, scriptId };
             }
             return { success: false, scriptId, error: 'Document not found' };
@@ -4240,7 +4198,7 @@ async function batchDeleteScripts() {
     
     try {
         const results = await processBatchOperation(selectedScripts, async (scriptId) => {
-            await apiRequest(`/api/documents/${scriptId}`, 'DELETE');
+            await api(`/api/documents/${scriptId}`, 'DELETE');
             return { success: true, scriptId };
         });
         
@@ -4447,7 +4405,7 @@ async function executeImportScripts() {
             
             try {
                 // Check if script already exists
-                const existingDocs = await apiRequest(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
+                const existingDocs = await api(`/api/documents?collection=${currentCollection}&library=${currentLibrary}`);
                 const existing = existingDocs.find(d => d.name === doc.name || d.uuid === doc.uuid || d._id === doc._id);
                 
                 if (existing && !overwriteExisting) {
@@ -4466,13 +4424,13 @@ async function executeImportScripts() {
                     const updateData = { ...doc };
                     delete updateData._id; // Remove _id to avoid conflicts
                     delete updateData.uuid; // Remove uuid to avoid conflicts
-                    importedDoc = await apiRequest(`/api/documents/${existing.uuid || existing._id}`, 'PUT', updateData);
+                    importedDoc = await api(`/api/documents/${existing.uuid || existing._id}`, 'PUT', updateData);
                 } else {
                     // Create new document
                     const createData = { ...doc };
                     delete createData._id; // Let server assign new ID
                     delete createData.uuid; // Let server assign new UUID
-                    importedDoc = await apiRequest(`/api/documents`, 'POST', createData);
+                    importedDoc = await api(`/api/documents`, 'POST', createData);
                 }
                 
                 // Import version history if requested
@@ -4484,7 +4442,7 @@ async function executeImportScripts() {
                             delete versionData._id; // Let server assign new ID
                             delete versionData.uuid; // Let server assign new UUID
                             
-                            await apiRequest('/api/documents', 'POST', versionData);
+                            await api('/api/documents', 'POST', versionData);
                         } catch (versionError) {
                             // console.warn(`Failed to import version ${version.version}:`, versionError);
                         }
@@ -4688,7 +4646,7 @@ async function loadTransformersForPreview() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"transformer","library":currentLibrary});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         if (response && response.documents) {
             // Filter transformers for this collection or global transformers
             currentTransformers = response.documents.filter(script => {
@@ -4733,7 +4691,7 @@ async function runTransformers(document) {
         const transformerStartTime = performance.now();
         
         try {
-            const response = await apiRequest(`/api/js/functions/${transformer.name || transformer.id}`, {
+            const response = await api(`/api/js/functions/${transformer.name || transformer.id}`, {
                 method: 'POST',
                 body: JSON.stringify({
                     input_data: currentDoc,
@@ -5020,7 +4978,7 @@ async function createNewCollection() {
         };
         
         // Create collection metadata document
-        const metaResponse = await apiRequest('/api/documents', {
+        const metaResponse = await api('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(collectionMetadata)
@@ -5043,7 +5001,7 @@ async function createNewCollection() {
             description: `Initial document for ${collectionName} collection`
         };
         
-        const response = await apiRequest(`/api/documents`, {
+        const response = await api(`/api/documents`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(initialDocument)
@@ -5095,7 +5053,7 @@ async function saveDocument() {
         const collection = parts[1] || parts[0];
         
         // Use PUT to update the document
-        const response = await apiRequest(
+        const response = await api(
             `/api/libraries/${library}/collections/${collection}/documents/${currentDocument.uuid}`,
             {
                 method: 'PUT',
@@ -5131,7 +5089,7 @@ async function deleteDocument() {
     if (confirm(`Are you sure you want to delete the document "${docDisplayName}"?`)) {
         try {
             // Use unified documents API - DELETE by document ID
-            await apiRequest(
+            await api(
                 `/api/documents/${currentDocument}`,
                 { method: 'DELETE' }
             );
@@ -5188,7 +5146,7 @@ async function createDocument() {
         };
         
         // Use POST to create the document in unified documents API
-        const response = await apiRequest(
+        const response = await api(
             `/api/documents`,
             {
                 method: 'POST',
@@ -5799,7 +5757,7 @@ async function loadScriptMetrics() {
         // Load script execution metrics from unified documents API
         const query = JSON.stringify({"type":"script_metric","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         
         if (response && response.documents && response.documents.length > 0) {
             // Convert documents to scripts format
@@ -5923,11 +5881,11 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         // Load collections from all libraries for metrics dashboard
         let allCollections = { collections: [] };
         try {
-            const librariesResponse = await apiRequest('/api/libraries');
+            const librariesResponse = await api('/api/libraries');
             if (librariesResponse && librariesResponse.libraries) {
                 for (const library of librariesResponse.libraries) {
                     try {
-                        const libCollections = await apiRequest(`/api/collections?library=${library.name}`);
+                        const libCollections = await api(`/api/collections?library=${library.name}`);
                         if (libCollections && libCollections.collections) {
                             allCollections.collections = allCollections.collections.concat(libCollections.collections);
                         }
@@ -5941,11 +5899,11 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         }
         
         const [health, cacheStats] = await Promise.all([
-            apiRequest('/api/health').catch(err => { 
+            api('/api/health').catch(err => { 
                 // console.error('Health API error:', err); 
                 return null; 
             }),
-            apiRequest('/api/cache/stats').catch(err => { 
+            api('/api/cache/stats').catch(err => { 
                 // console.error('Cache stats API error:', err); 
                 return null; 
             })
@@ -5959,7 +5917,7 @@ async function loadMetrics(timeRange = '1h', isPolling = false) {
         // console.log('Fetching metrics from _metrics collection...');
         const query = JSON.stringify({"type":"metric","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const metricsData = await apiRequest(`/api/documents?query=${encodedQuery}`).catch(err => {
+        const metricsData = await api(`/api/documents?query=${encodedQuery}`).catch(err => {
             // console.error('Failed to fetch metrics data:', err);
             return { documents: [] };
         });
@@ -7167,7 +7125,7 @@ async function loadUsers() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"user","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         
         // Handle unified documents response format
         allUsers = Array.isArray(response) ? response : (response.documents || []);
@@ -7275,7 +7233,7 @@ async function loadRoles() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"role","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         // console.log('Roles API response:', response);
         
         // Handle unified documents response format
@@ -7436,7 +7394,7 @@ async function loadPermissionMatrix() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"role","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         
         // Extract permissions from role documents
         const permissionsByResource = {};
@@ -7547,7 +7505,7 @@ async function loadSessions() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"session","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         const sessions = response.documents || [];
         window.lastSessionsData = sessions; // Store for tab switching
         renderSessions(sessions);
@@ -7707,12 +7665,12 @@ async function clearAllSessions() {
         // Use properly URL-encoded JSON query for server-side filtering
         const query = JSON.stringify({"type":"session","library":"system"});
         const encodedQuery = encodeURIComponent(query);
-        const response = await apiRequest(`/api/documents?query=${encodedQuery}`);
+        const response = await api(`/api/documents?query=${encodedQuery}`);
         const sessions = response.documents || [];
         
         // Delete each session
         await Promise.all(sessions.map(session => 
-            apiRequest(`/api/documents/${session.uuid || session._id}`, {
+            api(`/api/documents/${session.uuid || session._id}`, {
                 method: 'DELETE'
             })
         ));
@@ -7732,7 +7690,7 @@ async function revokeSession(sessionId) {
     
     try {
         // Use the proper session termination endpoint
-        await apiRequest(`/api/sessions/${sessionId}/terminate`, {
+        await api(`/api/sessions/${sessionId}/terminate`, {
             method: 'POST'
         });
         
@@ -7908,7 +7866,7 @@ function initializeOperations() {
 async function updateOperationsStatus(isPolling = false) {
     try {
         // Get database status
-        const health = await apiRequest('/api/health');
+        const health = await api('/api/health');
         
         // Update status indicators
         const statusIndicators = document.querySelectorAll('.operation-status');
@@ -8330,7 +8288,7 @@ function showSchemaManager() {
 // Load all schemas
 async function loadSchemas() {
     try {
-        const response = await apiRequest('/api/schemas');
+        const response = await api('/api/schemas');
         schemas = response || [];
         renderSchemaList();
     } catch (error) {
@@ -8366,12 +8324,12 @@ async function loadCollectionsForSchema() {
     try {
         // Load collections from all libraries for schema dropdown
         let allCollectionsList = [];
-        const librariesResponse = await apiRequest('/api/libraries');
+        const librariesResponse = await api('/api/libraries');
         
         if (librariesResponse && librariesResponse.libraries) {
             for (const library of librariesResponse.libraries) {
                 try {
-                    const response = await apiRequest(`/api/collections?library=${library.name}`);
+                    const response = await api(`/api/collections?library=${library.name}`);
                     if (response && response.collections) {
                         // Add library prefix to collection names for clarity
                         response.collections.forEach(col => {
@@ -8395,7 +8353,7 @@ async function loadCollectionsForSchema() {
 // Select a schema for editing
 async function selectSchema(collection) {
     try {
-        const response = await apiRequest(`/api/schemas/${collection}`);
+        const response = await api(`/api/schemas/${collection}`);
         currentSchema = response;
         
         // Show editor
@@ -8486,7 +8444,7 @@ async function saveSchema() {
         const method = currentSchema ? 'PUT' : 'POST';
         const url = currentSchema ? `/api/schemas/${collection}` : '/api/schemas';
         
-        const response = await apiRequest(url, method, schemaData);
+        const response = await api(url, method, schemaData);
         
         showNotification(`Schema ${currentSchema ? 'updated' : 'created'} successfully`, 'success');
         
@@ -8510,7 +8468,7 @@ async function deleteSchema() {
     }
     
     try {
-        await apiRequest(`/api/schemas/${currentSchema.collection}`, 'DELETE');
+        await api(`/api/schemas/${currentSchema.collection}`, 'DELETE');
         
         showNotification('Schema deleted successfully', 'success');
         
@@ -8535,7 +8493,7 @@ async function loadWelcomePanel() {
         // Check if _system_config collection exists first
         const query1 = JSON.stringify({"type":"config","library":"system"});
         const encodedQuery1 = encodeURIComponent(query1);
-        const systemConfigResponse = await apiRequest(`/api/documents?query=${encodedQuery1}`, 'GET', null, true);
+        const systemConfigResponse = await api(`/api/documents?query=${encodedQuery1}`);
         
         if (systemConfigResponse && systemConfigResponse.documents) {
             // Look for welcome message in system config
@@ -8570,7 +8528,7 @@ async function loadWelcomePanel() {
         // Fall back to checking _config collection for legacy support
         const query2 = JSON.stringify({"type":"config","library":"default"});
         const encodedQuery2 = encodeURIComponent(query2);
-        const configResponse = await apiRequest(`/api/documents?query=${encodedQuery2}`, 'GET', null, true);
+        const configResponse = await api(`/api/documents?query=${encodedQuery2}`);
         
         if (configResponse && configResponse.documents) {
             const welcomeConfig = configResponse.documents.find(doc => 
@@ -8601,11 +8559,54 @@ async function loadWelcomePanel() {
                 }
                 
                 // Content is now always visible in the fixed dashboard panel
+                return;
             }
         }
+        
+        // No welcome message found, create default one
+        await createDefaultWelcomeMessage();
+        
     } catch (error) {
         // Silently fail if config collection doesn't exist
         // console.log('Welcome panel config not found or error loading:', error);
+    }
+}
+
+// Create default welcome message if none exists
+async function createDefaultWelcomeMessage() {
+    try {
+        const welcomeDoc = {
+            type: 'config',
+            library: 'system',
+            name: 'welcome_message',
+            title: 'Welcome to JDBX',
+            message: `# Welcome to JDBX Database System\n\n**JDBX** is a high-performance JSON document database with advanced features:\n\n- 🚀 **Fast Operations**: Lock-free skiplist data structures\n- 📊 **Rich Queries**: Powerful document querying and filtering\n- 🔐 **Secure Access**: Role-based access control (RBAC)\n- 📈 **Real-time Metrics**: Performance monitoring and analytics\n- 🌐 **RESTful API**: Clean HTTP interface for all operations\n\n## Getting Started\n\n1. **Browse Data**: Use the Browser tab to explore collections\n2. **Manage Users**: Configure access via the RBAC tab\n3. **Monitor Performance**: Check system health on the Dashboard\n4. **API Access**: View documentation in the API tab\n\nEnjoy using JDBX! 🎉`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+        
+        // Insert the welcome message into the database
+        await api('/api/documents', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(welcomeDoc)
+        });
+        
+        // Update the welcome panel immediately
+        const contentElement = document.getElementById('welcomeContent');
+        if (contentElement) {
+            if (typeof marked !== 'undefined') {
+                const htmlContent = marked.parse(welcomeDoc.message.replace(/\\n/g, '\n'));
+                contentElement.innerHTML = htmlContent;
+            } else {
+                contentElement.innerHTML = welcomeDoc.message.replace(/\\n/g, '<br>');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Failed to create welcome message:', error);
     }
 }
 
@@ -8806,18 +8807,33 @@ const RetryManager = {
     }
 };
 
-// Enhanced API call wrapper with retry logic
-async function apiWithRetry(endpoint, options = {}, retryConfig = {}) {
-    return RetryManager.withRetry(async () => {
-        const response = await apiRequest(endpoint, options);
-        
-        // Check if response indicates a retryable error
-        if (!response.ok && response.status >= 500) {
-            throw new Error(`Server error: ${response.status}`);
+// Simplified API call - single source of truth
+async function api(endpoint, options = {}) {
+    const token = localStorage.getItem('jdbx_auth_token');
+    if (!token && !endpoint.includes('/login')) {
+        window.location.href = '/login.html';
+        return;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...options.headers
         }
-        
-        return response;
-    }, retryConfig);
+    });
+    
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+            return;
+        }
+        throw new Error(`API error: ${response.status}`);
+    }
+    
+    return response.json();
 }
 
 // ===== CLIENT-SIDE CACHING SYSTEM =====
@@ -8942,51 +8958,15 @@ const APICache = {
     }
 };
 
-// Enhanced API call with caching
-async function apiCallWithCache(endpoint, options = {}, useCache = true) {
-    // Only cache GET requests by default
-    if (useCache && (!options.method || options.method === 'GET')) {
-        const cached = APICache.get(endpoint, options);
-        if (cached) {
-            console.log(`📦 Cache ${cached.stale ? 'HIT (stale)' : 'HIT'} for ${endpoint}`);
-            
-            // If stale, trigger background refresh
-            if (cached.stale) {
-                console.log(`🔄 Background refresh triggered for ${endpoint}`);
-                apiCallWithCache(endpoint, options, false).then(freshData => {
-                    // Update cache with fresh data
-                    console.log(`✅ Background refresh completed for ${endpoint}`);
-                }).catch(error => {
-                    console.warn(`⚠️ Background refresh failed for ${endpoint}:`, error);
-                });
-            }
-            
-            return cached.data;
-        }
-        
-        console.log(`📦 Cache MISS for ${endpoint}`);
-    }
-    
-    try {
-        const data = await apiWithRetry(endpoint, options);
-        
-        // Cache successful responses - apiWithRetry already returns parsed JSON
-        if (useCache && (!options.method || options.method === 'GET')) {
-            APICache.set(endpoint, options, data);
-        }
-        
-        return data;
-    } catch (error) {
-        // On error, try to return stale cached data as fallback
-        if (useCache) {
-            const cached = APICache.get(endpoint, options);
-            if (cached) {
-                console.log(`📦 Cache FALLBACK for ${endpoint} due to error:`, error.message);
-                return cached.data;
-            }
-        }
-        throw error;
-    }
+// Simplified error handling - single source of truth
+function showError(message, error) {
+    console.error(message, error);
+    const alertsContainer = document.querySelector('.alerts') || document.body;
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger';
+    alert.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ${message}`;
+    alertsContainer.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
 }
 
 // ===== ERROR HANDLING AND USER FEEDBACK =====
@@ -10276,7 +10256,7 @@ async function runTerminalCommand(command) {
         case 'backup':
             addTerminalLine('Creating database backup...', 'info');
             try {
-                const response = await apiRequest('/api/backup', {
+                const response = await api('/api/backup', {
                     method: 'POST',
                     body: JSON.stringify({})
                 });
@@ -10297,7 +10277,7 @@ async function runTerminalCommand(command) {
             // Original code commented out until backend endpoint is available:
             /*
             try {
-                const response = await apiRequest('/api/admin/compact', 'POST');
+                const response = await api('/api/admin/compact', 'POST');
                 if (response.success) {
                     addTerminalLine('Database compacted successfully', 'success');
                     if (response.stats) {
@@ -10317,7 +10297,7 @@ async function runTerminalCommand(command) {
         case 'test':
             addTerminalLine('Testing database connection...', 'info');
             try {
-                const response = await apiRequest('/api/health', {
+                const response = await api('/api/health', {
                     method: 'GET'
                 });
                 if (response.status === 'healthy') {
@@ -10335,7 +10315,7 @@ async function runTerminalCommand(command) {
         case 'export':
             addTerminalLine('Exporting database...', 'info');
             try {
-                const response = await apiRequest('/api/export', {
+                const response = await api('/api/export', {
                     method: 'POST',
                     body: JSON.stringify({})
                 });
@@ -10376,7 +10356,7 @@ async function runTerminalCommand(command) {
                             addTerminalLine('Import failed: Invalid JSON format', 'error');
                             return;
                         }
-                        const response = await apiRequest('/api/import', {
+                        const response = await api('/api/import', {
                             method: 'POST',
                             body: JSON.stringify(parseResult.data)
                         });
@@ -10400,7 +10380,7 @@ async function runTerminalCommand(command) {
         case 'cache':
             addTerminalLine('Clearing cache...', 'info');
             try {
-                const response = await apiRequest('/api/cache/clear', {
+                const response = await api('/api/cache/clear', {
                     method: 'POST',
                     body: JSON.stringify({})
                 });
@@ -10480,7 +10460,7 @@ async function saveDocument() {
         const requestBody = JSON.stringify(parsedDoc);
         // console.log('Sending request body:', requestBody);
         
-        const response = await apiRequest(`/api/documents/${currentDocument}`, {
+        const response = await api(`/api/documents/${currentDocument}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: requestBody
@@ -10603,8 +10583,8 @@ function createNewDocument() {
 async function loadIndexMetrics() {
     try {
         const [healthResponse, indexStatsResponse] = await Promise.all([
-            apiRequest('health'),
-            apiRequest('index/stats')
+            api('health'),
+            api('index/stats')
         ]);
 
         const health = healthResponse.health || {};
