@@ -58,8 +58,10 @@ export function logout() {
  */
 export async function apiRequest(endpoint, options = {}) {
     const token = getAuthToken();
+    console.log('🌐 apiRequest called:', endpoint, 'token exists:', !!token);
     
     if (!token) {
+        console.log('❌ No token in apiRequest, redirecting to login');
         redirectToLogin();
         return null;
     }
@@ -270,3 +272,9 @@ export const librariesAPI = {
         });
     }
 };
+
+// Default API function for backward compatibility
+export const api = apiRequest;
+
+// Export as default as well
+export default apiRequest;
