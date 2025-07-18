@@ -713,6 +713,37 @@
             visibility: visible !important;
             opacity: 1 !important;
         }
+        
+        /* DEBUG: Make everything visible with colors */
+        .navbar {
+            background-color: #007bff !important;
+            z-index: 1000 !important;
+        }
+        
+        .view-container.active {
+            background-color: #f8f9fa !important;
+            border: 2px solid red !important;
+            color: #212529 !important;
+        }
+        
+        .view-container.active * {
+            color: #212529 !important;
+            background-color: transparent !important;
+        }
+        
+        .view-container.active h1,
+        .view-container.active h2,
+        .view-container.active h3,
+        .view-container.active h4,
+        .view-container.active h5,
+        .view-container.active h6 {
+            color: #000 !important;
+            font-weight: bold !important;
+        }
+        
+        .view-container.active .nav-link {
+            color: #007bff !important;
+        }
     </style>
 </head>
 <body>
