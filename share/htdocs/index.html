@@ -719,35 +719,56 @@
             opacity: 1 !important;
         }
         
-        /* DEBUG: Make everything visible with colors */
+        /* ULTRA AGGRESSIVE DEBUG: Force everything visible */
+        body {
+            background-color: yellow !important;
+            color: black !important;
+        }
+        
         .navbar {
-            background-color: #007bff !important;
-            z-index: 1000 !important;
+            background-color: blue !important;
+            color: white !important;
+            height: 60px !important;
+            display: block !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 9999 !important;
+            border: 5px solid red !important;
+        }
+        
+        .container-fluid {
+            background-color: lime !important;
+            margin-top: 80px !important;
+            min-height: 100vh !important;
+            display: block !important;
+            position: relative !important;
+            z-index: 1 !important;
+            border: 10px solid purple !important;
+        }
+        
+        .view-container {
+            background-color: orange !important;
+            color: black !important;
+            border: 5px solid cyan !important;
+            padding: 20px !important;
+            margin: 20px !important;
+            min-height: 300px !important;
         }
         
         .view-container.active {
-            background-color: #f8f9fa !important;
-            border: 2px solid red !important;
-            color: #212529 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background-color: pink !important;
+            border: 10px solid black !important;
         }
         
-        .view-container.active * {
-            color: #212529 !important;
-            background-color: transparent !important;
-        }
-        
-        .view-container.active h1,
-        .view-container.active h2,
-        .view-container.active h3,
-        .view-container.active h4,
-        .view-container.active h5,
-        .view-container.active h6 {
-            color: #000 !important;
+        * {
+            color: black !important;
             font-weight: bold !important;
-        }
-        
-        .view-container.active .nav-link {
-            color: #007bff !important;
+            font-size: 16px !important;
         }
     </style>
 </head>
