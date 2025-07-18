@@ -137,8 +137,34 @@ export class DataManager {
             const currentLibrary = state.get('currentLibrary');
             
             // Load system stats
-            const statsResponse = await api(`/api/metrics/stats?library=${currentLibrary}`);
-            const stats = statsResponse.stats || {};
+            const statsResponse = await api(`/api/metrics/stats?format=json&library=${currentLibrary}`);
+            
+            // Transform metrics data to stats format
+            const metrics = statsResponse.metrics || [];
+            const stats = {
+                totalDocuments: 0,
+                databaseSize: 0,
+                totalRequests: 0,
+                activeConnections: 0
+            };
+            
+            // Extract relevant metrics
+            metrics.forEach(metric => {
+                switch(metric.name) {
+                    case 'db_operations_total':
+                        stats.totalDocuments = metric.value || 0;
+                        break;
+                    case 'system_memory_bytes':
+                        stats.databaseSize = metric.value || 0;
+                        break;
+                    case 'server_requests_total':
+                        stats.totalRequests = metric.value || 0;
+                        break;
+                    case 'active_connections':
+                        stats.activeConnections = metric.value || 0;
+                        break;
+                }
+            });
             
             // Load collections data
             const collectionsResponse = await api(`/api/collections?library=${currentLibrary}&stats=true`);
