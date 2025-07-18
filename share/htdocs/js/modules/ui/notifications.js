@@ -166,6 +166,81 @@ export function showInfo(message) {
     showNotification(message, NOTIFICATION_TYPES.INFO);
 }
 
+/**
+ * Notification Manager Class
+ * Provides a class-based interface for the notification system
+ */
+export class NotificationManager {
+    constructor() {
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize notification manager
+     */
+    initialize() {
+        if (this.isInitialized) return;
+        
+        console.log('🔔 Initializing Notification Manager');
+        
+        // Ensure container exists
+        if (!document.getElementById('notification-container')) {
+            createNotificationContainer();
+        }
+        
+        this.isInitialized = true;
+    }
+
+    /**
+     * Show notification
+     */
+    show(message, type, duration) {
+        return showNotification(message, type, duration);
+    }
+
+    /**
+     * Show success notification
+     */
+    showSuccess(message) {
+        return showSuccess(message);
+    }
+
+    /**
+     * Show error notification
+     */
+    showError(message) {
+        return showError(message);
+    }
+
+    /**
+     * Show warning notification
+     */
+    showWarning(message) {
+        return showWarning(message);
+    }
+
+    /**
+     * Show info notification
+     */
+    showInfo(message) {
+        return showInfo(message);
+    }
+
+    /**
+     * Clear all notifications
+     */
+    clearAll() {
+        return clearAllNotifications();
+    }
+
+    /**
+     * Cleanup resources
+     */
+    cleanup() {
+        clearAllNotifications();
+    }
+}
+
 // Make functions globally available for onclick handlers
 if (typeof window !== 'undefined') {
     window.dismissNotification = dismissNotification;
