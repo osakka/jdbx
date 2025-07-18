@@ -123,8 +123,9 @@
         .view-container {
             display: none;
             animation: fadeIn 0.2s ease-in;
-            min-height: 100vh;
+            min-height: calc(100vh - 120px);
             padding: 20px;
+            width: 100%;
         }
         
         .view-container.active {
@@ -684,6 +685,33 @@
         
         [data-theme="dark"] .terminal-text {
             color: #e6edf3;
+        }
+        
+        /* Fix body/html height constraints */
+        html, body {
+            height: 100%;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .container-fluid {
+            min-height: calc(100vh - 80px);
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Force content to be visible */
+        .view-container .section-header,
+        .view-container .row,
+        .view-container .card,
+        .view-container .stat-card {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
     </style>
 </head>
