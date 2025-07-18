@@ -2343,6 +2343,33 @@
     
     <!-- 🚀 JDBX Professional Modular Architecture -->
     <!-- Complete modular system - no legacy code -->
+    <script>
+        // Debug: Test if we can fetch modules manually
+        console.log('🔍 Testing manual module fetch...');
+        
+        fetch('./js/modules/core/state.js')
+            .then(response => {
+                console.log('✅ Manual fetch state.js response:', response.status, response.statusText);
+                return response.text();
+            })
+            .then(content => {
+                console.log('✅ Manual fetch state.js content length:', content.length);
+            })
+            .catch(error => {
+                console.error('❌ Manual fetch state.js failed:', error);
+            });
+        
+        // Also test with type="module"
+        console.log('🔍 Testing module import...');
+        import('./js/modules/core/state.js')
+            .then(module => {
+                console.log('✅ Dynamic import state.js succeeded:', module);
+            })
+            .catch(error => {
+                console.error('❌ Dynamic import state.js failed:', error);
+            });
+    </script>
+    
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
