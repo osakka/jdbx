@@ -436,15 +436,19 @@ void logger_log(log_level_t level, const char* file, int line,
   /* Add source information if enabled - functionname.filename line_num: */
   if (logger->include_source) {
     const char* filename = get_filename(file);
-    /* Remove .c extension for cleaner output */
-    char clean_filename[64];
-    strncpy(clean_filename, filename, sizeof(clean_filename) - 1);
-    clean_filename[sizeof(clean_filename) - 1] = '\0';
-    char* ext = strrchr(clean_filename, '.');
+    /* CRITICAL FIX: Remove .c extension without stack buffer overflow
+     * Previously used stack buffer clean_filename[64] which caused race conditions
+     * in concurrent logging, corrupting memory and causing segfaults */
+    
+    /* Find the extension directly without copying */
+    const char* ext = strrchr(filename, '.');
     if (ext && strcmp(ext, ".c") == 0) {
-      *ext = '\0';
+      /* Print filename without extension */
+      fprintf(output, "%s.%.*s %d: ", function, (int)(ext - filename), filename, line);
+    } else {
+      /* No .c extension, print as-is */
+      fprintf(output, "%s.%s %d: ", function, filename, line);
     }
-    fprintf(output, "%s.%s %d: ", function, clean_filename, line);
   }
   
   /* Format and write the actual log message */

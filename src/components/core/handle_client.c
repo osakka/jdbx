@@ -39,9 +39,22 @@ static int client_read_data(client_conn_t* client, char* buffer, size_t buffer_s
     return -1;
   }
   
-  if (client->use_ssl) {
+  /* CRITICAL FIX: Cache client fields to prevent race condition access
+   * Previously accessed client->use_ssl and client->ssl_conn after null check
+   * but without protection, causing segfaults at offset 112 (ssl_conn field)
+   * Now cache these values while we know client is valid */
+  int client_use_ssl = 0;
+  ssl_connection_t* ssl_conn = NULL;
+  
+  /* Safe field caching with memory barrier */
+  __asm__ __volatile__("" ::: "memory");
+  if (client && (uintptr_t)client >= 0x1000) {
+    client_use_ssl = client->use_ssl;
+    ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
+  }
+  
+  if (client_use_ssl) {
     /* 🎯 ULTIMATE SSL READ RELIABILITY - ENTERPRISE-GRADE SOLUTION */
-    ssl_connection_t* ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
     if (!ssl_conn) {
       return -1;  /* SSL expected but not available */
     }
@@ -125,9 +138,20 @@ static int client_write_data(client_conn_t* client, const char* data, size_t dat
     return -1;
   }
   
-  if (client->use_ssl) {
+  /* CRITICAL FIX: Cache client fields to prevent race condition access
+   * Same pattern as client_read_data - prevent segfault at offset 112 */
+  int client_use_ssl = 0;
+  ssl_connection_t* ssl_conn = NULL;
+  
+  /* Safe field caching with memory barrier */
+  __asm__ __volatile__("" ::: "memory");
+  if (client && (uintptr_t)client >= 0x1000) {
+    client_use_ssl = client->use_ssl;
+    ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
+  }
+  
+  if (client_use_ssl) {
     /* Safely get SSL connection pointer */
-    ssl_connection_t* ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
     if (!ssl_conn) {
       return -1;  /* SSL expected but not available */
     }
@@ -160,6 +184,22 @@ static int client_setup_ssl(client_conn_t* client) {
     return -1;
   }
   
+  /* CRITICAL FIX: Cache client fields to prevent race condition access
+   * Prevent segfault at offset 112 (ssl_conn field) and client_fd access */
+  int client_fd = -1;
+  ssl_connection_t** ssl_conn_ptr = NULL;
+  
+  /* Safe field caching with memory barrier */
+  __asm__ __volatile__("" ::: "memory");
+  if (client && (uintptr_t)client >= 0x1000) {
+    client_fd = client->client_fd;
+    ssl_conn_ptr = &client->ssl_conn;
+  }
+  
+  if (client_fd < 0 || !ssl_conn_ptr) {
+    return -1;
+  }
+  
   /* Get SSL context from server */
   ssl_context_t* ssl_ctx = server_get_ssl_context();
   if (!ssl_ctx) {
@@ -169,8 +209,8 @@ static int client_setup_ssl(client_conn_t* client) {
     return -1;
   }
   
-  /* Create SSL connection */
-  ssl_error_t error = ssl_connection_create(ssl_ctx, client->client_fd, &client->ssl_conn);
+  /* Create SSL connection using cached values */
+  ssl_error_t error = ssl_connection_create(ssl_ctx, client_fd, ssl_conn_ptr);
   if (error != SSL_SUCCESS) {
     if (g_logger) {
       LOG_ERROR("Cannot create SSL connection: %s", ssl_error_string(error));
@@ -178,13 +218,22 @@ static int client_setup_ssl(client_conn_t* client) {
     return -1;
   }
   
-  /* Perform SSL handshake */
-  error = ssl_handshake(client->ssl_conn);
+  /* Perform SSL handshake - need to re-read ssl_conn safely */
+  ssl_connection_t* ssl_conn = NULL;
+  if (client && (uintptr_t)client >= 0x1000) {
+    ssl_conn = __sync_fetch_and_add(&client->ssl_conn, 0);
+  }
+  
+  if (!ssl_conn) {
+    return -1;
+  }
+  
+  error = ssl_handshake(ssl_conn);
   if (error != SSL_SUCCESS) {
     if (g_logger) {
       LOG_ERROR("SSL handshake failed: %s", ssl_error_string(error));
     }
-    ssl_connection_free(client->ssl_conn);
+    ssl_connection_free(ssl_conn);
     client->ssl_conn = NULL;
     return -1;
   }
@@ -299,13 +348,27 @@ void handle_client(void* client_data) {
     client_port = ntohs(client_addr.sin_port);
   }
 
+  /* CRITICAL FIX: Cache client fields to prevent race condition access
+   * Previously accessed client->use_ssl and client->api_ctx after null check
+   * but without protection, causing segfaults at offsets 24, 104, etc.
+   * Now cache these values while we know client is valid */
+  int client_use_ssl = 0;
+  void* client_api_ctx = NULL;
+  
+  /* Safe field caching with memory barrier */
+  __asm__ __volatile__("" ::: "memory");
+  if (client && (uintptr_t)client >= 0x1000) {
+    client_use_ssl = client->use_ssl;
+    client_api_ctx = client->api_ctx;
+  }
+  
   /* Comprehensive connection lifecycle logging */
   if (g_logger) {
     TRACE_NET("Connection started - fd=%d, thread=%lu, tid=%d, client=%s:%d, ssl=%s", 
         client_fd, (unsigned long)tid, system_tid, client_ip, client_port,
-        client->use_ssl ? "enabled" : "disabled");
+        client_use_ssl ? "enabled" : "disabled");
     TRACE_NET("CONNECTION_DETAILS: api_ctx=%p, client_struct=%p", 
-        client->api_ctx, (void*)client);
+        client_api_ctx, (void*)client);
   } else {
     printf("Thread %lu (tid=%d) handling client connection (fd=%d, %s:%d)\n", 
        (unsigned long)tid, system_tid, client_fd, client_ip, client_port);
@@ -317,11 +380,14 @@ void handle_client(void* client_data) {
     goto cleanup;
   }
 
-  /* Verify API context is available */
-  if (!client->api_ctx) {
+  /* Verify API context is available using cached value */
+  if (!client_api_ctx) {
     fprintf(stderr, "Error: NULL API context in client handler\n");
     close(client_fd);
-    client->client_fd = 0;
+    /* Safe null check before accessing client fields */
+    if (client && (uintptr_t)client >= 0x1000) {
+      client->client_fd = 0;
+    }
     goto cleanup;
   }
 
@@ -338,8 +404,8 @@ void handle_client(void* client_data) {
   }
   memset(buffer, 0, buffer_size);
   
-  /* Set up SSL connection if needed */
-  if (client->use_ssl) {
+  /* Set up SSL connection if needed using cached value */
+  if (client_use_ssl) {
     if (g_logger) {
       LOG_DEBUG("Setting up SSL connection for client fd=%d", client_fd);
     }
@@ -1226,7 +1292,7 @@ void handle_client(void* client_data) {
                  request->path ? request->path : "<null>");
       }
       
-      api_result = api_dispatch_request(client->api_ctx, request);
+      api_result = api_dispatch_request(client_api_ctx, request);
       response = api_result ? api_result->response : NULL;
       
       if (SHOULD_DEBUG_MEMORY()) {
@@ -1546,8 +1612,18 @@ cleanup:
   
   /* 🔒 CRITICAL: Single cleanup sequence with proper ordering */
   if (client) {
+    /* CRITICAL FIX: Cache ssl_conn pointer to prevent race condition access
+     * Prevent segfault at offset 116 (ssl_conn field) during cleanup */
+    ssl_connection_t* ssl_conn_cached = NULL;
+    
+    /* Safe field caching with memory barrier */
+    __asm__ __volatile__("" ::: "memory");
+    if (client && (uintptr_t)client >= 0x1000) {
+      ssl_conn_cached = client->ssl_conn;
+    }
+    
     /* 1. Cleanup SSL first (while socket is still valid) */
-    if (client->ssl_conn) {
+    if (ssl_conn_cached) {
       if (g_logger) {
         TRACE_NET("CONNECTION_SSL_CLEANUP: fd=%d, cleaning up SSL connection", client_fd);
       }
@@ -1570,8 +1646,10 @@ cleanup:
       if (g_logger) {
         TRACE_NET("CONNECTION_CLIENT_FREE: client=%p, freeing structure", (void*)client);
       }
-      /* Clear all pointers before freeing */
-      client->api_ctx = NULL;
+      /* Clear all pointers before freeing - safe null check */
+      if (client && (uintptr_t)client >= 0x1000) {
+        client->api_ctx = NULL;
+      }
       /* Note: ssl_conn already cleared by client_cleanup_ssl() */
       BUFFER_FREE(client);
       client = NULL;

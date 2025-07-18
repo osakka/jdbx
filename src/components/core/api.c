@@ -689,7 +689,7 @@ api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) 
           /* Check if response needs promotion to survive checkpoint operations */
           
           /* Large response bodies that might be transmitted asynchronously */
-          if (result->body && strlen(result->body) > 65536) {  /* 64KB threshold */
+          if (result->body && strlen(result->body) > 32768) {  /* 32KB threshold - reduced to prevent memory leaks */
               needs_promotion = true;
           }
           
@@ -700,7 +700,7 @@ api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) 
                strstr(result->content_type, "application/javascript") ||
                strstr(result->content_type, "text/javascript"))) {
               /* Only promote if large enough to warrant async transmission */
-              if (result->body && strlen(result->body) > 32768) {  /* 32KB for static files */
+              if (result->body && strlen(result->body) > 16384) {  /* 16KB for static files - reduced to prevent accumulation */
                   needs_promotion = true;
               }
           }
@@ -744,6 +744,24 @@ api_result_t* api_dispatch_request(api_context_t* ctx, http_request_t* request) 
           metric_t* error_counter = get_api_errors_metric();
           if (error_counter) {
               metrics_counter_inc(error_counter, 1);
+          }
+          
+          /* CRITICAL FIX: Promote error response before rewinding checkpoint
+           * Error responses are allocated from the checkpoint memory,
+           * so we must promote them to survive the checkpoint rewind */
+          if (request_checkpoint && result) {
+              memory_promote(result);
+              if (result->body) memory_promote(result->body);
+              if (result->content_type) memory_promote(result->content_type);
+              if (result->headers) {
+                  memory_promote(result->headers);
+                  for (size_t j = 0; j < result->num_headers; j++) {
+                      if (result->headers[j]) {
+                          memory_promote(result->headers[j]);
+                      }
+                  }
+              }
+              LOG_DEBUG("Promoted error response to survive checkpoint rewind");
           }
           
           /* Rewind memory checkpoint on error immediately */
