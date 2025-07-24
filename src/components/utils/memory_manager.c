@@ -717,29 +717,38 @@ static bool ssl_semantic_free(memory_header_t* header) {
     
     /* Return to appropriate pool based on size */
     if (size <= SSL_TINY_THRESHOLD && g_ssl_pools.tiny_available < g_ssl_pools.tiny_pool_size) {
-        /* Return to tiny pool */
-        g_ssl_pools.tiny_pool[g_ssl_pools.tiny_available++] = header;
-        returned_to_pool = true;
-        if (SHOULD_DEBUG_MEMORY()) {
-            fprintf(stderr, "   ♻️  SSL tiny pool return (size=%zu, available=%zu)\n", 
-                   size, g_ssl_pools.tiny_available);
+        /* Limit pool size to prevent memory accumulation */
+        if (g_ssl_pools.tiny_available < 128) {  /* Max 128 items in tiny pool */
+            g_ssl_pools.tiny_pool[g_ssl_pools.tiny_available++] = header;
+            returned_to_pool = true;
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "   ♻️  SSL tiny pool return (size=%zu, available=%zu)\n", 
+                       size, g_ssl_pools.tiny_available);
+            }
         }
+        /* If pool is full, just free the memory to prevent accumulation */
     } else if (size <= SSL_SMALL_THRESHOLD && g_ssl_pools.small_available < g_ssl_pools.small_pool_size) {
-        /* Return to small pool */
-        g_ssl_pools.small_pool[g_ssl_pools.small_available++] = header;
-        returned_to_pool = true;
-        if (SHOULD_DEBUG_MEMORY()) {
-            fprintf(stderr, "   ♻️  SSL small pool return (size=%zu, available=%zu)\n", 
-                   size, g_ssl_pools.small_available);
+        /* Limit pool size to prevent memory accumulation */
+        if (g_ssl_pools.small_available < 64) {  /* Max 64 items in small pool */
+            g_ssl_pools.small_pool[g_ssl_pools.small_available++] = header;
+            returned_to_pool = true;
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "   ♻️  SSL small pool return (size=%zu, available=%zu)\n", 
+                       size, g_ssl_pools.small_available);
+            }
         }
+        /* If pool is full, just free the memory to prevent accumulation */
     } else if (size <= SSL_MEDIUM_THRESHOLD && g_ssl_pools.medium_available < g_ssl_pools.medium_pool_size) {
-        /* Return to medium pool */
-        g_ssl_pools.medium_pool[g_ssl_pools.medium_available++] = header;
-        returned_to_pool = true;
-        if (SHOULD_DEBUG_MEMORY()) {
-            fprintf(stderr, "   ♻️  SSL medium pool return (size=%zu, available=%zu)\n", 
-                   size, g_ssl_pools.medium_available);
+        /* Limit pool size to prevent memory accumulation */
+        if (g_ssl_pools.medium_available < 32) {  /* Max 32 items in medium pool */
+            g_ssl_pools.medium_pool[g_ssl_pools.medium_available++] = header;
+            returned_to_pool = true;
+            if (SHOULD_DEBUG_MEMORY()) {
+                fprintf(stderr, "   ♻️  SSL medium pool return (size=%zu, available=%zu)\n", 
+                       size, g_ssl_pools.medium_available);
+            }
         }
+        /* If pool is full, just free the memory to prevent accumulation */
     }
     
     pthread_mutex_unlock(&g_ssl_pools.pool_mutex);

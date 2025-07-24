@@ -84,6 +84,12 @@ export function updateChart(chartId, newData) {
     const chart = getChart(chartId);
     
     if (!chart) {
+        // Try to create the chart if canvas exists
+        const canvas = document.getElementById(chartId);
+        if (canvas) {
+            console.log(`Creating chart: ${chartId}`);
+            return createChart(chartId, chartId, 'doughnut', newData);
+        }
         console.warn(`Chart not found: ${chartId}`);
         return;
     }

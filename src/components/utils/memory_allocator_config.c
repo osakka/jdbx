@@ -55,9 +55,8 @@ int memory_allocator_config_init(void) {
     
     /* Initialize mutex */
     if (pthread_mutex_init(&g_mem_config.config_mutex, NULL) != 0) {
-        if (getenv("JDBX_MEM_DEBUG")) {
-            fprintf(stderr, "Failed to initialize memory allocator config mutex\n");
-        }
+        /* Error logging - always enabled for critical failures */
+        fprintf(stderr, "Failed to initialize memory allocator config mutex\n");
         return -1;
     }
     
@@ -66,7 +65,7 @@ int memory_allocator_config_init(void) {
     
     atomic_store(&g_mem_config.initialized, true);
     
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (atomic_load(&g_mem_config.debug_enabled)) {
         fprintf(stderr, "Memory allocator configuration initialized\n");
     }
     return 0;
@@ -81,7 +80,7 @@ void memory_allocator_config_shutdown(void) {
     atomic_store(&g_mem_config.initialized, false);
     pthread_mutex_destroy(&g_mem_config.config_mutex);
     
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (atomic_load(&g_mem_config.debug_enabled)) {
         fprintf(stderr, "Memory allocator configuration shutdown\n");
     }
 }
@@ -131,13 +130,18 @@ void memory_allocator_config_reload(void) {
     
     /* Debug mode (existing JDBX_MEM_DEBUG) */
     const char* debug_enabled = getenv("JDBX_MEM_DEBUG");
-    bool enable_debug = (debug_enabled != NULL);
+    bool enable_debug = false;
+    if (debug_enabled) {
+        enable_debug = (strcmp(debug_enabled, "true") == 0 || 
+                       strcmp(debug_enabled, "1") == 0 ||
+                       strcmp(debug_enabled, "yes") == 0);
+    }
     atomic_store(&g_mem_config.debug_enabled, enable_debug);
     
     pthread_mutex_unlock(&g_mem_config.config_mutex);
     
     /* Log configuration state if debug enabled */
-    if (getenv("JDBX_MEM_DEBUG")) {
+    if (enable_debug) {
         fprintf(stderr, "Memory allocator configuration reloaded:\n");
         fprintf(stderr, "  Exotic allocators: %s\n", enable_exotic ? "enabled" : "disabled");
         fprintf(stderr, "  Arena allocator: %s\n", enable_arena ? "enabled" : "disabled");

@@ -64,11 +64,14 @@ export class DataManager {
      */
     async loadCollections() {
         try {
-            const currentLibrary = state.get('currentLibrary');
+            const currentLibrary = state.get('currentLibrary') || 'default';
+            console.log('🔄 Loading collections for library:', currentLibrary);
             const response = await api(`/api/collections?library=${currentLibrary}`);
-            return response.collections || [];
+            console.log('✅ Collections loaded:', response);
+            return response.collections || response || [];
         } catch (error) {
             console.error('Failed to load collections:', error);
+            console.error('Error details:', error.message);
             return [];
         }
     }
@@ -104,15 +107,15 @@ export class DataManager {
             
             // Load users
             const usersResponse = await api(`/api/rbac/users?library=${currentLibrary}`);
-            const users = usersResponse.users || [];
+            const users = usersResponse ? (usersResponse.users || []) : [];
             
             // Load roles
             const rolesResponse = await api(`/api/rbac/roles?library=${currentLibrary}`);
-            const roles = rolesResponse.roles || [];
+            const roles = rolesResponse ? (rolesResponse.roles || []) : [];
             
             // Load permissions
             const permissionsResponse = await api(`/api/rbac/permissions?library=${currentLibrary}`);
-            const permissions = permissionsResponse.permissions || [];
+            const permissions = permissionsResponse ? (permissionsResponse.permissions || []) : [];
             
             // Update state
             state.setState({
@@ -167,8 +170,16 @@ export class DataManager {
             });
             
             // Load collections data
-            const collectionsResponse = await api(`/api/collections?library=${currentLibrary}&stats=true`);
-            const collections = collectionsResponse.collections || [];
+            let collections = [];
+            try {
+                const collectionsResponse = await api(`/api/collections?library=${currentLibrary}&stats=true`);
+                if (collectionsResponse) {
+                    collections = collectionsResponse.collections || collectionsResponse || [];
+                }
+            } catch (collectionsError) {
+                console.warn('Failed to load collections for dashboard:', collectionsError);
+                // Continue with empty collections array
+            }
             
             // Update previous data for optimization
             state.updatePreviousData({
@@ -192,11 +203,31 @@ export class DataManager {
      */
     async loadMetricsData(timeRange = '1h') {
         try {
-            const response = await api(`/api/metrics?range=${timeRange}`);
-            return response.metrics || {};
+            const currentLibrary = state.get('currentLibrary') || 'default';
+            const response = await api(`/api/metrics/stats?format=json&library=${currentLibrary}&range=${timeRange}`);
+            
+            if (!response) {
+                console.warn('No response from metrics endpoint');
+                return {
+                    performance: {},
+                    system: {},
+                    database: {}
+                };
+            }
+            
+            // Handle both direct response and data envelope
+            const metrics = response.data || response;
+            console.log('✅ Loaded metrics data:', metrics);
+            
+            return metrics || {};
         } catch (error) {
             console.error('Failed to load metrics data:', error);
-            return {};
+            // Return empty metrics object instead of throwing
+            return {
+                performance: {},
+                system: {},
+                database: {}
+            };
         }
     }
 

@@ -5,12 +5,14 @@
 
 import { state } from '../core/state.js';
 import { VIEW_TYPES } from '../core/constants.js';
+import { UnifiedRenderer } from './unifiedRenderer.js';
 
 export class ViewManager {
     constructor() {
         this.isInitialized = false;
         this.currentView = null;
         this.viewRenderers = new Map();
+        this.renderer = new UnifiedRenderer();
     }
 
     /**
@@ -44,6 +46,7 @@ export class ViewManager {
         this.viewRenderers.set(VIEW_TYPES.METRICS, this.renderMetrics.bind(this));
         this.viewRenderers.set(VIEW_TYPES.OPERATIONS, this.renderOperations.bind(this));
         this.viewRenderers.set(VIEW_TYPES.SCRIPTS, this.renderScripts.bind(this));
+        this.viewRenderers.set('api', this.renderAPI.bind(this));
     }
 
     /**
@@ -125,8 +128,15 @@ export class ViewManager {
      */
     showView(viewName) {
         const viewElement = document.getElementById(`${viewName}-view`);
+        console.log(`🔍 showView(${viewName}): element found:`, !!viewElement);
         if (viewElement) {
             viewElement.classList.add('active');
+            console.log(`✅ Added 'active' class to ${viewName}-view`);
+            console.log(`🔍 Element classes:`, viewElement.classList.toString());
+            console.log(`🔍 Element style.display:`, viewElement.style.display);
+            console.log(`🔍 Computed display:`, getComputedStyle(viewElement).display);
+        } else {
+            console.error(`❌ Element not found: ${viewName}-view`);
         }
     }
 
@@ -147,31 +157,37 @@ export class ViewManager {
      * Render dashboard view
      */
     async renderDashboard() {
+        console.log('🎯 renderDashboard called');
         const dataManager = window.jdbxApp.getManager('data');
         const pollingManager = window.jdbxApp.getManager('polling');
         
         // Load dashboard data
         const { stats, collections } = await dataManager.loadDashboardData();
+        console.log('📊 Dashboard data loaded:', { stats, collections });
         
-        // Update dashboard UI
-        this.updateDashboardStats(stats);
-        this.updateDashboardCharts(collections);
+        // Single render call - unified approach
+        this.renderer.render({ stats, collections });
         
         // Start polling
         pollingManager.startPolling(VIEW_TYPES.DASHBOARD);
+        console.log('✅ Dashboard rendering complete');
     }
 
     /**
      * Render browser view
      */
     async renderBrowser() {
+        console.log('🗂️ renderBrowser called');
         const dataManager = window.jdbxApp.getManager('data');
         
-        // Load documents
-        await dataManager.loadDocuments();
+        // Load all browser data
+        const collections = await dataManager.loadCollections();
+        const documents = await dataManager.loadDocuments();
+        console.log('📚 Browser data loaded:', { collections: collections?.length, documents: documents?.length });
         
-        // Update browser UI
-        this.updateBrowserUI();
+        // Single render call
+        this.renderer.render({ collections, documents });
+        console.log('✅ Browser rendering complete');
     }
 
     /**
@@ -234,23 +250,37 @@ export class ViewManager {
     /**
      * Update dashboard stats
      * @param {object} stats - Statistics data
+     * @param {Array} collections - Collections data
      */
-    updateDashboardStats(stats) {
+    updateDashboardStats(stats, collections) {
+        console.log('📊 updateDashboardStats called with:', stats);
+        
         // Update stats display
         const elements = {
-            totalCollections: document.getElementById('totalCollections'),
+            totalCollections: document.getElementById('statTotalCollections'),
             totalDocuments: document.getElementById('totalDocuments'),
-            databaseSize: document.getElementById('databaseSize')
+            databaseSize: document.getElementById('statDatabaseSize')
         };
 
+        console.log('🔍 DOM elements found:', {
+            totalCollections: !!elements.totalCollections,
+            totalDocuments: !!elements.totalDocuments,
+            databaseSize: !!elements.databaseSize
+        });
+
         if (elements.totalCollections) {
-            elements.totalCollections.textContent = stats.totalCollections || 0;
+            // Get collections count from the collections data, not stats
+            const collectionsCount = collections ? collections.length : (stats.totalCollections || 0);
+            elements.totalCollections.textContent = collectionsCount;
+            console.log('✅ Updated totalCollections to:', collectionsCount);
         }
         if (elements.totalDocuments) {
             elements.totalDocuments.textContent = stats.totalDocuments || 0;
+            console.log('✅ Updated totalDocuments to:', stats.totalDocuments || 0);
         }
         if (elements.databaseSize) {
             elements.databaseSize.textContent = this.formatBytes(stats.databaseSize || 0);
+            console.log('✅ Updated databaseSize to:', this.formatBytes(stats.databaseSize || 0));
         }
     }
 
@@ -259,20 +289,48 @@ export class ViewManager {
      * @param {Array} collections - Collections data
      */
     updateDashboardCharts(collections) {
+        console.log('📈 updateDashboardCharts called with collections:', collections);
+        
         // Update collections chart
-        if (collections.length > 0) {
+        if (collections && collections.length > 0) {
+            console.log('🔍 Processing collections for chart:', collections.map(c => ({ name: c.name, count: c.documentCount })));
+            
             const chartData = {
                 labels: collections.map(c => c.name || 'Unknown'),
                 datasets: [{
                     label: 'Documents',
                     data: collections.map(c => c.documentCount || 0),
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 205, 86, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(153, 102, 255, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 205, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
                     borderWidth: 1
                 }]
             };
 
-            window.updateChart('collections', chartData);
+            console.log('📊 Chart data prepared:', chartData);
+
+            // Create chart if it doesn't exist, otherwise update it
+            try {
+                window.updateChart('collectionsChart', chartData);
+                console.log('✅ Chart updated successfully');
+            } catch (error) {
+                console.log('🔄 Creating collections chart...', error);
+                window.createChart('collectionsChart', 'collectionsChart', 'doughnut', chartData);
+                console.log('✅ Chart created successfully');
+            }
+        } else {
+            console.warn('⚠️ No collections data available for chart');
         }
     }
 
@@ -332,6 +390,15 @@ export class ViewManager {
     updateScriptsUI() {
         // Update scripts list
         this.updateScriptsList();
+    }
+
+    /**
+     * Render API view
+     */
+    async renderAPI() {
+        // Update API documentation UI
+        console.log('Rendering API view');
+        // API view is static, no dynamic content to load
     }
 
     /**

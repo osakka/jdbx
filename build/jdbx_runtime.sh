@@ -90,10 +90,10 @@ case "$1" in
         # Force kill any existing processes first
         pkill -f jdbxd 2>/dev/null || true
         sleep 1
+
+        # Cleanup
         rm -f "$PID_FILE"
-        
-        # Clean database for fresh start (use configurable paths)
-        rm -f "$VAR_DIR/database.jdb" "$VAR_DIR/jdbx.jdbx" "$VAR_DIR/jdbx.wal"
+        rm -f "$LOG_FILE"
         
         # Export all JDBX variables for the daemon
         export JDBX_BOOTSTRAP_ADMIN_USER

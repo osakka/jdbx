@@ -59,9 +59,11 @@ export function logout() {
 export async function apiRequest(endpoint, options = {}) {
     const token = getAuthToken();
     console.log('🌐 apiRequest called:', endpoint, 'token exists:', !!token);
+    console.log('🌐 apiRequest token value:', token ? token.substring(0, 20) + '...' : 'null');
     
     if (!token) {
         console.log('❌ No token in apiRequest, redirecting to login');
+        console.log('❌ localStorage keys:', Object.keys(localStorage));
         redirectToLogin();
         return null;
     }
@@ -108,7 +110,8 @@ export async function apiRequest(endpoint, options = {}) {
         } else {
             showNotification(`API Error: ${error.message}`, 'danger');
         }
-        throw error;
+        console.error('API request failed:', endpoint, error);
+        return null; // Return null instead of throwing to match expected behavior
     }
 }
 

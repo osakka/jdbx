@@ -340,6 +340,58 @@ export function navigateTo(view) {
     // Hash change will trigger switchView
 }
 
+/**
+ * Navigation Manager Class
+ * Encapsulates navigation functionality
+ */
+export class NavigationManager {
+    constructor() {
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize navigation manager
+     */
+    initialize() {
+        if (this.isInitialized) return;
+        
+        console.log('🧭 Initializing Navigation Manager');
+        
+        // Set up hash navigation
+        setupHashNavigation();
+        
+        this.isInitialized = true;
+    }
+
+    /**
+     * Switch to view
+     * @param {string} view - View to switch to
+     */
+    switchView(view) {
+        switchView(view);
+    }
+
+    /**
+     * Navigate to view
+     * @param {string} view - View to navigate to
+     */
+    navigateTo(view) {
+        navigateTo(view);
+    }
+
+    /**
+     * Cleanup resources
+     */
+    cleanup() {
+        // Clear any intervals
+        const refreshInterval = state.get('refreshInterval');
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            setState('refreshInterval', null);
+        }
+    }
+}
+
 // Make functions globally available for onclick handlers
 if (typeof window !== 'undefined') {
     window.switchView = switchView;

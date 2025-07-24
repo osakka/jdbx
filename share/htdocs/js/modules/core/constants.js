@@ -24,7 +24,8 @@ export const VIEW_TYPES = {
     BROWSER: 'browser',
     METRICS: 'metrics',
     RBAC: 'rbac',
-    OPERATIONS: 'operations'
+    OPERATIONS: 'operations',
+    SCRIPTS: 'scripts'
 };
 
 export const NOTIFICATION_TYPES = {
@@ -36,6 +37,7 @@ export const NOTIFICATION_TYPES = {
 
 export const STORAGE_KEYS = {
     AUTH_TOKEN: 'jdbx_auth_token',
+    REFRESH_TOKEN: 'jdbx_refresh_token',
     THEME: 'jdbx_theme',
     CURRENT_LIBRARY: 'jdbx_current_library'
 };
