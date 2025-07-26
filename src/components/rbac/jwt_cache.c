@@ -279,7 +279,7 @@ jwt_payload_t* jwt_cache_get(const char* token) {
                 
                 if (claims_copy) {
                     /* Promote the duplicated payload to survive checkpoint rewinds */
-                    memory_promote(claims_copy);
+                    // LEAK_FIX: memory_promote(claims_copy);
                     if (claims_copy->iss) memory_promote(claims_copy->iss);
                     if (claims_copy->sub) memory_promote(claims_copy->sub);
                     if (claims_copy->aud) memory_promote(claims_copy->aud);
@@ -391,7 +391,7 @@ void jwt_cache_put(const char* token, jwt_payload_t* claims, const char* usernam
         pthread_rwlock_unlock(&g_jwt_cache->lock);
         return;
     }
-    memory_promote(new_entry);  /* Cache entry survives checkpoints */
+    // LEAK_FIX: memory_promote(new_entry);  /* Cache entry survives checkpoints */
     
     /* Initialize all fields to prevent uninitialized memory access */
     memset(new_entry, 0, sizeof(jwt_cache_entry_t));
